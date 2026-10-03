@@ -113,7 +113,7 @@ describe("matchmaking v3 simulation", () => {
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 
-  it("keeps Social court time fair with cadence smoothing before variety", () => {
+  it("keeps Social court time fair with zero-rest prevention before entropy", () => {
     const state = createSimulationState(
       createSimulationPlayers(7, { strengthStep: 0 }),
       {

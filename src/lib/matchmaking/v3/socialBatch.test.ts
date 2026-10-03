@@ -5,7 +5,7 @@ import { findBestSingleCourtSelectionV3 } from "./singleCourt";
 import { findBestSocialBatchSelection } from "./socialBatch";
 import { buildCandidatePool } from "./candidatePool";
 import { getDoublesPartitions, isValidPartitionForMode, getPartitionBalanceGap, getPartitionPointDiffGap } from "./balance";
-import { buildSocialVarietyContext, getSocialVarietyGain } from "./socialVariety";
+import { buildSocialVarietyContext, getSocialVarietyGain, getSocialVarietyGains } from "./socialVariety";
 import { getExactPartitionKey } from "./rematch";
 import type { MatchmakerV3Player, V3CompletedMatch, V3DoublesPartition } from "./types";
 
@@ -34,20 +34,25 @@ describe("Social global batch solver", () => {
     const history: V3CompletedMatch[] = [{ team1: ["P0", "P5"], team2: ["P1", "P6"] }];
     const context = buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO });
     const byId = new Map(players.map((player) => [player.userId, player]));
-    const legal: Array<{ ids: [string, string, string, string]; partition: V3DoublesPartition; gain: number; balance: number; point: number }> = [];
+    const legal: Array<{ ids: [string, string, string, string]; partition: V3DoublesPartition; gains: ReturnType<typeof getSocialVarietyGains>; balance: number; point: number }> = [];
     for (let a = 0; a < count - 3; a++) for (let b = a + 1; b < count - 2; b++) for (let c = b + 1; c < count - 1; c++) for (let d = c + 1; d < count; d++) {
       const ids: [string, string, string, string] = [a, b, c, d].map((index) => players[index].userId) as [string, string, string, string];
       for (const partition of getDoublesPartitions(ids)) if (isValidPartitionForMode(partition, byId, SessionMode.MIXICANO)) {
-        legal.push({ ids, partition, gain: getSocialVarietyGain(partition, context), balance: getPartitionBalanceGap(partition, byId)!, point: getPartitionPointDiffGap(partition, byId)! });
+        legal.push({ ids, partition, gains: getSocialVarietyGains(partition, context), balance: getPartitionBalanceGap(partition, byId)!, point: getPartitionPointDiffGap(partition, byId)! });
       }
     }
     let optimum: number[] | null = null;
     const key = (left: typeof legal[number], right: typeof legal[number]) => {
       const selected = [...left.ids, ...right.ids].map((id) => byId.get(id)!);
       const rests = selected.map((player) => player.restTurns).sort((a, b) => a - b);
+      const facetTotal = (facet: keyof typeof left.gains) => [left.gains[facet], right.gains[facet]]
+        .sort((a, b) => a - b).reduce((sum, gain) => sum + gain, 0);
+      const matchTypeGain = facetTotal("matchType");
+      const relationshipGain = [facetTotal("courtmates"), facetTotal("partners"), facetTotal("opponents")]
+        .sort((a, b) => a - b).reduce((sum, gain) => sum + gain, 0);
       return [...selected.map((player) => player.matchesPlayed).sort((a, b) => a - b),
-        0, 0, 0, rests.filter((rest) => rest === 0).length, ...rests.map((rest) => -rest),
-        -(left.gain + right.gain), Math.max(left.balance, right.balance), left.balance + right.balance,
+        0, 0, 0, -matchTypeGain, rests.filter((rest) => rest === 0).length, -relationshipGain, ...rests.map((rest) => -rest),
+        Math.max(left.balance, right.balance), left.balance + right.balance,
         Math.max(left.point, right.point), left.point + right.point];
     };
     for (let a = 0; a < legal.length; a++) for (let b = a + 1; b < legal.length; b++) {
@@ -68,6 +73,20 @@ describe("Social global batch solver", () => {
     expect(result.selection?.socialStarvation).toMatchObject({ idealRestGap: 1, availableOverdueCount: 0 });
     const ignoreRest = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0, respectPlayerRest: false });
     expect(ignoreRest.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
+  });
+
+  it("keeps match-type entropy inactive when a Mixed context is reused for MEXICANO", () => {
+    const players = makePlayers(8);
+    const mixedContext = buildSocialVarietyContext(players, [], { sessionMode: SessionMode.MIXICANO });
+    const result = findBestSingleCourtSelectionV3(players, {
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      socialVarietyContext: mixedContext,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.socialVarietyGains?.matchType).toBe(0);
+    expect(result.debug.chosenMatchTypeEntropyGain).toBe(0);
   });
 
   it("keeps arrival priority ahead of overdue-turn protection", () => {
@@ -312,7 +331,7 @@ describe("Social global batch solver", () => {
     expect(result.varietyOptimal).toBe(false);
   });
 
-  it("widens a supplied strict candidate pool without letting variety beat smoother cadence", () => {
+  it("widens a supplied strict candidate pool without letting variety beat zero-rest prevention", () => {
     const players = makePlayers(5).map((player, index) => ({
       ...player,
       restTurns: index < 4 ? 1 : 0,

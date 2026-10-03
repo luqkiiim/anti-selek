@@ -173,12 +173,12 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("previous match");
   });
 
-  it("explains the Social order with cadence before shared variety", () => {
+  it("explains the Mixed Social order with match-type, zero-rest, relationship and soft-cadence layers", () => {
     const reason = buildV3MatchmakingReason(
       createSelection({ socialVarietyGain: 0.25 }),
       {
         sessionType: SessionType.SOCIAL_MIX,
-        sessionMode: SessionMode.MEXICANO,
+        sessionMode: SessionMode.MIXICANO,
         courtGroupType: CourtGroupType.CROSSOVER,
         poolASeatCount: 2,
         poolBSeatCount: 2,
@@ -186,7 +186,8 @@ describe("matchmaking reason", () => {
     );
 
     expect(reason.summary.join(" ")).toContain("fair turns, arrival priority, applicable player-group rules and overdue-turn protection");
-    expect(reason.summary.join(" ")).toContain("Smoother completed-match rest cadence ranks choices before shared entropy");
+    expect(reason.summary.join(" ")).toContain("Match-type entropy ranks first, then the matcher minimizes selected players with zero rest");
+    expect(reason.summary.join(" ")).toContain("Relationship entropy follows, and smoother completed-match rest cadence breaks entropy ties");
     expect(reason.summary.join(" ")).toContain("completed-match rest turns");
   });
 
@@ -217,6 +218,7 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("2 of 2 available players");
     expect(reason.summary.join(" ")).toContain("Normalized entropy gain");
     expect(reason.summary.join(" ")).toContain("match type");
+    expect(reason.summary.join(" ")).toContain("Match-type entropy ranks first, followed by relationship entropy");
     expect(reason.summary.join(" ")).toContain("Exact rematch avoidance decided only after");
     expect(reason.summary.join(" ")).not.toMatch(/coverage penalty|Partner repeat penalty|Opponent repeat penalty|Shared-court repeat penalty/);
     const parsed = parseMatchmakingReasonJson(JSON.stringify(reason));

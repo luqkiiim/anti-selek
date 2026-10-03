@@ -1,4 +1,4 @@
-import { SessionType } from "../../../types/enums";
+import { SessionMode, SessionType } from "../../../types/enums";
 import { getArrivalPriorityTime } from "../arrivalPriority";
 
 import type {
@@ -8,6 +8,7 @@ import type {
   V3DoublesPartition,
   V3SingleCourtSelection,
   V3RestSummary,
+  SocialVarietyGains,
   V3SocialStarvationSummary,
 } from "./types";
 
@@ -49,20 +50,24 @@ export function getSocialFairnessVector(
   return vector;
 }
 
-/**
- * Cadence is a tie-break after stronger rotation classes and before entropy.
- * Minimize immediate replays first, then maximize the ascending rest vector.
- */
-export function getSocialRestVector(
-  players: readonly ActiveMatchmakerV3Player[]
+/** First cadence layer: minimize selected players with no completed-match rest. */
+export function getImmediateReplayCount(
+  players: readonly Pick<ActiveMatchmakerV3Player, "restTurns">[]
 ) {
-  const ascendingRestTurns = players
+  return players.filter((player) => player.restTurns === 0).length;
+}
+
+/**
+ * Late cadence tie-break: maximize the ascending sorted rest vector.
+ * Negation makes a lexicographically smaller vector better for the search.
+ */
+export function getSoftCadenceVector(
+  players: readonly Pick<ActiveMatchmakerV3Player, "restTurns">[]
+) {
+  return players
     .map((player) => player.restTurns)
-    .sort((left, right) => left - right);
-  return [
-    ascendingRestTurns.filter((turns) => turns === 0).length,
-    ...ascendingRestTurns.map((turns) => -turns),
-  ];
+    .sort((left, right) => left - right)
+    .map((turns) => (turns === 0 ? 0 : -turns));
 }
 
 export function getSocialIdealRestGap(activePlayerCount: number) {
@@ -135,14 +140,65 @@ export function compareSocialFairnessPlayers(
   );
 }
 
-export function compareSocialRestPlayers(
+export function compareImmediateReplayPlayers(
   left: readonly ActiveMatchmakerV3Player[],
   right: readonly ActiveMatchmakerV3Player[]
 ) {
-  return compareSocialNumberVectors(
-    getSocialRestVector(left),
-    getSocialRestVector(right)
-  );
+  return getImmediateReplayCount(left) - getImmediateReplayCount(right);
+}
+
+export function compareSoftCadencePlayers(
+  left: readonly ActiveMatchmakerV3Player[],
+  right: readonly ActiveMatchmakerV3Player[]
+) {
+  return compareSocialNumberVectors(getSoftCadenceVector(left), getSoftCadenceVector(right));
+}
+
+/** Stable summation makes global batch entropy scores independent of court order. */
+export function canonicalSumEntropyGains(values: readonly number[]) {
+  return [...values].sort((left, right) => left - right).reduce((sum, value) => sum + value, 0);
+}
+
+export function getSocialMatchTypeEntropyGain(gains?: Partial<SocialVarietyGains> | null) {
+  return gains?.matchType ?? 0;
+}
+
+export function getSocialRelationshipEntropyGain(gains?: Partial<SocialVarietyGains> | null) {
+  return canonicalSumEntropyGains([
+    gains?.courtmates ?? 0,
+    gains?.partners ?? 0,
+    gains?.opponents ?? 0,
+  ]);
+}
+
+function getSelectionMatchTypeEntropyGain<T extends ActiveMatchmakerV3Player>(
+  selection: V3SingleCourtSelection<T>
+) {
+  return getSocialMatchTypeEntropyGain(selection.socialVarietyGains);
+}
+
+function getSelectionRelationshipEntropyGain<T extends ActiveMatchmakerV3Player>(
+  selection: V3SingleCourtSelection<T>
+) {
+  return selection.socialVarietyGains
+    ? getSocialRelationshipEntropyGain(selection.socialVarietyGains)
+    : selection.socialVarietyGain ?? 0;
+}
+
+function getBatchMatchTypeEntropyGain<T extends ActiveMatchmakerV3Player>(
+  selection: V3BatchSelection<T>
+) {
+  return selection.totalSocialVarietyGains
+    ? getSocialMatchTypeEntropyGain(selection.totalSocialVarietyGains)
+    : 0;
+}
+
+function getBatchRelationshipEntropyGain<T extends ActiveMatchmakerV3Player>(
+  selection: V3BatchSelection<T>
+) {
+  return selection.totalSocialVarietyGains
+    ? getSocialRelationshipEntropyGain(selection.totalSocialVarietyGains)
+    : selection.totalSocialVarietyGain ?? 0;
 }
 
 export function compareSocialBatchSelections<T extends ActiveMatchmakerV3Player>(
@@ -150,6 +206,7 @@ export function compareSocialBatchSelections<T extends ActiveMatchmakerV3Player>
   right: V3BatchSelection<T>,
   options?: {
     respectPlayerRest?: boolean;
+    sessionMode?: SessionMode;
     leftSchedulingRank?: number;
     rightSchedulingRank?: number;
     starvationContext?: SocialStarvationContext;
@@ -163,8 +220,12 @@ export function compareSocialBatchSelections<T extends ActiveMatchmakerV3Player>
   ) ||
     (options?.leftSchedulingRank ?? 0) - (options?.rightSchedulingRank ?? 0) ||
     (options?.starvationContext ? compareSocialStarvationPlayers(leftPlayers, rightPlayers, options.starvationContext) : 0) ||
-    (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(leftPlayers, rightPlayers)) ||
-    (right.totalSocialVarietyGain ?? 0) - (left.totalSocialVarietyGain ?? 0) ||
+    ((options?.sessionMode ?? SessionMode.MEXICANO) === SessionMode.MIXICANO
+      ? getBatchMatchTypeEntropyGain(right) - getBatchMatchTypeEntropyGain(left)
+      : 0) ||
+    (options?.respectPlayerRest === false ? 0 : compareImmediateReplayPlayers(leftPlayers, rightPlayers)) ||
+    getBatchRelationshipEntropyGain(right) - getBatchRelationshipEntropyGain(left) ||
+    (options?.respectPlayerRest === false ? 0 : compareSoftCadencePlayers(leftPlayers, rightPlayers)) ||
     left.maxBalanceGap - right.maxBalanceGap ||
     left.totalBalanceGap - right.totalBalanceGap ||
     left.maxPointDiffGap - right.maxPointDiffGap ||
@@ -324,23 +385,9 @@ function compareBatchRandomTieBreak<T extends ActiveMatchmakerV3Player>(
   );
 }
 
-/** Fixed entropy buckets give a transitive notion of an effectively tied gain. */
+/** Social keeps exact entropy ordering; Balanced uses transitive fixed 1e-12 buckets. */
 export function getRotationVarietyScore(gain: number, sessionType: SessionType) {
   return sessionType === SessionType.SOCIAL_MIX ? gain : Math.round(gain * 1e12) / 1e12;
-}
-
-export function compareRestSummaries(left: V3RestSummary, right: V3RestSummary) {
-  const cadenceVector = (summary: V3RestSummary) => {
-    const ascendingRestTurns = [...summary.restTurnVector].sort((a, b) => a - b);
-    return [
-      ascendingRestTurns.filter((turns) => turns === 0).length,
-      ...ascendingRestTurns.map((turns) => -turns),
-    ];
-  };
-  return compareSocialNumberVectors(
-    cadenceVector(left),
-    cadenceVector(right)
-  );
 }
 
 /**
@@ -352,13 +399,20 @@ export function compareSingleCourtSelections<T extends ActiveMatchmakerV3Player>
   left: V3SingleCourtSelection<T>,
   right: V3SingleCourtSelection<T>,
   sessionType: SessionType,
-  options?: { respectPlayerRest?: boolean; starvationContext?: SocialStarvationContext }
+  options?: { respectPlayerRest?: boolean; sessionMode?: SessionMode; starvationContext?: SocialStarvationContext }
 ) {
   const social = isSocialSession(sessionType);
+  const sessionMode = options?.sessionMode ?? SessionMode.MEXICANO;
   return compareSocialFairnessPlayers(left.players, right.players) ||
     (options?.starvationContext ? compareSocialStarvationPlayers(left.players, right.players, options.starvationContext) : 0) ||
-    (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(left.players, right.players)) ||
-    getRotationVarietyScore(right.socialVarietyGain ?? 0, sessionType) - getRotationVarietyScore(left.socialVarietyGain ?? 0, sessionType) ||
+    (sessionMode === SessionMode.MIXICANO
+      ? getRotationVarietyScore(getSelectionMatchTypeEntropyGain(right), sessionType) -
+        getRotationVarietyScore(getSelectionMatchTypeEntropyGain(left), sessionType)
+      : 0) ||
+    (options?.respectPlayerRest === false ? 0 : compareImmediateReplayPlayers(left.players, right.players)) ||
+    getRotationVarietyScore(getSelectionRelationshipEntropyGain(right), sessionType) -
+      getRotationVarietyScore(getSelectionRelationshipEntropyGain(left), sessionType) ||
+    (options?.respectPlayerRest === false ? 0 : compareSoftCadencePlayers(left.players, right.players)) ||
     left.balanceGap - right.balanceGap ||
     (social || sessionType === SessionType.POINTS ? left.pointDiffGap - right.pointDiffGap : 0) ||
     (social ? left.partnerRepeatPenalty - right.partnerRepeatPenalty : 0) ||
@@ -374,6 +428,7 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   sessionType: SessionType,
   options?: {
     respectPlayerRest?: boolean;
+    sessionMode?: SessionMode;
     pairingRandomMode?: V3BatchPairingRandomMode;
     starvationContext?: SocialStarvationContext;
     leftSchedulingRank?: number;
@@ -386,8 +441,14 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   return compareSocialFairnessPlayers(leftPlayers, rightPlayers) ||
     (options?.leftSchedulingRank ?? 0) - (options?.rightSchedulingRank ?? 0) ||
     (options?.starvationContext ? compareSocialStarvationPlayers(leftPlayers, rightPlayers, options.starvationContext) : 0) ||
-    (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(leftPlayers, rightPlayers)) ||
-    getRotationVarietyScore(right.totalSocialVarietyGain ?? 0, sessionType) - getRotationVarietyScore(left.totalSocialVarietyGain ?? 0, sessionType) ||
+    ((options?.sessionMode ?? SessionMode.MEXICANO) === SessionMode.MIXICANO
+      ? getRotationVarietyScore(getBatchMatchTypeEntropyGain(right), sessionType) -
+        getRotationVarietyScore(getBatchMatchTypeEntropyGain(left), sessionType)
+      : 0) ||
+    (options?.respectPlayerRest === false ? 0 : compareImmediateReplayPlayers(leftPlayers, rightPlayers)) ||
+    getRotationVarietyScore(getBatchRelationshipEntropyGain(right), sessionType) -
+      getRotationVarietyScore(getBatchRelationshipEntropyGain(left), sessionType) ||
+    (options?.respectPlayerRest === false ? 0 : compareSoftCadencePlayers(leftPlayers, rightPlayers)) ||
     left.maxBalanceGap - right.maxBalanceGap ||
     left.totalBalanceGap - right.totalBalanceGap ||
     (sessionType === SessionType.POINTS ? left.maxPointDiffGap - right.maxPointDiffGap : 0) ||

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { SessionMode, SessionType } from "../../../types/enums";
 import { findBestRotationBatchSelection, measureRotationStarvationIntervention } from "./socialBatch";
+import { buildSocialVarietyContext } from "./socialVariety";
 import type {
   ActiveMatchmakerV3Player,
   MatchmakerV3Player,
+  V3CompletedMatch,
+  V3DoublesPartition,
   V3SelectionConstraints,
 } from "./types";
 
@@ -19,6 +22,9 @@ type OracleBatch = {
   rank: number;
   maximumBalanceGap: number;
   totalBalanceGap: number;
+  /** Kept separate to mirror the final Mixed-mode priority layers. */
+  matchTypeGain: number;
+  relationshipGain: number;
 };
 
 const compareWords = (left: readonly number[], right: readonly number[]) => {
@@ -30,11 +36,121 @@ const compareWords = (left: readonly number[], right: readonly number[]) => {
   return 0;
 };
 
-// This is an intentionally separate statement of the requested cadence rule:
-// first count zero-rest assignments, then maximize each ascending rest value.
-function cadenceWord(restTurns: readonly number[]) {
-  const ascending = [...restTurns].sort((a, b) => a - b);
-  return [ascending.filter((turns) => turns === 0).length, ...ascending.map((turns) => -turns)];
+function immediateReplayCount(restTurns: readonly number[]) {
+  return restTurns.filter((turns) => turns === 0).length;
+}
+
+function softCadenceWord(restTurns: readonly number[]) {
+  return [...restTurns].sort((a, b) => a - b).map((turns) => (turns === 0 ? 0 : -turns));
+}
+
+type SplitCadenceCandidate = {
+  restTurns: number[];
+  matchTypeGain: number;
+  relationshipGain: number;
+};
+
+function oracleEntropyScore(gain: number, sessionType: SessionType) {
+  return sessionType === SessionType.SOCIAL_MIX ? gain : Math.round(gain * 1e12) / 1e12;
+}
+
+function compareSplitCadence(
+  left: SplitCadenceCandidate,
+  right: SplitCadenceCandidate,
+  sessionType: SessionType,
+  sessionMode: SessionMode = SessionMode.MEXICANO
+) {
+  const matchType = sessionMode === SessionMode.MIXICANO
+    ? oracleEntropyScore(right.matchTypeGain, sessionType) - oracleEntropyScore(left.matchTypeGain, sessionType)
+    : 0;
+  return matchType ||
+    immediateReplayCount(left.restTurns) - immediateReplayCount(right.restTurns) ||
+    oracleEntropyScore(right.relationshipGain, sessionType) - oracleEntropyScore(left.relationshipGain, sessionType) ||
+    compareWords(softCadenceWord(left.restTurns), softCadenceWord(right.restTurns));
+}
+
+type FixedLayout = { ids: string[]; partition: V3DoublesPartition };
+
+function fixedLayouts(...layouts: FixedLayout[]): V3SelectionConstraints<ActiveMatchmakerV3Player> {
+  const byQuartet = new Map(layouts.map((layout) => [quartetKey(layout.ids), layout.partition]));
+  return {
+    isQuartetAllowed: (players) => byQuartet.has(quartetKey(players.map((player) => player.userId))),
+    normalizePartition: ({ players }) => byQuartet.get(quartetKey(players.map((player) => player.userId))) ?? null,
+  };
+}
+
+function ownSideChoices(): [FixedLayout, FixedLayout] {
+  const men = ["m0", "m1", "m2", "m3"];
+  const women = ["f0", "f1", "f2", "f3"];
+  return [
+    { ids: men, partition: { team1: ["m0", "m1"], team2: ["m2", "m3"] } },
+    { ids: women, partition: { team1: ["f0", "f1"], team2: ["f2", "f3"] } },
+  ];
+}
+
+function standardMixedRoster(restById: Readonly<Record<string, number>> = {}) {
+  return [
+    ...Array.from({ length: 7 }, (_value, index) => makePlayer(`m${index}`, {
+      matchesPlayed: 5,
+      gender: "MALE",
+      partnerPreference: "OPEN",
+      restTurns: restById[`m${index}`] ?? 1,
+    })),
+    ...Array.from({ length: 7 }, (_value, index) => makePlayer(`f${index}`, {
+      matchesPlayed: 5,
+      gender: "FEMALE",
+      partnerPreference: "FEMALE_FLEX",
+      restTurns: restById[`f${index}`] ?? 1,
+    })),
+  ];
+}
+
+function repeatedHistory(layout: FixedLayout, count: number): V3CompletedMatch[] {
+  return Array.from({ length: count }, () => ({
+    team1: [layout.partition.team1[0], layout.partition.team1[1]],
+    team2: [layout.partition.team2[0], layout.partition.team2[1]],
+  }));
+}
+
+function runFixedOneCourt(
+  players: Player[],
+  sessionType: SessionType,
+  layouts: FixedLayout[],
+  socialHistoryMatches: V3CompletedMatch[] = [],
+  sessionMode: SessionMode = SessionMode.MIXICANO
+) {
+  const profile: Profile = { rank: 0, courts: [fixedLayouts(...layouts)] };
+  return findBestRotationBatchSelection(players, {
+    courtCount: 1,
+    sessionMode,
+    sessionType,
+    rotationPlayerCount: 14,
+    schedules: [profile],
+    socialHistoryMatches,
+    socialVarietyContext: buildSocialVarietyContext(players, socialHistoryMatches, { sessionMode }),
+    randomFn: () => 0,
+  });
+}
+
+function selectedFacetGain(
+  result: ReturnType<typeof findBestRotationBatchSelection>,
+  facet: "matchType" | "courtmates" | "partners" | "opponents"
+) {
+  return result.selection?.selections[0]?.socialVarietyGains?.[facet] ?? 0;
+}
+
+function selectedRelationshipGain(result: ReturnType<typeof findBestRotationBatchSelection>) {
+  return selectedFacetGain(result, "courtmates") + selectedFacetGain(result, "partners") + selectedFacetGain(result, "opponents");
+}
+
+function batchRelationshipGain(result: ReturnType<typeof findBestRotationBatchSelection>) {
+  const gains = result.selection?.totalSocialVarietyGains;
+  return (gains?.courtmates ?? 0) + (gains?.partners ?? 0) + (gains?.opponents ?? 0);
+}
+
+function selectedOwnSideType(result: ReturnType<typeof findBestRotationBatchSelection>) {
+  const type = result.selection?.selections[0]?.socialVariety?.courtType;
+  return type === "MIXED" ? "MIXED" : type ? "OWN_SIDE" : null;
 }
 
 function quartetKey(ids: readonly string[]) {
@@ -161,6 +277,8 @@ function enumerateOracleBatches(
           rank: profile.rank,
           maximumBalanceGap: Math.max(...gaps),
           totalBalanceGap: gaps.reduce((sum, gap) => sum + gap, 0),
+          matchTypeGain: 0,
+          relationshipGain: 0,
         });
         return;
       }
@@ -216,7 +334,8 @@ function oracleBestBatch(
   roster: Player[],
   rotationPlayerCount: number,
   sessionType: SessionType,
-  balanceWindow = 0
+  balanceWindow = 0,
+  sessionMode = SessionMode.MEXICANO
 ) {
   const rotationSorted = [...batches].sort((left, right) => compareRotationClass(left, right, roster, rotationPlayerCount));
   const bestRotation = rotationSorted[0];
@@ -228,9 +347,21 @@ function oracleBestBatch(
     const allowedGap = bestGap <= ceiling ? Math.min(bestGap + balanceWindow, ceiling) : bestGap;
     admissible = admissible.filter((candidate) => candidate.maximumBalanceGap <= allowedGap);
   }
+  if (sessionMode === SessionMode.MIXICANO) {
+    const bestMatchTypeGain = Math.max(...admissible.map((candidate) => oracleEntropyScore(candidate.matchTypeGain, sessionType)));
+    admissible = admissible.filter((candidate) => oracleEntropyScore(candidate.matchTypeGain, sessionType) === bestMatchTypeGain);
+  }
+  const bestImmediateReplayCount = Math.min(...admissible.map((candidate) =>
+    immediateReplayCount(candidate.players.map((player) => player.restTurns))
+  ));
+  admissible = admissible.filter((candidate) =>
+    immediateReplayCount(candidate.players.map((player) => player.restTurns)) === bestImmediateReplayCount
+  );
+  const bestRelationshipGain = Math.max(...admissible.map((candidate) => oracleEntropyScore(candidate.relationshipGain, sessionType)));
+  admissible = admissible.filter((candidate) => oracleEntropyScore(candidate.relationshipGain, sessionType) === bestRelationshipGain);
   return [...admissible].sort((left, right) => compareWords(
-    cadenceWord(left.players.map((player) => player.restTurns)),
-    cadenceWord(right.players.map((player) => player.restTurns))
+    softCadenceWord(left.players.map((player) => player.restTurns)),
+    softCadenceWord(right.players.map((player) => player.restTurns))
   ))[0];
 }
 
@@ -255,12 +386,183 @@ const rotationTypes = [
 ] as const;
 
 describe("independent cadence oracle", () => {
-  it("ranks the two documented rest examples by cadence, not total rest", () => {
-    expect(compareWords(cadenceWord([0, 3, 3, 3]), cadenceWord([1, 1, 2, 2]))).toBeGreaterThan(0);
-    expect(compareWords(cadenceWord([1, 1, 4, 4]), cadenceWord([1, 2, 2, 2]))).toBeGreaterThan(0);
+  it("uses the two entropy layers around zero-rest count and the ascending soft vector", () => {
+    expect(immediateReplayCount([0, 3, 3, 3])).toBeGreaterThan(immediateReplayCount([1, 1, 2, 2]));
+    expect(compareWords(softCadenceWord([1, 1, 4, 4]), softCadenceWord([1, 2, 2, 2]))).toBeGreaterThan(0);
   });
 
-  it.each(rotationTypes)("matches a brute-force two-court oracle for %s in both court modes", (sessionType) => {
+  it("uses a transitive Mixed priority: match type, zero-rest count, relationship, then soft cadence", () => {
+    const bestTypeDespiteReplay: SplitCadenceCandidate = {
+      restTurns: [0, 1, 1, 1], matchTypeGain: 0.9, relationshipGain: 0.1,
+    };
+    const zeroReplayWithGoodRelations: SplitCadenceCandidate = {
+      restTurns: [1, 1, 1, 1], matchTypeGain: 0.8, relationshipGain: 0.9,
+    };
+    const softerButLessRelated: SplitCadenceCandidate = {
+      restTurns: [3, 3, 3, 3], matchTypeGain: 0.8, relationshipGain: 0.8,
+    };
+    expect(compareSplitCadence(bestTypeDespiteReplay, zeroReplayWithGoodRelations, SessionType.SOCIAL_MIX, SessionMode.MIXICANO)).toBeLessThan(0);
+    expect(compareSplitCadence(zeroReplayWithGoodRelations, softerButLessRelated, SessionType.SOCIAL_MIX, SessionMode.MIXICANO)).toBeLessThan(0);
+    expect(compareSplitCadence(bestTypeDespiteReplay, softerButLessRelated, SessionType.SOCIAL_MIX, SessionMode.MIXICANO)).toBeLessThan(0);
+  });
+
+  it.each(rotationTypes)("uses independent transitive entropy buckets for match type and relationships in %s", (sessionType) => {
+    const base: SplitCadenceCandidate = { restTurns: [2, 2, 2, 2], matchTypeGain: 0.5, relationshipGain: 0.5 };
+    const typeBucketTie: SplitCadenceCandidate = { ...base, matchTypeGain: 0.5 + 2e-13 };
+    const relationBucketTie: SplitCadenceCandidate = { ...base, relationshipGain: 0.5 + 2e-13 };
+    if (sessionType !== SessionType.SOCIAL_MIX) {
+      expect(oracleEntropyScore(typeBucketTie.matchTypeGain, sessionType)).toBe(oracleEntropyScore(base.matchTypeGain, sessionType));
+      expect(oracleEntropyScore(relationBucketTie.relationshipGain, sessionType)).toBe(oracleEntropyScore(base.relationshipGain, sessionType));
+      expect(compareSplitCadence(base, typeBucketTie, sessionType, SessionMode.MIXICANO)).toBe(0);
+      expect(compareSplitCadence(base, relationBucketTie, sessionType, SessionMode.MIXICANO)).toBe(0);
+    }
+  });
+
+  it.each(rotationTypes)("allows higher Mixed-type entropy to beat one fewer immediate replay for %s", (sessionType) => {
+    const noReplay: SplitCadenceCandidate = { restTurns: [1, 1, 1, 1], matchTypeGain: 0.4, relationshipGain: 0.1 };
+    const replayButNewType: SplitCadenceCandidate = { restTurns: [0, 2, 2, 2], matchTypeGain: 0.5, relationshipGain: 0.9 };
+    expect(compareSplitCadence(replayButNewType, noReplay, sessionType, SessionMode.MIXICANO)).toBeLessThan(0);
+  });
+
+  it.each(rotationTypes)("lets zero-rest priority beat relationship entropy when match-type gains tie for %s", (sessionType) => {
+    const noReplay: SplitCadenceCandidate = { restTurns: [1, 1, 1, 1], matchTypeGain: 0.5, relationshipGain: 0.1 };
+    const replayWithMoreRelationships: SplitCadenceCandidate = { restTurns: [0, 2, 2, 2], matchTypeGain: 0.5, relationshipGain: 0.9 };
+    expect(compareSplitCadence(noReplay, replayWithMoreRelationships, sessionType, SessionMode.MIXICANO)).toBeLessThan(0);
+  });
+
+  it.each(rotationTypes)("lets relationship entropy beat soft cadence after type and zero ties in %s", (sessionType) => {
+    const variedButShorterRest: SplitCadenceCandidate = { restTurns: [1, 1, 1, 1], matchTypeGain: 0.5, relationshipGain: 0.8 };
+    const lessVariedButSmoother: SplitCadenceCandidate = { restTurns: [3, 3, 3, 3], matchTypeGain: 0.5, relationshipGain: 0.2 };
+    expect(compareSplitCadence(variedButShorterRest, lessVariedButSmoother, sessionType, SessionMode.MIXICANO)).toBeLessThan(0);
+  });
+
+  it.each(rotationTypes)("keeps Mixed-type gain inactive for MEXICANO in %s", (sessionType) => {
+    const highType = { restTurns: [1, 1, 1, 1], matchTypeGain: 0.99, relationshipGain: 0.1 };
+    const lowerType = { restTurns: [1, 1, 1, 1], matchTypeGain: 0, relationshipGain: 0.2 };
+    expect(compareSplitCadence(lowerType, highType, sessionType, SessionMode.MEXICANO)).toBeLessThan(0);
+  });
+
+  it.each(rotationTypes)("selects the higher-relationship-entropy group ahead of softer rest when zero counts tie for %s", (sessionType) => {
+    const [men, women] = ownSideChoices();
+    const players = standardMixedRoster({
+      m0: 1, m1: 1, m2: 1, m3: 1,
+      f0: 2, f1: 2, f2: 2, f3: 2,
+    });
+    const history = repeatedHistory(women, 20);
+    const maleOnly = runFixedOneCourt(players, sessionType, [men], history, SessionMode.MEXICANO);
+    const femaleOnly = runFixedOneCourt(players, sessionType, [women], history, SessionMode.MEXICANO);
+    const combined = runFixedOneCourt(players, sessionType, [men, women], history, SessionMode.MEXICANO);
+
+    expect(selectedFacetGain(maleOnly, "matchType")).toBe(0);
+    expect(selectedFacetGain(femaleOnly, "matchType")).toBe(0);
+    expect(selectedRelationshipGain(maleOnly)).toBeGreaterThan(selectedRelationshipGain(femaleOnly));
+    expect(maleOnly.selection?.restSummary.restTurnVector.filter((turns) => turns === 0)).toHaveLength(0);
+    expect(femaleOnly.selection?.restSummary.restTurnVector.filter((turns) => turns === 0)).toHaveLength(0);
+    expect(selectedIds(combined)).toEqual(men.ids.sort());
+    expect(softCadenceWord(combined.selection!.restSummary.restTurnVector)).toEqual([-1, -1, -1, -1]);
+  });
+
+  it.each(rotationTypes)("falls through to soft cadence when relationship gains tie and type is inactive for %s", (sessionType) => {
+    const [men, women] = ownSideChoices();
+    const players = standardMixedRoster({
+      m0: 1, m1: 1, m2: 1, m3: 1,
+      f0: 2, f1: 2, f2: 2, f3: 2,
+    });
+    const maleOnly = runFixedOneCourt(players, sessionType, [men], [], SessionMode.MEXICANO);
+    const femaleOnly = runFixedOneCourt(players, sessionType, [women], [], SessionMode.MEXICANO);
+    const combined = runFixedOneCourt(players, sessionType, [men, women], [], SessionMode.MEXICANO);
+
+    expect(selectedRelationshipGain(maleOnly)).toBeCloseTo(selectedRelationshipGain(femaleOnly), 12);
+    expect(selectedFacetGain(maleOnly, "matchType")).toBe(0);
+    expect(selectedFacetGain(femaleOnly, "matchType")).toBe(0);
+    expect(selectedIds(combined)).toEqual(women.ids.sort());
+    expect(softCadenceWord(combined.selection!.restSummary.restTurnVector)).toEqual([-2, -2, -2, -2]);
+  });
+
+  it.each(rotationTypes)("uses Mixed match-type entropy before the immediate-replay count for %s", (sessionType) => {
+    const mixed: FixedLayout = {
+      ids: ["m0", "m1", "f0", "f1"],
+      partition: { team1: ["m0", "f0"], team2: ["m1", "f1"] },
+    };
+    const [ownMen] = ownSideChoices();
+    const players = standardMixedRoster({
+      m0: 1, m1: 1, m2: 1, m3: 0, m4: 0,
+      f0: 1, f1: 1, f2: 1, f3: 0, f4: 0,
+    });
+    const history = repeatedHistory(mixed, 20);
+    const mixedOnly = runFixedOneCourt(players, sessionType, [mixed], history);
+    const ownSideOnly = runFixedOneCourt(players, sessionType, [ownMen], history);
+    const combined = runFixedOneCourt(players, sessionType, [mixed, ownMen], history);
+
+    expect(immediateReplayCount(mixedOnly.selection!.restSummary.restTurnVector)).toBe(0);
+    expect(immediateReplayCount(ownSideOnly.selection!.restSummary.restTurnVector)).toBe(1);
+    expect(oracleEntropyScore(selectedFacetGain(ownSideOnly, "matchType"), sessionType))
+      .toBeGreaterThan(oracleEntropyScore(selectedFacetGain(mixedOnly, "matchType"), sessionType));
+    expect(selectedIds(combined)).toEqual(ownMen.ids.sort());
+    expect(selectedOwnSideType(combined)).toBe("OWN_SIDE");
+  });
+
+  it.each(rotationTypes)("uses the zero-rest count when Mixed match-type gains tie for %s", (sessionType) => {
+    const mixed: FixedLayout = {
+      ids: ["m0", "m1", "f0", "f1"],
+      partition: { team1: ["m0", "f0"], team2: ["m1", "f1"] },
+    };
+    const [ownMen] = ownSideChoices();
+    const players = standardMixedRoster({
+      m0: 1, m1: 1, m2: 1, m3: 0,
+      f0: 1, f1: 1,
+    });
+    const mixedOnly = runFixedOneCourt(players, sessionType, [mixed]);
+    const ownSideOnly = runFixedOneCourt(players, sessionType, [ownMen]);
+    const combined = runFixedOneCourt(players, sessionType, [mixed, ownMen]);
+
+    expect(selectedFacetGain(mixedOnly, "matchType")).toBeCloseTo(selectedFacetGain(ownSideOnly, "matchType"), 12);
+    expect(immediateReplayCount(mixedOnly.selection!.restSummary.restTurnVector)).toBe(0);
+    expect(immediateReplayCount(ownSideOnly.selection!.restSummary.restTurnVector)).toBe(1);
+    expect(selectedIds(combined)).toEqual(mixed.ids.sort());
+    expect(selectedOwnSideType(combined)).toBe("MIXED");
+  });
+
+  it.each(rotationTypes)("proves the one-court 10-player hard-zero limit can exclude an OWN_SIDE match for %s", (sessionType) => {
+    const available = [
+      ...Array.from({ length: 5 }, (_value, index) => makePlayer(`m${index}`, {
+        matchesPlayed: 5, gender: "MALE", partnerPreference: "OPEN", restTurns: index < 3 ? 1 : 0,
+      })),
+      ...Array.from({ length: 5 }, (_value, index) => makePlayer(`f${index}`, {
+        matchesPlayed: 5, gender: "FEMALE", partnerPreference: "FEMALE_FLEX", restTurns: index < 3 ? 1 : 0,
+      })),
+    ];
+    const busy = [
+      makePlayer("m5", { matchesPlayed: 5, gender: "MALE", isBusy: true, restTurns: 0 }),
+      makePlayer("m6", { matchesPlayed: 5, gender: "MALE", isBusy: true, restTurns: 0 }),
+      makePlayer("f5", { matchesPlayed: 5, gender: "FEMALE", partnerPreference: "FEMALE_FLEX", isBusy: true, restTurns: 0 }),
+      makePlayer("f6", { matchesPlayed: 5, gender: "FEMALE", partnerPreference: "FEMALE_FLEX", isBusy: true, restTurns: 0 }),
+    ];
+    const availableBatches = choose(available, 4).flatMap((quartet) => {
+      const legalLayouts = partitions(quartet.map((player) => player.userId))
+        .filter((partition) => isLegalForMode(partition, new Map(available.map((player) => [player.userId, player])), SessionMode.MIXICANO));
+      if (!legalLayouts.length) return [];
+      const type = quartet.every((player) => player.gender === "MALE") || quartet.every((player) => player.gender === "FEMALE")
+        ? "OWN_SIDE" : "MIXED";
+      return [{ type, zeroRestCount: immediateReplayCount(quartet.map((player) => player.restTurns)) }];
+    });
+    const minimumFor = (type: "MIXED" | "OWN_SIDE") => Math.min(...availableBatches
+      .filter((batch) => batch.type === type).map((batch) => batch.zeroRestCount));
+    expect(minimumFor("MIXED")).toBe(0);
+    expect(minimumFor("OWN_SIDE")).toBe(1);
+
+    const result = findBestRotationBatchSelection([...available, ...busy], {
+      courtCount: 1,
+      sessionMode: SessionMode.MIXICANO,
+      sessionType,
+      rotationPlayerCount: 14,
+      randomFn: () => 0,
+    });
+    expect(result.selection?.restSummary.restTurnVector.filter((turns) => turns === 0)).toHaveLength(0);
+    expect(selectedOwnSideType(result)).toBe("MIXED");
+  });
+
+  it.each(rotationTypes)("optimizes zero-rest count over the complete two-court batch for %s in both modes", (sessionType) => {
     const p = ["p0", "p1", "p2", "p3"];
     const q = ["q0", "q1", "q2", "q3"];
     const r = ["q0", "r1", "r2", "r3"];
@@ -286,7 +588,9 @@ describe("independent cadence oracle", () => {
     const expectedFor = (mode: SessionMode) => {
       const batches = enumerateOracleBatches(players, profiles, 2, mode);
       expect(batches).toHaveLength(2);
-      const expected = oracleBestBatch(batches, players, 14, sessionType);
+      expect(batches.map((batch) => immediateReplayCount(batch.players.map((player) => player.restTurns))).sort((a, b) => a - b))
+        .toEqual([0, 3]);
+      const expected = oracleBestBatch(batches, players, 14, sessionType, 0, mode);
       expect(expected).toBeDefined();
       return expected!.ids.sort();
     };
@@ -331,7 +635,7 @@ describe("independent cadence oracle", () => {
     };
     const legalBatches = enumerateOracleBatches(players, [profile], 3, SessionMode.MEXICANO);
     expect(legalBatches).toHaveLength(2);
-    const expected = oracleBestBatch(legalBatches, players, 14, sessionType);
+    const expected = oracleBestBatch(legalBatches, players, 14, sessionType, 0, SessionMode.MEXICANO);
     expect(expected!.ids).toContain("x");
     expect(expected!.ids).toContain("y");
 
@@ -349,30 +653,179 @@ describe("independent cadence oracle", () => {
     expect(selectedIds(result)).toEqual(expected!.ids.sort());
   });
 
-  it.each(rotationTypes)("chooses a smoother all-MIXED batch ahead of an equally fair OWN_SIDE batch for %s", (sessionType) => {
-    const mixedLeft = ["m0", "m1", "f0", "f1"];
-    const mixedRight = ["m2", "m3", "f2", "f3"];
-    const ownMen = ["m0", "m2", "m4", "m5"];
-    const ownWomen = ["f0", "f2", "f4", "f5"];
-    const rest3 = new Set([...mixedLeft, ...mixedRight]);
+  it("does not prune a higher-entropy 3-court batch just because its soft rest vector is worse", () => {
+    const a0: FixedLayout = { ids: ["a0", "a1", "a2", "a3"], partition: { team1: ["a0", "a1"], team2: ["a2", "a3"] } };
+    const a1: FixedLayout = { ids: ["b0", "b1", "b2", "b3"], partition: { team1: ["b0", "b1"], team2: ["b2", "b3"] } };
+    const a2: FixedLayout = { ids: ["c0", "c1", "c2", "c3"], partition: { team1: ["c0", "c1"], team2: ["c2", "c3"] } };
+    const b0: FixedLayout = { ids: ["b0", "b1", "c0", "x"], partition: { team1: ["b0", "b1"], team2: ["c0", "x"] } };
+    const b1: FixedLayout = { ids: ["a0", "a1", "c1", "c2"], partition: { team1: ["a0", "a1"], team2: ["c1", "c2"] } };
+    const b2: FixedLayout = { ids: ["a2", "a3", "b2", "y"], partition: { team1: ["a2", "a3"], team2: ["b2", "y"] } };
+    const a = [a0, a1, a2];
+    const b = [b0, b1, b2];
+    const bHistory = b.flatMap((layout) => repeatedHistory(layout, 12));
+    const playerIds = [...new Set([...a, ...b].flatMap((layout) => layout.ids))];
+    const restById: Record<string, number> = Object.fromEntries(playerIds.map((id) => [id, 1]));
+    restById.x = 3;
+    restById.y = 3;
+    const roster = playerIds.map((id) => makePlayer(id, { matchesPlayed: 5, restTurns: restById[id] }));
+    const profileFor = (layouts: FixedLayout[][]): Profile => ({
+      rank: 0,
+      courts: layouts.map((courtLayouts) => fixedLayouts(...courtLayouts)),
+    });
+    const optionsFor = (layouts: FixedLayout[][]) => ({
+      courtCount: 3,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      rotationPlayerCount: 14,
+      schedules: [profileFor(layouts)],
+      socialHistoryMatches: bHistory,
+      socialVarietyContext: buildSocialVarietyContext(roster, bHistory, { sessionMode: SessionMode.MEXICANO }),
+      searchLimits: { maxBranches: 50_000, maxMs: 30_000 },
+      randomFn: () => 0,
+    });
+    const allA = findBestRotationBatchSelection(roster, optionsFor([[a0], [a1], [a2]]));
+    const allB = findBestRotationBatchSelection(roster, optionsFor([[b0], [b1], [b2]]));
+    const combined = findBestRotationBatchSelection(roster, optionsFor([[a0, b0], [a1, b1], [a2, b2]]));
+
+    expect(allA.selection).not.toBeNull();
+    expect(allB.selection).not.toBeNull();
+    expect(allA.selection!.totalSocialVarietyGain ?? 0).toBeGreaterThan(allB.selection!.totalSocialVarietyGain ?? 0);
+    expect(softCadenceWord(allB.selection!.restSummary.restTurnVector))
+      .toEqual(expect.arrayContaining([-3, -3]));
+    expect(compareWords(
+      softCadenceWord(allB.selection!.restSummary.restTurnVector),
+      softCadenceWord(allA.selection!.restSummary.restTurnVector)
+    )).toBeLessThan(0);
+    expect(combined.varietyOptimal).toBe(true);
+    expect(selectedIds(combined)).toEqual(selectedIds(allA));
+  });
+
+  it("keeps a one-replay 3-court branch when its Mixed match-type gain is higher", () => {
+    const a0: FixedLayout = { ids: ["a1", "a2", "a3", "a4"], partition: { team1: ["a1", "a3"], team2: ["a2", "a4"] } };
+    const a1: FixedLayout = { ids: ["b1", "b2", "b3", "b4"], partition: { team1: ["b1", "b3"], team2: ["b2", "b4"] } };
+    const a2: FixedLayout = { ids: ["c1", "c2", "c3", "c4"], partition: { team1: ["c1", "c2"], team2: ["c3", "c4"] } };
+    const b0: FixedLayout = { ids: ["b1", "b2", "c1", "x"], partition: { team1: ["b1", "b2"], team2: ["c1", "x"] } };
+    const b1: FixedLayout = { ids: ["a1", "a2", "c2", "y"], partition: { team1: ["a1", "a2"], team2: ["c2", "y"] } };
+    const b2: FixedLayout = { ids: ["a3", "a4", "b3", "b4"], partition: { team1: ["a3", "b3"], team2: ["a4", "b4"] } };
+    const allMixed = [a0, a1, a2];
+    const typeFavoredBatch = [b0, b1, b2];
+    const playerIds = [...new Set([...allMixed, ...typeFavoredBatch].flatMap((layout) => layout.ids))];
+    const maleIds = new Set(["a3", "a4", "b1", "b2", "c1", "c3", "x"]);
+    const players = playerIds.map((userId) => makePlayer(userId, {
+      matchesPlayed: 5,
+      restTurns: userId === "x" ? 0 : 1,
+      gender: maleIds.has(userId) ? "MALE" : "FEMALE",
+      partnerPreference: maleIds.has(userId) ? "OPEN" : "FEMALE_FLEX",
+    }));
+    const xMixedPrior: FixedLayout = {
+      ids: ["x", "b1", "a1", "a2"],
+      partition: { team1: ["x", "a1"], team2: ["b1", "a2"] },
+    };
+    const yMixedPrior: FixedLayout = {
+      ids: ["b1", "b2", "a1", "y"],
+      partition: { team1: ["b1", "a1"], team2: ["b2", "y"] },
+    };
+    const history = [
+      ...allMixed.flatMap((layout) => repeatedHistory(layout, 8)),
+      ...repeatedHistory(xMixedPrior, 1),
+      ...repeatedHistory(yMixedPrior, 1),
+    ];
+    const profileFor = (layouts: FixedLayout[][]): Profile => ({
+      rank: 0,
+      courts: layouts.map((courtLayouts) => fixedLayouts(...courtLayouts)),
+    });
+    const run = (layouts: FixedLayout[][]) => findBestRotationBatchSelection(players, {
+      courtCount: 3,
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      rotationPlayerCount: 14,
+      schedules: [profileFor(layouts)],
+      socialHistoryMatches: history,
+      socialVarietyContext: buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO }),
+      searchLimits: { maxBranches: 50_000, maxMs: 30_000 },
+      randomFn: () => 0,
+    });
+    const mixedOnly = run([[a0], [a1], [a2]]);
+    const typeFavoredOnly = run([[b0], [b1], [b2]]);
+    const combined = run([[a0, b0], [a1, b1], [a2, b2]]);
+
+    const mixedSelection = mixedOnly.selection;
+    const typeFavoredSelection = typeFavoredOnly.selection;
+    const combinedSelection = combined.selection;
+    if (!mixedSelection || !typeFavoredSelection || !combinedSelection) {
+      throw new Error("The constrained three-court batches should all have certified selections.");
+    }
+    expect(immediateReplayCount(mixedSelection.restSummary.restTurnVector)).toBe(0);
+    expect(immediateReplayCount(typeFavoredSelection.restSummary.restTurnVector)).toBe(1);
+    const mixedTypeGain = mixedSelection.totalSocialVarietyGains?.matchType ?? 0;
+    const typeFavoredGain = typeFavoredSelection.totalSocialVarietyGains?.matchType ?? 0;
+    expect(typeFavoredGain).toBeGreaterThan(mixedTypeGain);
+    expect(combined.varietyOptimal).toBe(true);
+    expect(immediateReplayCount(combinedSelection.restSummary.restTurnVector)).toBe(1);
+    expect(selectedIds(combined)).toEqual(selectedIds(typeFavoredOnly));
+    expect(combinedSelection.selections.map((selection) => selection.socialVariety?.courtType))
+      .toEqual(["UPPER", "LOWER", "MIXED"]);
+  });
+
+  it.each(rotationTypes)("uses soft rest only after Mixed type and relationship gains tie for %s", (sessionType) => {
+    const a0: FixedLayout = {
+      ids: ["m0", "m1", "f0", "f1"],
+      partition: { team1: ["m0", "f0"], team2: ["m1", "f1"] },
+    };
+    const a1: FixedLayout = {
+      ids: ["m2", "m3", "f2", "f3"],
+      partition: { team1: ["m2", "f2"], team2: ["m3", "f3"] },
+    };
+    const b0: FixedLayout = {
+      ids: ["m0", "m4", "f0", "f4"],
+      partition: { team1: ["m0", "f0"], team2: ["m4", "f4"] },
+    };
+    const b1: FixedLayout = {
+      ids: ["m1", "m2", "f1", "f2"],
+      partition: { team1: ["m1", "f1"], team2: ["m2", "f2"] },
+    };
+    const rest3 = new Set(["m1", "f1"]);
+    const rest2 = new Set(["m4", "f4"]);
     const players = [
       ...Array.from({ length: 7 }, (_value, index) => makePlayer(`m${index}`, {
-        gender: "MALE", restTurns: rest3.has(`m${index}`) ? 3 : ownMen.includes(`m${index}`) ? 2 : 1,
+        gender: "MALE", restTurns: rest3.has(`m${index}`) ? 3 : rest2.has(`m${index}`) ? 2 : 1,
       })),
       ...Array.from({ length: 7 }, (_value, index) => makePlayer(`f${index}`, {
         gender: "FEMALE", partnerPreference: "FEMALE_FLEX",
-        restTurns: rest3.has(`f${index}`) ? 3 : ownWomen.includes(`f${index}`) ? 2 : 1,
+        restTurns: rest3.has(`f${index}`) ? 3 : rest2.has(`f${index}`) ? 2 : 1,
       })),
     ];
     const profile: Profile = {
       rank: 0,
-      courts: [allowedQuartets(mixedLeft, ownMen), allowedQuartets(mixedRight, ownWomen)],
+      courts: [fixedLayouts(a0, b0), fixedLayouts(a1, b1)],
     };
     const batches = enumerateOracleBatches(players, [profile], 2, SessionMode.MIXICANO);
-    expect(batches).toHaveLength(2);
-    const oracle = oracleBestBatch(batches, players, 14, sessionType);
-    expect(oracle!.ids.sort()).toEqual([...mixedLeft, ...mixedRight].sort());
-    expect(cadenceWord(oracle!.players.map((player) => player.restTurns))).toEqual([0, ...Array(8).fill(-3)]);
+    expect(batches).toHaveLength(3);
+    const oracle = oracleBestBatch(batches, players, 14, sessionType, 0, SessionMode.MIXICANO);
+    expect(oracle!.ids.sort()).toEqual(["m0", "m1", "m2", "m4", "f0", "f1", "f2", "f4"].sort());
+    const restTurns = oracle!.players.map((player) => player.restTurns);
+    expect(immediateReplayCount(restTurns)).toBe(0);
+    expect(softCadenceWord(restTurns)).toEqual([-1, -1, -1, -1, -2, -2, -3, -3]);
+
+    const run = (left: FixedLayout, right: FixedLayout[]) => findBestRotationBatchSelection(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MIXICANO,
+      sessionType,
+      rotationPlayerCount: 14,
+      schedules: [{ rank: 0, courts: [fixedLayouts(left), fixedLayouts(...right)] }],
+      socialVarietyContext: buildSocialVarietyContext(players, [], { sessionMode: SessionMode.MIXICANO }),
+      randomFn: () => 0,
+    });
+    const candidateA = run(a0, [a1]);
+    const candidateB = run(b0, [b1]);
+    const candidateC = run(b0, [a1]);
+    const gainLayers = [candidateA, candidateB, candidateC].map((candidate) => ({
+      type: oracleEntropyScore(candidate.selection?.totalSocialVarietyGains?.matchType ?? 0, sessionType),
+      relationship: oracleEntropyScore(batchRelationshipGain(candidate), sessionType),
+    }));
+    const referenceGain = gainLayers[0];
+    if (!referenceGain) throw new Error("The three fixed batches should have entropy measurements.");
+    expect(gainLayers.every((gains) => gains.type === referenceGain.type && gains.relationship === referenceGain.relationship)).toBe(true);
 
     const result = findBestRotationBatchSelection(players, {
       courtCount: 2,
@@ -380,6 +833,7 @@ describe("independent cadence oracle", () => {
       sessionType,
       rotationPlayerCount: 14,
       schedules: [profile],
+      socialVarietyContext: buildSocialVarietyContext(players, [], { sessionMode: SessionMode.MIXICANO }),
       randomFn: () => 0,
     });
     expect(selectedIds(result)).toEqual(oracle!.ids.sort());

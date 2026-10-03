@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { SessionType } from "../../../types/enums";
+import { SessionMode, SessionType } from "../../../types/enums";
 import {
   buildRestSummary,
   compareBatchSelections,
   compareSingleCourtSelections,
+  getImmediateReplayCount,
+  getSoftCadenceVector,
 } from "./scoring";
 import type {
   ActiveMatchmakerV3Player,
@@ -185,8 +187,14 @@ function createBatchSelection({
 }
 
 describe("matchmaking v3 scoring", () => {
+  it("separates immediate zero-rest count from the late soft-cadence vector", () => {
+    const players = [0, 3, 3, 3].map((restTurns, index) => createActivePlayer(`P${index}`, restTurns, 0));
+    expect(getImmediateReplayCount(players)).toBe(1);
+    expect(getSoftCadenceVector(players)).toEqual([0, -3, -3, -3]);
+  });
+
   // The solver applies the fixed balance envelope before these comparisons.
-  it.each(BALANCED_SESSION_TYPES)("uses cadence smoothing ahead of entropy and actual admissible balance (%s)", (sessionType) => {
+  it.each(BALANCED_SESSION_TYPES)("minimizes zero-rest players before entropy and admissible balance (%s)", (sessionType) => {
     const varied = createSelection({ balanceGap: 1, socialVarietyGain: 1, restTurns: [0, 0, 0, 0], exactRematchPenalty: 10 });
     const rested = createSelection({ balanceGap: 0, socialVarietyGain: 0, restTurns: [3, 3, 3, 3], exactRematchPenalty: 0 });
     expect(compareSingleCourtSelections(rested, varied, sessionType)).toBeLessThan(0);
@@ -218,7 +226,7 @@ describe("matchmaking v3 scoring", () => {
     expect(compareBatchSelections(legacyBatch, createBatchSelection({ maxBalanceGap: 0, totalBalanceGap: 0 }), sessionType)).toBe(0);
   });
 
-  it.each(BALANCED_SESSION_TYPES)("uses enabled cadence before entropy, then actual balance and exact rematch (%s)", (sessionType) => {
+  it.each(BALANCED_SESSION_TYPES)("uses entropy before soft cadence, then actual balance and exact rematch (%s)", (sessionType) => {
     const rested = createSelection({ balanceGap: 1, restTurns: [3, 3, 3, 3], socialVarietyGain: 1, exactRematchPenalty: 0 });
     const balanced = createSelection({ balanceGap: 0, restTurns: [1, 1, 1, 1], socialVarietyGain: 1, exactRematchPenalty: 1 });
     expect(compareSingleCourtSelections(rested, balanced, sessionType)).toBeLessThan(0);
@@ -254,7 +262,7 @@ describe("matchmaking v3 scoring", () => {
       if (ab <= 0 && bc <= 0) expect(compareSingleCourtSelections(a, c, sessionType)).toBeLessThanOrEqual(0);
     }
   });
-  it("uses cadence smoothing after Social starvation and before variety, and skips it when disabled", () => {
+  it("uses the late Social soft-cadence tie after entropy, and skips both cadence layers when disabled", () => {
     const moreRest = createSelection({
       restTurns: [4, 4, 4, 4], balanceGap: 0, exactRematchPenalty: 0,
       socialVarietyGain: 2,
@@ -266,6 +274,96 @@ describe("matchmaking v3 scoring", () => {
 
     expect(compareSingleCourtSelections(moreRest, lessRest, SessionType.SOCIAL_MIX)).toBeLessThan(0);
     expect(compareSingleCourtSelections(moreRest, lessRest, SessionType.SOCIAL_MIX, { respectPlayerRest: false })).toBe(0);
+  });
+
+  it("keeps immediate-replay prevention ahead of variety while allowing entropy to beat soft rest", () => {
+    const immediateReplay = createSelection({
+      restTurns: [0, 1, 1, 1], balanceGap: 0, socialVarietyGain: 100, exactRematchPenalty: 0,
+    });
+    const noReplay = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    expect(compareSingleCourtSelections(noReplay, immediateReplay, SessionType.SOCIAL_MIX)).toBeLessThan(0);
+
+    const betterEntropy = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 1, exactRematchPenalty: 0,
+    });
+    const moreRest = createSelection({
+      restTurns: [4, 4, 4, 4], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    expect(compareSingleCourtSelections(betterEntropy, moreRest, SessionType.SOCIAL_MIX)).toBeLessThan(0);
+  });
+
+  it.each([SessionType.SOCIAL_MIX, ...BALANCED_SESSION_TYPES])("uses separate Mixed entropy and cadence priority layers for %s", (sessionType) => {
+    const higherTypeButReplay = createSelection({
+      restTurns: [0, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    higherTypeButReplay.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0.4 };
+    const lowerTypeNoReplay = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0.4, exactRematchPenalty: 0,
+    });
+    lowerTypeNoReplay.socialVarietyGains = { courtmates: 0.1, partners: 0.1, opponents: 0.1, matchType: 0.1 };
+    const mixed = { sessionMode: SessionMode.MIXICANO };
+    expect(compareSingleCourtSelections(higherTypeButReplay, lowerTypeNoReplay, sessionType, mixed)).toBeLessThan(0);
+
+    const fewerZeroRest = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    fewerZeroRest.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0.1 };
+    const moreRelationshipEntropy = createSelection({
+      restTurns: [0, 1, 1, 1], balanceGap: 0, socialVarietyGain: 10, exactRematchPenalty: 0,
+    });
+    moreRelationshipEntropy.socialVarietyGains = { courtmates: 3, partners: 3, opponents: 3, matchType: 0.1 };
+    expect(compareSingleCourtSelections(fewerZeroRest, moreRelationshipEntropy, sessionType, mixed)).toBeLessThan(0);
+
+    const moreRelation = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 1, exactRematchPenalty: 0,
+    });
+    moreRelation.socialVarietyGains = { courtmates: 0.3, partners: 0.3, opponents: 0.3, matchType: 0.1 };
+    const smoother = createSelection({
+      restTurns: [3, 3, 3, 3], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    smoother.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0.1 };
+    expect(compareSingleCourtSelections(moreRelation, smoother, sessionType, mixed)).toBeLessThan(0);
+
+    const openNoReplay = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    openNoReplay.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0 };
+    const openTypeOnly = createSelection({
+      restTurns: [0, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    openTypeOnly.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 10 };
+    expect(compareSingleCourtSelections(openNoReplay, openTypeOnly, sessionType, { sessionMode: SessionMode.MEXICANO })).toBeLessThan(0);
+  });
+
+  it("uses exact Social entropy before soft rest and soft rest only on an exact entropy tie", () => {
+    const higherExactEntropy = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 1 + 1e-14, exactRematchPenalty: 0,
+    });
+    const betterSoftRest = createSelection({
+      restTurns: [3, 3, 3, 3], balanceGap: 0, socialVarietyGain: 1, exactRematchPenalty: 0,
+    });
+    expect(compareSingleCourtSelections(higherExactEntropy, betterSoftRest, SessionType.SOCIAL_MIX)).toBeLessThan(0);
+
+    const exactEntropyTie = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 1, exactRematchPenalty: 0,
+    });
+    expect(compareSingleCourtSelections(betterSoftRest, exactEntropyTie, SessionType.SOCIAL_MIX)).toBeLessThan(0);
+  });
+
+  it("uses the existing fixed Balanced entropy bucket before soft rest", () => {
+    const betterSoftRest = createSelection({
+      restTurns: [3, 3, 3, 3], balanceGap: 0, socialVarietyGain: 1, exactRematchPenalty: 0,
+    });
+    const bucketTied = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 1 + 1e-14, exactRematchPenalty: 0,
+    });
+    const outsideBucket = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 1 + 2e-12, exactRematchPenalty: 0,
+    });
+    expect(compareSingleCourtSelections(betterSoftRest, bucketTied, SessionType.POINTS)).toBeLessThan(0);
+    expect(compareSingleCourtSelections(outsideBucket, betterSoftRest, SessionType.POINTS)).toBeLessThan(0);
   });
 
   it.each([SessionType.SOCIAL_MIX, ...BALANCED_SESSION_TYPES])("uses the ascending cadence vector for %s", (sessionType) => {

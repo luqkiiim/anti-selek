@@ -2,7 +2,7 @@ import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import { MixedSide, PartnerPreference, PlayerGender, SessionMode, SessionType } from "../../../types/enums";
 import { buildBalanceGuardrail } from "./balanceGuardrail";
 import { getDoublesPartitions } from "./balance";
-import { buildSocialVarietyContext, buildSocialVarietySnapshot, getSocialVarietyCoverage } from "./socialVariety";
+import { buildSocialVarietyContext, buildSocialVarietySnapshot, getSocialVarietyCoverage, getSocialVarietyGains } from "./socialVariety";
 import { analyzeStaticBalancedRelationshipFeasibility } from "./benchmarkBalanceFeasibility";
 import type { StaticBalanceFeasibilityReport } from "./benchmarkBalanceFeasibility";
 import * as rotationApi from "./socialBatch";
@@ -19,6 +19,7 @@ export type BenchmarkProfile = "narrow" | "wide";
 
 export interface BenchmarkCheckpoint {
   completedMatches: number;
+  completedMatchTypeCounts: { MIXED: number; OWN_SIDE: number };
   varietyCoverageScore: number | null;
   partnerCoverage: number | null;
   opponentCoverage: number | null;
@@ -35,6 +36,14 @@ export interface BenchmarkCheckpoint {
   reachedIdealPlusOne: number;
   reachedIdealPlusTwo: number;
   starvation: StarvationSummary;
+  typePriorityOverrides: {
+    policyApplied: boolean;
+    refillDecisions: number;
+    decisionsWithLowerZeroTypeTradeoff: number;
+    rateAcrossRefills: number | null;
+    selectedMatchTypeGainMean: number | null;
+    selectedRelationshipGainMean: number | null;
+  };
   optimizer: OptimizerSummary;
   matchCountSpread: number;
   maximumFairnessSpread: number;
@@ -80,10 +89,16 @@ export interface RelationshipKey {
 export interface MissingRelationship extends RelationshipKey {
   observedStrongRotationOpportunities: number;
   observedBalanceEnvelopeOpportunities: number;
+  observedMatchTypeFrontierOpportunities: number;
   observedCadenceAdmissibleOpportunities: number;
+  observedRelationshipEntropyFrontierOpportunities: number;
+  observedSoftCadenceFrontierOpportunities: number;
   classification:
     | "admissible_but_unselected"
-    | "cadence_priority_excluded_in_observed_opportunities"
+    | "soft_cadence_priority_excluded_in_observed_opportunities"
+    | "relationship_entropy_priority_excluded_in_observed_opportunities"
+    | "immediate_replay_priority_excluded_in_observed_opportunities"
+    | "match_type_entropy_priority_excluded_in_observed_opportunities"
     | "excluded_by_balance_envelope_in_observed_opportunities"
     | "never_in_strongest_rotation_class_during_observed_refills";
 }
@@ -95,7 +110,38 @@ export interface ReplayInitiationTrace {
   fairAlternativeSetsWithoutPlayer: number;
   starvationEquivalentAlternativeSetsWithoutPlayer: number;
   balanceAdmissibleAlternativeSetsWithoutPlayer: number;
+  betterZeroRestSetsWithoutPlayer: number;
+  /** Legacy strict-policy witness: full rest vector improves inside the stronger class. */
   smootherBalanceAdmissibleSetsWithoutPlayer: number;
+  /** A type-entropy-first mixed candidate with fewer immediate replays existed. */
+  betterTypeGainLowerZeroRestSetsWithoutPlayer: number;
+}
+
+export interface TypePriorityOverrideWitness {
+  afterCompletedMatches: number;
+  fairnessVector: number[];
+  starvationVector: number[];
+  balanceEnvelopeCandidateCount: number;
+  selected: {
+    ids: string[];
+    balanceGap: number;
+    zeroRestCount: number;
+    restVector: number[];
+    rawMatchTypeGain: number;
+    effectiveMatchTypeGain: number;
+    rawRelationshipGain: number;
+    effectiveRelationshipGain: number;
+  };
+  lowerZeroRestCompetitor: {
+    ids: string[];
+    balanceGap: number;
+    zeroRestCount: number;
+    restVector: number[];
+    rawMatchTypeGain: number;
+    effectiveMatchTypeGain: number;
+    rawRelationshipGain: number;
+    effectiveRelationshipGain: number;
+  };
 }
 
 export interface BenchmarkSessionResult {
@@ -105,14 +151,30 @@ export interface BenchmarkSessionResult {
   latentRankStrengths: number[];
   strengthUnits: string;
   externalCompletionSchedule: Array<0 | 1>;
-  checkpoints: Record<"20" | "400", BenchmarkCheckpoint>;
+  /** Completed-only match types in event order, used for early/late session counts. */
+  completedMatchTypes: Array<"MIXED" | "OWN_SIDE">;
+  checkpoints: Record<string, BenchmarkCheckpoint>;
   maximumMatchCountSpread: number;
   fiveGapEpisodes: FiveGapEpisode[];
   missingRelationships: MissingRelationship[];
   relationshipOpportunityCounts: Record<string, Record<string, number>>;
   everStrongRotationRelationshipCounts: Record<string, number>;
   everBalanceEnvelopeRelationshipCounts: Record<string, number>;
+  everMatchTypeFrontierRelationshipCounts: Record<string, number>;
   everCadenceAdmissibleRelationshipCounts: Record<string, number>;
+  everRelationshipEntropyFrontierRelationshipCounts: Record<string, number>;
+  everSoftCadenceFrontierRelationshipCounts: Record<string, number>;
+  typePriorityOverrides: {
+    scope: "type-entropy-first policy; certified one-court refills only, opening two-court decision excluded";
+    applicable: boolean;
+    refillDecisions: number;
+    certifiedRefillDecisions: number;
+    decisionsWithLowerZeroTypeTradeoff: number;
+    rateAcrossCertifiedRefillDecisions: number | null;
+    selectedMatchTypeGainMean: number | null;
+    selectedRelationshipGainMean: number | null;
+    witnesses: TypePriorityOverrideWitness[];
+  };
   structuralOpportunityAudit: {
     partnerPairs: number;
     opponentPairs: number;
@@ -131,6 +193,14 @@ export interface FiveGapEpisode {
   initiatingReplay: ReplayInitiationTrace | null;
   classification:
     | "avoidable_equal_priority_smoother_alternative"
+    | "avoidable_equal_priority_zero_rest_alternative"
+    | "type_entropy_priority_override"
+    | "match_type_entropy_priority_exclusion"
+    | "immediate_replay_priority_exclusion"
+    | "relationship_entropy_priority_exclusion"
+    | "soft_cadence_priority_exclusion"
+    | "zero_rest_frontier_inclusion_available"
+    | "no_equal_priority_inclusion_candidate"
     | "fairness_or_mixed_legality"
     | "starvation_priority"
     | "balance_guardrail"
@@ -141,6 +211,10 @@ export interface FiveGapEpisode {
   hadFairnessClassOpportunity: boolean;
   hadStarvationClassOpportunity: boolean;
   hadBalanceAdmissibleOpportunity: boolean;
+  hadMatchTypeFrontierOpportunity: boolean;
+  hadZeroRestFrontierOpportunity: boolean;
+  hadRelationshipEntropyFrontierOpportunity: boolean;
+  hadSoftCadenceFrontierOpportunity: boolean;
   hadSmootherAlternative: boolean;
   hadCadenceOptimalOpportunity: boolean;
   hadCadenceSuboptimalOpportunity: boolean;
@@ -149,7 +223,7 @@ export interface FiveGapEpisode {
   strictlyBetterCadenceWitness: DeferredRefillWitness | null;
   cadenceSuboptimalAlternativeWitness: DeferredRefillWitness | null;
   currentWaitClassification: FiveGapEpisode["classification"];
-  replayClassification: "avoidable_equal_priority_smoother_alternative" | "no_equal_priority_smoother_alternative" | "no_linked_rest0_replay";
+  replayClassification: "avoidable_equal_priority_smoother_alternative" | "avoidable_equal_priority_zero_rest_alternative" | "type_entropy_priority_override" | "no_equal_priority_smoother_alternative" | "no_linked_rest0_replay";
 }
 
 export interface DeferredRefillWitness {
@@ -157,21 +231,55 @@ export interface DeferredRefillWitness {
   playerRestTurns: number;
   chosenIds: string[];
   chosenRestVector: number[];
+  chosenZeroRestCount: number;
+  chosenSoftRestVector: number[];
+  chosenRawMatchTypeGain: number;
+  chosenEffectiveMatchTypeGain: number;
+  chosenRawRelationshipGain: number;
+  chosenEffectiveRelationshipGain: number;
   fairnessCandidateCount: number;
   starvationEquivalentCandidateCount: number;
   balanceEnvelopeCandidateCount: number;
+  matchTypeFrontierCandidateCount: number;
   cadenceFrontierCandidateCount: number;
-  bestBalanceCandidate: { ids: string[]; partition: V3DoublesPartition; restVector: number[] } | null;
+  relationshipEntropyFrontierCandidateCount: number;
+  softCadenceFrontierCandidateCount: number;
+  bestBalanceCandidate: {
+    ids: string[];
+    partition: V3DoublesPartition;
+    restVector: number[];
+    zeroRestCount: number;
+    softRestVector: number[];
+    rawMatchTypeGain: number;
+    effectiveMatchTypeGain: number;
+    rawRelationshipGain: number;
+    effectiveRelationshipGain: number;
+  } | null;
+  bestCandidateVsChosenMatchType: "better" | "equal" | "worse" | "none";
   bestCandidateVsChosenCadence: "strictly_better" | "equal" | "worse" | "none";
+  bestCandidateVsChosenZeroRest: "strictly_better" | "equal" | "worse" | "none";
+  bestCandidateVsChosenRelationshipGain: "better" | "equal" | "worse" | "none";
+  bestCandidateVsChosenSoftRest: "strictly_better" | "equal" | "worse" | "none";
 }
 
 export interface BenchmarkReport {
   schemaVersion: 1;
   sourceRevision: string;
+  sourceProvenance: {
+    commitSha: string;
+    workingTreeDirty: boolean;
+    workingTreeNote: string;
+    policyLabel: string;
+    engineSourceSha256: string | null;
+    measurementHarnessSha256: string | null;
+    coreEngineTrackedDiffPaths: string[];
+    sharedVarietyTrackedDiffPaths: string[];
+    measurementHarnessTrackedDiffPaths: string[];
+  };
   generatedAt: string;
   seedCount: number;
   wideSeedCount: number;
-  enginePolicy: "current" | "baseline";
+  enginePolicy: "current" | "strict" | "baseline";
   setup: {
     roster: "14 players: P1-P7 male, P8-P14 female (FEMALE_FLEX)";
     sessionMode: "MIXICANO";
@@ -222,6 +330,10 @@ interface WaitEpisodeMeta {
   hadFairnessClassOpportunity: boolean;
   hadStarvationClassOpportunity: boolean;
   hadBalanceAdmissibleOpportunity: boolean;
+  hadMatchTypeFrontierOpportunity: boolean;
+  hadZeroRestFrontierOpportunity: boolean;
+  hadRelationshipEntropyFrontierOpportunity: boolean;
+  hadSoftCadenceFrontierOpportunity: boolean;
   hadSmootherAlternative: boolean;
   hadCadenceOptimalOpportunity: boolean;
   hadCadenceSuboptimalOpportunity: boolean;
@@ -237,7 +349,13 @@ interface OracleCandidate {
   partition: V3DoublesPartition;
   fairness: number[];
   starvation: number[];
+  zeroRestCount: number;
+  softRest: number[];
   rest: number[];
+  rawMatchTypeGain: number;
+  effectiveMatchTypeGain: number;
+  rawRelationshipGain: number;
+  effectiveRelationshipGain: number;
   balanceGap: number;
 }
 
@@ -246,17 +364,32 @@ interface RotationAudit {
   fairnessClass: OracleCandidate[];
   rotationClass: OracleCandidate[];
   balanceEnvelope: OracleCandidate[];
+  matchTypeFrontier: OracleCandidate[];
   cadenceAdmissible: OracleCandidate[];
+  relationshipEntropyFrontier: OracleCandidate[];
+  softCadenceFrontier: OracleCandidate[];
+  strictCadenceAdmissible: OracleCandidate[];
+  bestMatchTypeGain: number | null;
+  bestZeroRestCount: number | null;
+  bestRelationshipGain: number | null;
+  bestSoftRestVector: number[] | null;
   bestCadenceVector: number[] | null;
   fairnessClassIds: Set<string>;
   rotationClassIds: Set<string>;
   balanceEnvelopeIds: Set<string>;
+  matchTypeFrontierIds: Set<string>;
   cadenceAdmissibleIds: Set<string>;
+  relationshipEntropyFrontierIds: Set<string>;
+  softCadenceFrontierIds: Set<string>;
   legalCandidateIds: Set<string>;
   fairnessClassKeys: Set<string>;
   rotationClassKeys: Set<string>;
   balanceEnvelopeKeys: Set<string>;
+  matchTypeFrontierKeys: Set<string>;
   cadenceAdmissibleKeys: Set<string>;
+  relationshipEntropyFrontierKeys: Set<string>;
+  softCadenceFrontierKeys: Set<string>;
+  strictCadenceAdmissibleKeys: Set<string>;
 }
 
 type PairCounts = Map<string, number>;
@@ -372,6 +505,45 @@ function getCadenceVector(selected: BenchmarkPlayer[]) {
   return [ascending.filter((turns) => turns === 0).length, ...ascending.map((turns) => -turns)];
 }
 
+function getZeroRestCount(selected: BenchmarkPlayer[]) {
+  return selected.filter((player) => player.restTurns === 0).length;
+}
+
+function getSoftRestVector(selected: BenchmarkPlayer[]) {
+  return selected.map((player) => player.restTurns).sort((a, b) => a - b).map((turns) => -turns);
+}
+
+function getEffectiveEntropyGain(gain: number, sessionType: SessionType) {
+  return sessionType === SessionType.SOCIAL_MIX ? gain : Math.round(gain * 1e12) / 1e12;
+}
+
+function canonicalSum(values: number[]) {
+  return values.sort((a, b) => a - b).reduce((total, value) => total + value, 0);
+}
+
+export interface TypePriorityCandidateSummary {
+  ids: string[];
+  partition: V3DoublesPartition;
+  zeroRestCount: number;
+  effectiveMatchTypeGain: number;
+  effectiveRelationshipGain: number;
+  softRest: number[];
+}
+
+/** Selects a witness from the same stronger class/envelope supplied by the caller. */
+export function findLowerZeroTypeGainCompetitor<T extends TypePriorityCandidateSummary>(
+  selected: T,
+  candidates: readonly T[]
+): T | null {
+  return [...candidates]
+    .filter((candidate) => candidate.zeroRestCount < selected.zeroRestCount &&
+      candidate.effectiveMatchTypeGain < selected.effectiveMatchTypeGain)
+    .sort((left, right) => right.effectiveMatchTypeGain - left.effectiveMatchTypeGain ||
+      right.effectiveRelationshipGain - left.effectiveRelationshipGain ||
+      compareNumberVectors(left.softRest, right.softRest) ||
+      exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)))[0] ?? null;
+}
+
 function isMixedModeLegal(partition: V3DoublesPartition, playersById: Map<string, BenchmarkPlayer>) {
   const ids = [...partition.team1, ...partition.team2];
   const sides = ids.map((id) => getEffectiveMixedSide(playersById.get(id)!));
@@ -391,8 +563,12 @@ function getOverduePlayerCount(available: BenchmarkPlayer[]) {
   return available.filter((player) => player.restTurns > IDEAL_REST_GAP).length;
 }
 
-/** Independent one-court oracle: enumerate every available quartet and legal mixed partition. */
-function auditRotationClass(players: BenchmarkPlayer[], sessionType: SessionType): RotationAudit {
+/** Independent one-court oracle: enumerate each stronger class before entropy/cadence frontiers. */
+function auditRotationClass(
+  players: BenchmarkPlayer[],
+  sessionType: SessionType,
+  socialHistory: SocialHistoryMatch[]
+): RotationAudit {
   const available = players.filter((player) => !player.isBusy && !player.isPaused);
   const playersById = new Map(players.map((player) => [player.userId, player]));
   const candidates: OracleCandidate[] = [];
@@ -409,7 +585,13 @@ function auditRotationClass(players: BenchmarkPlayer[], sessionType: SessionType
               partition,
               fairness: getFairnessVector(quartet),
               starvation: getStarvationVector(quartet, available),
+              zeroRestCount: getZeroRestCount(quartet),
+              softRest: getSoftRestVector(quartet),
               rest: getCadenceVector(quartet),
+              rawMatchTypeGain: 0,
+              effectiveMatchTypeGain: 0,
+              rawRelationshipGain: 0,
+              effectiveRelationshipGain: 0,
               balanceGap: independentBalanceGap(partition, playersById),
             });
           }
@@ -418,10 +600,10 @@ function auditRotationClass(players: BenchmarkPlayer[], sessionType: SessionType
     }
   }
   if (!candidates.length) return {
-    legalCandidates: [], fairnessClass: [], rotationClass: [], balanceEnvelope: [], cadenceAdmissible: [], bestCadenceVector: null,
-    fairnessClassIds: new Set(), rotationClassIds: new Set(), balanceEnvelopeIds: new Set(), legalCandidateIds: new Set(),
-    cadenceAdmissibleIds: new Set(),
-    fairnessClassKeys: new Set(), rotationClassKeys: new Set(), balanceEnvelopeKeys: new Set(), cadenceAdmissibleKeys: new Set(),
+    legalCandidates: [], fairnessClass: [], rotationClass: [], balanceEnvelope: [], matchTypeFrontier: [], cadenceAdmissible: [], relationshipEntropyFrontier: [], softCadenceFrontier: [], strictCadenceAdmissible: [], bestMatchTypeGain: null, bestZeroRestCount: null, bestRelationshipGain: null, bestSoftRestVector: null, bestCadenceVector: null,
+    fairnessClassIds: new Set(), rotationClassIds: new Set(), balanceEnvelopeIds: new Set(), matchTypeFrontierIds: new Set(), cadenceAdmissibleIds: new Set(), relationshipEntropyFrontierIds: new Set(), softCadenceFrontierIds: new Set(), legalCandidateIds: new Set(),
+    strictCadenceAdmissibleKeys: new Set(),
+    fairnessClassKeys: new Set(), rotationClassKeys: new Set(), balanceEnvelopeKeys: new Set(), matchTypeFrontierKeys: new Set(), cadenceAdmissibleKeys: new Set(), relationshipEntropyFrontierKeys: new Set(), softCadenceFrontierKeys: new Set(),
   };
   const bestFairness = candidates.reduce((best, candidate) => compareNumberVectors(candidate.fairness, best) < 0 ? candidate.fairness : best, candidates[0].fairness);
   const fairnessClass = candidates.filter((candidate) => compareNumberVectors(candidate.fairness, bestFairness) === 0);
@@ -437,10 +619,44 @@ function auditRotationClass(players: BenchmarkPlayer[], sessionType: SessionType
     balanceEnvelope = rotationClass.filter((candidate) => candidate.balanceGap <= guardrail.allowedMaxBalanceGap + 1e-12 &&
       (guardrail.allowedTotalBalanceGap === null || candidate.balanceGap <= guardrail.allowedTotalBalanceGap + 1e-12));
   }
+  const context = buildSocialVarietyContext(players, socialHistory, { sessionMode: SessionMode.MIXICANO });
+  for (const candidate of balanceEnvelope) {
+    const gains = getSocialVarietyGains(candidate.partition, context);
+    candidate.rawMatchTypeGain = gains.matchType;
+    candidate.effectiveMatchTypeGain = getEffectiveEntropyGain(gains.matchType, sessionType);
+    candidate.rawRelationshipGain = canonicalSum([gains.courtmates, gains.partners, gains.opponents]);
+    candidate.effectiveRelationshipGain = getEffectiveEntropyGain(candidate.rawRelationshipGain, sessionType);
+  }
+  const bestMatchTypeGain = balanceEnvelope.length
+    ? Math.max(...balanceEnvelope.map((candidate) => candidate.effectiveMatchTypeGain))
+    : null;
+  const matchTypeFrontier = bestMatchTypeGain === null
+    ? []
+    : balanceEnvelope.filter((candidate) => candidate.effectiveMatchTypeGain === bestMatchTypeGain);
+  const bestZeroRestCount = matchTypeFrontier.length
+    ? Math.min(...matchTypeFrontier.map((candidate) => candidate.zeroRestCount))
+    : null;
+  // Match-type entropy is the first variety layer for MIXICANO. Zero-rest
+  // count is optimized only inside its best effective-gain class.
+  const cadenceAdmissible = bestZeroRestCount === null
+    ? []
+    : matchTypeFrontier.filter((candidate) => candidate.zeroRestCount === bestZeroRestCount);
+  const bestRelationshipGain = cadenceAdmissible.length
+    ? Math.max(...cadenceAdmissible.map((candidate) => candidate.effectiveRelationshipGain))
+    : null;
+  const relationshipEntropyFrontier = bestRelationshipGain === null
+    ? []
+    : cadenceAdmissible.filter((candidate) => candidate.effectiveRelationshipGain === bestRelationshipGain);
+  const bestSoftRestVector = relationshipEntropyFrontier.length
+    ? relationshipEntropyFrontier.reduce((best, candidate) => compareNumberVectors(candidate.softRest, best) < 0 ? candidate.softRest : best, relationshipEntropyFrontier[0].softRest)
+    : null;
+  const softCadenceFrontier = bestSoftRestVector
+    ? relationshipEntropyFrontier.filter((candidate) => compareNumberVectors(candidate.softRest, bestSoftRestVector) === 0)
+    : [];
   const bestCadenceVector = balanceEnvelope.length
     ? balanceEnvelope.reduce((best, candidate) => compareNumberVectors(candidate.rest, best) < 0 ? candidate.rest : best, balanceEnvelope[0].rest)
     : null;
-  const cadenceAdmissible = bestCadenceVector
+  const strictCadenceAdmissible = bestCadenceVector
     ? balanceEnvelope.filter((candidate) => compareNumberVectors(candidate.rest, bestCadenceVector) === 0)
     : [];
   const idsFor = (values: OracleCandidate[]) => new Set(values.flatMap((candidate) => candidate.ids));
@@ -450,17 +666,32 @@ function auditRotationClass(players: BenchmarkPlayer[], sessionType: SessionType
     fairnessClass,
     rotationClass,
     balanceEnvelope,
+    matchTypeFrontier,
     cadenceAdmissible,
+    relationshipEntropyFrontier,
+    softCadenceFrontier,
+    strictCadenceAdmissible,
+    bestMatchTypeGain,
+    bestZeroRestCount,
+    bestRelationshipGain,
+    bestSoftRestVector,
     bestCadenceVector,
     fairnessClassIds: idsFor(fairnessClass),
     rotationClassIds: idsFor(rotationClass),
     balanceEnvelopeIds: idsFor(balanceEnvelope),
+    matchTypeFrontierIds: idsFor(matchTypeFrontier),
     cadenceAdmissibleIds: idsFor(cadenceAdmissible),
+    relationshipEntropyFrontierIds: idsFor(relationshipEntropyFrontier),
+    softCadenceFrontierIds: idsFor(softCadenceFrontier),
     legalCandidateIds: idsFor(candidates),
     fairnessClassKeys: keysFor(fairnessClass),
     rotationClassKeys: keysFor(rotationClass),
     balanceEnvelopeKeys: keysFor(balanceEnvelope),
+    matchTypeFrontierKeys: keysFor(matchTypeFrontier),
     cadenceAdmissibleKeys: keysFor(cadenceAdmissible),
+    relationshipEntropyFrontierKeys: keysFor(relationshipEntropyFrontier),
+    softCadenceFrontierKeys: keysFor(softCadenceFrontier),
+    strictCadenceAdmissibleKeys: keysFor(strictCadenceAdmissible),
   };
 }
 
@@ -469,6 +700,10 @@ function emptyWaitMeta(): WaitEpisodeMeta {
     hadFairnessClassOpportunity: false,
     hadStarvationClassOpportunity: false,
     hadBalanceAdmissibleOpportunity: false,
+    hadMatchTypeFrontierOpportunity: false,
+    hadZeroRestFrontierOpportunity: false,
+    hadRelationshipEntropyFrontierOpportunity: false,
+    hadSoftCadenceFrontierOpportunity: false,
     hadSmootherAlternative: false,
     hadCadenceOptimalOpportunity: false,
     hadCadenceSuboptimalOpportunity: false,
@@ -532,6 +767,11 @@ function getCheckpoint(
     maximumFairnessSpread: number;
     minimumFairnessSpread: number;
     externalBusyEventCount: number;
+    refillDecisionCount: number;
+    selectedMatchTypeGainTotal: number;
+    selectedRelationshipGainTotal: number;
+    typePriorityOverrideCount: number;
+    typePriorityPolicyApplied: boolean;
   },
   completedMatches: number
 ): BenchmarkCheckpoint {
@@ -554,6 +794,13 @@ function getCheckpoint(
     : null;
   return {
     completedMatches,
+    completedMatchTypeCounts: completed.reduce((counts, match) => {
+      const type = match.socialVariety?.courtType;
+      if (type === "MIXED") counts.MIXED += 1;
+      else if (type === "UPPER" || type === "LOWER") counts.OWN_SIDE += 1;
+      else throw new Error(`Completed benchmark match ${match.id ?? "(unknown)"} has no completed match-type snapshot.`);
+      return counts;
+    }, { MIXED: 0, OWN_SIDE: 0 }),
     varietyCoverageScore: coverage.score,
     partnerCoverage: coverage.partnerScore,
     opponentCoverage: coverage.opponentScore,
@@ -581,6 +828,17 @@ function getCheckpoint(
       rateAmongCertifiedCounterfactualDecisions: counters.starvationCertified
         ? counters.starvationInterventions / counters.starvationCertified
         : null,
+    },
+    typePriorityOverrides: {
+      policyApplied: counters.typePriorityPolicyApplied,
+      refillDecisions: counters.refillDecisionCount,
+      decisionsWithLowerZeroTypeTradeoff: counters.typePriorityOverrideCount,
+      rateAcrossRefills: counters.typePriorityPolicyApplied && counters.refillDecisionCount
+        ? counters.typePriorityOverrideCount / counters.refillDecisionCount : null,
+      selectedMatchTypeGainMean: counters.typePriorityPolicyApplied && counters.refillDecisionCount
+        ? counters.selectedMatchTypeGainTotal / counters.refillDecisionCount : null,
+      selectedRelationshipGainMean: counters.typePriorityPolicyApplied && counters.refillDecisionCount
+        ? counters.selectedRelationshipGainTotal / counters.refillDecisionCount : null,
     },
     optimizer: {
       callsStarted: counters.optimizerCallCount,
@@ -629,7 +887,8 @@ function makeActiveAssignment(
   assignmentId: string,
   completedEventIndex: number,
   audit: RotationAudit | null,
-  lastCompletedEvent: ReadonlyMap<string, number>
+  lastCompletedEvent: ReadonlyMap<string, number>,
+  enginePolicy: "current" | "strict" | "baseline"
 ): ActiveAssignment {
   const selectedIds = new Set(selection.ids);
   const byId = new Map(players.map((player) => [player.userId, player]));
@@ -647,6 +906,10 @@ function makeActiveAssignment(
       new Set(candidates.filter((candidate) => !candidate.ids.includes(userId) && (predicate?.(candidate) ?? true))
         .map((candidate) => candidate.ids.slice().sort().join("|"))).size;
     const selectedCadence = getCadenceVector(players.filter((player) => selectedIds.has(player.userId)));
+    const selectedZeroRestCount = players.filter((player) => selectedIds.has(player.userId) && player.restTurns === 0).length;
+    const selectedCandidate = audit.balanceEnvelope.find((candidate) =>
+      exactCandidateKey(candidate.ids, candidate.partition) === exactCandidateKey(selection.ids, selection.partition)
+    );
     for (const id of selectedIds) {
       const player = byId.get(id)!;
       if (!hadPriorMatchAtAssignment.has(id) || player.restTurns !== 0) continue;
@@ -658,11 +921,23 @@ function makeActiveAssignment(
         fairAlternativeSetsWithoutPlayer: distinctSetsWithout(audit.fairnessClass, id),
         starvationEquivalentAlternativeSetsWithoutPlayer: distinctSetsWithout(audit.rotationClass, id),
         balanceAdmissibleAlternativeSetsWithoutPlayer: distinctSetsWithout(audit.balanceEnvelope, id),
-        smootherBalanceAdmissibleSetsWithoutPlayer: distinctSetsWithout(
+        betterZeroRestSetsWithoutPlayer: distinctSetsWithout(
           audit.balanceEnvelope,
           id,
-          (candidate) => compareNumberVectors(candidate.rest, selectedCadence) < 0
+          (candidate) => candidate.zeroRestCount < selectedZeroRestCount
         ),
+        betterTypeGainLowerZeroRestSetsWithoutPlayer: selectedCandidate
+          ? distinctSetsWithout(audit.balanceEnvelope, id, (candidate) =>
+            candidate.zeroRestCount < selectedZeroRestCount &&
+            candidate.effectiveMatchTypeGain < selectedCandidate.effectiveMatchTypeGain)
+          : 0,
+        smootherBalanceAdmissibleSetsWithoutPlayer: enginePolicy === "strict" ? distinctSetsWithout(
+          audit.balanceEnvelope,
+          id,
+          (candidate) => enginePolicy === "strict"
+            ? compareNumberVectors(candidate.rest, selectedCadence) < 0
+            : false
+        ) : 0,
       });
     }
   }
@@ -690,8 +965,21 @@ function classifyFiveGap(meta: WaitEpisodeMeta): FiveGapEpisode["classification"
   return "cadence_priority_exclusion";
 }
 
-function classifyReplayOrigin(trace: ReplayInitiationTrace): FiveGapEpisode["classification"] {
-  if (trace.smootherBalanceAdmissibleSetsWithoutPlayer > 0) return "avoidable_equal_priority_smoother_alternative";
+function classifySplitFiveGap(meta: WaitEpisodeMeta): FiveGapEpisode["classification"] {
+  if (!meta.hadLegalCandidate || !meta.hadFairnessClassOpportunity) return "fairness_or_mixed_legality";
+  if (!meta.hadStarvationClassOpportunity) return "starvation_priority";
+  if (!meta.hadBalanceAdmissibleOpportunity) return "balance_guardrail";
+  if (!meta.hadMatchTypeFrontierOpportunity) return "match_type_entropy_priority_exclusion";
+  if (!meta.hadZeroRestFrontierOpportunity) return "immediate_replay_priority_exclusion";
+  if (!meta.hadRelationshipEntropyFrontierOpportunity) return "relationship_entropy_priority_exclusion";
+  if (!meta.hadSoftCadenceFrontierOpportunity) return "soft_cadence_priority_exclusion";
+  return "cadence_tie_later_tiebreak";
+}
+
+function classifyReplayOrigin(trace: ReplayInitiationTrace, enginePolicy: "current" | "strict" | "baseline"): FiveGapEpisode["classification"] {
+  if (enginePolicy === "strict" && trace.smootherBalanceAdmissibleSetsWithoutPlayer > 0) return "avoidable_equal_priority_smoother_alternative";
+  if (enginePolicy === "current" && trace.betterTypeGainLowerZeroRestSetsWithoutPlayer > 0) return "type_entropy_priority_override";
+  if (enginePolicy !== "strict" && trace.betterZeroRestSetsWithoutPlayer > 0) return "avoidable_equal_priority_zero_rest_alternative";
   if (trace.fairAlternativeSetsWithoutPlayer === 0) return "fairness_or_mixed_legality";
   if (trace.starvationEquivalentAlternativeSetsWithoutPlayer === 0) return "starvation_priority";
   if (trace.balanceAdmissibleAlternativeSetsWithoutPlayer === 0) return "balance_guardrail";
@@ -706,8 +994,8 @@ export function advanceReplayOriginOnCompletion(
   return completedAssignmentReplayOrigin ?? null;
 }
 
-export function classifyReplayOriginForBenchmark(trace: ReplayInitiationTrace): FiveGapEpisode["classification"] {
-  return classifyReplayOrigin(trace);
+export function classifyReplayOriginForBenchmark(trace: ReplayInitiationTrace, enginePolicy: "current" | "strict" | "baseline" = "current"): FiveGapEpisode["classification"] {
+  return classifyReplayOrigin(trace, enginePolicy);
 }
 
 function buildUnseenRelationships(
@@ -715,7 +1003,10 @@ function buildUnseenRelationships(
   observed: RelationshipCounts,
   strongCounts: Record<string, number>,
   envelopeCounts: Record<string, number>,
-  cadenceCounts: Record<string, number>
+  typeFrontierCounts: Record<string, number>,
+  cadenceCounts: Record<string, number>,
+  relationshipFrontierCounts: Record<string, number>,
+  softFrontierCounts: Record<string, number>
 ) {
   const unseen: MissingRelationship[] = [];
   for (const facet of RELATION_FACETS) {
@@ -724,20 +1015,32 @@ function buildUnseenRelationships(
       if (observed[facet].has(relationship)) continue;
       const strong = strongCounts[key] ?? 0;
       const envelope = envelopeCounts[key] ?? 0;
+      const typeFrontier = typeFrontierCounts[key] ?? 0;
       const cadence = cadenceCounts[key] ?? 0;
+      const relationshipFrontier = relationshipFrontierCounts[key] ?? 0;
+      const softFrontier = softFrontierCounts[key] ?? 0;
       unseen.push({
         facet,
         players: relationship.split("|") as [string, string],
         observedStrongRotationOpportunities: strong,
         observedBalanceEnvelopeOpportunities: envelope,
+        observedMatchTypeFrontierOpportunities: typeFrontier,
         observedCadenceAdmissibleOpportunities: cadence,
-        classification: cadence > 0
+        observedRelationshipEntropyFrontierOpportunities: relationshipFrontier,
+        observedSoftCadenceFrontierOpportunities: softFrontier,
+        classification: softFrontier > 0
           ? "admissible_but_unselected"
-          : envelope > 0
-            ? "cadence_priority_excluded_in_observed_opportunities"
-            : strong > 0
-            ? "excluded_by_balance_envelope_in_observed_opportunities"
-            : "never_in_strongest_rotation_class_during_observed_refills",
+          : relationshipFrontier > 0
+            ? "soft_cadence_priority_excluded_in_observed_opportunities"
+            : cadence > 0
+              ? "relationship_entropy_priority_excluded_in_observed_opportunities"
+              : typeFrontier > 0
+                ? "immediate_replay_priority_excluded_in_observed_opportunities"
+                : envelope > 0
+                  ? "match_type_entropy_priority_excluded_in_observed_opportunities"
+                  : strong > 0
+                    ? "excluded_by_balance_envelope_in_observed_opportunities"
+                    : "never_in_strongest_rotation_class_during_observed_refills",
       });
     }
   }
@@ -753,7 +1056,7 @@ function createSessionResult(
   sessionType: SessionType,
   seed: number,
   targetMatches = 400,
-  enginePolicy: "current" | "baseline" = "current"
+  enginePolicy: "current" | "strict" | "baseline" = "current"
 ): BenchmarkSessionResult {
   const startTime = performance.now();
   const players = createRoster(sessionType, profile);
@@ -794,12 +1097,21 @@ function createSessionResult(
     minimumFairnessSpread: Number.POSITIVE_INFINITY,
     externalBusyEventCount: 0,
     maximumObservedAvailableRestTurns: 0,
+    refillDecisionCount: 0,
+    selectedMatchTypeGainTotal: 0,
+    selectedRelationshipGainTotal: 0,
+    typePriorityOverrideCount: 0,
+    typePriorityPolicyApplied: enginePolicy === "current",
   };
   const opportunities = createStructuralOpportunityCounts(players);
   const observed: RelationshipCounts = { courtmates: new Map(), partners: new Map(), opponents: new Map() };
   const strongRelationshipCounts: Record<string, number> = {};
   const envelopeRelationshipCounts: Record<string, number> = {};
+  const matchTypeFrontierRelationshipCounts: Record<string, number> = {};
   const cadenceRelationshipCounts: Record<string, number> = {};
+  const relationshipEntropyFrontierRelationshipCounts: Record<string, number> = {};
+  const softCadenceFrontierRelationshipCounts: Record<string, number> = {};
+  const typePriorityOverrideWitnesses: TypePriorityOverrideWitness[] = [];
   const lastReplayInitiation = new Map<string, ReplayInitiationTrace>();
   let nextDecisionId = 1;
   let openingDecisionId = 0;
@@ -822,7 +1134,8 @@ function createSessionResult(
       assignmentId,
       completedEventIndex,
       audit,
-      lastCompletedEvent
+      lastCompletedEvent,
+      enginePolicy
     );
     active.set(court, assignment);
   };
@@ -905,7 +1218,8 @@ function createSessionResult(
     counters.maximumBalanceGap = Math.max(counters.maximumBalanceGap, selection.balanceGap);
   }
 
-  const checkpointResults: Partial<Record<"20" | "400", BenchmarkCheckpoint>> = {};
+  const checkpointResults: Record<string, BenchmarkCheckpoint> = {};
+  const completedMatchTypes: Array<"MIXED" | "OWN_SIDE"> = [];
   for (let eventIndex = 0; eventIndex < targetMatches; eventIndex += 1) {
     const completedCourt = externalCompletionSchedule[eventIndex];
     const finished = active.get(completedCourt);
@@ -919,6 +1233,9 @@ function createSessionResult(
       socialVariety: finished.socialVariety,
     };
     completed.push(completedMatch);
+    if (finished.socialVariety.courtType === "MIXED") completedMatchTypes.push("MIXED");
+    else if (finished.socialVariety.courtType === "UPPER" || finished.socialVariety.courtType === "LOWER") completedMatchTypes.push("OWN_SIDE");
+    else throw new Error(`Finished benchmark assignment ${finished.assignmentId} has no match type.`);
     // Update stable per-facet observed counts without rebuilding the snapshot.
     for (const key of getPartitionRelationships(finished.partition)) {
       const [facet, pair] = key.split(":") as [(typeof RELATION_FACETS)[number], string];
@@ -950,16 +1267,26 @@ function createSessionResult(
         if (assignedRest >= 5) {
           const meta = waits.get(id) ?? emptyWaitMeta();
           const initiatingReplay = lastReplayInitiation.get(id) ?? null;
-          const currentWaitClassification = classifyFiveGap(meta);
+          const currentWaitClassification = enginePolicy === "current" ? classifySplitFiveGap(meta) : classifyFiveGap(meta);
+          const originClassification = initiatingReplay ? classifyReplayOrigin(initiatingReplay, enginePolicy) : null;
+          const replayClassification = originClassification === "avoidable_equal_priority_zero_rest_alternative" ||
+            originClassification === "avoidable_equal_priority_smoother_alternative" ||
+            originClassification === "type_entropy_priority_override"
+            ? originClassification
+            : initiatingReplay ? "no_equal_priority_smoother_alternative" : "no_linked_rest0_replay";
           fiveGapEpisodes.push({
             traceId: `wait-${profile}-${sessionType}-${seed}-${id}-${eventIndex + 1}`,
             userId: id,
             restGap: assignedRest,
             initiatingReplay,
-            classification: initiatingReplay ? classifyReplayOrigin(initiatingReplay) : currentWaitClassification,
+            classification: initiatingReplay ? classifyReplayOrigin(initiatingReplay, enginePolicy) : currentWaitClassification,
             hadFairnessClassOpportunity: meta.hadFairnessClassOpportunity,
             hadStarvationClassOpportunity: meta.hadStarvationClassOpportunity,
             hadBalanceAdmissibleOpportunity: meta.hadBalanceAdmissibleOpportunity,
+            hadMatchTypeFrontierOpportunity: meta.hadMatchTypeFrontierOpportunity,
+            hadZeroRestFrontierOpportunity: meta.hadZeroRestFrontierOpportunity,
+            hadRelationshipEntropyFrontierOpportunity: meta.hadRelationshipEntropyFrontierOpportunity,
+            hadSoftCadenceFrontierOpportunity: meta.hadSoftCadenceFrontierOpportunity,
             hadSmootherAlternative: meta.hadSmootherAlternative,
             hadCadenceOptimalOpportunity: meta.hadCadenceOptimalOpportunity,
             hadCadenceSuboptimalOpportunity: meta.hadCadenceSuboptimalOpportunity,
@@ -968,11 +1295,7 @@ function createSessionResult(
             strictlyBetterCadenceWitness: meta.strictlyBetterCadenceWitness,
             cadenceSuboptimalAlternativeWitness: meta.cadenceSuboptimalAlternativeWitness,
             currentWaitClassification,
-            replayClassification: initiatingReplay
-              ? classifyReplayOrigin(initiatingReplay) === "avoidable_equal_priority_smoother_alternative"
-                ? "avoidable_equal_priority_smoother_alternative"
-                : "no_equal_priority_smoother_alternative"
-              : "no_linked_rest0_replay",
+            replayClassification,
           });
         }
       }
@@ -1018,10 +1341,15 @@ function createSessionResult(
 
     // This independent enumeration records the strongest legal rotation class
     // and its balance envelope at every actual one-court refill.
+    const refillHistory = [...completed, ...[...active.values()].map((assignment) => ({
+      id: `active-${assignment.decisionId}-${assignment.court}`,
+      ...assignment.partition,
+      socialVariety: assignment.socialVariety,
+    }))];
     const refillAudit = eventIndex + 1 < targetMatches
-      ? auditRotationClass(players, sessionType)
+      ? auditRotationClass(players, sessionType, refillHistory)
       : null;
-    if (eventIndex + 1 === 20 || eventIndex + 1 === 400) {
+    if (eventIndex + 1 === 20 || eventIndex + 1 === 400 || eventIndex + 1 === targetMatches) {
       const completedRestValues = [...completedRestGaps];
       const assignmentRestValues = [...assignmentRestGaps];
       const ongoingAvailableFiveTurnWaits = players
@@ -1043,7 +1371,7 @@ function createSessionResult(
         ongoingAvailableFiveTurnWaits,
         inProgressFiveTurnAssignments,
       };
-      checkpointResults[String(eventIndex + 1) as "20" | "400"] = getCheckpoint(players, completed, starvationSnapshot, eventIndex + 1);
+      checkpointResults[String(eventIndex + 1)] = getCheckpoint(players, completed, starvationSnapshot, eventIndex + 1);
     }
     if (!refillAudit) continue;
     for (const candidate of refillAudit.rotationClass) {
@@ -1052,17 +1380,29 @@ function createSessionResult(
     for (const candidate of refillAudit.balanceEnvelope) {
       for (const key of getPartitionRelationships(candidate.partition)) envelopeRelationshipCounts[key] = (envelopeRelationshipCounts[key] ?? 0) + 1;
     }
+    for (const candidate of refillAudit.matchTypeFrontier) {
+      for (const key of getPartitionRelationships(candidate.partition)) matchTypeFrontierRelationshipCounts[key] = (matchTypeFrontierRelationshipCounts[key] ?? 0) + 1;
+    }
     for (const candidate of refillAudit.cadenceAdmissible) {
       for (const key of getPartitionRelationships(candidate.partition)) cadenceRelationshipCounts[key] = (cadenceRelationshipCounts[key] ?? 0) + 1;
+    }
+    for (const candidate of refillAudit.relationshipEntropyFrontier) {
+      for (const key of getPartitionRelationships(candidate.partition)) relationshipEntropyFrontierRelationshipCounts[key] = (relationshipEntropyFrontierRelationshipCounts[key] ?? 0) + 1;
+    }
+    for (const candidate of refillAudit.softCadenceFrontier) {
+      for (const key of getPartitionRelationships(candidate.partition)) softCadenceFrontierRelationshipCounts[key] = (softCadenceFrontierRelationshipCounts[key] ?? 0) + 1;
     }
     const refill = callOptimizer(1);
     if (!refill.result.selection || refill.result.selection.selections.length !== 1) {
       throw new Error(`${sessionType}/${profile}/seed ${seed}: refill failed after completion ${eventIndex + 1} (${refill.result.debug.failureReason})`);
     }
+    counters.refillDecisionCount += 1;
     const selection = refill.result.selection.selections[0];
     const selectedSet = new Set(selection.ids);
     const selectedPlayers = players.filter((player) => selectedSet.has(player.userId));
     const selectedRestVector = getCadenceVector(selectedPlayers);
+    const selectedZeroRestCount = getZeroRestCount(selectedPlayers);
+    const selectedSoftRest = getSoftRestVector(selectedPlayers);
     const chosenCandidateKey = exactCandidateKey(selection.ids, selection.partition);
     if (!refillAudit.fairnessClassKeys.has(chosenCandidateKey)) {
       throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside independent count/arrival fairness class after completion ${eventIndex + 1}`);
@@ -1073,12 +1413,59 @@ function createSessionResult(
     if (!refillAudit.balanceEnvelopeKeys.has(chosenCandidateKey)) {
       throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside independent balance envelope after completion ${eventIndex + 1}`);
     }
-    const bestRest = refillAudit.bestCadenceVector;
-    if (enginePolicy === "current" && !refillAudit.cadenceAdmissibleKeys.has(chosenCandidateKey)) {
-      throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside independent cadence frontier after completion ${eventIndex + 1}`);
+    const selectedOracleCandidate = refillAudit.balanceEnvelope.find((candidate) => exactCandidateKey(candidate.ids, candidate.partition) === chosenCandidateKey);
+    if (!selectedOracleCandidate) throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was absent from independent balance candidate records after completion ${eventIndex + 1}`);
+    if (enginePolicy === "current" && !refillAudit.matchTypeFrontierKeys.has(chosenCandidateKey)) {
+      throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside the independent match-type entropy frontier after completion ${eventIndex + 1}`);
     }
-    if (enginePolicy === "current" && bestRest && compareNumberVectors(selectedRestVector, bestRest) !== 0) {
-      throw new Error(`${sessionType}/${profile}/seed ${seed}: selected cadence vector ${JSON.stringify(selectedRestVector)} differed from independent optimum ${JSON.stringify(bestRest)} after completion ${eventIndex + 1}`);
+    if (enginePolicy === "current" && (!refillAudit.cadenceAdmissibleKeys.has(chosenCandidateKey) || selectedZeroRestCount !== refillAudit.bestZeroRestCount)) {
+      throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside the independent minimum-zero-rest frontier within its best match-type class after completion ${eventIndex + 1}`);
+    }
+    if (enginePolicy === "current" && !refillAudit.relationshipEntropyFrontierKeys.has(chosenCandidateKey)) {
+      throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside the independent relationship-entropy frontier after completion ${eventIndex + 1}`);
+    }
+    if (enginePolicy === "current" && !refillAudit.softCadenceFrontierKeys.has(chosenCandidateKey)) {
+      throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside the independent soft-cadence frontier after completion ${eventIndex + 1}`);
+    }
+    if (enginePolicy === "strict" && !refillAudit.strictCadenceAdmissibleKeys.has(chosenCandidateKey)) {
+      throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside independent strict cadence frontier after completion ${eventIndex + 1}`);
+    }
+    if (enginePolicy === "strict" && refillAudit.bestCadenceVector && compareNumberVectors(selectedRestVector, refillAudit.bestCadenceVector) !== 0) {
+      throw new Error(`${sessionType}/${profile}/seed ${seed}: selected strict cadence vector ${JSON.stringify(selectedRestVector)} differed from independent optimum ${JSON.stringify(refillAudit.bestCadenceVector)} after completion ${eventIndex + 1}`);
+    }
+    if (enginePolicy === "current") {
+      counters.selectedMatchTypeGainTotal += selectedOracleCandidate.rawMatchTypeGain;
+      counters.selectedRelationshipGainTotal += selectedOracleCandidate.rawRelationshipGain;
+      const strongestLowerZeroCompetitor = findLowerZeroTypeGainCompetitor(selectedOracleCandidate, refillAudit.balanceEnvelope);
+      if (strongestLowerZeroCompetitor) {
+        counters.typePriorityOverrideCount += 1;
+        typePriorityOverrideWitnesses.push({
+          afterCompletedMatches: eventIndex + 1,
+          fairnessVector: selectedOracleCandidate.fairness,
+          starvationVector: selectedOracleCandidate.starvation,
+          balanceEnvelopeCandidateCount: refillAudit.balanceEnvelope.length,
+          selected: {
+            ids: [...selectedOracleCandidate.ids].sort(),
+            balanceGap: selectedOracleCandidate.balanceGap,
+            zeroRestCount: selectedOracleCandidate.zeroRestCount,
+            restVector: selectedOracleCandidate.rest,
+            rawMatchTypeGain: selectedOracleCandidate.rawMatchTypeGain,
+            effectiveMatchTypeGain: selectedOracleCandidate.effectiveMatchTypeGain,
+            rawRelationshipGain: selectedOracleCandidate.rawRelationshipGain,
+            effectiveRelationshipGain: selectedOracleCandidate.effectiveRelationshipGain,
+          },
+          lowerZeroRestCompetitor: {
+            ids: [...strongestLowerZeroCompetitor.ids].sort(),
+            balanceGap: strongestLowerZeroCompetitor.balanceGap,
+            zeroRestCount: strongestLowerZeroCompetitor.zeroRestCount,
+            restVector: strongestLowerZeroCompetitor.rest,
+            rawMatchTypeGain: strongestLowerZeroCompetitor.rawMatchTypeGain,
+            effectiveMatchTypeGain: strongestLowerZeroCompetitor.effectiveMatchTypeGain,
+            rawRelationshipGain: strongestLowerZeroCompetitor.rawRelationshipGain,
+            effectiveRelationshipGain: strongestLowerZeroCompetitor.effectiveRelationshipGain,
+          },
+        });
+      }
     }
     for (const player of players.filter((candidate) => !candidate.isBusy && !candidate.isPaused &&
       candidate.restTurns >= IDEAL_REST_GAP + 1 && !selectedSet.has(candidate.userId))) {
@@ -1086,45 +1473,103 @@ function createSessionResult(
       const includes = (candidate: OracleCandidate) => candidate.ids.includes(player.userId);
       const bestBalanceCandidate = refillAudit.balanceEnvelope
         .filter(includes)
-        .sort((left, right) => compareNumberVectors(left.rest, right.rest) ||
+        .sort((left, right) => (enginePolicy === "strict"
+          ? compareNumberVectors(left.rest, right.rest)
+          : right.effectiveMatchTypeGain - left.effectiveMatchTypeGain ||
+            left.zeroRestCount - right.zeroRestCount ||
+            right.effectiveRelationshipGain - left.effectiveRelationshipGain ||
+            compareNumberVectors(left.softRest, right.softRest)) ||
           exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)))[0] ?? null;
-      const candidateVsChosen = bestBalanceCandidate
+      const candidateVsChosenCadence = bestBalanceCandidate
         ? compareNumberVectors(bestBalanceCandidate.rest, selectedRestVector)
         : null;
-      const cadenceFrontierCandidateCount = refillAudit.cadenceAdmissible.filter(includes).length;
+      const candidateVsChosenZeroRest = bestBalanceCandidate
+        ? bestBalanceCandidate.zeroRestCount - selectedZeroRestCount
+        : null;
+      const candidateVsChosenSoftRest = bestBalanceCandidate &&
+        bestBalanceCandidate.effectiveMatchTypeGain === selectedOracleCandidate.effectiveMatchTypeGain &&
+        bestBalanceCandidate.zeroRestCount === selectedZeroRestCount &&
+        bestBalanceCandidate.effectiveRelationshipGain === selectedOracleCandidate.effectiveRelationshipGain
+        ? compareNumberVectors(bestBalanceCandidate.softRest, selectedSoftRest)
+        : null;
+      const candidateVsChosenMatchType = bestBalanceCandidate
+        ? bestBalanceCandidate.effectiveMatchTypeGain - selectedOracleCandidate.effectiveMatchTypeGain
+        : null;
+      const candidateVsChosenRelationship = bestBalanceCandidate
+        ? bestBalanceCandidate.effectiveRelationshipGain - selectedOracleCandidate.effectiveRelationshipGain
+        : null;
+      const candidatePriorityComparison = enginePolicy === "strict"
+        ? candidateVsChosenCadence
+        : candidateVsChosenMatchType === null ? null
+          : candidateVsChosenMatchType !== 0 ? (candidateVsChosenMatchType > 0 ? -1 : 1)
+            : candidateVsChosenZeroRest !== null && candidateVsChosenZeroRest !== 0 ? (candidateVsChosenZeroRest < 0 ? -1 : 1)
+              : candidateVsChosenRelationship !== null && candidateVsChosenRelationship !== 0 ? (candidateVsChosenRelationship > 0 ? -1 : 1)
+                : candidateVsChosenSoftRest;
+      const cadenceFrontierCandidateCount = (enginePolicy === "strict" ? refillAudit.strictCadenceAdmissible : refillAudit.cadenceAdmissible).filter(includes).length;
       meta.hadLegalCandidate ||= refillAudit.legalCandidates.some(includes);
       meta.hadFairnessClassOpportunity ||= refillAudit.fairnessClass.some(includes);
       meta.hadStarvationClassOpportunity ||= refillAudit.rotationClass.some(includes);
       meta.hadBalanceAdmissibleOpportunity ||= refillAudit.balanceEnvelope.some(includes);
-      meta.hadCadenceOptimalOpportunity ||= candidateVsChosen !== null && candidateVsChosen <= 0;
-      meta.hadSmootherAlternative ||= candidateVsChosen !== null && candidateVsChosen < 0;
-      meta.hadCadenceSuboptimalOpportunity ||= candidateVsChosen !== null && candidateVsChosen > 0;
+      meta.hadMatchTypeFrontierOpportunity ||= refillAudit.matchTypeFrontier.some(includes);
+      meta.hadZeroRestFrontierOpportunity ||= refillAudit.cadenceAdmissible.some(includes);
+      meta.hadRelationshipEntropyFrontierOpportunity ||= refillAudit.relationshipEntropyFrontier.some(includes);
+      meta.hadSoftCadenceFrontierOpportunity ||= refillAudit.softCadenceFrontier.some(includes);
+      meta.hadCadenceOptimalOpportunity ||= candidatePriorityComparison !== null && candidatePriorityComparison <= 0;
+      meta.hadSmootherAlternative ||= candidatePriorityComparison !== null && candidatePriorityComparison < 0;
+      meta.hadCadenceSuboptimalOpportunity ||= candidatePriorityComparison !== null && candidatePriorityComparison > 0;
       const witness: DeferredRefillWitness = {
         afterCompletedMatches: eventIndex + 1,
         playerRestTurns: player.restTurns,
         chosenIds: [...selection.ids].sort(),
         chosenRestVector: selectedRestVector,
+        chosenZeroRestCount: selectedZeroRestCount,
+        chosenSoftRestVector: selectedSoftRest,
+        chosenRawMatchTypeGain: selectedOracleCandidate.rawMatchTypeGain,
+        chosenEffectiveMatchTypeGain: selectedOracleCandidate.effectiveMatchTypeGain,
+        chosenRawRelationshipGain: selectedOracleCandidate.rawRelationshipGain,
+        chosenEffectiveRelationshipGain: selectedOracleCandidate.effectiveRelationshipGain,
         fairnessCandidateCount: refillAudit.fairnessClass.filter(includes).length,
         starvationEquivalentCandidateCount: refillAudit.rotationClass.filter(includes).length,
         balanceEnvelopeCandidateCount: refillAudit.balanceEnvelope.filter(includes).length,
+        matchTypeFrontierCandidateCount: refillAudit.matchTypeFrontier.filter(includes).length,
         cadenceFrontierCandidateCount,
+        relationshipEntropyFrontierCandidateCount: refillAudit.relationshipEntropyFrontier.filter(includes).length,
+        softCadenceFrontierCandidateCount: refillAudit.softCadenceFrontier.filter(includes).length,
         bestBalanceCandidate: bestBalanceCandidate ? {
           ids: [...bestBalanceCandidate.ids].sort(),
           partition: bestBalanceCandidate.partition,
           restVector: bestBalanceCandidate.rest,
+          zeroRestCount: bestBalanceCandidate.zeroRestCount,
+          softRestVector: bestBalanceCandidate.softRest,
+          rawMatchTypeGain: bestBalanceCandidate.rawMatchTypeGain,
+          effectiveMatchTypeGain: bestBalanceCandidate.effectiveMatchTypeGain,
+          rawRelationshipGain: bestBalanceCandidate.rawRelationshipGain,
+          effectiveRelationshipGain: bestBalanceCandidate.effectiveRelationshipGain,
         } : null,
-        bestCandidateVsChosenCadence: candidateVsChosen === null ? "none"
-          : candidateVsChosen < 0 ? "strictly_better"
-            : candidateVsChosen === 0 ? "equal" : "worse",
+        bestCandidateVsChosenMatchType: candidateVsChosenMatchType === null ? "none"
+          : candidateVsChosenMatchType > 0 ? "better"
+            : candidateVsChosenMatchType === 0 ? "equal" : "worse",
+        bestCandidateVsChosenCadence: candidateVsChosenCadence === null ? "none"
+          : candidateVsChosenCadence < 0 ? "strictly_better"
+            : candidateVsChosenCadence === 0 ? "equal" : "worse",
+        bestCandidateVsChosenZeroRest: candidateVsChosenZeroRest === null ? "none"
+          : candidateVsChosenZeroRest < 0 ? "strictly_better"
+            : candidateVsChosenZeroRest === 0 ? "equal" : "worse",
+        bestCandidateVsChosenRelationshipGain: candidateVsChosenRelationship === null ? "none"
+          : candidateVsChosenRelationship > 0 ? "better"
+            : candidateVsChosenRelationship === 0 ? "equal" : "worse",
+        bestCandidateVsChosenSoftRest: candidateVsChosenSoftRest === null ? "none"
+          : candidateVsChosenSoftRest < 0 ? "strictly_better"
+            : candidateVsChosenSoftRest === 0 ? "equal" : "worse",
       };
       meta.lastDeferredWitness = witness;
-      if (candidateVsChosen !== null && candidateVsChosen <= 0) {
+      if (candidatePriorityComparison !== null && candidatePriorityComparison <= 0) {
         meta.cadenceOptimalAlternativeWitness ??= witness;
       }
-      if (candidateVsChosen !== null && candidateVsChosen < 0) {
+      if (candidatePriorityComparison !== null && candidatePriorityComparison < 0) {
         meta.strictlyBetterCadenceWitness ??= witness;
       }
-      if (candidateVsChosen !== null && candidateVsChosen > 0) {
+      if (candidatePriorityComparison !== null && candidatePriorityComparison > 0) {
         meta.cadenceSuboptimalAlternativeWitness ??= witness;
       }
     }
@@ -1135,8 +1580,19 @@ function createSessionResult(
     counters.maximumBalanceGap = Math.max(counters.maximumBalanceGap, selection.balanceGap);
   }
 
-  if (!checkpointResults["20"] || !checkpointResults["400"]) throw new Error("Benchmark must stop on exact 20 and 400 completed-match checkpoints.");
-  const missingRelationships = buildUnseenRelationships(opportunities, observed, strongRelationshipCounts, envelopeRelationshipCounts, cadenceRelationshipCounts);
+  if (!checkpointResults["20"] || !checkpointResults[String(targetMatches)]) {
+    throw new Error(`Benchmark must stop on exact 20 and ${targetMatches} completed-match checkpoints.`);
+  }
+  const missingRelationships = buildUnseenRelationships(
+    opportunities,
+    observed,
+    strongRelationshipCounts,
+    envelopeRelationshipCounts,
+    matchTypeFrontierRelationshipCounts,
+    cadenceRelationshipCounts,
+    relationshipEntropyFrontierRelationshipCounts,
+    softCadenceFrontierRelationshipCounts
+  );
   let staticBalanceFeasibility: StaticBalanceFeasibilityReport | null = null;
   let staticBalanceFeasibilityMs = 0;
   if (sessionType === SessionType.POINTS || sessionType === SessionType.ELO) {
@@ -1171,14 +1627,32 @@ function createSessionResult(
       : profile === "wide" ? "points-like strength units: 10 + 1 × latent rank"
         : "points-like strength units: 10 + 0.1 × latent rank",
     externalCompletionSchedule,
-    checkpoints: checkpointResults as Record<"20" | "400", BenchmarkCheckpoint>,
+    completedMatchTypes,
+    checkpoints: checkpointResults,
     maximumMatchCountSpread: counters.maximumFairnessSpread,
     fiveGapEpisodes,
     missingRelationships,
     relationshipOpportunityCounts: getCountMapAsObject(opportunities),
     everStrongRotationRelationshipCounts: strongRelationshipCounts,
     everBalanceEnvelopeRelationshipCounts: envelopeRelationshipCounts,
+    everMatchTypeFrontierRelationshipCounts: matchTypeFrontierRelationshipCounts,
     everCadenceAdmissibleRelationshipCounts: cadenceRelationshipCounts,
+    everRelationshipEntropyFrontierRelationshipCounts: relationshipEntropyFrontierRelationshipCounts,
+    everSoftCadenceFrontierRelationshipCounts: softCadenceFrontierRelationshipCounts,
+    typePriorityOverrides: {
+      scope: "type-entropy-first policy; certified one-court refills only, opening two-court decision excluded",
+      applicable: enginePolicy === "current",
+      refillDecisions: counters.refillDecisionCount,
+      certifiedRefillDecisions: enginePolicy === "current" ? counters.refillDecisionCount : 0,
+      decisionsWithLowerZeroTypeTradeoff: typePriorityOverrideWitnesses.length,
+      rateAcrossCertifiedRefillDecisions: enginePolicy === "current" && counters.refillDecisionCount
+        ? typePriorityOverrideWitnesses.length / counters.refillDecisionCount : null,
+      selectedMatchTypeGainMean: enginePolicy === "current" && counters.refillDecisionCount
+        ? counters.selectedMatchTypeGainTotal / counters.refillDecisionCount : null,
+      selectedRelationshipGainMean: enginePolicy === "current" && counters.refillDecisionCount
+        ? counters.selectedRelationshipGainTotal / counters.refillDecisionCount : null,
+      witnesses: typePriorityOverrideWitnesses,
+    },
     structuralOpportunityAudit: {
       partnerPairs: opportunities.partners.size,
       opponentPairs: opportunities.opponents.size,
@@ -1196,12 +1670,24 @@ export function runSocialCoverageBenchmark({
   includeWide = true,
   enginePolicy = "current",
   sourceRevision = "recorded by runner",
+  sourceProvenance = {
+    commitSha: sourceRevision,
+    workingTreeDirty: false,
+    workingTreeNote: "No extra change note supplied.",
+    policyLabel: "unspecified",
+    engineSourceSha256: null,
+    measurementHarnessSha256: null,
+    coreEngineTrackedDiffPaths: [],
+    sharedVarietyTrackedDiffPaths: [],
+    measurementHarnessTrackedDiffPaths: [],
+  },
 }: {
   seeds: number[];
   wideSeeds?: number[];
   includeWide?: boolean;
-  enginePolicy?: "current" | "baseline";
+  enginePolicy?: "current" | "strict" | "baseline";
   sourceRevision?: string;
+  sourceProvenance?: BenchmarkReport["sourceProvenance"];
 }): BenchmarkReport {
   const sessions: BenchmarkSessionResult[] = [];
   for (const seed of seeds) for (const sessionType of FORMAT_ORDER) sessions.push(createSessionResult("narrow", sessionType, seed, 400, enginePolicy));
@@ -1209,6 +1695,7 @@ export function runSocialCoverageBenchmark({
   return {
     schemaVersion: 1,
     sourceRevision,
+    sourceProvenance,
     generatedAt: new Date().toISOString(),
     seedCount: seeds.length,
     wideSeedCount: includeWide ? wideSeeds.length : 0,
@@ -1231,6 +1718,18 @@ export function runSocialCoverageBenchmark({
   };
 }
 
+/** A bounded CI probe that uses the same completed-event simulator and checkpoint accounting. */
+export function runSocialCoverageRegressionProbe(
+  sessionType: SessionType,
+  seed: number,
+  targetMatches = 120,
+): BenchmarkSessionResult {
+  if (!Number.isSafeInteger(targetMatches) || targetMatches < 20) {
+    throw new Error("The regression probe requires at least 20 completed matches.");
+  }
+  return createSessionResult("narrow", sessionType, seed, targetMatches, "current");
+}
+
 function formatPct(value: number | null) {
   return value === null ? "n/a" : `${(value * 100).toFixed(1)}%`;
 }
@@ -1250,9 +1749,13 @@ function stats(values: number[]) {
 export function summarizeBenchmarkGroup(report: BenchmarkReport, profile: BenchmarkProfile, sessionType: SessionType, checkpoint: "20" | "400") {
   const sessions = report.sessions.filter((session) => session.profile === profile && session.sessionType === sessionType);
   const field = (key: keyof BenchmarkCheckpoint) => sessions.map((session) => session.checkpoints[checkpoint][key] as number | null);
-  const overdueStarvationRates = sessions.map((session) => session.checkpoints[checkpoint].starvation.rateWhenOverdue)
+  const hasUncertifiedOverdueDecision = sessions.some((session) =>
+    session.checkpoints[checkpoint].starvation.uncertifiedCounterfactualDecisions > 0);
+  const overdueStarvationRates = hasUncertifiedOverdueDecision ? [] : sessions
+    .map((session) => session.checkpoints[checkpoint].starvation.rateWhenOverdue)
     .filter((value): value is number => value !== null);
-  const allDecisionStarvationRates = sessions.map((session) => session.checkpoints[checkpoint].starvation.rateAcrossCompletedDecisions)
+  const allDecisionStarvationRates = hasUncertifiedOverdueDecision ? [] : sessions
+    .map((session) => session.checkpoints[checkpoint].starvation.rateAcrossCompletedDecisions)
     .filter((value): value is number => value !== null);
   const coverage = field("varietyCoverageScore").filter((value): value is number => value !== null);
   const entropy = field("normalizedEntropyScore").filter((value): value is number => value !== null);
@@ -1267,6 +1770,10 @@ export function summarizeBenchmarkGroup(report: BenchmarkReport, profile: Benchm
     matchTypeEntropy: stats(sessions.map((session) => session.checkpoints[checkpoint].matchTypeEntropyScore).filter((value): value is number => value !== null)),
     mixedTypeCoverage: stats(sessions.map((session) => session.checkpoints[checkpoint].matchTypeCoverage.MIXED).filter((value): value is number => value !== null)),
     ownSideTypeCoverage: stats(sessions.map((session) => session.checkpoints[checkpoint].matchTypeCoverage.OWN_SIDE).filter((value): value is number => value !== null)),
+    completedMixedMatches: stats(sessions.map((session) => session.checkpoints[checkpoint].completedMatchTypeCounts?.MIXED).filter((value): value is number => typeof value === "number")),
+    completedOwnSideMatches: stats(sessions.map((session) => session.checkpoints[checkpoint].completedMatchTypeCounts?.OWN_SIDE).filter((value): value is number => typeof value === "number")),
+    first100OwnSideMatches: stats(sessions.map((session) => session.completedMatchTypes?.slice(0, 100).filter((type) => type === "OWN_SIDE").length).filter((value): value is number => typeof value === "number")),
+    last100OwnSideMatches: stats(sessions.map((session) => session.completedMatchTypes?.slice(300, 400).filter((type) => type === "OWN_SIDE").length).filter((value): value is number => typeof value === "number")),
     backToBackRate: stats(sessions.map((session) => session.checkpoints[checkpoint].backToBack.rate ?? 0)),
     backToBackCount: stats(sessions.map((session) => session.checkpoints[checkpoint].backToBack.count)),
     maxAssignmentRestGap: stats(sessions.map((session) => session.checkpoints[checkpoint].assignmentRestGap.max)),
@@ -1282,6 +1789,11 @@ export function summarizeBenchmarkGroup(report: BenchmarkReport, profile: Benchm
     starvationUncertifiedDecisionCount: stats(sessions.map((session) => session.checkpoints[checkpoint].starvation.uncertifiedCounterfactualDecisions)),
     starvationCertifiedActivationRate: stats(sessions.map((session) => session.checkpoints[checkpoint].starvation.rateAmongCertifiedCounterfactualDecisions)
       .filter((value): value is number => value !== null)),
+    starvationDecisionCohort: {
+      overdue: sessions.reduce((sum, session) => sum + session.checkpoints[checkpoint].starvation.decisionsWithOverdueAvailable, 0),
+      certified: sessions.reduce((sum, session) => sum + session.checkpoints[checkpoint].starvation.certifiedCounterfactualDecisions, 0),
+      uncertified: sessions.reduce((sum, session) => sum + session.checkpoints[checkpoint].starvation.uncertifiedCounterfactualDecisions, 0),
+    },
     completedRotationDecisions: stats(sessions.map((session) => session.checkpoints[checkpoint].starvation.completedRotationDecisions)),
     fairnessSpread: stats(sessions.map((session) => session.checkpoints[checkpoint].matchCountSpread)),
     maximumFairnessSpread: stats(sessions.map((session) => session.checkpoints[checkpoint].maximumFairnessSpread)),
@@ -1306,7 +1818,10 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
   const lines = [
     "# Matchmaking cadence and relationship coverage benchmark",
     "",
-    `Generated ${report.generatedAt}; source revision ${report.sourceRevision}. Primary seeds: ${report.seedCount}; wide-profile Balanced seeds: ${report.wideSeedCount}.`,
+    `Generated ${report.generatedAt}; source commit ${report.sourceRevision}; policy ${report.sourceProvenance.policyLabel}; dirty worktree ${report.sourceProvenance.workingTreeDirty}. Primary seeds: ${report.seedCount}; wide-profile Balanced seeds: ${report.wideSeedCount}.`,
+    `Worktree note: ${report.sourceProvenance.workingTreeNote}`,
+    `Tracked source changes from commit: core engine ${report.sourceProvenance.coreEngineTrackedDiffPaths.length ? report.sourceProvenance.coreEngineTrackedDiffPaths.join(", ") : "clean"}; shared variety ${report.sourceProvenance.sharedVarietyTrackedDiffPaths.length ? report.sourceProvenance.sharedVarietyTrackedDiffPaths.join(", ") : "clean"}; measurement harness ${report.sourceProvenance.measurementHarnessTrackedDiffPaths.length ? report.sourceProvenance.measurementHarnessTrackedDiffPaths.join(", ") : "clean"}. Generated untracked artifacts can make the overall worktree dirty without changing these tracked source statuses.`,
+    `Engine source SHA-256 ${report.sourceProvenance.engineSourceSha256 ?? "unavailable"}; measurement harness SHA-256 ${report.sourceProvenance.measurementHarnessSha256 ?? "unavailable"}.`,
     "",
     "The roster uses the same P1–P14 identities, gender/preference assignments, latent skill ranks, and independent event-level court-completion schedule for every format at a given seed. The narrow profile maps the same rank vector to Points/Social strengths at 0.1 per rank and Rating strengths at 4 per rank; the wide profile maps it at 1 and 40 respectively. `pointDiff` stays 0 because this benchmark has no match scores. Each run has two active courts; one randomly scheduled court completes per event and is refilled. Coverage counts only completed matches. Rest turns count completed-match events while a player is available; active players do not accrue rest. The +1/+2 threshold counters include available idle events before a player's first match; assignment-rest gaps and back-to-back rates exclude first assignments.",
     "",
@@ -1314,7 +1829,7 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
     "",
     "## Primary narrow-skill profile",
     "",
-    "| Format | Completed | Relationship coverage (mean; median; min–max) | Partner / opponent / courtmate | MIXED / OWN_SIDE | Normalized entropy | Back-to-back rate | Max assignment rest gap (mean of per-seed maxima) | Mean / p95 assignment rest | +1 / +2 threshold reaches | Starvation changed set | Checkpoint / max fairness spread |",
+    "| Format | Completed | Relationship coverage (mean; median; min–max) | Partner / opponent / courtmate | MIXED / OWN_SIDE | Normalized entropy | Back-to-back rate | Max assignment rest gap (mean of per-seed maxima) | Mean / p95 assignment rest | +1 / +2 threshold reaches | Starvation changes / overdue (certified, unknown; rates) | Checkpoint / max fairness spread |",
     "|---|---:|---:|---|---|---:|---:|---:|---:|---:|---:|---:|",
   ];
   for (const [type, label] of formats) for (const checkpoint of ["20", "400"] as const) {
@@ -1325,18 +1840,37 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
       : `${value.mean.toFixed(2)}; ${value.median!.toFixed(2)}; ${value.min!.toFixed(2)}–${value.max!.toFixed(2)}`;
     const pairCoverage = `${formatPct(summary.partnerCoverage.mean)} / ${formatPct(summary.opponentCoverage.mean)} / ${formatPct(summary.courtmateCoverage.mean)}`;
     const typeCoverage = `${formatPct(summary.mixedTypeCoverage.mean)} / ${formatPct(summary.ownSideTypeCoverage.mean)}`;
-    const starvation = summary.starvationInterventionCount.mean === null ? "n/a" : `${summary.starvationInterventionCount.mean.toFixed(1)} (${formatPct(summary.starvationInterventionRate.mean)})`;
+    const starvation = summary.starvationInterventionCount.mean === null ? "n/a"
+      : `${summary.starvationInterventionCount.mean.toFixed(1)} changes (${summary.starvationDecisionCohort.overdue} overdue; ${summary.starvationDecisionCohort.certified} certified, ${summary.starvationDecisionCohort.uncertified} unknown; overdue ${formatPct(summary.starvationInterventionRate.mean)}, certified-only ${formatPct(summary.starvationCertifiedActivationRate.mean)})`;
     const restBeforeAfter = base
       ? `${fmtStats(base.maxAssignmentRestGap)} → ${fmtStats(summary.maxAssignmentRestGap)}`
       : fmtStats(summary.maxAssignmentRestGap);
     lines.push(`| ${label}${base ? " (before → after)" : ""} | ${checkpoint} | ${fmtStats(summary.coverage, true)} | ${pairCoverage} | ${typeCoverage} | ${formatPct(summary.normalizedEntropy.mean)} | ${formatPct(base?.backToBackRate.mean ?? null)} → ${formatPct(summary.backToBackRate.mean)} | ${restBeforeAfter} | ${fmtStats(summary.meanAssignmentRestGap)} / ${fmtStats(summary.p95AssignmentRestGap)} | ${summary.reachedIdealPlusOne.mean?.toFixed(1)} / ${summary.reachedIdealPlusTwo.mean?.toFixed(1)} | ${starvation} | ${fmtStats(summary.fairnessSpread)} / ${fmtStats(summary.maximumFairnessSpread)} |`);
   }
   lines.push("", "The table reports after-change coverage/entropy and before→after back-to-back rate and maximum assignment rest gap when a baseline report is supplied. Assignment rest is the completed-match rest-turn count sampled when players are selected; elapsed completion-event gaps are retained as a separate diagnostic and can include time spent in a match. `Starvation changed set` gives mean counterfactual set changes and the rate conditional on an overdue player being available. The fairness columns are checkpoint spread and maximum spread seen over the run. Exact per-seed values and missing relationship lists are in the adjacent JSON.", "");
+  lines.push("Decision cohorts: coverage, rest, and match-type checkpoints use completed matches only. Starvation's completed-decision count increments when every assignment in that optimizer decision has completed. Refill/type-override counts at checkpoint N include decisions assigned after completion events 1 through N−1; the latest refill can still be active. The opening two-court decision is excluded from type-override counts.");
+  lines.push("## Match-type priority overrides", "", "Each override is one certified one-court refill where the chosen set has more immediate replays but higher match-type entropy gain than a legal candidate in the same strongest fairness/starvation class and Balanced envelope. The denominator is certified one-court refills; the opening two-court decision is excluded. Relationship gain is courtmates + partners + opponents, scored independently from match-type gain.", "", "| Format | Overrides / certified refills | Rate | Mean selected match-type gain | Mean selected relationship gain |", "|---|---:|---:|---:|---:|");
+  for (const [type, label] of formats) {
+    const sessions = report.sessions.filter((session) => session.profile === "narrow" && session.sessionType === type);
+    const overrides = sessions.reduce((sum, session) => sum + session.typePriorityOverrides.decisionsWithLowerZeroTypeTradeoff, 0);
+    const certified = sessions.reduce((sum, session) => sum + session.typePriorityOverrides.certifiedRefillDecisions, 0);
+    const typeGains = sessions.map((session) => session.typePriorityOverrides.selectedMatchTypeGainMean).filter((value) => value !== null);
+    const relationshipGains = sessions.map((session) => session.typePriorityOverrides.selectedRelationshipGainMean).filter((value) => value !== null);
+    lines.push(`| ${label} | ${overrides} / ${certified} | ${formatPct(certified ? overrides / certified : null)} | ${mean(typeGains)?.toFixed(6) ?? "n/a"} | ${mean(relationshipGains)?.toFixed(6) ?? "n/a"} |`);
+  }
+  lines.push("");
+  lines.push("## Completed match-type counts by session window", "", "These are actual completed matches, not player-level match-type coverage. Early and late refer to the first and last 100 completed matches of each 400-match run.", "", "| Format | At 20 completed: MIXED / OWN_SIDE | At 400 completed: MIXED / OWN_SIDE | First 100 OWN_SIDE | Last 100 OWN_SIDE |", "|---|---:|---:|---:|---:|");
+  for (const [type, label] of formats) {
+    const at20 = summarizeBenchmarkGroup(report, "narrow", type, "20");
+    const at400 = summarizeBenchmarkGroup(report, "narrow", type, "400");
+    lines.push(`| ${label} | ${at20.completedMixedMatches.mean?.toFixed(1)} / ${at20.completedOwnSideMatches.mean?.toFixed(1)} | ${at400.completedMixedMatches.mean?.toFixed(1)} / ${at400.completedOwnSideMatches.mean?.toFixed(1)} | ${at400.first100OwnSideMatches.mean?.toFixed(1)} | ${at400.last100OwnSideMatches.mean?.toFixed(1)} |`);
+  }
+  lines.push("");
   if (report.wideSeedCount) {
-    lines.push("## Wide-skill guardrail sensitivity", "", "| Format | Completed | Relationship coverage | Partner / opponent / courtmate | Normalized entropy | Back-to-back rate | Max assignment rest gap | Starvation set changes | Checkpoint / max fairness spread |", "|---|---:|---:|---|---:|---:|---:|---:|---:|");
+    lines.push("## Wide-skill guardrail sensitivity", "", "| Format | Completed | Relationship coverage | Partner / opponent / courtmate | Normalized entropy | Back-to-back rate | Max assignment rest gap | Starvation changes / certified / unknown (rate) | Checkpoint / max fairness spread |", "|---|---:|---:|---|---:|---:|---:|---:|---:|");
     for (const [type, label] of formats.slice(1)) for (const checkpoint of ["20", "400"] as const) {
       const summary = summarizeBenchmarkGroup(report, "wide", type, checkpoint);
-      lines.push(`| ${label} | ${checkpoint} | ${formatPct(summary.coverage.mean)} | ${formatPct(summary.partnerCoverage.mean)} / ${formatPct(summary.opponentCoverage.mean)} / ${formatPct(summary.courtmateCoverage.mean)} | ${formatPct(summary.normalizedEntropy.mean)} | ${formatPct(summary.backToBackRate.mean)} | ${summary.maxAssignmentRestGap.mean?.toFixed(2)} | ${summary.starvationInterventionCount.mean?.toFixed(2)} | ${summary.fairnessSpread.mean?.toFixed(2)} / ${summary.maximumFairnessSpread.mean?.toFixed(2)} |`);
+      lines.push(`| ${label} | ${checkpoint} | ${formatPct(summary.coverage.mean)} | ${formatPct(summary.partnerCoverage.mean)} / ${formatPct(summary.opponentCoverage.mean)} / ${formatPct(summary.courtmateCoverage.mean)} | ${formatPct(summary.normalizedEntropy.mean)} | ${formatPct(summary.backToBackRate.mean)} | ${summary.maxAssignmentRestGap.mean?.toFixed(2)} | ${summary.starvationInterventionCount.mean?.toFixed(2)} / ${summary.starvationDecisionCohort.certified} / ${summary.starvationDecisionCohort.uncertified} (${formatPct(summary.starvationInterventionRate.mean)}) | ${summary.fairnessSpread.mean?.toFixed(2)} / ${summary.maximumFairnessSpread.mean?.toFixed(2)} |`);
     }
     lines.push("", "The wide profile uses the same skill ranks at 10× the narrow strength spread. It is a sensitivity run for balance-envelope restrictions; the primary relationship denominator remains structural and does not shrink to the guardrail.");
     for (const [type, label] of formats.slice(1)) {
@@ -1356,7 +1890,7 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
     const guardrail = type === SessionType.SOCIAL_MIX ? "No balance guardrail." : `${sessions.reduce((sum, session) => sum + session.missingRelationships.filter((relationship) => relationship.classification === "excluded_by_balance_envelope_in_observed_opportunities").length, 0)} unseen facet-pairs were in a strongest rotation class but outside every observed balance envelope.`;
     lines.push(`| ${label} | ${full}/${sessions.length} | ${missed} total facet-pairs across seeds | ${guardrail} |`);
   }
-  lines.push("", "The unseen relationship classification is finite-session evidence: `ever admissible but unchosen`, `in the strongest fair/starvation class but excluded by every observed balance envelope`, or `never in the strongest rotation class during observed refills`. The static balance-feasibility audit is reported separately and can show whether a relationship is structurally possible while still outside a specific balance envelope. Finite simulation alone does not prove permanent exclusion.", "");
+  lines.push("", "The unseen relationship classification is finite-session evidence across successive opportunity layers: balance envelope, match-type entropy frontier, zero-rest frontier, relationship entropy frontier, and soft cadence frontier. The static balance-feasibility audit is reported separately and can show whether a relationship is structurally feasible while still outside a specific balance envelope. Finite simulation alone does not prove permanent exclusion.", "");
   const longWaits = report.sessions.flatMap((session) => session.fiveGapEpisodes.map((episode) => ({ ...episode, format: session.sessionType, profile: session.profile, seed: session.seed })));
   const waitClassCounts = longWaits.reduce<Record<string, number>>((counts, episode) => {
     counts[episode.currentWaitClassification] = (counts[episode.currentWaitClassification] ?? 0) + 1;
@@ -1364,12 +1898,16 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
   }, {});
   const waitClassSummary = Object.entries(waitClassCounts).map(([name, count]) => `${name}: ${count}`).join("; ") || "none";
   const linkedReplayCount = longWaits.filter((episode) => episode.initiatingReplay !== null).length;
+  const immediateReplayExclusionCount = longWaits.filter((episode) => episode.currentWaitClassification === "immediate_replay_priority_exclusion").length;
+  const typeOverrideReplayOrigins = longWaits.filter((episode) => episode.initiatingReplay?.betterTypeGainLowerZeroRestSetsWithoutPlayer).length;
   const equalCadenceWitnessCount = longWaits.filter((episode) => episode.cadenceOptimalAlternativeWitness?.bestCandidateVsChosenCadence === "equal").length;
   const betterCadenceWitnessCount = longWaits.filter((episode) => episode.strictlyBetterCadenceWitness !== null).length;
   const worseCadenceWitnessCount = longWaits.filter((episode) => episode.cadenceSuboptimalAlternativeWitness !== null).length;
   lines.push("## Long waits", "", `There were ${longWaits.length} completed assignment gaps of at least five available completed-match rest turns in these runs. ` +
     (longWaits.length
-      ? `Deferred-refill classes: ${waitClassSummary}. ${linkedReplayCount} had a linked immediately preceding rest-zero replay. The preserved cadence witnesses show ${betterCadenceWitnessCount} strictly better-cadence inclusion opportunities, ${equalCadenceWitnessCount} equal-cadence inclusion alternatives, and ${worseCadenceWitnessCount} cadence-worse inclusion opportunities; JSON stores the selected and candidate IDs/rest vectors for each witness. A fairness/legality class means no candidate including that player was observed in the stronger fairness class during their deferred decisions. An equal-cadence alternative had the same preceding fairness, starvation, balance and cadence state, but the independent oracle does not capture entropy scores, so the exact later tie-break is not attributed.`
+      ? report.enginePolicy === "current"
+        ? `Deferred-refill classes: ${waitClassSummary}. ${linkedReplayCount} had a linked immediately preceding rest-zero replay; ${typeOverrideReplayOrigins} linked replay origins had a lower-zero alternative with lower match-type gain, so the chosen replay was an observed type-priority tradeoff. ${immediateReplayExclusionCount} long-wait episodes had no candidate in the minimum-zero frontier after the best type gain. Each wait record stores the type, zero-rest, relationship, and soft-rest frontier evidence and candidate gains.`
+        : `Deferred-refill classes: ${waitClassSummary}. ${linkedReplayCount} had a linked immediately preceding rest-zero replay. Strict-cadence witnesses show ${betterCadenceWitnessCount} strictly better-vector inclusion opportunities, ${equalCadenceWitnessCount} equal-vector inclusion alternatives, and ${worseCadenceWitnessCount} worse-vector inclusion opportunities. JSON stores selected and candidate IDs/rest vectors; an equal vector may still lose on entropy.`
       : "No player reached a five-turn available rest gap."), "");
   lines.push("## Runtime", "", `Total measured optimizer/oracle time across sessions: ${(report.sessions.reduce((sum, session) => sum + session.performanceMs, 0) / 1000).toFixed(1)} seconds. Per-run timings are in JSON.`, "");
   return lines.join("\n");
@@ -1381,16 +1919,29 @@ export function makeBenchmarkReport({
   seedCount,
   wideSeedCount,
   enginePolicy = "current",
+  sourceProvenance,
 }: {
   sessions: BenchmarkSessionResult[];
   sourceRevision: string;
   seedCount: number;
   wideSeedCount: number;
-  enginePolicy?: "current" | "baseline";
+  enginePolicy?: "current" | "strict" | "baseline";
+  sourceProvenance?: BenchmarkReport["sourceProvenance"];
 }): BenchmarkReport {
   return {
     schemaVersion: 1,
     sourceRevision,
+    sourceProvenance: sourceProvenance ?? {
+      commitSha: sourceRevision,
+      workingTreeDirty: false,
+      workingTreeNote: "No extra change note supplied.",
+      policyLabel: enginePolicy,
+      engineSourceSha256: null,
+      measurementHarnessSha256: null,
+      coreEngineTrackedDiffPaths: [],
+      sharedVarietyTrackedDiffPaths: [],
+      measurementHarnessTrackedDiffPaths: [],
+    },
     generatedAt: new Date().toISOString(),
     seedCount,
     wideSeedCount,

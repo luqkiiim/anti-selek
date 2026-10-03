@@ -77,11 +77,6 @@ function summarizeVariety(players: MatchmakerV3Player[], history: SocialHistoryM
 function simulate({ men, mode, sessionType, respectPlayerRest, matches, wideSkills = false }: {
   men: number; mode: SessionMode; sessionType: SessionType; respectPlayerRest: boolean; matches: number; wideSkills?: boolean;
 }) {
-  const strictCadenceMixedPoints = mode === SessionMode.MIXICANO && men === 7 &&
-    sessionType === SessionType.POINTS && respectPlayerRest;
-  const strictCadenceWideRating = mode === SessionMode.MEXICANO && men === 14 &&
-    sessionType === SessionType.ELO && wideSkills && respectPlayerRest;
-  const strictCadenceCoverageTradeoff = strictCadenceMixedPoints || strictCadenceWideRating;
   const players = createSimulationPlayers(14, {
     baseStrength: sessionType === SessionType.ELO ? 900 : 10,
     strengthStep: sessionType === SessionType.ELO ? (wideSkills ? 40 : 4) : (wideSkills ? 1 : 0.1),
@@ -172,22 +167,11 @@ function simulate({ men, mode, sessionType, respectPlayerRest, matches, wideSkil
       const variety = summarizeVariety(players, [...completed, ...active.values()], mode);
       checkpoints.push({ matches: event + 1, entropy: variety.meanEntropy, coverage: variety.minimumCoverage });
       expect(variety.meanEntropy).toBeGreaterThan(0.9);
-      // Strict cadence can keep the least-covered player/facet below the old
-      // variety-first floor in these measured profiles. The 7+7 Points run
-      // records whether OWN_SIDE types recur, and wide Elo keeps its full
-      // structural denominator. Keep reporting these minima while entropy,
-      // fairness, guardrail, partner-repeat and pod-repeat checks still apply.
-      if (!strictCadenceCoverageTradeoff) expect(variety.minimumCoverage).toBeGreaterThanOrEqual(0.75);
+      expect(variety.minimumCoverage).toBeGreaterThanOrEqual(0.75);
       if (mode === SessionMode.MIXICANO) {
         const recentTypes = new Set(types.slice(-100));
-        expect([...recentTypes].every((type) => ["MIXED", "MENS", "WOMENS"].includes(type))).toBe(true);
-        // In this exact Balanced Points profile, report rather than require
-        // cadence-inferior OWN_SIDE types to recur. Other Mixed profiles still
-        // retain the recurring-type assertions.
-        if (!strictCadenceMixedPoints) {
-          expect(recentTypes).toEqual(new Set(["MIXED", "MENS", "WOMENS"]));
-          for (const player of variety.context.playersByUserId.values()) expect(player.matchType.counts.size).toBe(2);
-        }
+        expect(recentTypes).toEqual(new Set(["MIXED", "MENS", "WOMENS"]));
+        for (const player of variety.context.playersByUserId.values()) expect(player.matchType.counts.size).toBe(2);
       }
     }
   }
@@ -198,12 +182,22 @@ function simulate({ men, mode, sessionType, respectPlayerRest, matches, wideSkil
     // Widely separated ratings can make extreme partners permanently exceed
     // the safety ceiling; the shared roster vocabulary deliberately remains
     // broader than the momentary balance envelope.
-    if (!strictCadenceMixedPoints) expect(final.minimumCoverage).toBeGreaterThanOrEqual(wideSkills ? 0.8 : 0.9);
+    expect(final.minimumCoverage).toBeGreaterThanOrEqual(wideSkills ? 0.8 : 0.9);
   }
-  // A four-person minority has only one legal own-side pod; recurring that
-  // experience necessarily recreates its pod while teams can still vary.
+  // A four-person minority has only one legal own-side quartet. Every
+  // own-side match for that group necessarily repeats that exact pod; keep
+  // the ordinary pod-repeat cap for every other quartet.
   const hasOnlyOneOwnSidePod = mode === SessionMode.MIXICANO && [men, 14 - men].includes(4);
-  expect(Math.max(...podCounts.values())).toBeLessThanOrEqual(Math.ceil(matches / (hasOnlyOneOwnSidePod ? 10 : 20)));
+  if (hasOnlyOneOwnSidePod) {
+    const minorityGender = men === 4 ? "MALE" : "FEMALE";
+    const uniqueMinorityPod = players.filter((player) => player.gender === minorityGender).map((player) => player.userId).sort().join("|");
+    const minorityOwnSideType = minorityGender === "MALE" ? "MENS" : "WOMENS";
+    expect(podCounts.get(uniqueMinorityPod) ?? 0).toBe(types.filter((type) => type === minorityOwnSideType).length);
+    const otherPodCounts = [...podCounts].filter(([pod]) => pod !== uniqueMinorityPod).map(([, count]) => count);
+    expect(Math.max(0, ...otherPodCounts)).toBeLessThanOrEqual(Math.ceil(matches / 20));
+  } else {
+    expect(Math.max(...podCounts.values())).toBeLessThanOrEqual(Math.ceil(matches / 20));
+  }
   expect(final.maximumPartnerCount).toBeLessThan(Math.ceil(matches * 4 / 14 / 3));
   const matchTypeCounts = Object.fromEntries(["MIXED", "MENS", "WOMENS"].map((type) => [type, types.filter((value) => value === type).length]));
   console.info("Balanced asynchronous simulation", JSON.stringify({ sessionType, mode, men, women: 14 - men, respectPlayerRest, wideSkills, matches, maximumFairnessGap, maximumRestGap, unavoidableOverdueEvents, guardrailRestrictedEvents, ratingCeilingFallbackEvents, maximumBalanceGap, maximumPodCount: Math.max(...podCounts.values()), maximumPartnerCount: final.maximumPartnerCount, matchTypeCounts, checkpoints }));
