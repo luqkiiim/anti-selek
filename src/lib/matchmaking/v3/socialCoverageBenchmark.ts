@@ -1751,6 +1751,57 @@ export function classifyReplayOriginForBenchmark(trace: ReplayInitiationTrace, e
 
 type BenchmarkEnginePolicy = "current" | "strict" | "baseline" | "type-first" | "replay-envelope";
 
+interface MissingRelationshipOpportunityCounts {
+  strong: number;
+  envelope: number;
+  typeFrontier: number;
+  cadence: number;
+  relationshipFrontier: number;
+  replayAllowance: number;
+  policyAdmission: number;
+  policyEntropy: number;
+  policyFinal: number;
+  gateRejected: number;
+}
+
+export function classifyMissingRelationshipForBenchmark(
+  enginePolicy: BenchmarkEnginePolicy,
+  counts: MissingRelationshipOpportunityCounts
+): MissingRelationship["classification"] {
+  const {
+    strong, envelope, typeFrontier, cadence, relationshipFrontier,
+    replayAllowance,
+    policyAdmission, policyEntropy, policyFinal, gateRejected,
+  } = counts;
+  if (policyFinal > 0) return "admissible_but_unselected";
+  if (policyEntropy > 0) return enginePolicy === "baseline"
+    ? "legacy_rest_priority_excluded_in_observed_opportunities"
+    : "soft_cadence_priority_excluded_in_observed_opportunities";
+  if (policyAdmission > 0) {
+    return enginePolicy === "type-first"
+      ? "relationship_entropy_priority_excluded_in_observed_opportunities"
+      : enginePolicy === "strict" ? "strict_entropy_priority_excluded_in_observed_opportunities"
+        : "combined_entropy_priority_excluded_in_observed_opportunities";
+  }
+  if (enginePolicy === "current" && gateRejected > 0) return "coverage_gate_priority_excluded_in_observed_opportunities";
+  if (enginePolicy === "current" && envelope > 0) return "replay_allowance_priority_excluded_in_observed_opportunities";
+  if (enginePolicy === "strict" && envelope > 0) return "strict_cadence_priority_excluded_in_observed_opportunities";
+  if (enginePolicy === "baseline" && envelope > 0) return "combined_entropy_priority_excluded_in_observed_opportunities";
+  if (enginePolicy === "type-first" && envelope > 0) {
+    return typeFrontier === 0 ? "match_type_entropy_priority_excluded_in_observed_opportunities"
+      : cadence === 0 ? "immediate_replay_priority_excluded_in_observed_opportunities"
+        : relationshipFrontier === 0 ? "relationship_entropy_priority_excluded_in_observed_opportunities"
+          : "soft_cadence_priority_excluded_in_observed_opportunities";
+  }
+  if (enginePolicy === "replay-envelope" && envelope > 0) {
+    return replayAllowance === 0
+      ? "replay_allowance_priority_excluded_in_observed_opportunities"
+      : "combined_entropy_priority_excluded_in_observed_opportunities";
+  }
+  if (strong > 0 && envelope === 0) return "excluded_by_balance_envelope_in_observed_opportunities";
+  return "never_in_strongest_rotation_class_during_observed_refills";
+}
+
 /** Lower values mean the independent candidate has higher priority for this measured engine policy. */
 function compareCandidatePolicyPriority(
   left: OracleCandidate,
@@ -1825,38 +1876,11 @@ function buildUnseenRelationships(
       const policyEntropy = policyEntropyCounts[key] ?? 0;
       const policyFinal = policyFinalCounts[key] ?? 0;
       const gateRejected = coverageGateRejectedCounts[key] ?? 0;
-      let classification: MissingRelationship["classification"];
-      if (policyFinal > 0) classification = "admissible_but_unselected";
-      else if (policyEntropy > 0) classification = enginePolicy === "baseline"
-        ? "legacy_rest_priority_excluded_in_observed_opportunities"
-        : "soft_cadence_priority_excluded_in_observed_opportunities";
-      else if (policyAdmission > 0) {
-        classification = enginePolicy === "type-first"
-          ? "relationship_entropy_priority_excluded_in_observed_opportunities"
-          : enginePolicy === "strict" ? "strict_entropy_priority_excluded_in_observed_opportunities"
-            : "combined_entropy_priority_excluded_in_observed_opportunities";
-      } else if (enginePolicy === "current" && gateRejected > 0) {
-        classification = "coverage_gate_priority_excluded_in_observed_opportunities";
-      } else if (enginePolicy === "current" && envelope > 0) {
-        classification = "replay_allowance_priority_excluded_in_observed_opportunities";
-      } else if (enginePolicy === "strict" && envelope > 0) {
-        classification = "strict_cadence_priority_excluded_in_observed_opportunities";
-      } else if (enginePolicy === "baseline" && envelope > 0) {
-        classification = "combined_entropy_priority_excluded_in_observed_opportunities";
-      } else if (enginePolicy === "type-first") {
-        classification = typeFrontier === 0 ? "match_type_entropy_priority_excluded_in_observed_opportunities"
-          : cadence === 0 ? "immediate_replay_priority_excluded_in_observed_opportunities"
-            : relationshipFrontier === 0 ? "relationship_entropy_priority_excluded_in_observed_opportunities"
-              : "soft_cadence_priority_excluded_in_observed_opportunities";
-      } else if (enginePolicy === "replay-envelope" && envelope > 0) {
-        classification = replayAllowance === 0
-          ? "replay_allowance_priority_excluded_in_observed_opportunities"
-          : "combined_entropy_priority_excluded_in_observed_opportunities";
-      } else if (strong > 0 && envelope === 0) {
-        classification = "excluded_by_balance_envelope_in_observed_opportunities";
-      } else {
-        classification = "never_in_strongest_rotation_class_during_observed_refills";
-      }
+      const classification = classifyMissingRelationshipForBenchmark(enginePolicy, {
+        strong, envelope, typeFrontier, cadence, relationshipFrontier,
+        replayAllowance,
+        policyAdmission, policyEntropy, policyFinal, gateRejected,
+      });
       unseen.push({
         measuredPolicy: enginePolicy,
         frontierDiagnosticPolicy: "current-coverage-gated-oracle",

@@ -8,6 +8,7 @@ import {
   assertBenchmarkReportReadyForRendering,
   advanceReplayOriginOnCompletion,
   classifyReplayOriginForBenchmark,
+  classifyMissingRelationshipForBenchmark,
   findLowerZeroTypeGainCompetitor,
   formatBenchmarkHuman,
   getReplayCoverageZeroDiagnostics,
@@ -50,6 +51,27 @@ describe("social relationship coverage benchmark", () => {
     expect(() => assertBenchmarkReportReadyForRendering({ validationStatus: "pending" })).toThrow(/validationStatus=pending/);
     expect(() => assertBenchmarkReportReadyForRendering({})).not.toThrow();
     expect(() => assertBenchmarkReportReadyForRendering({ validationStatus: "passed" })).not.toThrow();
+  });
+
+  it("classifies type-first misses only after checking the balance envelope", () => {
+    const frontiers = {
+      strong: 774,
+      envelope: 0,
+      typeFrontier: 0,
+      cadence: 0,
+      relationshipFrontier: 0,
+      replayAllowance: 0,
+      policyAdmission: 0,
+      policyEntropy: 0,
+      policyFinal: 0,
+      gateRejected: 0,
+    };
+    expect(classifyMissingRelationshipForBenchmark("type-first", frontiers))
+      .toBe("excluded_by_balance_envelope_in_observed_opportunities");
+    expect(classifyMissingRelationshipForBenchmark("type-first", { ...frontiers, strong: 0 }))
+      .toBe("never_in_strongest_rotation_class_during_observed_refills");
+    expect(classifyMissingRelationshipForBenchmark("type-first", { ...frontiers, envelope: 1 }))
+      .toBe("match_type_entropy_priority_excluded_in_observed_opportunities");
   });
 
   it("matches a presentation baseline to the current profile, format, and seed subset", () => {
