@@ -93,12 +93,14 @@ The default run uses five narrow-profile seeds (`1, 4729, 104729, 130363,
 2097593`) for Social, Balanced Points and Balanced Rating/Elo, plus three
 wide-profile sensitivity seeds (`30011, 65537, 999983`) for the two Balanced
 formats. It uses the same 14-player 7/7 roster and seeded court-completion
-schedule across formats. Each run records checkpoints after exactly 20 and 400
-completed matches; unfinished active assignments do not count toward coverage.
-All match point differences are zero because these runs measure matchmaking,
-not match outcomes. The full run writes
-`benchmarks/social-coverage-full-current.md` and
-`benchmarks/social-coverage-full-current.json`.
+schedule across formats. Each policy run records checkpoints after exactly 21
+and 400 completed matches; unfinished active assignments do not count toward
+coverage. The 21-match report includes each player's completed-match count,
+minimum, maximum and spread. All point differences are zero because these runs
+measure matchmaking, not match outcomes. By default, the current-policy report
+and comparison write under `benchmarks/social-coverage-21/`; the example below
+uses an explicit output directory at
+`benchmarks/social-coverage-21/coverage-gated/`.
 
 Variety Coverage Score measures whether distinct relationships have occurred:
 for each player and facet, it divides experienced feasible courtmates,
@@ -123,20 +125,48 @@ example:
 npm run benchmark:matchmaking -- --seeds 1,4729,104729 --wide-seeds 30011,65537
 ```
 
-To compare against a previously saved report, pass `--baseline-json <path>`.
-For a four-policy comparison, also pass `--strict-json <path>` and
-`--type-first-json <path>` with the preserved strict-cadence and
-type-entropy-first reports. The retained full reports can be compared with:
+To compare against saved reports, pass `--baseline-json <path>`,
+`--strict-json <path>`, `--type-first-json <path>`, and
+`--replay-envelope-json <path>`. A five-policy comparison using the saved
+21/400 runs is:
 
 ```sh
-npm run benchmark:matchmaking -- --baseline-json benchmarks/social-coverage-full-baseline.json --strict-json benchmarks/social-coverage-full-strict.json --type-first-json benchmarks/social-coverage-full-type-entropy-first.json
+npm run benchmark:matchmaking -- --baseline-json benchmarks/social-coverage-21/social-coverage-full21-entropy-first.json --strict-json benchmarks/social-coverage-21/social-coverage-full21-strict-cadence.json --type-first-json benchmarks/social-coverage-21/type-first-final/social-coverage-full21-type-entropy-first.json --replay-envelope-json benchmarks/social-coverage-21/replay-envelope/social-coverage-full21-replay-envelope.json --out-dir benchmarks/social-coverage-21/coverage-gated
 ```
 
-To generate a baseline report from an explicit worktree, pass
-`--baseline-worktree <path>`; the worktree must contain the benchmark test and
-measurement files. `--skip-baseline` runs only the current engine, and
-`--out-dir <path>` changes the output directory. The long benchmark case is
-skipped in the normal Vitest/CI run and is enabled by this script.
+`--only-policy baseline|strict|type-first|replay-envelope` runs a pinned
+historical worktree and requires its matching `--baseline-worktree`,
+`--strict-worktree`, `--type-first-worktree`, or
+`--replay-envelope-worktree` path plus an explicit `--out-dir`. Use
+`--only-policy current --out-dir <path>` to run only the current checkout.
+Historical worktrees must resolve to the pinned engine revisions listed in
+`benchmarks/README.md`. `--out-dir <path>` selects an isolated output directory.
+The long benchmark is skipped in normal Vitest/CI and enabled by this script.
+
+The current replay-coverage gate runs after the strongest fairness/arrival/
+schedule/starvation class and, for Balanced, inside the frozen balance envelope.
+It admits the minimum immediate-replay count and permits one additional
+immediate replay only when its normalized first-exposure coverage gain is
+strictly greater than the best gain available at the minimum. The gate includes
+feasible match-type first exposures in Mixed; the primary Variety Coverage Score
+still measures only partner, opponent, and courtmate coverage. Combined
+normalized entropy and then soft rest cadence rank the admitted batches.
+Checkpoint counters are assignment/refill cohorts after completions 1 through
+N−1; the completed-match coverage history itself is sampled exactly at N.
+Root-level `social-coverage-full-*.{json,md}` reports are preserved older
+20/400-checkpoint artifacts and are not the current 21/400 benchmark.
+Two preserved late-OWN_SIDE regression tests currently fail under the exact
+first-exposure gate. They remain enabled and unchanged pending the user's
+priority clarification; the multi-seed benchmark reports late-window match
+types so this tradeoff stays visible.
+Coverage at 100% means every feasible people relationship has occurred once;
+it does not guarantee even repetition entropy or ongoing match-type variety.
+The gate also tracks Mixed match-type first exposure. Once all four gate facets
+are covered, all immediate gains are zero, so no +1 replay can pass the strict
+improvement rule. If the minimum-replay class then offers only MIXED, OWN_SIDE
+can stop recurring. Gate diagnostics report +1 availability, eligibility,
+selection, and rejection separately; decision and candidate counts differ and
+decision cohorts may overlap.
 
 ## Balance admissibility
 
