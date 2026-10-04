@@ -481,6 +481,12 @@ export interface BenchmarkReport {
   sessions: BenchmarkSessionResult[];
 }
 
+export function assertBenchmarkReportReadyForRendering(report: Pick<BenchmarkReport, "validationStatus">) {
+  if (report.validationStatus === "pending") {
+    throw new Error("Cannot render a benchmark report with validationStatus=pending.");
+  }
+}
+
 interface BenchmarkPlayer extends MatchmakerV3Player {
   restTurns: number;
   gender: string;

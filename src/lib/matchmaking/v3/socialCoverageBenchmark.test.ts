@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { PartnerPreference, PlayerGender, SessionMode, SessionType } from "../../../types/enums";
 import { buildSocialVarietyContext, buildSocialVarietySnapshot } from "./socialVariety";
 import {
+  assertBenchmarkReportReadyForRendering,
   advanceReplayOriginOnCompletion,
   classifyReplayOriginForBenchmark,
   findLowerZeroTypeGainCompetitor,
@@ -43,6 +44,12 @@ describe("social relationship coverage benchmark", () => {
       chosenGainIsZero: true,
       minimumFrontierAndChosenGainAreZero: true,
     });
+  });
+
+  it("rejects rendering a pending report but accepts legacy reports without validation status", () => {
+    expect(() => assertBenchmarkReportReadyForRendering({ validationStatus: "pending" })).toThrow(/validationStatus=pending/);
+    expect(() => assertBenchmarkReportReadyForRendering({})).not.toThrow();
+    expect(() => assertBenchmarkReportReadyForRendering({ validationStatus: "passed" })).not.toThrow();
   });
 
   it("matches a presentation baseline to the current profile, format, and seed subset", () => {
@@ -100,6 +107,7 @@ describe("social relationship coverage benchmark", () => {
     const outputPath = process.env.BENCHMARK_RENDER_OUTPUT_MARKDOWN;
     if (!reportPath || !outputPath) throw new Error("Set BENCHMARK_RENDER_REPORT_JSON and BENCHMARK_RENDER_OUTPUT_MARKDOWN.");
     const report = JSON.parse(readFileSync(resolve(reportPath), "utf8")) as BenchmarkReport;
+    assertBenchmarkReportReadyForRendering(report);
     const baselinePath = process.env.BENCHMARK_RENDER_BASELINE_JSON;
     const baseline = baselinePath ? JSON.parse(readFileSync(resolve(baselinePath), "utf8")) as BenchmarkReport : undefined;
     mkdirSync(dirname(resolve(outputPath)), { recursive: true });
