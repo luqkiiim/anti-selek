@@ -46,23 +46,23 @@ These are actual completed matches, not player-level match-type coverage. Early 
 
 Checkpoint-21 exact player match counts (each row is one seed; IDs are roster identities). The four aggregate columns show min/max/spread and whether all fourteen players have exactly six completed matches.
 
-| Format | Seed | P1–P14 completed-match counts | Min | Max | Spread | All exactly 6 |
+| Format | Seed | Completed counts by player ID | Min | Max | Spread | All exactly 6 |
 |---|---:|---|---:|---:|---:|---|
-| Social | 1 | 5,5,7,5,6,7,5,6,6,6,6,6,7,7 | 5 | 7 | 2 | no |
-| Social | 4729 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Social | 104729 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Social | 130363 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Social | 2097593 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Balanced Points | 1 | 5,5,7,5,6,7,5,6,6,6,6,6,7,7 | 5 | 7 | 2 | no |
-| Balanced Points | 4729 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Balanced Points | 104729 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Balanced Points | 130363 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Balanced Points | 2097593 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Balanced Rating/Elo | 1 | 6,5,7,7,7,5,6,6,5,6,6,5,6,7 | 5 | 7 | 2 | no |
-| Balanced Rating/Elo | 4729 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Balanced Rating/Elo | 104729 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Balanced Rating/Elo | 130363 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
-| Balanced Rating/Elo | 2097593 | 6,6,6,6,6,6,6,6,6,6,6,6,6,6 | 6 | 6 | 0 | yes |
+| Social | 1 | P1=5,P10=5,P11=7,P12=5,P13=6,P14=7,P2=5,P3=6,P4=6,P5=6,P6=6,P7=6,P8=7,P9=7 | 5 | 7 | 2 | no |
+| Social | 4729 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Social | 104729 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Social | 130363 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Social | 2097593 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Balanced Points | 1 | P1=5,P10=5,P11=7,P12=5,P13=6,P14=7,P2=5,P3=6,P4=6,P5=6,P6=6,P7=6,P8=7,P9=7 | 5 | 7 | 2 | no |
+| Balanced Points | 4729 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Balanced Points | 104729 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Balanced Points | 130363 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Balanced Points | 2097593 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Balanced Rating/Elo | 1 | P1=6,P10=5,P11=7,P12=7,P13=7,P14=5,P2=6,P3=6,P4=5,P5=6,P6=6,P7=5,P8=6,P9=7 | 5 | 7 | 2 | no |
+| Balanced Rating/Elo | 4729 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Balanced Rating/Elo | 104729 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Balanced Rating/Elo | 130363 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
+| Balanced Rating/Elo | 2097593 | P1=6,P10=6,P11=6,P12=6,P13=6,P14=6,P2=6,P3=6,P4=6,P5=6,P6=6,P7=6,P8=6,P9=6 | 6 | 6 | 0 | yes |
 
 ## Wide-skill guardrail sensitivity
 
