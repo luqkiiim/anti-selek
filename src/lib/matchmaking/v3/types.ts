@@ -216,6 +216,12 @@ export interface V3SingleCourtDebug {
   chosenImmediateReplayCount?: number | null;
   replayCertified?: boolean;
   replayEnvelopeStatus?: V3ReplayEnvelopeStatus;
+  bestMinimumReplayCoverageGain?: number | null;
+  chosenImmediateCoverageGain?: number | null;
+  coverageGateCertified?: boolean;
+  coverageGateUpperBoundCertified?: boolean;
+  coverageGateStatus?: V3CoverageGateStatus;
+  chosenReplayCoverageEligible?: boolean | null;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
   starvationCertified?: boolean;
@@ -320,6 +326,12 @@ export interface V3BatchDebug {
   chosenImmediateReplayCount: number | null;
   replayCertified: boolean;
   replayEnvelopeStatus: V3ReplayEnvelopeStatus;
+  bestMinimumReplayCoverageGain?: number | null;
+  chosenImmediateCoverageGain?: number | null;
+  coverageGateCertified?: boolean;
+  coverageGateUpperBoundCertified?: boolean;
+  coverageGateStatus?: V3CoverageGateStatus;
+  chosenReplayCoverageEligible?: boolean | null;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
   starvationCertified?: boolean;
@@ -338,6 +350,7 @@ export interface V3BatchDebug {
 }
 
 export type V3ReplayEnvelopeStatus = "DISABLED" | "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION";
+export type V3CoverageGateStatus = "DISABLED" | "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION";
 
 export interface V3BatchResult<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,

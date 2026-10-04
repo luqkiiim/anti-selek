@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { PartnerPreference, PlayerGender, SessionMode } from "../../../types/enums";
+import { getDoublesPartitions } from "./balance";
 import {
   buildSocialVarietyContext,
   buildSocialVarietySnapshot,
+  createSocialVarietyCoverageScorer,
   getSocialVarietyCoverage,
   getSocialVarietyGains,
   parseSocialVarietySnapshot,
@@ -40,6 +42,56 @@ function histogramEntropy(counts: ReadonlyMap<string, number>, opportunities: Re
 }
 
 describe("Social lifetime normalized diversity", () => {
+  it("scores first-exposure coverage as an exact weighted mean over feasible facets", () => {
+    const players = createRoster(7, 7);
+    const mixedContext = buildSocialVarietyContext(players, [], { sessionMode: SessionMode.MIXICANO });
+    const mixedScorer = createSocialVarietyCoverageScorer(mixedContext);
+    const mixedUnits = mixedScorer.getPartitionGainUnits(mixed);
+    // Each of four players gains 3/13 courtmates, 1/13 partners, 2/13
+    // opponents, and one of two feasible match types, then the roster mean.
+    expect(mixedScorer.toNormalizedScore(mixedUnits)).toBeCloseTo(100 / 1456, 14);
+    expect(mixedScorer.getBatchGainUnits([mixed, mixed])).toBe(mixedUnits);
+
+    const openScorer = createSocialVarietyCoverageScorer(mixedContext, SessionMode.MEXICANO);
+    expect(openScorer.toNormalizedScore(openScorer.getPartitionGainUnits(mixed))).toBeCloseTo(24 / 546, 14);
+
+    const repeated = buildSocialVarietyContext(players, [mixed], { sessionMode: SessionMode.MIXICANO });
+    expect(createSocialVarietyCoverageScorer(repeated).getPartitionGainUnits(mixed)).toBe(BigInt(0));
+  });
+
+  it("provides a safe exact upper bound for one player's coverage gain in a match", () => {
+    const players = createRoster(7, 7);
+    const context = buildSocialVarietyContext(players, [mixed], { sessionMode: SessionMode.MIXICANO });
+    const mixedScorer = createSocialVarietyCoverageScorer(context);
+    const openScorer = createSocialVarietyCoverageScorer(context, SessionMode.MEXICANO);
+    const quartets = [
+      ["U1", "U2", "L1", "L2"],
+      ["U1", "U2", "U3", "U4"],
+      ["L1", "L2", "L3", "L4"],
+    ];
+    for (const quartet of quartets) {
+      for (const partition of getDoublesPartitions(quartet as [string, string, string, string])) {
+        const playerUpper = quartet.reduce((sum, userId) =>
+          sum + mixedScorer.getMaximumSingleMatchGainUnits(userId), BigInt(0));
+        expect(playerUpper).toBeGreaterThanOrEqual(mixedScorer.getPartitionGainUnits(partition));
+      }
+    }
+    expect(mixedScorer.getMaximumSingleMatchGainUnits("U1"))
+      .toBeGreaterThan(openScorer.getMaximumSingleMatchGainUnits("U1"));
+  });
+
+  it("counts feasible singleton facets as meaningful first exposures", () => {
+    const players = createRoster(2, 2);
+    const context = buildSocialVarietyContext(players, [], { sessionMode: SessionMode.MIXICANO });
+    const scorer = createSocialVarietyCoverageScorer(context);
+    expect(scorer.eligiblePlayerCount).toBe(4);
+    expect([...context.playersByUserId.values()].every((player) => player.matchType.opportunities.size === 1)).toBe(true);
+    const withSingletonType = scorer.toNormalizedScore(scorer.getPartitionGainUnits(mixed));
+    const noTypeScorer = createSocialVarietyCoverageScorer(context, SessionMode.MEXICANO);
+    const withoutTypeFacet = noTypeScorer.toNormalizedScore(noTypeScorer.getPartitionGainUnits(mixed));
+    expect(withSingletonType).toBeGreaterThan(withoutTypeFacet);
+  });
+
   it("measures relationship coverage against the structural vocabulary, separately from entropy", () => {
     const players = createRoster(7, 7);
     const context = buildSocialVarietyContext(players, [mixed], { sessionMode: SessionMode.MIXICANO });

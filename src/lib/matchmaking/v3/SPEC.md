@@ -16,21 +16,34 @@ specification records behavioral invariants used by regression tests.
 - Protect available overdue players using the full unpaused roster, even when
   ordinary cadence preference is off.
 - After fairness, arrival, structural schedule rank and starvation tie, Social
-  certifies the lowest immediate-replay count across the whole batch and allows
-  at most one additional selected player with `restTurns === 0`. Balanced first
-  freezes its existing balance guardrail, then certifies that same global
-  replay minimum only inside the fixed envelope; the one-player allowance does
-  not expand it.
-- Within the certified replay allowance, compare the existing combined
-  normalized entropy across courtmates, partners, opponents and, in MIXICANO,
-  match type. Match type is one facet of the combined score, not a separate
-  priority tier. In MEXICANO that facet is inactive.
+  certifies the lowest immediate-replay count across the whole batch. Balanced
+  first freezes its existing balance guardrail, then certifies that same global
+  replay minimum only inside the fixed envelope; neither later gate expands
+  that envelope.
+- All exact-minimum-replay batches remain admissible. A batch with one
+  additional selected player at `restTurns === 0` is admissible only if its
+  normalized first-exposure coverage exceeds the maximum coverage among the
+  exact-minimum batches. More than one additional replay is excluded. This
+  coverage threshold is fixed from the whole-batch best-replay frontier; it is
+  not a pairwise tolerance and coverage does not rank candidates afterward.
+- First-exposure coverage is the eligible context-roster average of each
+  player's equal-weight mean over feasible facets. Each new opportunity
+  exposure contributes the reciprocal of that player's structural opportunity
+  count. Courtmates, partners, opponents and, in MIXICANO, match type are
+  active facets; MEXICANO omits match type. Empty facets are excluded, while a
+  feasible singleton is meaningful. Existing completed/committed exposures
+  are baseline; Balanced keeps its full structural denominator even when its
+  guardrail blocks a relationship.
+- Within the admitted set, compare the existing combined normalized entropy
+  across courtmates, partners, opponents and, in MIXICANO, match type. Match
+  type is one facet of the combined score, not a separate priority tier. In
+  MEXICANO that facet is inactive.
 - Only when combined entropy ties does the ascending sorted completed-match
   rest-turn vector act as a soft cadence tie-break. Social compares combined
   entropy exactly; Balanced applies its fixed `1e-12` bucket to the combined
   score.
-- `respectPlayerRest: false` disables the replay allowance and soft cadence
-  layer while leaving starvation protection active.
+- `respectPlayerRest: false` disables replay, first-exposure coverage and soft
+  cadence gates while leaving starvation protection active.
 - Optimize whole disjoint batches globally, including asynchronous refills.
 
 ## Shared variety invariants
@@ -46,13 +59,15 @@ specification records behavioral invariants used by regression tests.
 
 ## Social policy
 
-Order Social by fairness/arrival, group schedule and starvation. When ordinary
-rest preferences are enabled, find the global minimum zero-rest count in that
-stronger class and admit candidates up to minimum plus one. Rank those batches
-by combined four-facet entropy, then the soft ascending rest vector. Continue
+Order Social by legality/availability, fairness/arrival, group schedule and
+starvation. When ordinary rest preferences are enabled, find the global
+minimum zero-rest count in that stronger class, then freeze the largest
+first-exposure coverage at that exact minimum. Admit the minimum plus one only
+when coverage strictly exceeds that frozen frontier. Rank admitted batches by
+combined four-facet entropy, then the soft ascending rest vector. Continue
 with actual balance, late partner/opponent repeats, exact rematch and seeded
 pairing ties. Entropy is exact. `respectPlayerRest: false` skips the replay
-allowance and soft vector while starvation remains.
+and first-exposure gates and soft vector while starvation remains.
 
 ## Balanced policy
 
@@ -61,7 +76,9 @@ allowance and soft vector while starvation remains.
 3. Shared starvation protection.
 4. Freeze balance admissibility within that stronger class.
 5. If rest preferences are enabled, certify the minimum global zero-rest count
-   inside the fixed envelope and allow at most one additional replay.
+   inside the fixed envelope and freeze the greatest first-exposure coverage
+   among batches at that minimum. Allow one additional replay only when its
+   coverage strictly exceeds that frozen frontier.
 6. Combined normalized entropy (courtmates, partners, opponents and, in
    MIXICANO, match type).
 7. Soft ascending rest vector for entropy ties, when enabled.
@@ -76,30 +93,35 @@ Starvation wins over a prettier baseline that excludes an overdue player.
 
 Balanced never compares candidates using a weighted balance/entropy sum or
 pairwise balance tolerance. Effective ties use one fixed `1e-12` bucket on the
-combined entropy score; Social retains exact ordering. Legacy debt, repeat,
-coverage and rest heuristics cannot prune legal candidates. Search first
-certifies the replay minimum after stronger priorities and, for Balanced,
-inside its fixed guardrail. The final global search admits only batches within
-minimum plus one, then may prune by an optimistic combined-entropy upper bound
-and, only when that score ties, by the soft-rest bound. Whole-batch replay and
-entropy bounds include every court in the refill. Exact rematches have no
-influence until all earlier metrics tie.
+combined entropy score; Social retains exact ordering. Legacy debt, repeat and
+quota heuristics cannot prune legal candidates. Search certifies the replay
+minimum after stronger priorities and, for Balanced, inside its fixed
+guardrail. A separate global pass certifies the coverage frontier across exact
+best-replay batches. The final global search admits only the minimum or
+strictly higher-coverage minimum-plus-one batches, then may prune by an
+optimistic combined-entropy upper bound and, only when that score ties, by the
+soft-rest bound. Whole-batch replay, coverage and entropy bounds include every
+court in the refill. Exact rematches have no influence until all earlier
+metrics tie.
 
 ## Search certification and explanation
 
 At most fourteen available players and at most two courts are exhaustive by
 default. Larger global search is bounded. Explicit limits can interrupt the
-balance-baseline, replay-certification or final-optimization phase. Rest-
-sensitive selection requires a certified replay minimum and allowance; an
-incomplete replay-certification phase returns no selection. Returning a
-Balanced batch also requires certified stronger priorities and a certified
-balance baseline; incomplete final entropy optimization is reported.
+balance-baseline, replay-certification, coverage-certification or
+final-optimization phase. Rest-sensitive selection requires certified replay
+and coverage gates; an incomplete replay or coverage certification returns no
+selection. Returning a Balanced batch also requires certified stronger
+priorities and a certified balance baseline; incomplete final entropy
+optimization is reported.
 
 Shared debug must identify fairness state, schedule rank, starvation state,
-certified best/allowed/chosen replay counts and envelope status, best
-achievable balance, allowed envelope, actual balance, raw entropy and facet
-gains, final tie-break and search certifications. Persisted reasons explain
-the policy and selection metrics without storing a per-court replay baseline.
+certified best/allowed/chosen replay counts and envelope status, best-replay
+coverage frontier, chosen coverage gain/eligibility and its certificate,
+best achievable balance, allowed envelope, actual balance, raw entropy and
+facet gains, final tie-break and search certifications. Persisted reasons
+explain the policy and selection metrics without storing a per-court replay
+baseline.
 
 Behavior tests cover independent exhaustive batch comparison, global
 best-plus-one replay envelopes, combined-entropy and soft-cadence ordering,

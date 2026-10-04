@@ -183,8 +183,8 @@ function buildReasonSummary({
         ? "courtmates, partners, opponents and match type"
         : "courtmates, partners and opponents";
       const entropyAndCadence = respectPlayerRest === false
-        ? `Starvation protection remains active, while ordinary replay and cadence preferences are disabled. The matcher then maximizes combined normalized entropy across ${varietyFacets}.`
-        : `The matcher certifies the lowest immediate-replay count for the whole refill batch, then allows up to one additional replay. Within that fixed allowance, it maximizes combined normalized entropy across ${varietyFacets}; smoother completed-match rest cadence breaks entropy ties.`;
+        ? `Starvation protection remains active, while ordinary replay, first-exposure coverage and cadence gates are disabled. The matcher then maximizes combined normalized entropy across ${varietyFacets}.`
+        : `The matcher certifies the lowest immediate-replay count for the whole refill batch. A batch with one additional replay is admitted only when its first-exposure coverage strictly exceeds the best-replay frontier. Within that fixed admission set, it maximizes combined normalized entropy across ${varietyFacets}; smoother completed-match rest cadence breaks entropy ties.`;
       const tieBreakExplanation = balanced
         ? `The balance guardrail sets the admissible envelope first. Inside it, ${entropyAndCadence}`
         : entropyAndCadence;
@@ -265,7 +265,7 @@ function buildReasonSummary({
     const gain = metrics.socialVarietyGain.toPrecision(5);
     const facets = metrics.socialVarietyGains;
     summary.push(`Normalized entropy gain is ${gain}${facets ? ` (courtmates ${facets.courtmates.toPrecision(5)}, partners ${facets.partners.toPrecision(5)}, opponents ${facets.opponents.toPrecision(5)}, match type ${facets.matchType.toPrecision(5)})` : ""}.`);
-    if (metrics.finalTieBreak === "EXACT_REMATCH") summary.push("Exact rematch avoidance decided only after rotation priorities, the certified best-plus-one replay allowance, combined entropy, soft cadence and balance priorities tied.");
+    if (metrics.finalTieBreak === "EXACT_REMATCH") summary.push("Exact rematch avoidance decided only after rotation priorities, the certified replay and first-exposure coverage gates, combined entropy, soft cadence and balance priorities tied.");
     else if (metrics.finalTieBreak === "RANDOM") summary.push("Randomness decided only the final tied choices.");
     else if (metrics.finalTieBreak === "DETERMINISTIC") summary.push("A deterministic final tie-break decided between equivalent choices.");
   }

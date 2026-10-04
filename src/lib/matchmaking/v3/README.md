@@ -12,32 +12,50 @@ constraints are enforced before ranking. Shared priorities are effective match
 counts, arrival priority, applicable structural schedule rank, then starvation.
 
 After those priorities tie, Social certifies the smallest immediate-replay
-count available in that rotation class and allows at most one additional
-zero-rest player. Balanced first establishes its fixed balance envelope inside
-the same stronger class, then certifies that minimum replay count only among
-candidates inside the envelope and applies the same one-player allowance.
-Neither allowance is calculated court by court or expands Balanced's envelope.
+count available in that rotation class. Balanced first establishes its fixed
+balance envelope inside the same stronger class, then certifies the minimum
+replay count only among candidates inside that envelope. Across the entire
+refill batch, all candidates at that minimum remain admissible. A batch with
+one additional `restTurns === 0` player is admitted only when its immediate
+first-exposure coverage is strictly greater than the maximum coverage among
+the exact-minimum batches. Two or more additional replays are never admitted.
+The envelope is frozen globally; Balanced's coverage gate cannot expand its
+balance envelope.
 
-Within the certified replay allowance, both formats maximize the existing
-combined normalized entropy across courtmates, partners, opponents and, in
-Mixed sessions, match type. The completed-match rest vector is a soft tie-break
-after entropy. `restTurns === 0` counts as an immediate replay. The soft vector
+This first-exposure coverage gate is an admission rule, not another score to
+maximize. Within the admitted set, the matcher maximizes the existing combined
+normalized entropy across courtmates, partners, opponents and, in Mixed
+sessions, match type. The completed-match rest vector is a soft tie-break after
+entropy. `restTurns === 0` counts as an immediate replay. The soft vector
 maximizes the ascending sorted rest turns lexicographically: maximize the
 lowest rest, then the next-lowest, and so on. Total rest is not an objective.
 Social compares combined entropy exactly; Balanced uses its fixed 1e-12 bucket
-on the combined score. `respectPlayerRest: false` disables both the replay
-allowance and soft cadence preference, while starvation protection remains
-enabled. Structural opportunity coverage continues to report feasible
+on the combined score. `respectPlayerRest: false` disables replay and
+first-exposure gates and soft cadence preference, while starvation protection
+remains enabled. Structural opportunity coverage continues to report feasible
 relationships regardless of the choices admitted by the balance envelope.
 
+The score averages each eligible player's mean first-exposure fraction across
+feasible facets. Each facet uses the shared structural opportunity vocabulary
+and is normalized by its feasible opportunity count. A feasible singleton is
+meaningful; a facet with no opportunities is omitted. In Mixed sessions,
+match type is one facet normalized by feasible MIXED/OWN_SIDE types; in other
+modes it is inactive. The denominator does not shrink when a Balanced
+guardrail blocks a relationship. Existing completed and committed exposure
+history supplies the baseline. Thus a best+1 batch can reopen an OWN_SIDE/MIXED
+first exposure, but only while it adds coverage beyond every exact-best-replay
+batch. Once no new exposure is available, the extra replay closes again.
+
 The resulting Social order is legality and availability, match-count fairness,
-arrival, structural schedule rank, starvation, the whole-batch replay
-allowance, combined entropy, soft cadence, actual worst/total balance gaps and
-applicable point-difference gaps, Social's late partner/opponent-repeat ties,
-exact rematch and seeded randomness. Balanced uses the same stronger rotation
-order, then its fixed balance guardrail, replay allowance, combined entropy,
-soft cadence, actual worst/total balance, Points worst/total point-difference
-gaps where applicable, exact rematch and its seeded/deterministic final tie.
+arrival, structural schedule rank, starvation, certified global replay
+minimum, first-exposure coverage admission, combined entropy, soft cadence,
+actual worst/total balance gaps and applicable point-difference gaps, Social's
+late partner/opponent-repeat ties, exact rematch and seeded randomness.
+Balanced uses the same stronger rotation order, then its fixed balance
+guardrail, certified replay minimum, first-exposure coverage admission,
+combined entropy, soft cadence, actual worst/total balance, Points
+worst/total point-difference gaps where applicable, exact rematch and its
+seeded/deterministic final tie.
 
 ## Shared variety and starvation
 
@@ -126,10 +144,12 @@ skipped in the normal Vitest/CI run and is enabled by this script.
 the strongest feasible fairness/arrival/schedule/starvation class and its
 lexicographic minimum `(maxBalanceGap, totalBalanceGap)`. It then freezes the
 envelope before searching whole batches. Replay certification finds the
-minimum zero-rest count inside that fixed envelope and allows at most one
-additional zero-rest player across the whole batch. Combined normalized
-entropy ranks the admitted batches next, followed by soft completed-match
-cadence when entropy ties. The replay allowance never widens the balance
+minimum zero-rest count inside that fixed envelope. Coverage certification
+freezes the greatest first-exposure gain among batches at that minimum. A
+batch with one additional zero-rest player joins only when its coverage is
+strictly above that frozen frontier; batches with more replays are excluded.
+Combined normalized entropy ranks the admitted batches next, followed by soft
+completed-match cadence when entropy ties. Neither gate widens the balance
 envelope.
 
 Points admits `maxBalanceGap <= bestMaxBalanceGap + 1.5`. Rating admits
@@ -148,34 +168,40 @@ weaker starvation or fairness class cannot set the baseline.
 ## Search and diagnostics
 
 Balanced retires the old candidate caps, rest tie zones, quartet exemplars,
-anchor locks and repeat/coverage pruning. Every admissible partition remains
-visible to the shared combined entropy and cadence ordering. Small one/two-court
+anchor locks and legacy repeat/debt pruning. The certified first-exposure gate
+uses the shared structural vocabulary and filters only the one-replay allowance;
+it is not a candidate-compression heuristic. Small one/two-court
 decisions with at most fourteen available players are exhaustive by default.
 Larger decisions use bounded global search and admissible pruning, with a
-50,000-branch / two-second budget for each baseline, replay-certification and
-final-selection phase.
-The balance pass defers replay, entropy and soft cadence, collapsing only
-worse-balanced partitions of an identical quartet. The replay pass then
+50,000-branch / two-second budget for each baseline, replay-certification,
+coverage-certification and final-selection phase.
+The balance pass defers replay, first-exposure coverage, entropy and soft
+cadence, collapsing only worse-balanced partitions of an identical quartet.
+The replay pass then
 certifies the minimum zero-rest count inside the strongest rotation class and,
 for Balanced, inside the frozen guardrail. Its optimistic replay lower bound
-is relaxed across all remaining players. The final pass restores admissible
-layouts and searches only batches within the global best-plus-one allowance.
-Its optimistic combined-entropy bound is checked before the soft-rest bound;
-soft cadence prunes only when the entropy score ties. A rest-sensitive
-selection requires certified replay minimum and allowance; an incomplete
-replay-certification phase returns no selection. A Balanced timeout may return
-an incumbent only when fairness, schedule, starvation, balance baseline and
-replay allowance are certified; otherwise it reports a search limit. It
-never grants an unproven envelope or falls back to greedy courts. Diagnostics
-distinguish incomplete entropy or soft-rest optimization.
+is relaxed across all remaining players. The coverage pass then certifies the
+maximum first-exposure gain among exact-best-replay batches; its optimistic
+upper bound spans every remaining court. The final pass admits the exact
+minimum and only those best+1 batches whose first-exposure gain is strictly
+greater than that frozen frontier. Its optimistic combined-entropy bound is
+checked before the soft-rest bound; soft cadence prunes only when the entropy
+score ties. A rest-sensitive selection requires certified replay and coverage
+gates; incomplete certification returns no selection. A Balanced timeout may
+return an incumbent only when fairness, schedule, starvation, balance
+baseline, replay allowance and coverage gate are certified; otherwise it
+reports a search limit. It never grants an unproven gate or falls back to
+greedy courts. Diagnostics distinguish incomplete entropy or soft-rest
+optimization.
 
 Balanced entropy uses one fixed 1e-12 bucket on the combined score for
 transitive effective ties; Social retains exact score ordering. No pairwise
 epsilon is used. Raw total/facet gains remain available. Shared debug reports
-the certified best replay count, its allowed best-plus-one count, chosen count
-and envelope status together with fairness, starvation, balance baseline,
-allowed gap, chosen gap, completed-match rest vector, entropy facets and final
-tie-break. Persisted reasons explain the rotation policy and selection metrics.
+the certified best replay count and allowance, maximum first-exposure gain at
+the minimum, chosen coverage gain and replay eligibility, and both certificate
+statuses, together with fairness, starvation, balance baseline, allowed gap,
+chosen gap, completed-match rest vector, entropy facets and final tie-break.
+Persisted reasons explain the rotation policy and selection metrics.
 The opt-in `measureRotationStarvationIntervention` benchmark helper runs the
 same search with starvation priority suppressed only in a private
 counterfactual, replaying identical random draws and reporting whether the

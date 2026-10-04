@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { SessionMode, SessionType } from "../../../types/enums";
 import { findBestRotationBatchSelection, measureRotationStarvationIntervention } from "./socialBatch";
-import { buildSocialVarietyContext } from "./socialVariety";
+import { buildSocialVarietyContext, createSocialVarietyCoverageScorer } from "./socialVariety";
+import type { SocialVarietyContext } from "./socialVariety";
 import type {
   ActiveMatchmakerV3Player,
   MatchmakerV3Player,
@@ -47,6 +48,79 @@ type SplitCadenceCandidate = {
   restTurns: number[];
   gains: { matchType: number; courtmates: number; partners: number; opponents: number };
 };
+
+type OracleFraction = { numerator: bigint; denominator: bigint };
+const ORACLE_BIG_ZERO = BigInt(0);
+const ORACLE_BIG_ONE = BigInt(1);
+
+const oracleFraction = (numerator: bigint, denominator: bigint): OracleFraction => {
+  if (denominator <= ORACLE_BIG_ZERO) throw new Error("Oracle fraction denominator must be positive");
+  let a = numerator < ORACLE_BIG_ZERO ? -numerator : numerator;
+  let b = denominator;
+  while (b !== ORACLE_BIG_ZERO) [a, b] = [b, a % b];
+  const divisor = a || ORACLE_BIG_ONE;
+  const sign = numerator < ORACLE_BIG_ZERO ? -ORACLE_BIG_ONE : ORACLE_BIG_ONE;
+  return { numerator: sign * (numerator < ORACLE_BIG_ZERO ? -numerator : numerator) / divisor, denominator: denominator / divisor };
+};
+
+function addOracleFractions(left: OracleFraction, right: OracleFraction): OracleFraction {
+  return oracleFraction(
+    left.numerator * right.denominator + right.numerator * left.denominator,
+    left.denominator * right.denominator
+  );
+}
+
+function compareOracleFractions(left: OracleFraction, right: OracleFraction) {
+  const difference = left.numerator * right.denominator - right.numerator * left.denominator;
+  return difference < ORACLE_BIG_ZERO ? -1 : difference > ORACLE_BIG_ZERO ? 1 : 0;
+}
+
+function meanOracleFractions(values: readonly OracleFraction[]): OracleFraction {
+  if (!values.length) return oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE);
+  const sum = values.reduce((total, value) => addOracleFractions(total, value), oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE));
+  return oracleFraction(sum.numerator, sum.denominator * BigInt(values.length));
+}
+
+/** Independent exact model for the certified first-exposure gate. */
+function oracleCoverageReplayEnvelope<T extends {
+  restTurns: readonly number[];
+  firstExposureCoverage: OracleFraction;
+}>(candidates: readonly T[], respectPlayerRest = true) {
+  if (!candidates.length) {
+    return {
+      bestImmediateReplayCount: null,
+      allowedImmediateReplayCount: null,
+      bestCoverageFrontier: oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE),
+      candidates: [] as T[],
+    };
+  }
+  if (!respectPlayerRest) {
+    return {
+      bestImmediateReplayCount: null,
+      allowedImmediateReplayCount: null,
+      bestCoverageFrontier: oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE),
+      candidates: [...candidates],
+    };
+  }
+  const bestImmediateReplayCount = Math.min(...candidates.map((candidate) => immediateReplayCount(candidate.restTurns)));
+  const allowedImmediateReplayCount = bestImmediateReplayCount + 1;
+  const bestReplayCandidates = candidates.filter((candidate) => immediateReplayCount(candidate.restTurns) === bestImmediateReplayCount);
+  const bestCoverageFrontier = [...bestReplayCandidates]
+    .map((candidate) => candidate.firstExposureCoverage)
+    .sort(compareOracleFractions)
+    .at(-1)!;
+  return {
+    bestImmediateReplayCount,
+    allowedImmediateReplayCount,
+    bestCoverageFrontier,
+    candidates: candidates.filter((candidate) => {
+      const replayCount = immediateReplayCount(candidate.restTurns);
+      if (replayCount === bestImmediateReplayCount) return true;
+      return replayCount === allowedImmediateReplayCount &&
+        compareOracleFractions(candidate.firstExposureCoverage, bestCoverageFrontier) > 0;
+    }),
+  };
+}
 
 function oracleEntropyScore(gain: number, sessionType: SessionType) {
   return sessionType === SessionType.SOCIAL_MIX ? gain : Math.round(gain * 1e12) / 1e12;
@@ -126,6 +200,87 @@ function repeatedHistory(layout: FixedLayout, count: number): V3CompletedMatch[]
     team1: [layout.partition.team1[0], layout.partition.team1[1]],
     team2: [layout.partition.team2[0], layout.partition.team2[1]],
   }));
+}
+
+type OracleCoverageFacet = "courtmates" | "partners" | "opponents" | "matchType";
+
+/** Recomputes first-exposure coverage directly from opportunity/count sets. */
+function oracleFirstExposureCoverage(
+  partitionsToPlay: readonly V3DoublesPartition[],
+  context: SocialVarietyContext,
+  sessionMode: SessionMode
+): OracleFraction {
+  const activeFacets: OracleCoverageFacet[] = sessionMode === SessionMode.MIXICANO
+    ? ["courtmates", "partners", "opponents", "matchType"]
+    : ["courtmates", "partners", "opponents"];
+  const eligiblePlayers = [...context.playersByUserId].filter(([, facets]) =>
+    activeFacets.some((facet) => facets[facet].opportunities.size > 0)
+  );
+  if (!eligiblePlayers.length) return oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE);
+  const additions = new Map<string, Map<OracleCoverageFacet, Set<string>>>();
+  const remember = (userId: string, facet: OracleCoverageFacet, experience: string) => {
+    let byFacet = additions.get(userId);
+    if (!byFacet) {
+      byFacet = new Map();
+      additions.set(userId, byFacet);
+    }
+    let experiences = byFacet.get(facet);
+    if (!experiences) {
+      experiences = new Set();
+      byFacet.set(facet, experiences);
+    }
+    experiences.add(experience);
+  };
+
+  for (const partition of partitionsToPlay) {
+    const team1 = partition.team1;
+    const team2 = partition.team2;
+    const ids = [...team1, ...team2];
+    const sides = ids.map((id) => context.effectiveSideByUserId.get(id) ?? null);
+    let matchType: string | null = null;
+    if (sessionMode === SessionMode.MIXICANO && sides.every((side) => side !== null)) {
+      if (sides.every((side) => side === sides[0])) matchType = "OWN_SIDE";
+      else {
+        const teamHasOppositeSides = (team: readonly string[]) =>
+          context.effectiveSideByUserId.get(team[0]) !== context.effectiveSideByUserId.get(team[1]);
+        if (teamHasOppositeSides(team1) && teamHasOppositeSides(team2)) matchType = "MIXED";
+      }
+    }
+    for (const [team, opponents] of [[team1, team2], [team2, team1]] as const) {
+      for (let seat = 0; seat < team.length; seat += 1) {
+        const userId = team[seat];
+        const partner = team[1 - seat];
+        remember(userId, "courtmates", partner);
+        remember(userId, "partners", partner);
+        for (const opponent of opponents) {
+          remember(userId, "courtmates", opponent);
+          remember(userId, "opponents", opponent);
+        }
+        if (matchType) remember(userId, "matchType", matchType);
+      }
+    }
+  }
+
+  let total = oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE);
+  const eligibleCount = BigInt(eligiblePlayers.length);
+  for (const [userId, histograms] of eligiblePlayers) {
+    const feasibleFacets = activeFacets.filter((facet) => histograms[facet].opportunities.size > 0);
+    const byFacet = additions.get(userId);
+    for (const facet of feasibleFacets) {
+      const histogram = histograms[facet];
+      const possible = BigInt(histogram.opportunities.size);
+      const newExposures = [...(byFacet?.get(facet) ?? [])].filter((experience) =>
+        histogram.opportunities.has(experience) && (histogram.counts.get(experience) ?? 0) === 0
+      );
+      if (newExposures.length > 0) {
+        total = addOracleFractions(total, oracleFraction(
+          BigInt(newExposures.length),
+          eligibleCount * BigInt(feasibleFacets.length) * possible
+        ));
+      }
+    }
+  }
+  return total;
 }
 
 function runFixedOneCourt(
@@ -427,6 +582,125 @@ describe("independent cadence oracle", () => {
     expect(chooseSplitCadence([oneReplay, twoReplay, threeReplay], sessionType)).toBe(twoReplay);
   });
 
+  it.each(rotationTypes)("admits best+1 only above the frozen best-replay coverage frontier in %s", (sessionType) => {
+    const candidate = (restTurns: number[], coverage: OracleFraction, entropy: number) => ({
+      restTurns,
+      firstExposureCoverage: coverage,
+      entropy,
+    });
+    const bestHighCoverageLowerEntropy = candidate([1, 1, 1, 1], oracleFraction(BigInt(3), BigInt(4)), 5);
+    const bestLowCoverageHigherEntropy = candidate([1, 1, 1, 1], oracleFraction(BigInt(1), BigInt(4)), 7);
+    const equalCoverageHighEntropy = candidate([0, 1, 1, 1], oracleFraction(BigInt(3), BigInt(4)), 200);
+    const belowFrontierHighEntropy = candidate([0, 1, 1, 1], oracleFraction(BigInt(1), BigInt(2)), 100);
+    const admittedLowerCoverage = candidate([0, 1, 1, 1], oracleFraction(BigInt(7), BigInt(8)), 8);
+    const admittedHigherCoverageLowerEntropy = candidate([0, 1, 1, 1], oracleFraction(ORACLE_BIG_ONE, ORACLE_BIG_ONE), 6);
+    const twoReplaysEvenMoreCoverage = candidate([0, 0, 1, 1], oracleFraction(ORACLE_BIG_ONE, ORACLE_BIG_ONE), 300);
+    const envelope = oracleCoverageReplayEnvelope([
+      bestHighCoverageLowerEntropy,
+      bestLowCoverageHigherEntropy,
+      equalCoverageHighEntropy,
+      belowFrontierHighEntropy,
+      admittedLowerCoverage,
+      admittedHigherCoverageLowerEntropy,
+      twoReplaysEvenMoreCoverage,
+    ]);
+
+    expect(envelope.bestImmediateReplayCount).toBe(0);
+    expect(envelope.allowedImmediateReplayCount).toBe(1);
+    expect(envelope.bestCoverageFrontier).toEqual(oracleFraction(BigInt(3), BigInt(4)));
+    expect(envelope.candidates).toEqual([
+      bestHighCoverageLowerEntropy,
+      bestLowCoverageHigherEntropy,
+      admittedLowerCoverage,
+      admittedHigherCoverageLowerEntropy,
+    ]);
+
+    // The frozen frontier comes from every exact-best-replay batch, not just
+    // the entropy winner: B's lower coverage does not remove it, and C cannot
+    // pass by comparing only with B or an evolving incumbent.
+    // Coverage is admission only. Once admitted, entropy wins even when a
+    // lower-coverage +1 candidate faces a higher-coverage +1 alternative.
+    const chosen = [...envelope.candidates].sort((left, right) =>
+      oracleEntropyScore(right.entropy, sessionType) - oracleEntropyScore(left.entropy, sessionType)
+    )[0];
+    expect(chosen).toBe(admittedLowerCoverage);
+  });
+
+  it("treats a feasible singleton as a meaningful first exposure and ignores players with no active facets", () => {
+    const singletonGain = meanOracleFractions([oracleFraction(ORACLE_BIG_ONE, ORACLE_BIG_ONE)]);
+    expect(compareOracleFractions(singletonGain, oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE))).toBeGreaterThan(0);
+    expect(compareOracleFractions(meanOracleFractions([]), oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE))).toBe(0);
+  });
+
+  it("activates the type facet from the actual search mode, not a reused Mixed context", () => {
+    const roster = standardMixedRoster();
+    const mixed: FixedLayout = {
+      ids: ["m0", "m1", "f0", "f1"],
+      partition: { team1: ["m0", "f0"], team2: ["m1", "f1"] },
+    };
+    const mixedContext = buildSocialVarietyContext(roster, [], { sessionMode: SessionMode.MIXICANO });
+    const mixedModeOracle = oracleFirstExposureCoverage([mixed.partition], mixedContext, SessionMode.MIXICANO);
+    const openModeOracle = oracleFirstExposureCoverage([mixed.partition], mixedContext, SessionMode.MEXICANO);
+    const mixedModeScorer = createSocialVarietyCoverageScorer(mixedContext, SessionMode.MIXICANO);
+    const openModeScorer = createSocialVarietyCoverageScorer(mixedContext, SessionMode.MEXICANO);
+    expect(compareOracleFractions(mixedModeOracle, openModeOracle)).toBeGreaterThan(0);
+    expect(mixedModeScorer.toNormalizedScore(mixedModeScorer.getPartitionGainUnits(mixed.partition))).toBeCloseTo(
+      Number(mixedModeOracle.numerator) / Number(mixedModeOracle.denominator), 12
+    );
+    expect(openModeScorer.toNormalizedScore(openModeScorer.getPartitionGainUnits(mixed.partition))).toBeCloseTo(
+      Number(openModeOracle.numerator) / Number(openModeOracle.denominator), 12
+    );
+  });
+
+  it("threads an open-session mode through production coverage even when the supplied context is Mixed", () => {
+    const roster = standardMixedRoster();
+    const staleMixedContext = buildSocialVarietyContext(roster, [], { sessionMode: SessionMode.MIXICANO });
+    const openContext = buildSocialVarietyContext(roster, [], { sessionMode: SessionMode.MEXICANO });
+    const result = findBestRotationBatchSelection(roster, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      rotationPlayerCount: 14,
+      socialVarietyContext: staleMixedContext,
+      randomFn: () => 0,
+    });
+    const chosenPartitions = result.selection?.selections.map((selection) => selection.partition) ?? [];
+    const expectedOpen = oracleFirstExposureCoverage(chosenPartitions, openContext, SessionMode.MEXICANO);
+    const wronglyMixed = oracleFirstExposureCoverage(chosenPartitions, staleMixedContext, SessionMode.MIXICANO);
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.bestMinimumReplayCoverageGain).toBeCloseTo(
+      Number(expectedOpen.numerator) / Number(expectedOpen.denominator), 12
+    );
+    expect(result.debug.bestMinimumReplayCoverageGain).not.toBeCloseTo(
+      Number(wronglyMixed.numerator) / Number(wronglyMixed.denominator), 12
+    );
+    expect(result.debug.coverageGateCertified).toBe(true);
+  });
+
+  it.each(rotationTypes)("recomputes the coverage threshold from a nonzero replay minimum and disables both gates on opt-out in %s", (sessionType) => {
+    const candidate = (restTurns: number[], score: OracleFraction, entropy: number) => ({
+      restTurns, firstExposureCoverage: score, entropy,
+    });
+    const oneReplay = candidate([0, 1, 1, 1], oracleFraction(BigInt(1), BigInt(3)), 1);
+    const secondOneReplay = candidate([0, 1, 1, 1], oracleFraction(BigInt(1), BigInt(4)), 2);
+    const twoReplay = candidate([0, 0, 1, 1], oracleFraction(BigInt(1), BigInt(2)), 10);
+    const threeReplay = candidate([0, 0, 0, 1], oracleFraction(ORACLE_BIG_ONE, ORACLE_BIG_ONE), 100);
+    const envelope = oracleCoverageReplayEnvelope([oneReplay, secondOneReplay, twoReplay, threeReplay]);
+    expect(envelope.bestImmediateReplayCount).toBe(1);
+    expect(envelope.allowedImmediateReplayCount).toBe(2);
+    expect(envelope.bestCoverageFrontier).toEqual(oracleFraction(BigInt(1), BigInt(3)));
+    expect(envelope.candidates).toEqual([oneReplay, secondOneReplay, twoReplay]);
+    const chosen = [...envelope.candidates].sort((left, right) =>
+      oracleEntropyScore(right.entropy, sessionType) - oracleEntropyScore(left.entropy, sessionType)
+    )[0];
+    expect(chosen).toBe(twoReplay);
+
+    const disabled = oracleCoverageReplayEnvelope([oneReplay, secondOneReplay, twoReplay, threeReplay], false);
+    expect(disabled.bestImmediateReplayCount).toBeNull();
+    expect(disabled.allowedImmediateReplayCount).toBeNull();
+    expect(disabled.candidates).toHaveLength(4);
+  });
+
   it.each(rotationTypes)("uses one combined four-facet entropy score rather than a match-type tier in %s", (sessionType) => {
     const typeHeavy: SplitCadenceCandidate = {
       restTurns: [1, 1, 1, 1], gains: { matchType: 0.9, courtmates: 0, partners: 0, opponents: 0 },
@@ -573,6 +847,9 @@ describe("independent cadence oracle", () => {
     expect(result.debug.bestImmediateReplayCount).toBe(1);
     expect(result.debug.allowedImmediateReplayCount).toBe(2);
     expect(result.debug.chosenImmediateReplayCount).toBe(2);
+    expect(result.debug.coverageGateCertified).toBe(true);
+    expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
+    expect(result.debug.chosenReplayCoverageEligible).toBe(true);
   });
 
   it.each(rotationTypes)("keeps the replay-free Mixed batch when combined entropy ties and its soft cadence wins for %s", (sessionType) => {
@@ -620,6 +897,11 @@ describe("independent cadence oracle", () => {
     };
     const [ownMen] = ownSideChoices();
     const history = repeatedHistory(mixed, 30);
+    const roster = [...available, ...busy];
+    const context = buildSocialVarietyContext(roster, history, { sessionMode: SessionMode.MIXICANO });
+    const mixedCoverage = oracleFirstExposureCoverage([mixed.partition], context, SessionMode.MIXICANO);
+    const ownCoverage = oracleFirstExposureCoverage([ownMen.partition], context, SessionMode.MIXICANO);
+    expect(compareOracleFractions(ownCoverage, mixedCoverage)).toBeGreaterThan(0);
     const profile: Profile = { rank: 0, courts: [fixedLayouts(mixed, ownMen)] };
     const availableBatches = [mixed, ownMen].map((layout) => ({
       type: layout.ids.every((id) => id.startsWith("m")) ? "OWN_SIDE" : "MIXED",
@@ -630,20 +912,25 @@ describe("independent cadence oracle", () => {
     expect(minimumFor("MIXED")).toBe(0);
     expect(minimumFor("OWN_SIDE")).toBe(1);
 
-    const result = findBestRotationBatchSelection([...available, ...busy], {
+    const result = findBestRotationBatchSelection(roster, {
       courtCount: 1,
       sessionMode: SessionMode.MIXICANO,
       sessionType,
       rotationPlayerCount: 14,
       schedules: [profile],
       socialHistoryMatches: history,
-      socialVarietyContext: buildSocialVarietyContext([...available, ...busy], history, { sessionMode: SessionMode.MIXICANO }),
+      socialVarietyContext: context,
       randomFn: () => 0,
     });
     expect(selectedOwnSideType(result)).toBe("OWN_SIDE");
     expect(result.debug.bestImmediateReplayCount).toBe(0);
     expect(result.debug.allowedImmediateReplayCount).toBe(1);
     expect(result.debug.chosenImmediateReplayCount).toBe(1);
+    expect(result.debug.bestMinimumReplayCoverageGain).toBeCloseTo(Number(mixedCoverage.numerator) / Number(mixedCoverage.denominator), 12);
+    expect(result.debug.chosenImmediateCoverageGain).toBeCloseTo(Number(ownCoverage.numerator) / Number(ownCoverage.denominator), 12);
+    expect(result.debug.coverageGateCertified).toBe(true);
+    expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
+    expect(result.debug.chosenReplayCoverageEligible).toBe(true);
   });
 
   it.each(rotationTypes)("compares the best+1 replay envelope over all eight selected players across two courts for %s", (sessionType) => {
@@ -689,6 +976,9 @@ describe("independent cadence oracle", () => {
     expect(combined.debug.bestImmediateReplayCount).toBe(0);
     expect(combined.debug.allowedImmediateReplayCount).toBe(1);
     expect(combined.debug.chosenImmediateReplayCount).toBe(1);
+    expect(combined.debug.coverageGateCertified).toBe(true);
+    expect(combined.debug.coverageGateStatus).toBe("CERTIFIED");
+    expect(combined.debug.chosenReplayCoverageEligible).toBe(true);
   });
 
   it.each(rotationTypes)("matches the brute-force 3-court oracle through the cadence-bound DFS for %s", (sessionType) => {
@@ -844,6 +1134,9 @@ describe("independent cadence oracle", () => {
     expect(combined.debug.chosenImmediateReplayCount).toBe(1);
     expect(combined.debug.replayCertified).toBe(true);
     expect(combined.debug.replayEnvelopeStatus).toBe("CERTIFIED");
+    expect(combined.debug.coverageGateCertified).toBe(true);
+    expect(combined.debug.coverageGateStatus).toBe("CERTIFIED");
+    expect(combined.debug.chosenReplayCoverageEligible).toBe(true);
     expect(combinedSelection.selections.map((selection) => selection.socialVariety?.courtType))
       .toEqual(["UPPER", "LOWER", "MIXED"]);
   });
@@ -1035,9 +1328,12 @@ describe("independent cadence oracle", () => {
       expect(selectedIds(result)).toEqual(oracle!.ids.sort());
       expect(result.selection?.maxBalanceGap).toBe(result.selection?.balanceGuardrail?.bestMaxBalanceGap);
       expect(result.selection?.maxBalanceGap).toBeLessThanOrEqual(result.selection?.balanceGuardrail?.allowedMaxBalanceGap ?? -1);
-      expect(result.debug.bestImmediateReplayCount).toBe(4);
-      expect(result.debug.allowedImmediateReplayCount).toBe(5);
-      expect(result.debug.chosenImmediateReplayCount).toBe(4);
+    expect(result.debug.bestImmediateReplayCount).toBe(4);
+    expect(result.debug.allowedImmediateReplayCount).toBe(5);
+    expect(result.debug.chosenImmediateReplayCount).toBe(4);
+    expect(result.debug.coverageGateCertified).toBe(true);
+    expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
+    expect(result.debug.chosenReplayCoverageEligible).toBe(true);
     }
   });
 
@@ -1064,9 +1360,12 @@ describe("independent cadence oracle", () => {
       });
       expect(result.balanceCertified).toBe(true);
       expect(result.selection?.maxBalanceGap).toBe(0);
-      expect(result.debug.bestImmediateReplayCount).toBe(0);
-      expect(result.debug.allowedImmediateReplayCount).toBe(1);
-      expect(result.debug.chosenImmediateReplayCount).toBe(0);
+    expect(result.debug.bestImmediateReplayCount).toBe(0);
+    expect(result.debug.allowedImmediateReplayCount).toBe(1);
+    expect(result.debug.chosenImmediateReplayCount).toBe(0);
+    expect(result.debug.coverageGateCertified).toBe(true);
+    expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
+    expect(result.debug.chosenReplayCoverageEligible).toBe(true);
       expect(result.scheduleIndex).toBe(1);
       expect(selectedIds(result)).toEqual(b.sort());
       expect(result.selection?.selections.every((selection) => selection.ids.every((id) => b.includes(id)))).toBe(true);
@@ -1138,6 +1437,8 @@ describe("independent cadence oracle", () => {
     expect(measured.production.selection).toBeNull();
     expect(measured.production.debug.replayCertified).toBe(false);
     expect(measured.production.debug.replayEnvelopeStatus).toBe("UNCERTIFIED");
+    expect(measured.production.debug.coverageGateCertified).toBe(false);
+    expect(measured.production.debug.coverageGateStatus).toBe("UNCERTIFIED");
     expect(measured.production.debug.bestImmediateReplayCount).toBeNull();
     expect(measured.production.debug.allowedImmediateReplayCount).toBeNull();
     expect(measured.production.debug.chosenImmediateReplayCount).toBeNull();
@@ -1172,6 +1473,9 @@ describe("independent cadence oracle", () => {
     expect(selectedIds(measured.production)).toEqual(overdue.sort());
     expect(measured.production.debug.replayEnvelopeStatus).toBe("DISABLED");
     expect(measured.production.debug.replayCertified).toBe(true);
+    expect(measured.production.debug.coverageGateStatus).toBe("DISABLED");
+    expect(measured.production.debug.coverageGateCertified).toBe(true);
+    expect(measured.production.debug.chosenReplayCoverageEligible).toBeNull();
   });
 
   it("replays identical random draws without perturbing the production RNG stream", () => {

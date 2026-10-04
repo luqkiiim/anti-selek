@@ -2,7 +2,7 @@ import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import { MixedSide, PartnerPreference, PlayerGender, SessionMode, SessionType } from "../../../types/enums";
 import { buildBalanceGuardrail } from "./balanceGuardrail";
 import { getDoublesPartitions } from "./balance";
-import { buildSocialVarietyContext, buildSocialVarietySnapshot, getSocialVarietyCoverage, getSocialVarietyGains } from "./socialVariety";
+import { buildSocialVarietyContext, buildSocialVarietySnapshot, getSocialVarietyCoverage, getSocialVarietyGains, getSocialVarietySnapshot } from "./socialVariety";
 import { analyzeStaticBalancedRelationshipFeasibility } from "./benchmarkBalanceFeasibility";
 import type { StaticBalanceFeasibilityReport } from "./benchmarkBalanceFeasibility";
 import * as rotationApi from "./socialBatch";
@@ -37,6 +37,7 @@ export interface BenchmarkCheckpoint {
   reachedIdealPlusTwo: number;
   starvation: StarvationSummary;
   replayEnvelope: ReplayEnvelopeSummary;
+  coverageGate: CoverageGateSummary;
   typePriorityOverrides: {
     policyApplied: boolean;
     refillDecisions: number | null;
@@ -47,6 +48,10 @@ export interface BenchmarkCheckpoint {
   };
   optimizer: OptimizerSummary;
   matchCountSpread: number;
+  playerMatchCounts: Array<{ userId: string; matchesPlayed: number }>;
+  minimumPlayerMatchCount: number;
+  maximumPlayerMatchCount: number;
+  allPlayersExactlySixMatches: boolean | null;
   maximumFairnessSpread: number;
   minimumFairnessSpread: number;
   maximumBalanceGap: number;
@@ -91,6 +96,65 @@ export interface ReplayEnvelopeSummary {
   witnesses: ReplayEnvelopeWitness[];
 }
 
+export interface CoverageGateSummary {
+  policyApplied: boolean;
+  refillDecisions: number;
+  certifiedDecisions: number;
+  uncertifiedDecisions: number;
+  noStarvationRefillDecisions: number;
+  noStarvationCertifiedDecisions: number;
+  noStarvationUncertifiedDecisions: number;
+  plusOneAvailableDecisions: number;
+  plusOneAvailableCandidates: number;
+  plusOneCoverageEligibleDecisions: number;
+  plusOneCoverageEligibleCandidates: number;
+  plusOneSelectedDecisions: number;
+  plusOneSelectedCandidates: number;
+  plusOneRejectedWithoutImprovedCoverageDecisions: number;
+  plusOneRejectedWithoutImprovedCoverageCandidates: number;
+  zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions: number;
+  zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates: number;
+  acceptedGreaterCoverageDecisions: number;
+  acceptedGreaterCoverageCandidates: number;
+  higherEntropyBeyondAllowanceDecisions: number;
+  higherEntropyBeyondAllowanceCandidates: number;
+  fivePlusCompletedRestEpisodes: number;
+  fivePlusEpisodesLinkedAcceptedPlusOneReplay: number;
+  witnesses: CoverageGateWitness[];
+}
+
+export interface CoverageGateWitness {
+  afterCompletedMatches: number;
+  bestImmediateReplayCount: number;
+  allowedImmediateReplayCount: number;
+  chosenImmediateReplayCount: number;
+  bestMinimumReplayCoverageGain: number;
+  chosenImmediateCoverageGain: number;
+  chosenReplayCoverageEligible: boolean;
+  selected: EntropyCandidateWitness;
+  fairnessVector: number[];
+  starvationVector: number[];
+  minimumReplayCoverageGainIsZero: boolean;
+  higherTypeGainRejectedPlusOneCandidateCount: number;
+  bestMinimumReplayCoverageCandidate: EntropyCandidateWitness | null;
+  bestCoverageEligiblePlusOne: EntropyCandidateWitness | null;
+  bestCoverageRejectedPlusOne: EntropyCandidateWitness | null;
+  higherTypeGainRejectedPlusOne: EntropyCandidateWitness | null;
+  bestEntropyRejectedBeyondAllowance: EntropyCandidateWitness | null;
+  plusOneAvailableCandidates: number;
+    plusOneCoverageEligibleCandidates: number;
+    plusOneRejectedWithoutImprovedCoverageCandidates: number;
+  withoutStarvation: null | {
+    ids: string[];
+    bestImmediateReplayCount: number;
+    allowedImmediateReplayCount: number;
+    bestMinimumReplayCoverageGain: number;
+    chosenImmediateCoverageGain: number;
+    chosenImmediateReplayCount: number;
+    coverageGateCertified: boolean;
+  };
+}
+
 export interface ReplayEnvelopeWitness {
   afterCompletedMatches: number;
   fairnessVector: number[];
@@ -127,6 +191,9 @@ export interface EntropyCandidateWitness {
   effectiveRelationshipGain: number;
   rawCombinedEntropyGain: number;
   effectiveCombinedEntropyGain: number;
+  immediateCoverageGain: number;
+  immediateCoverageGainNumerator: string;
+  immediateCoverageGainDenominator: string;
 }
 
 export interface OptimizerSummary {
@@ -149,6 +216,8 @@ export interface RelationshipKey {
 }
 
 export interface MissingRelationship extends RelationshipKey {
+  measuredPolicy: BenchmarkEnginePolicy;
+  frontierDiagnosticPolicy: "current-coverage-gated-oracle";
   observedStrongRotationOpportunities: number;
   observedBalanceEnvelopeOpportunities: number;
   observedMatchTypeFrontierOpportunities: number;
@@ -159,14 +228,22 @@ export interface MissingRelationship extends RelationshipKey {
   observedReplayAllowanceOpportunities: number;
   observedCombinedEntropyFrontierOpportunities: number;
   observedCombinedSoftCadenceFrontierOpportunities: number;
+  observedPolicyAdmissionOpportunities: number;
+  observedPolicyEntropyFrontierOpportunities: number;
+  observedPolicyFinalFrontierOpportunities: number;
+  observedCoverageGateRejectedPlusOneOpportunities: number;
   classification:
     | "admissible_but_unselected"
     | "soft_cadence_priority_excluded_in_observed_opportunities"
+    | "legacy_rest_priority_excluded_in_observed_opportunities"
     | "relationship_entropy_priority_excluded_in_observed_opportunities"
     | "immediate_replay_priority_excluded_in_observed_opportunities"
     | "match_type_entropy_priority_excluded_in_observed_opportunities"
     | "combined_entropy_priority_excluded_in_observed_opportunities"
+    | "coverage_gate_priority_excluded_in_observed_opportunities"
     | "replay_allowance_priority_excluded_in_observed_opportunities"
+    | "strict_cadence_priority_excluded_in_observed_opportunities"
+    | "strict_entropy_priority_excluded_in_observed_opportunities"
     | "excluded_by_balance_envelope_in_observed_opportunities"
     | "never_in_strongest_rotation_class_during_observed_refills";
 }
@@ -185,6 +262,10 @@ export interface ReplayInitiationTrace {
   betterTypeGainLowerZeroRestSetsWithoutPlayer: number;
   /** The selected refill was certified at exactly one above its minimum zero-rest count. */
   acceptedPlusOneReplay?: boolean;
+  acceptedGreaterCoverageReplay?: boolean;
+  coverageGateCertified?: boolean;
+  bestMinimumReplayCoverageGain?: number;
+  selectedImmediateCoverageGain?: number;
   bestImmediateReplayCount?: number;
   allowedImmediateReplayCount?: number;
   chosenImmediateReplayCount?: number;
@@ -288,6 +369,9 @@ export interface FiveGapEpisode {
     | "cadence_tie_later_tiebreak"
     | "accepted_plus_one_replay_origin"
     | "combined_entropy_priority_exclusion"
+    | "coverage_gate_priority_exclusion"
+    | "strict_entropy_priority_exclusion"
+    | "legacy_rest_priority_exclusion"
     | "no_equal_priority_smoother_replay_witness"
     | "not_classified";
   hadFairnessClassOpportunity: boolean;
@@ -301,6 +385,11 @@ export interface FiveGapEpisode {
   hadReplayAllowanceOpportunity: boolean;
   hadCombinedEntropyFrontierOpportunity: boolean;
   hadCombinedSoftCadenceFrontierOpportunity: boolean;
+  hadCoverageGateRejectedPlusOneOpportunity: boolean;
+  hadBeyondReplayAllowanceOpportunity: boolean;
+  hadPolicyAdmissionOpportunity: boolean;
+  hadPolicyEntropyFrontierOpportunity: boolean;
+  hadPolicyFinalFrontierOpportunity: boolean;
   hadSmootherAlternative: boolean;
   hadCadenceOptimalOpportunity: boolean;
   hadCadenceSuboptimalOpportunity: boolean;
@@ -375,13 +464,13 @@ export interface BenchmarkReport {
   generatedAt: string;
   seedCount: number;
   wideSeedCount: number;
-  enginePolicy: "current" | "strict" | "baseline";
+  enginePolicy: "current" | "strict" | "baseline" | "type-first" | "replay-envelope";
   setup: {
     roster: "14 players: P1-P7 male, P8-P14 female (FEMALE_FLEX)";
     sessionMode: "MIXICANO";
     courts: 2;
     completionSchedule: "Independent seeded event sequence; each event completes one occupied court, then refills that court.";
-    checkpoints: [20, 400];
+    checkpoints: [21, 400];
     coverageHistory: "Completed matches only; active assignments are used by matchmaking and excluded from coverage.";
     restDefinition: "Completed-match events while available; players in an active match do not accrue rest turns.";
     skillProfiles: Record<BenchmarkProfile, string>;
@@ -419,6 +508,11 @@ interface ReplayAssignmentContext {
   bestImmediateReplayCount: number;
   allowedImmediateReplayCount: number;
   chosenImmediateReplayCount: number;
+  bestMinimumReplayCoverageGain: number;
+  chosenImmediateCoverageGain: number;
+  coverageGateCertified: boolean;
+  coverageEligiblePlusOne: boolean;
+  coverageGatePolicy: boolean;
 }
 
 interface DecisionMeta {
@@ -440,6 +534,11 @@ interface CounterfactualSelectionProof {
   chosenImmediateReplayCount: number | null;
   replayCertified: boolean | null;
   replayEnvelopeStatus: "DISABLED" | "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION" | null;
+  bestMinimumReplayCoverageGain?: number | null;
+  chosenImmediateCoverageGain?: number | null;
+  coverageGateCertified?: boolean | null;
+  coverageGateStatus?: "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION" | "DISABLED" | null;
+  chosenReplayCoverageEligible?: boolean | null;
 }
 
 interface WaitEpisodeMeta {
@@ -454,6 +553,11 @@ interface WaitEpisodeMeta {
   hadReplayAllowanceOpportunity: boolean;
   hadCombinedEntropyFrontierOpportunity: boolean;
   hadCombinedSoftCadenceFrontierOpportunity: boolean;
+  hadCoverageGateRejectedPlusOneOpportunity: boolean;
+  hadBeyondReplayAllowanceOpportunity: boolean;
+  hadPolicyAdmissionOpportunity: boolean;
+  hadPolicyEntropyFrontierOpportunity: boolean;
+  hadPolicyFinalFrontierOpportunity: boolean;
   hadSmootherAlternative: boolean;
   hadCadenceOptimalOpportunity: boolean;
   hadCadenceSuboptimalOpportunity: boolean;
@@ -478,6 +582,9 @@ interface OracleCandidate {
   effectiveRelationshipGain: number;
   rawCombinedEntropyGain: number;
   effectiveCombinedEntropyGain: number;
+  immediateCoverageGain: number;
+  immediateCoverageGainNumerator: bigint;
+  immediateCoverageGainDenominator: bigint;
   balanceGap: number;
 }
 
@@ -487,7 +594,15 @@ interface RotationAudit {
   rotationClass: OracleCandidate[];
   balanceEnvelope: OracleCandidate[];
   replayMinimum: OracleCandidate[];
+  replayCoverageFrontier: OracleCandidate[];
   replayAllowance: OracleCandidate[];
+  legacyReplayAllowance: OracleCandidate[];
+  legacyCombinedEntropyFrontier: OracleCandidate[];
+  legacyCombinedSoftCadenceFrontier: OracleCandidate[];
+  baselineEntropyFrontier: OracleCandidate[];
+  baselineSoftCadenceFrontier: OracleCandidate[];
+  strictEntropyFrontier: OracleCandidate[];
+  strictSoftCadenceFrontier: OracleCandidate[];
   matchTypeFrontier: OracleCandidate[];
   cadenceAdmissible: OracleCandidate[];
   combinedEntropyFrontier: OracleCandidate[];
@@ -498,6 +613,8 @@ interface RotationAudit {
   bestMatchTypeGain: number | null;
   bestZeroRestCount: number | null;
   allowedZeroRestCount: number | null;
+  bestMinimumReplayCoverageGain: number | null;
+  bestMinimumReplayCoverageGainNumerator: bigint | null;
   bestCombinedEntropyGain: number | null;
   bestRelationshipGain: number | null;
   bestSoftRestVector: number[] | null;
@@ -506,7 +623,11 @@ interface RotationAudit {
   rotationClassIds: Set<string>;
   balanceEnvelopeIds: Set<string>;
   replayMinimumIds: Set<string>;
+  replayCoverageFrontierIds: Set<string>;
   replayAllowanceIds: Set<string>;
+  legacyReplayAllowanceIds: Set<string>;
+  legacyCombinedEntropyFrontierIds: Set<string>;
+  legacyCombinedSoftCadenceFrontierIds: Set<string>;
   matchTypeFrontierIds: Set<string>;
   cadenceAdmissibleIds: Set<string>;
   combinedEntropyFrontierIds: Set<string>;
@@ -518,7 +639,15 @@ interface RotationAudit {
   rotationClassKeys: Set<string>;
   balanceEnvelopeKeys: Set<string>;
   replayMinimumKeys: Set<string>;
+  replayCoverageFrontierKeys: Set<string>;
   replayAllowanceKeys: Set<string>;
+  legacyReplayAllowanceKeys: Set<string>;
+  legacyCombinedEntropyFrontierKeys: Set<string>;
+  legacyCombinedSoftCadenceFrontierKeys: Set<string>;
+  baselineEntropyFrontierKeys: Set<string>;
+  baselineSoftCadenceFrontierKeys: Set<string>;
+  strictEntropyFrontierKeys: Set<string>;
+  strictSoftCadenceFrontierKeys: Set<string>;
   matchTypeFrontierKeys: Set<string>;
   cadenceAdmissibleKeys: Set<string>;
   combinedEntropyFrontierKeys: Set<string>;
@@ -649,12 +778,130 @@ function getSoftRestVector(selected: BenchmarkPlayer[]) {
   return selected.map((player) => player.restTurns).sort((a, b) => a - b).map((turns) => -turns);
 }
 
+/** Historical entropy-first policy's rest tie: maximize total, then minimum, then the rest vector. */
+export function getLegacySocialRestVectorForBenchmark(softRest: readonly number[]) {
+  return [softRest.reduce((total, turns) => total + turns, 0), softRest[0] ?? 0, ...[...softRest].reverse()];
+}
+
 function getEffectiveEntropyGain(gain: number, sessionType: SessionType) {
   return sessionType === SessionType.SOCIAL_MIX ? gain : Math.round(gain * 1e12) / 1e12;
 }
 
 function canonicalSum(values: number[]) {
   return values.sort((a, b) => a - b).reduce((total, value) => total + value, 0);
+}
+
+type CoverageGateFacet = "courtmates" | "partners" | "opponents" | "matchType";
+interface IndependentCoverageGain {
+  numerator: bigint;
+  denominator: bigint;
+  normalized: number;
+}
+
+function greatestCommonDivisor(left: bigint, right: bigint) {
+  const zero = BigInt(0);
+  let a = left < zero ? -left : left;
+  let b = right < zero ? -right : right;
+  while (b !== zero) [a, b] = [b, a % b];
+  return a;
+}
+
+function leastCommonMultiple(left: bigint, right: bigint) {
+  return left === BigInt(0) || right === BigInt(0)
+    ? BigInt(0)
+    : (left / greatestCommonDivisor(left, right)) * right;
+}
+
+/**
+ * Recomputes the coverage gate independently from the candidate-selection
+ * policy. The opportunity vocabulary and accumulated first-exposure counts
+ * come from Social's shared structural context, while partition exposures,
+ * rational weights and frontier comparison are computed here.
+ */
+function getIndependentImmediateCoverageGain(
+  partition: V3DoublesPartition,
+  context: ReturnType<typeof buildSocialVarietyContext>
+): IndependentCoverageGain {
+  const activeFacets: CoverageGateFacet[] = context.sessionMode === SessionMode.MIXICANO
+    ? ["courtmates", "partners", "opponents", "matchType"]
+    : ["courtmates", "partners", "opponents"];
+  const players = [...context.playersByUserId].map(([userId, histograms]) => ({
+    userId,
+    feasible: activeFacets.filter((facet) => histograms[facet].opportunities.size > 0),
+  }));
+  const eligibleCount = players.filter((player) => player.feasible.length > 0).length;
+  const facetDenominators = new Map<string, bigint>();
+  let denominator = BigInt(1);
+  for (const player of players) {
+    if (!player.feasible.length) continue;
+    const histograms = context.playersByUserId.get(player.userId)!;
+    for (const facet of player.feasible) {
+      const facetDenominator = BigInt(eligibleCount) * BigInt(player.feasible.length) * BigInt(histograms[facet].opportunities.size);
+      facetDenominators.set(`${player.userId}:${facet}`, facetDenominator);
+      denominator = leastCommonMultiple(denominator, facetDenominator);
+    }
+  }
+  const weights = new Map<string, bigint>();
+  for (const [key, facetDenominator] of facetDenominators) weights.set(key, denominator / facetDenominator);
+
+  const firstExposures = new Set<string>();
+  const add = (userId: string, facet: CoverageGateFacet, experience: string) => {
+    firstExposures.add(JSON.stringify([userId, facet, experience]));
+  };
+  const teams = [partition.team1, partition.team2];
+  for (let teamIndex = 0; teamIndex < teams.length; teamIndex += 1) {
+    const ownTeam = teams[teamIndex];
+    const otherTeam = teams[1 - teamIndex];
+    for (let seat = 0; seat < ownTeam.length; seat += 1) {
+      const userId = ownTeam[seat];
+      const partnerId = ownTeam[1 - seat];
+      add(userId, "courtmates", partnerId);
+      add(userId, "partners", partnerId);
+      for (const opponentId of otherTeam) {
+        add(userId, "courtmates", opponentId);
+        add(userId, "opponents", opponentId);
+      }
+    }
+  }
+  if (context.sessionMode === SessionMode.MIXICANO) {
+    const courtType = getSocialVarietySnapshot(partition, context).courtType;
+    const matchType = courtType === "MIXED" ? "MIXED" : "OWN_SIDE";
+    for (const userId of [...partition.team1, ...partition.team2]) add(userId, "matchType", matchType);
+  }
+
+  let numerator = BigInt(0);
+  for (const serialized of firstExposures) {
+    const [userId, facet, experience] = JSON.parse(serialized) as [string, CoverageGateFacet, string];
+    const histogram = context.playersByUserId.get(userId)?.[facet];
+    if (!histogram?.opportunities.has(experience) || (histogram.counts.get(experience) ?? 0) > 0) continue;
+    numerator += weights.get(`${userId}:${facet}`) ?? BigInt(0);
+  }
+  // The score is bounded by one; division is only for serialized diagnostics.
+  const normalized = denominator > BigInt(0)
+    ? Number((numerator * BigInt(1_000_000_000_000_000)) / denominator) / 1_000_000_000_000_000
+    : 0;
+  return { numerator, denominator, normalized };
+}
+
+export function measureIndependentCoverageGainForBenchmark(
+  partition: V3DoublesPartition,
+  players: readonly MatchmakerV3Player[],
+  history: readonly SocialHistoryMatch[]
+) {
+  const context = buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO });
+  const result = getIndependentImmediateCoverageGain(partition, context);
+  return {
+    numerator: result.numerator.toString(),
+    denominator: result.denominator.toString(),
+    normalized: result.normalized,
+  };
+}
+
+function compareCoverageUnits(left: OracleCandidate, right: OracleCandidate) {
+  if (left.immediateCoverageGainNumerator !== right.immediateCoverageGainNumerator) {
+    return left.immediateCoverageGainNumerator < right.immediateCoverageGainNumerator ? -1 : 1;
+  }
+  return 0;
 }
 
 export interface TypePriorityCandidateSummary {
@@ -731,6 +978,9 @@ function auditRotationClass(
               effectiveRelationshipGain: 0,
               rawCombinedEntropyGain: 0,
               effectiveCombinedEntropyGain: 0,
+              immediateCoverageGain: 0,
+              immediateCoverageGainNumerator: BigInt(0),
+              immediateCoverageGainDenominator: BigInt(1),
               balanceGap: independentBalanceGap(partition, playersById),
             });
           }
@@ -739,10 +989,10 @@ function auditRotationClass(
     }
   }
   if (!candidates.length) return {
-    legalCandidates: [], fairnessClass: [], rotationClass: [], balanceEnvelope: [], replayMinimum: [], replayAllowance: [], matchTypeFrontier: [], cadenceAdmissible: [], combinedEntropyFrontier: [], combinedSoftCadenceFrontier: [], relationshipEntropyFrontier: [], softCadenceFrontier: [], strictCadenceAdmissible: [], bestMatchTypeGain: null, bestZeroRestCount: null, allowedZeroRestCount: null, bestCombinedEntropyGain: null, bestRelationshipGain: null, bestSoftRestVector: null, bestCadenceVector: null,
-    fairnessClassIds: new Set(), rotationClassIds: new Set(), balanceEnvelopeIds: new Set(), replayMinimumIds: new Set(), replayAllowanceIds: new Set(), matchTypeFrontierIds: new Set(), cadenceAdmissibleIds: new Set(), combinedEntropyFrontierIds: new Set(), combinedSoftCadenceFrontierIds: new Set(), relationshipEntropyFrontierIds: new Set(), softCadenceFrontierIds: new Set(), legalCandidateIds: new Set(),
+    legalCandidates: [], fairnessClass: [], rotationClass: [], balanceEnvelope: [], replayMinimum: [], replayCoverageFrontier: [], replayAllowance: [], legacyReplayAllowance: [], legacyCombinedEntropyFrontier: [], legacyCombinedSoftCadenceFrontier: [], baselineEntropyFrontier: [], baselineSoftCadenceFrontier: [], strictEntropyFrontier: [], strictSoftCadenceFrontier: [], matchTypeFrontier: [], cadenceAdmissible: [], combinedEntropyFrontier: [], combinedSoftCadenceFrontier: [], relationshipEntropyFrontier: [], softCadenceFrontier: [], strictCadenceAdmissible: [], bestMatchTypeGain: null, bestZeroRestCount: null, allowedZeroRestCount: null, bestMinimumReplayCoverageGain: null, bestMinimumReplayCoverageGainNumerator: null, bestCombinedEntropyGain: null, bestRelationshipGain: null, bestSoftRestVector: null, bestCadenceVector: null,
+    fairnessClassIds: new Set(), rotationClassIds: new Set(), balanceEnvelopeIds: new Set(), replayMinimumIds: new Set(), replayCoverageFrontierIds: new Set(), replayAllowanceIds: new Set(), legacyReplayAllowanceIds: new Set(), legacyCombinedEntropyFrontierIds: new Set(), legacyCombinedSoftCadenceFrontierIds: new Set(), matchTypeFrontierIds: new Set(), cadenceAdmissibleIds: new Set(), combinedEntropyFrontierIds: new Set(), combinedSoftCadenceFrontierIds: new Set(), relationshipEntropyFrontierIds: new Set(), softCadenceFrontierIds: new Set(), legalCandidateIds: new Set(),
     strictCadenceAdmissibleKeys: new Set(),
-    fairnessClassKeys: new Set(), rotationClassKeys: new Set(), balanceEnvelopeKeys: new Set(), replayMinimumKeys: new Set(), replayAllowanceKeys: new Set(), matchTypeFrontierKeys: new Set(), cadenceAdmissibleKeys: new Set(), combinedEntropyFrontierKeys: new Set(), combinedSoftCadenceFrontierKeys: new Set(), relationshipEntropyFrontierKeys: new Set(), softCadenceFrontierKeys: new Set(),
+    fairnessClassKeys: new Set(), rotationClassKeys: new Set(), balanceEnvelopeKeys: new Set(), replayMinimumKeys: new Set(), replayCoverageFrontierKeys: new Set(), replayAllowanceKeys: new Set(), legacyReplayAllowanceKeys: new Set(), legacyCombinedEntropyFrontierKeys: new Set(), legacyCombinedSoftCadenceFrontierKeys: new Set(), baselineEntropyFrontierKeys: new Set(), baselineSoftCadenceFrontierKeys: new Set(), strictEntropyFrontierKeys: new Set(), strictSoftCadenceFrontierKeys: new Set(), matchTypeFrontierKeys: new Set(), cadenceAdmissibleKeys: new Set(), combinedEntropyFrontierKeys: new Set(), combinedSoftCadenceFrontierKeys: new Set(), relationshipEntropyFrontierKeys: new Set(), softCadenceFrontierKeys: new Set(),
   };
   const bestFairness = candidates.reduce((best, candidate) => compareNumberVectors(candidate.fairness, best) < 0 ? candidate.fairness : best, candidates[0].fairness);
   const fairnessClass = candidates.filter((candidate) => compareNumberVectors(candidate.fairness, bestFairness) === 0);
@@ -777,6 +1027,10 @@ function auditRotationClass(
       candidate.rawRelationshipGain,
     ]);
     candidate.effectiveCombinedEntropyGain = getEffectiveEntropyGain(candidate.rawCombinedEntropyGain, sessionType);
+    const coverageGain = getIndependentImmediateCoverageGain(candidate.partition, context);
+    candidate.immediateCoverageGain = coverageGain.normalized;
+    candidate.immediateCoverageGainNumerator = coverageGain.numerator;
+    candidate.immediateCoverageGainDenominator = coverageGain.denominator;
   }
   const bestZeroRestCount = balanceEnvelope.length
     ? Math.min(...balanceEnvelope.map((candidate) => candidate.zeroRestCount))
@@ -784,10 +1038,57 @@ function auditRotationClass(
   const replayMinimum = bestZeroRestCount === null
     ? []
     : balanceEnvelope.filter((candidate) => candidate.zeroRestCount === bestZeroRestCount);
+  const bestMinimumReplayCoverageCandidate = replayMinimum.length
+    ? replayMinimum.reduce((best, candidate) => compareCoverageUnits(candidate, best) > 0 ? candidate : best, replayMinimum[0])
+    : null;
+  const bestMinimumReplayCoverageGain = bestMinimumReplayCoverageCandidate?.immediateCoverageGain ?? null;
+  const bestMinimumReplayCoverageGainNumerator = bestMinimumReplayCoverageCandidate?.immediateCoverageGainNumerator ?? null;
+  const replayCoverageFrontier = bestMinimumReplayCoverageCandidate
+    ? replayMinimum.filter((candidate) => compareCoverageUnits(candidate, bestMinimumReplayCoverageCandidate) === 0)
+    : [];
+  const plusOneCoverageEligible = bestMinimumReplayCoverageCandidate
+    ? balanceEnvelope.filter((candidate) => candidate.zeroRestCount === bestZeroRestCount! + 1 &&
+      compareCoverageUnits(candidate, bestMinimumReplayCoverageCandidate) > 0)
+    : [];
+  // The frozen numeric envelope is always best + 1. The coverage gate then
+  // admits only those +1 candidates that strictly improve on the best
+  // minimum-replay coverage score; `replayAllowance` is that actual candidate
+  // set and is what selection certification checks.
   const allowedZeroRestCount = bestZeroRestCount === null ? null : bestZeroRestCount + 1;
   const replayAllowance = allowedZeroRestCount === null
     ? []
-    : balanceEnvelope.filter((candidate) => candidate.zeroRestCount <= allowedZeroRestCount);
+    : balanceEnvelope.filter((candidate) => candidate.zeroRestCount === bestZeroRestCount ||
+      (candidate.zeroRestCount === bestZeroRestCount! + 1 && plusOneCoverageEligible.includes(candidate)));
+  const legacyReplayAllowance = bestZeroRestCount === null
+    ? []
+    : balanceEnvelope.filter((candidate) => candidate.zeroRestCount <= bestZeroRestCount + 1);
+  const legacyBestCombinedEntropyGain = legacyReplayAllowance.length
+    ? Math.max(...legacyReplayAllowance.map((candidate) => candidate.effectiveCombinedEntropyGain))
+    : null;
+  const legacyCombinedEntropyFrontier = legacyBestCombinedEntropyGain === null
+    ? []
+    : legacyReplayAllowance.filter((candidate) => candidate.effectiveCombinedEntropyGain === legacyBestCombinedEntropyGain);
+  const legacyBestSoftRest = legacyCombinedEntropyFrontier.length
+    ? legacyCombinedEntropyFrontier.reduce((best, candidate) => compareNumberVectors(candidate.softRest, best) < 0 ? candidate.softRest : best, legacyCombinedEntropyFrontier[0].softRest)
+    : null;
+  const legacyCombinedSoftCadenceFrontier = legacyBestSoftRest
+    ? legacyCombinedEntropyFrontier.filter((candidate) => compareNumberVectors(candidate.softRest, legacyBestSoftRest) === 0)
+    : [];
+  const baselineBestEntropy = balanceEnvelope.length
+    ? Math.max(...balanceEnvelope.map((candidate) => candidate.effectiveCombinedEntropyGain))
+    : null;
+  const baselineEntropyFrontier = baselineBestEntropy === null
+    ? [] : balanceEnvelope.filter((candidate) => candidate.effectiveCombinedEntropyGain === baselineBestEntropy);
+  const baselineBestSoftRest = baselineEntropyFrontier.length
+    ? baselineEntropyFrontier.reduce((best, candidate) =>
+      compareNumberVectors(getLegacySocialRestVectorForBenchmark(candidate.softRest), best) < 0
+        ? getLegacySocialRestVectorForBenchmark(candidate.softRest) : best,
+      getLegacySocialRestVectorForBenchmark(baselineEntropyFrontier[0].softRest))
+    : null;
+  const baselineSoftCadenceFrontier = baselineBestSoftRest
+    ? baselineEntropyFrontier.filter((candidate) =>
+      compareNumberVectors(getLegacySocialRestVectorForBenchmark(candidate.softRest), baselineBestSoftRest) === 0)
+    : [];
   const bestCombinedEntropyGain = replayAllowance.length
     ? Math.max(...replayAllowance.map((candidate) => candidate.effectiveCombinedEntropyGain))
     : null;
@@ -835,6 +1136,17 @@ function auditRotationClass(
   const strictCadenceAdmissible = bestCadenceVector
     ? balanceEnvelope.filter((candidate) => compareNumberVectors(candidate.rest, bestCadenceVector) === 0)
     : [];
+  const strictBestEntropy = strictCadenceAdmissible.length
+    ? Math.max(...strictCadenceAdmissible.map((candidate) => candidate.effectiveCombinedEntropyGain))
+    : null;
+  const strictEntropyFrontier = strictBestEntropy === null
+    ? [] : strictCadenceAdmissible.filter((candidate) => candidate.effectiveCombinedEntropyGain === strictBestEntropy);
+  const strictBestSoftRest = strictEntropyFrontier.length
+    ? strictEntropyFrontier.reduce((best, candidate) => compareNumberVectors(candidate.softRest, best) < 0 ? candidate.softRest : best, strictEntropyFrontier[0].softRest)
+    : null;
+  const strictSoftCadenceFrontier = strictBestSoftRest
+    ? strictEntropyFrontier.filter((candidate) => compareNumberVectors(candidate.softRest, strictBestSoftRest) === 0)
+    : [];
   const idsFor = (values: OracleCandidate[]) => new Set(values.flatMap((candidate) => candidate.ids));
   const keysFor = (values: OracleCandidate[]) => new Set(values.map((candidate) => exactCandidateKey(candidate.ids, candidate.partition)));
   return {
@@ -843,7 +1155,15 @@ function auditRotationClass(
     rotationClass,
     balanceEnvelope,
     replayMinimum,
+    replayCoverageFrontier,
     replayAllowance,
+    legacyReplayAllowance,
+    legacyCombinedEntropyFrontier,
+    legacyCombinedSoftCadenceFrontier,
+    baselineEntropyFrontier,
+    baselineSoftCadenceFrontier,
+    strictEntropyFrontier,
+    strictSoftCadenceFrontier,
     matchTypeFrontier,
     cadenceAdmissible,
     combinedEntropyFrontier,
@@ -854,6 +1174,8 @@ function auditRotationClass(
     bestMatchTypeGain,
     bestZeroRestCount,
     allowedZeroRestCount,
+    bestMinimumReplayCoverageGain,
+    bestMinimumReplayCoverageGainNumerator,
     bestCombinedEntropyGain,
     bestRelationshipGain,
     bestSoftRestVector,
@@ -862,7 +1184,11 @@ function auditRotationClass(
     rotationClassIds: idsFor(rotationClass),
     balanceEnvelopeIds: idsFor(balanceEnvelope),
     replayMinimumIds: idsFor(replayMinimum),
+    replayCoverageFrontierIds: idsFor(replayCoverageFrontier),
     replayAllowanceIds: idsFor(replayAllowance),
+    legacyReplayAllowanceIds: idsFor(legacyReplayAllowance),
+    legacyCombinedEntropyFrontierIds: idsFor(legacyCombinedEntropyFrontier),
+    legacyCombinedSoftCadenceFrontierIds: idsFor(legacyCombinedSoftCadenceFrontier),
     matchTypeFrontierIds: idsFor(matchTypeFrontier),
     cadenceAdmissibleIds: idsFor(cadenceAdmissible),
     combinedEntropyFrontierIds: idsFor(combinedEntropyFrontier),
@@ -874,7 +1200,15 @@ function auditRotationClass(
     rotationClassKeys: keysFor(rotationClass),
     balanceEnvelopeKeys: keysFor(balanceEnvelope),
     replayMinimumKeys: keysFor(replayMinimum),
+    replayCoverageFrontierKeys: keysFor(replayCoverageFrontier),
     replayAllowanceKeys: keysFor(replayAllowance),
+    legacyReplayAllowanceKeys: keysFor(legacyReplayAllowance),
+    legacyCombinedEntropyFrontierKeys: keysFor(legacyCombinedEntropyFrontier),
+    legacyCombinedSoftCadenceFrontierKeys: keysFor(legacyCombinedSoftCadenceFrontier),
+    baselineEntropyFrontierKeys: keysFor(baselineEntropyFrontier),
+    baselineSoftCadenceFrontierKeys: keysFor(baselineSoftCadenceFrontier),
+    strictEntropyFrontierKeys: keysFor(strictEntropyFrontier),
+    strictSoftCadenceFrontierKeys: keysFor(strictSoftCadenceFrontier),
     matchTypeFrontierKeys: keysFor(matchTypeFrontier),
     cadenceAdmissibleKeys: keysFor(cadenceAdmissible),
     combinedEntropyFrontierKeys: keysFor(combinedEntropyFrontier),
@@ -900,14 +1234,18 @@ function toEntropyCandidateWitness(candidate: OracleCandidate, playersById: Map<
     effectiveRelationshipGain: candidate.effectiveRelationshipGain,
     rawCombinedEntropyGain: candidate.rawCombinedEntropyGain,
     effectiveCombinedEntropyGain: candidate.effectiveCombinedEntropyGain,
+    immediateCoverageGain: candidate.immediateCoverageGain,
+    immediateCoverageGainNumerator: candidate.immediateCoverageGainNumerator.toString(),
+    immediateCoverageGainDenominator: candidate.immediateCoverageGainDenominator.toString(),
   };
 }
 
 function certifyReplaySelection(
   proof: CounterfactualSelectionProof | null,
   audit: RotationAudit,
-  description: string
-): { candidate: OracleCandidate; replayEnvelopeCertified: boolean; engineCertified: boolean } | null {
+  description: string,
+  policy: "current" | "replay-envelope" = "current"
+): { candidate: OracleCandidate; replayEnvelopeCertified: boolean; coverageGateCertified: boolean; engineCertified: boolean } | null {
   if (!proof || proof.selections.length !== 1) return null;
   const selection = proof.selections[0];
   const key = exactCandidateKey(selection.ids, selection.partition);
@@ -916,11 +1254,14 @@ function certifyReplaySelection(
   if (!audit.balanceEnvelopeKeys.has(key)) throw new Error(`${description}: selected partition was outside its independently recomputed balance envelope.`);
   const candidate = audit.balanceEnvelope.find((item) => exactCandidateKey(item.ids, item.partition) === key);
   if (!candidate) throw new Error(`${description}: selected partition was not in the independent balance-envelope candidate set.`);
+  const allowedKeys = policy === "current" ? audit.replayAllowanceKeys : audit.legacyReplayAllowanceKeys;
   if (audit.bestZeroRestCount === null || audit.allowedZeroRestCount === null ||
-      candidate.zeroRestCount > audit.allowedZeroRestCount || !audit.replayAllowanceKeys.has(key)) {
-    throw new Error(`${description}: selected partition exceeded the independently recomputed best-zero/+1 replay envelope.`);
+      candidate.zeroRestCount > audit.allowedZeroRestCount || !allowedKeys.has(key)) {
+    throw new Error(`${description}: selected partition exceeded the independently recomputed replay allowance.`);
   }
-  const combinedAndSoftFrontierMatch = audit.combinedSoftCadenceFrontierKeys.has(key);
+  const combinedAndSoftFrontierMatch = policy === "current"
+    ? audit.combinedSoftCadenceFrontierKeys.has(key)
+    : audit.legacyCombinedSoftCadenceFrontierKeys.has(key);
   const debugCountsMatch = proof.bestImmediateReplayCount === audit.bestZeroRestCount &&
     proof.allowedImmediateReplayCount === audit.allowedZeroRestCount &&
     proof.chosenImmediateReplayCount === candidate.zeroRestCount;
@@ -930,11 +1271,25 @@ function certifyReplaySelection(
   if (proof.replayCertified === true && proof.varietyOptimal && !combinedAndSoftFrontierMatch) {
     throw new Error(`${description}: engine certified combined entropy/soft cadence, but the independent frontier disagreed.`);
   }
+  const expectedCoverageGain = candidate.immediateCoverageGain;
+  const coverageValuesMatch = proof.bestMinimumReplayCoverageGain === audit.bestMinimumReplayCoverageGain &&
+    proof.chosenImmediateCoverageGain === expectedCoverageGain &&
+    proof.chosenReplayCoverageEligible === audit.replayAllowanceKeys.has(key);
+  if (policy === "current" && proof.coverageGateCertified === true && !coverageValuesMatch) {
+    throw new Error(`${description}: engine coverage-gate score disagreed with the independent rational first-exposure oracle.`);
+  }
+  if (policy === "current" && proof.coverageGateCertified === true && !audit.replayAllowanceKeys.has(key)) {
+    throw new Error(`${description}: engine certified its coverage gate but selected outside the independently recomputed coverage-gated replay envelope.`);
+  }
+  const coverageGateCertified = policy === "current" && proof.coverageGateCertified === true &&
+    proof.coverageGateStatus === "CERTIFIED" && coverageValuesMatch && debugCountsMatch;
   return {
     candidate,
     replayEnvelopeCertified: proof.replayCertified === true && proof.replayEnvelopeStatus === "CERTIFIED" && debugCountsMatch,
+    coverageGateCertified,
     engineCertified: proof.replayCertified === true && proof.varietyOptimal &&
-      proof.replayEnvelopeStatus === "CERTIFIED" && debugCountsMatch && combinedAndSoftFrontierMatch,
+      proof.replayEnvelopeStatus === "CERTIFIED" && debugCountsMatch && combinedAndSoftFrontierMatch &&
+      (policy !== "current" || coverageGateCertified),
   };
 }
 
@@ -951,6 +1306,11 @@ function emptyWaitMeta(): WaitEpisodeMeta {
     hadReplayAllowanceOpportunity: false,
     hadCombinedEntropyFrontierOpportunity: false,
     hadCombinedSoftCadenceFrontierOpportunity: false,
+    hadCoverageGateRejectedPlusOneOpportunity: false,
+    hadBeyondReplayAllowanceOpportunity: false,
+    hadPolicyAdmissionOpportunity: false,
+    hadPolicyEntropyFrontierOpportunity: false,
+    hadPolicyFinalFrontierOpportunity: false,
     hadSmootherAlternative: false,
     hadCadenceOptimalOpportunity: false,
     hadCadenceSuboptimalOpportunity: false,
@@ -1031,6 +1391,26 @@ function getCheckpoint(
     acceptedPlusOneDecisions: number;
     betterEntropyBeyondAllowanceDecisions: number;
     betterEntropyBeyondAllowanceCandidateCount: number;
+    coverageGatePolicyApplied: boolean;
+    coverageGateCertified: number;
+    coverageGateUncertified: number;
+    noStarvationCoverageGateCertified: number;
+    noStarvationCoverageGateUncertified: number;
+    plusOneAvailableDecisions: number;
+    plusOneAvailableCandidates: number;
+    plusOneCoverageEligibleDecisions: number;
+    plusOneCoverageEligibleCandidates: number;
+    plusOneSelectedDecisions: number;
+    plusOneSelectedCandidates: number;
+    plusOneRejectedWithoutImprovedCoverageDecisions: number;
+    plusOneRejectedWithoutImprovedCoverageCandidates: number;
+    zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions: number;
+    zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates: number;
+    acceptedGreaterCoverageDecisions: number;
+    acceptedGreaterCoverageCandidates: number;
+    higherEntropyBeyondAllowanceDecisions: number;
+    higherEntropyBeyondAllowanceCandidates: number;
+    coverageGateWitnesses: CoverageGateWitness[];
     replayEnvelopeWitnesses: ReplayEnvelopeWitness[];
     fivePlusCompletedRestEpisodes: number;
     fivePlusEpisodesLinkedAcceptedPlusOneReplay: number;
@@ -1053,6 +1433,8 @@ function getCheckpoint(
   }
   const allEntropies = [...relationshipEntropies, ...matchTypeEntropies];
   const matchedCounts = players.map((player) => player.matchesPlayed);
+  const playerMatchCounts = players.map((player) => ({ userId: player.userId, matchesPlayed: player.matchesPlayed }))
+    .sort((left, right) => left.userId.localeCompare(right.userId));
   const starvRate = counters.starvationDecisions && counters.starvationUncertified === 0
     ? counters.starvationInterventions / counters.starvationDecisions
     : null;
@@ -1126,6 +1508,32 @@ function getCheckpoint(
       fivePlusEpisodesWithoutLinkedRestZeroReplay: counters.fivePlusEpisodesWithoutLinkedRestZeroReplay,
       witnesses: [...counters.replayEnvelopeWitnesses],
     },
+    coverageGate: {
+      policyApplied: counters.coverageGatePolicyApplied,
+      refillDecisions: counters.refillDecisionCount,
+      certifiedDecisions: counters.coverageGateCertified,
+      uncertifiedDecisions: counters.coverageGateUncertified,
+      noStarvationRefillDecisions: counters.noStarvationReplayRefillDecisions,
+      noStarvationCertifiedDecisions: counters.noStarvationCoverageGateCertified,
+      noStarvationUncertifiedDecisions: counters.noStarvationCoverageGateUncertified,
+      plusOneAvailableDecisions: counters.plusOneAvailableDecisions,
+      plusOneAvailableCandidates: counters.plusOneAvailableCandidates,
+      plusOneCoverageEligibleDecisions: counters.plusOneCoverageEligibleDecisions,
+      plusOneCoverageEligibleCandidates: counters.plusOneCoverageEligibleCandidates,
+      plusOneSelectedDecisions: counters.plusOneSelectedDecisions,
+      plusOneSelectedCandidates: counters.plusOneSelectedCandidates,
+      plusOneRejectedWithoutImprovedCoverageDecisions: counters.plusOneRejectedWithoutImprovedCoverageDecisions,
+      plusOneRejectedWithoutImprovedCoverageCandidates: counters.plusOneRejectedWithoutImprovedCoverageCandidates,
+      zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions: counters.zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions,
+      zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates: counters.zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates,
+      acceptedGreaterCoverageDecisions: counters.acceptedGreaterCoverageDecisions,
+      acceptedGreaterCoverageCandidates: counters.acceptedGreaterCoverageCandidates,
+      higherEntropyBeyondAllowanceDecisions: counters.higherEntropyBeyondAllowanceDecisions,
+      higherEntropyBeyondAllowanceCandidates: counters.higherEntropyBeyondAllowanceCandidates,
+      fivePlusCompletedRestEpisodes: counters.fivePlusCompletedRestEpisodes,
+      fivePlusEpisodesLinkedAcceptedPlusOneReplay: counters.fivePlusEpisodesLinkedAcceptedPlusOneReplay,
+      witnesses: [...counters.coverageGateWitnesses],
+    },
     optimizer: {
       callsStarted: counters.optimizerCallCount,
       callsCompleted: counters.completedOptimizerDecisions,
@@ -1140,6 +1548,12 @@ function getCheckpoint(
       incompleteCounterfactualCalls: counters.incompleteCounterfactualCalls,
     },
     matchCountSpread: Math.max(...matchedCounts) - Math.min(...matchedCounts),
+    playerMatchCounts,
+    minimumPlayerMatchCount: Math.min(...matchedCounts),
+    maximumPlayerMatchCount: Math.max(...matchedCounts),
+    allPlayersExactlySixMatches: completedMatches === 21
+      ? matchedCounts.length === PLAYER_COUNT && matchedCounts.every((count) => count === 6)
+      : null,
     maximumFairnessSpread: counters.maximumFairnessSpread,
     minimumFairnessSpread: counters.minimumFairnessSpread,
     maximumBalanceGap: counters.maximumBalanceGap,
@@ -1174,7 +1588,7 @@ function makeActiveAssignment(
   completedEventIndex: number,
   audit: RotationAudit | null,
   lastCompletedEvent: ReadonlyMap<string, number>,
-  enginePolicy: "current" | "strict" | "baseline",
+  enginePolicy: "current" | "strict" | "baseline" | "type-first" | "replay-envelope",
   replayContext: ReplayAssignmentContext | null
 ): ActiveAssignment {
   const selectedIds = new Set(selection.ids);
@@ -1226,7 +1640,13 @@ function makeActiveAssignment(
             : false
         ) : 0,
         acceptedPlusOneReplay: replayContext?.certified === true &&
-          replayContext.bestImmediateReplayCount + 1 === replayContext.chosenImmediateReplayCount,
+          replayContext.bestImmediateReplayCount + 1 === replayContext.chosenImmediateReplayCount &&
+          (!replayContext.coverageGatePolicy || (replayContext.coverageGateCertified && replayContext.coverageEligiblePlusOne)),
+        acceptedGreaterCoverageReplay: replayContext?.coverageGatePolicy === true &&
+          replayContext.coverageGateCertified && replayContext.coverageEligiblePlusOne,
+        coverageGateCertified: replayContext?.coverageGatePolicy ? replayContext.coverageGateCertified : undefined,
+        bestMinimumReplayCoverageGain: replayContext?.coverageGatePolicy ? replayContext.bestMinimumReplayCoverageGain : undefined,
+        selectedImmediateCoverageGain: replayContext?.coverageGatePolicy ? replayContext.chosenImmediateCoverageGain : undefined,
         ...(replayContext ? {
           bestImmediateReplayCount: replayContext.bestImmediateReplayCount,
           allowedImmediateReplayCount: replayContext.allowedImmediateReplayCount,
@@ -1252,40 +1672,37 @@ function makeActiveAssignment(
   };
 }
 
-function classifyFiveGap(meta: WaitEpisodeMeta): FiveGapEpisode["classification"] {
-  if (meta.hadSmootherAlternative) return "avoidable_equal_priority_smoother_alternative";
+function classifyPolicyFiveGap(meta: WaitEpisodeMeta, enginePolicy: BenchmarkEnginePolicy): FiveGapEpisode["classification"] {
   if (!meta.hadLegalCandidate || !meta.hadFairnessClassOpportunity) return "fairness_or_mixed_legality";
   if (!meta.hadStarvationClassOpportunity) return "starvation_priority";
   if (!meta.hadBalanceAdmissibleOpportunity) return "balance_guardrail";
-  if (meta.hadCadenceOptimalOpportunity) return "cadence_tie_later_tiebreak";
-  return "cadence_priority_exclusion";
-}
-
-function classifySplitFiveGap(meta: WaitEpisodeMeta): FiveGapEpisode["classification"] {
-  if (!meta.hadLegalCandidate || !meta.hadFairnessClassOpportunity) return "fairness_or_mixed_legality";
-  if (!meta.hadStarvationClassOpportunity) return "starvation_priority";
-  if (!meta.hadBalanceAdmissibleOpportunity) return "balance_guardrail";
-  if (!meta.hadMatchTypeFrontierOpportunity) return "match_type_entropy_priority_exclusion";
-  if (!meta.hadZeroRestFrontierOpportunity) return "immediate_replay_priority_exclusion";
-  if (!meta.hadRelationshipEntropyFrontierOpportunity) return "relationship_entropy_priority_exclusion";
-  if (!meta.hadSoftCadenceFrontierOpportunity) return "soft_cadence_priority_exclusion";
+  if (!meta.hadPolicyAdmissionOpportunity) {
+    if (enginePolicy === "current" && meta.hadCoverageGateRejectedPlusOneOpportunity) return "coverage_gate_priority_exclusion";
+    if (enginePolicy === "current" && meta.hadBeyondReplayAllowanceOpportunity) return "immediate_replay_priority_exclusion";
+    if (enginePolicy === "replay-envelope") return "immediate_replay_priority_exclusion";
+    if (enginePolicy === "strict") return "cadence_priority_exclusion";
+    if (enginePolicy === "type-first") {
+      if (!meta.hadMatchTypeFrontierOpportunity) return "match_type_entropy_priority_exclusion";
+      return "immediate_replay_priority_exclusion";
+    }
+    return "no_equal_priority_inclusion_candidate";
+  }
+  if (!meta.hadPolicyEntropyFrontierOpportunity) {
+    return enginePolicy === "type-first"
+      ? "relationship_entropy_priority_exclusion"
+      : enginePolicy === "strict" ? "strict_entropy_priority_exclusion"
+        : "combined_entropy_priority_exclusion";
+  }
+  if (!meta.hadPolicyFinalFrontierOpportunity) {
+    return enginePolicy === "baseline" ? "legacy_rest_priority_exclusion" : "soft_cadence_priority_exclusion";
+  }
   return "cadence_tie_later_tiebreak";
 }
 
-function classifyReplayPlusOneFiveGap(meta: WaitEpisodeMeta): FiveGapEpisode["classification"] {
-  if (!meta.hadLegalCandidate || !meta.hadFairnessClassOpportunity) return "fairness_or_mixed_legality";
-  if (!meta.hadStarvationClassOpportunity) return "starvation_priority";
-  if (!meta.hadBalanceAdmissibleOpportunity) return "balance_guardrail";
-  if (!meta.hadReplayAllowanceOpportunity) return "immediate_replay_priority_exclusion";
-  if (!meta.hadCombinedEntropyFrontierOpportunity) return "combined_entropy_priority_exclusion";
-  if (!meta.hadCombinedSoftCadenceFrontierOpportunity) return "soft_cadence_priority_exclusion";
-  return "cadence_tie_later_tiebreak";
-}
-
-function classifyReplayOrigin(trace: ReplayInitiationTrace, enginePolicy: "current" | "strict" | "baseline"): FiveGapEpisode["classification"] {
+function classifyReplayOrigin(trace: ReplayInitiationTrace, enginePolicy: "current" | "strict" | "baseline" | "type-first" | "replay-envelope"): FiveGapEpisode["classification"] {
   if (enginePolicy === "strict" && trace.smootherBalanceAdmissibleSetsWithoutPlayer > 0) return "avoidable_equal_priority_smoother_alternative";
-  if (enginePolicy === "current" && trace.acceptedPlusOneReplay === true) return "accepted_plus_one_replay_origin";
-  if (enginePolicy === "current" && trace.acceptedPlusOneReplay === undefined && trace.betterTypeGainLowerZeroRestSetsWithoutPlayer > 0) return "type_entropy_priority_override";
+  if ((enginePolicy === "current" || enginePolicy === "replay-envelope") && trace.acceptedPlusOneReplay === true) return "accepted_plus_one_replay_origin";
+  if (enginePolicy === "type-first" && trace.betterTypeGainLowerZeroRestSetsWithoutPlayer > 0) return "type_entropy_priority_override";
   if (enginePolicy === "current" && trace.acceptedPlusOneReplay === false) {
     if (trace.fairAlternativeSetsWithoutPlayer === 0) return "fairness_or_mixed_legality";
     if (trace.starvationEquivalentAlternativeSetsWithoutPlayer === 0) return "starvation_priority";
@@ -1307,11 +1724,50 @@ export function advanceReplayOriginOnCompletion(
   return completedAssignmentReplayOrigin ?? null;
 }
 
-export function classifyReplayOriginForBenchmark(trace: ReplayInitiationTrace, enginePolicy: "current" | "strict" | "baseline" = "current"): FiveGapEpisode["classification"] {
+export function classifyReplayOriginForBenchmark(trace: ReplayInitiationTrace, enginePolicy: "current" | "strict" | "baseline" | "type-first" | "replay-envelope" = "current"): FiveGapEpisode["classification"] {
   return classifyReplayOrigin(trace, enginePolicy);
 }
 
+type BenchmarkEnginePolicy = "current" | "strict" | "baseline" | "type-first" | "replay-envelope";
+
+/** Lower values mean the independent candidate has higher priority for this measured engine policy. */
+function compareCandidatePolicyPriority(
+  left: OracleCandidate,
+  right: OracleCandidate,
+  enginePolicy: BenchmarkEnginePolicy,
+  audit: RotationAudit,
+  sessionType: SessionType
+) {
+  let comparison = 0;
+  if (enginePolicy === "strict") {
+    comparison = compareNumberVectors(left.rest, right.rest) ||
+      right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
+      compareNumberVectors(left.softRest, right.softRest);
+  } else if (enginePolicy === "baseline") {
+    comparison = right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
+      compareNumberVectors(getLegacySocialRestVectorForBenchmark(left.softRest), getLegacySocialRestVectorForBenchmark(right.softRest));
+  } else if (enginePolicy === "type-first") {
+    comparison = right.effectiveMatchTypeGain - left.effectiveMatchTypeGain ||
+      left.zeroRestCount - right.zeroRestCount ||
+      right.effectiveRelationshipGain - left.effectiveRelationshipGain ||
+      compareNumberVectors(left.softRest, right.softRest);
+  } else {
+    const allowed = enginePolicy === "current" ? audit.replayAllowanceKeys : audit.legacyReplayAllowanceKeys;
+    const leftAllowed = allowed.has(exactCandidateKey(left.ids, left.partition));
+    const rightAllowed = allowed.has(exactCandidateKey(right.ids, right.partition));
+    comparison = leftAllowed !== rightAllowed ? (leftAllowed ? -1 : 1)
+      : right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
+        compareNumberVectors(left.softRest, right.softRest);
+  }
+  if (comparison !== 0) return comparison;
+  if (sessionType !== SessionType.SOCIAL_MIX && left.balanceGap !== right.balanceGap) {
+    return left.balanceGap - right.balanceGap;
+  }
+  return 0;
+}
+
 function buildUnseenRelationships(
+  enginePolicy: BenchmarkEnginePolicy,
   opportunities: RelationshipCounts,
   observed: RelationshipCounts,
   strongCounts: Record<string, number>,
@@ -1323,7 +1779,11 @@ function buildUnseenRelationships(
   replayMinimumCounts: Record<string, number>,
   replayAllowanceCounts: Record<string, number>,
   combinedEntropyCounts: Record<string, number>,
-  combinedSoftCounts: Record<string, number>
+  combinedSoftCounts: Record<string, number>,
+  policyAdmissionCounts: Record<string, number>,
+  policyEntropyCounts: Record<string, number>,
+  policyFinalCounts: Record<string, number>,
+  coverageGateRejectedCounts: Record<string, number>
 ) {
   const unseen: MissingRelationship[] = [];
   for (const facet of RELATION_FACETS) {
@@ -1340,7 +1800,45 @@ function buildUnseenRelationships(
       const replayAllowance = replayAllowanceCounts[key] ?? 0;
       const combinedEntropy = combinedEntropyCounts[key] ?? 0;
       const combinedSoft = combinedSoftCounts[key] ?? 0;
+      const policyAdmission = policyAdmissionCounts[key] ?? 0;
+      const policyEntropy = policyEntropyCounts[key] ?? 0;
+      const policyFinal = policyFinalCounts[key] ?? 0;
+      const gateRejected = coverageGateRejectedCounts[key] ?? 0;
+      let classification: MissingRelationship["classification"];
+      if (policyFinal > 0) classification = "admissible_but_unselected";
+      else if (policyEntropy > 0) classification = enginePolicy === "baseline"
+        ? "legacy_rest_priority_excluded_in_observed_opportunities"
+        : "soft_cadence_priority_excluded_in_observed_opportunities";
+      else if (policyAdmission > 0) {
+        classification = enginePolicy === "type-first"
+          ? "relationship_entropy_priority_excluded_in_observed_opportunities"
+          : enginePolicy === "strict" ? "strict_entropy_priority_excluded_in_observed_opportunities"
+            : "combined_entropy_priority_excluded_in_observed_opportunities";
+      } else if (enginePolicy === "current" && gateRejected > 0) {
+        classification = "coverage_gate_priority_excluded_in_observed_opportunities";
+      } else if (enginePolicy === "current" && envelope > 0) {
+        classification = "replay_allowance_priority_excluded_in_observed_opportunities";
+      } else if (enginePolicy === "strict" && envelope > 0) {
+        classification = "strict_cadence_priority_excluded_in_observed_opportunities";
+      } else if (enginePolicy === "baseline" && envelope > 0) {
+        classification = "combined_entropy_priority_excluded_in_observed_opportunities";
+      } else if (enginePolicy === "type-first") {
+        classification = typeFrontier === 0 ? "match_type_entropy_priority_excluded_in_observed_opportunities"
+          : cadence === 0 ? "immediate_replay_priority_excluded_in_observed_opportunities"
+            : relationshipFrontier === 0 ? "relationship_entropy_priority_excluded_in_observed_opportunities"
+              : "soft_cadence_priority_excluded_in_observed_opportunities";
+      } else if (enginePolicy === "replay-envelope" && envelope > 0) {
+        classification = replayAllowance === 0
+          ? "replay_allowance_priority_excluded_in_observed_opportunities"
+          : "combined_entropy_priority_excluded_in_observed_opportunities";
+      } else if (strong > 0 && envelope === 0) {
+        classification = "excluded_by_balance_envelope_in_observed_opportunities";
+      } else {
+        classification = "never_in_strongest_rotation_class_during_observed_refills";
+      }
       unseen.push({
+        measuredPolicy: enginePolicy,
+        frontierDiagnosticPolicy: "current-coverage-gated-oracle",
         facet,
         players: relationship.split("|") as [string, string],
         observedStrongRotationOpportunities: strong,
@@ -1353,17 +1851,11 @@ function buildUnseenRelationships(
         observedReplayAllowanceOpportunities: replayAllowance,
         observedCombinedEntropyFrontierOpportunities: combinedEntropy,
         observedCombinedSoftCadenceFrontierOpportunities: combinedSoft,
-        classification: combinedSoft > 0
-          ? "admissible_but_unselected"
-          : combinedEntropy > 0
-            ? "soft_cadence_priority_excluded_in_observed_opportunities"
-            : replayAllowance > 0
-              ? "combined_entropy_priority_excluded_in_observed_opportunities"
-              : envelope > 0
-                ? "replay_allowance_priority_excluded_in_observed_opportunities"
-                : strong > 0
-                  ? "excluded_by_balance_envelope_in_observed_opportunities"
-                  : "never_in_strongest_rotation_class_during_observed_refills",
+        observedPolicyAdmissionOpportunities: policyAdmission,
+        observedPolicyEntropyFrontierOpportunities: policyEntropy,
+        observedPolicyFinalFrontierOpportunities: policyFinal,
+        observedCoverageGateRejectedPlusOneOpportunities: gateRejected,
+        classification,
       });
     }
   }
@@ -1379,7 +1871,7 @@ function createSessionResult(
   sessionType: SessionType,
   seed: number,
   targetMatches = 400,
-  enginePolicy: "current" | "strict" | "baseline" = "current"
+  enginePolicy: "current" | "strict" | "baseline" | "type-first" | "replay-envelope" = "current"
 ): BenchmarkSessionResult {
   const startTime = performance.now();
   const players = createRoster(sessionType, profile);
@@ -1425,7 +1917,7 @@ function createSessionResult(
     selectedRelationshipGainTotal: 0,
     typePriorityOverrideCount: 0,
     typePriorityPolicyApplied: false,
-    replayEnvelopePolicyApplied: enginePolicy === "current",
+    replayEnvelopePolicyApplied: enginePolicy === "current" || enginePolicy === "replay-envelope",
     productionReplayCertified: 0,
     productionReplayUncertified: 0,
     productionReplayEnvelopeCertified: 0,
@@ -1437,6 +1929,26 @@ function createSessionResult(
     acceptedPlusOneDecisions: 0,
     betterEntropyBeyondAllowanceDecisions: 0,
     betterEntropyBeyondAllowanceCandidateCount: 0,
+    coverageGatePolicyApplied: enginePolicy === "current",
+    coverageGateCertified: 0,
+    coverageGateUncertified: 0,
+    noStarvationCoverageGateCertified: 0,
+    noStarvationCoverageGateUncertified: 0,
+    plusOneAvailableDecisions: 0,
+    plusOneAvailableCandidates: 0,
+    plusOneCoverageEligibleDecisions: 0,
+    plusOneCoverageEligibleCandidates: 0,
+    plusOneSelectedDecisions: 0,
+    plusOneSelectedCandidates: 0,
+    plusOneRejectedWithoutImprovedCoverageDecisions: 0,
+    plusOneRejectedWithoutImprovedCoverageCandidates: 0,
+    zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions: 0,
+    zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates: 0,
+    acceptedGreaterCoverageDecisions: 0,
+    acceptedGreaterCoverageCandidates: 0,
+    higherEntropyBeyondAllowanceDecisions: 0,
+    higherEntropyBeyondAllowanceCandidates: 0,
+    coverageGateWitnesses: [] as CoverageGateWitness[],
     replayEnvelopeWitnesses: [] as ReplayEnvelopeWitness[],
     fivePlusCompletedRestEpisodes: 0,
     fivePlusEpisodesLinkedAcceptedPlusOneReplay: 0,
@@ -1455,6 +1967,10 @@ function createSessionResult(
   const replayAllowanceRelationshipCounts: Record<string, number> = {};
   const combinedEntropyFrontierRelationshipCounts: Record<string, number> = {};
   const combinedSoftCadenceFrontierRelationshipCounts: Record<string, number> = {};
+  const policyAdmissionRelationshipCounts: Record<string, number> = {};
+  const policyEntropyFrontierRelationshipCounts: Record<string, number> = {};
+  const policyFinalFrontierRelationshipCounts: Record<string, number> = {};
+  const coverageGateRejectedPlusOneRelationshipCounts: Record<string, number> = {};
   const typePriorityOverrideWitnesses: TypePriorityOverrideWitness[] = [];
   const lastReplayInitiation = new Map<string, ReplayInitiationTrace>();
   let nextDecisionId = 1;
@@ -1512,6 +2028,11 @@ function createSessionResult(
         chosenImmediateReplayCount?: number | null;
         replayCertified?: boolean;
         replayEnvelopeStatus?: CounterfactualSelectionProof["replayEnvelopeStatus"];
+        bestMinimumReplayCoverageGain?: number | null;
+        chosenImmediateCoverageGain?: number | null;
+        coverageGateCertified?: boolean | null;
+        coverageGateStatus?: CounterfactualSelectionProof["coverageGateStatus"];
+        chosenReplayCoverageEligible?: boolean | null;
       };
       const debug = candidate.debug as unknown as {
         bestImmediateReplayCount?: number | null;
@@ -1519,6 +2040,11 @@ function createSessionResult(
         chosenImmediateReplayCount?: number | null;
         replayCertified?: boolean;
         replayEnvelopeStatus?: CounterfactualSelectionProof["replayEnvelopeStatus"];
+        bestMinimumReplayCoverageGain?: number | null;
+        chosenImmediateCoverageGain?: number | null;
+        coverageGateCertified?: boolean | null;
+        coverageGateStatus?: CounterfactualSelectionProof["coverageGateStatus"];
+        chosenReplayCoverageEligible?: boolean | null;
       };
       return {
         selections: candidate.selection?.selections.map((selection) => ({
@@ -1533,6 +2059,11 @@ function createSessionResult(
         chosenImmediateReplayCount: resultReplay.chosenImmediateReplayCount ?? debug.chosenImmediateReplayCount ?? null,
         replayCertified: resultReplay.replayCertified ?? debug.replayCertified ?? null,
         replayEnvelopeStatus: resultReplay.replayEnvelopeStatus ?? debug.replayEnvelopeStatus ?? null,
+        bestMinimumReplayCoverageGain: resultReplay.bestMinimumReplayCoverageGain ?? debug.bestMinimumReplayCoverageGain ?? null,
+        chosenImmediateCoverageGain: resultReplay.chosenImmediateCoverageGain ?? debug.chosenImmediateCoverageGain ?? null,
+        coverageGateCertified: resultReplay.coverageGateCertified ?? debug.coverageGateCertified ?? null,
+        coverageGateStatus: resultReplay.coverageGateStatus ?? debug.coverageGateStatus ?? null,
+        chosenReplayCoverageEligible: resultReplay.chosenReplayCoverageEligible ?? debug.chosenReplayCoverageEligible ?? null,
       };
     };
     const recordResultDiagnostics = (result: OptimizerResult) => {
@@ -1657,9 +2188,7 @@ function createSessionResult(
           if (initiatingReplay?.acceptedPlusOneReplay === true) counters.fivePlusEpisodesLinkedAcceptedPlusOneReplay += 1;
           else if (initiatingReplay) counters.fivePlusEpisodesLinkedOtherRestZeroReplay += 1;
           else counters.fivePlusEpisodesWithoutLinkedRestZeroReplay += 1;
-          const currentWaitClassification = enginePolicy === "current"
-            ? classifyReplayPlusOneFiveGap(meta)
-            : enginePolicy === "strict" ? classifyFiveGap(meta) : classifySplitFiveGap(meta);
+          const currentWaitClassification = classifyPolicyFiveGap(meta, enginePolicy);
           const originClassification = initiatingReplay ? classifyReplayOrigin(initiatingReplay, enginePolicy) : null;
           const replayClassification = originClassification === "accepted_plus_one_replay_origin" ||
             originClassification === "avoidable_equal_priority_zero_rest_alternative" ||
@@ -1684,6 +2213,11 @@ function createSessionResult(
             hadReplayAllowanceOpportunity: meta.hadReplayAllowanceOpportunity,
             hadCombinedEntropyFrontierOpportunity: meta.hadCombinedEntropyFrontierOpportunity,
             hadCombinedSoftCadenceFrontierOpportunity: meta.hadCombinedSoftCadenceFrontierOpportunity,
+            hadCoverageGateRejectedPlusOneOpportunity: meta.hadCoverageGateRejectedPlusOneOpportunity,
+            hadBeyondReplayAllowanceOpportunity: meta.hadBeyondReplayAllowanceOpportunity,
+            hadPolicyAdmissionOpportunity: meta.hadPolicyAdmissionOpportunity,
+            hadPolicyEntropyFrontierOpportunity: meta.hadPolicyEntropyFrontierOpportunity,
+            hadPolicyFinalFrontierOpportunity: meta.hadPolicyFinalFrontierOpportunity,
             hadSmootherAlternative: meta.hadSmootherAlternative,
             hadCadenceOptimalOpportunity: meta.hadCadenceOptimalOpportunity,
             hadCadenceSuboptimalOpportunity: meta.hadCadenceSuboptimalOpportunity,
@@ -1746,7 +2280,7 @@ function createSessionResult(
     const refillAudit = eventIndex + 1 < targetMatches
       ? auditRotationClass(players, sessionType, refillHistory)
       : null;
-    if (eventIndex + 1 === 20 || eventIndex + 1 === 400 || eventIndex + 1 === targetMatches) {
+    if (eventIndex + 1 === 21 || eventIndex + 1 === 400 || eventIndex + 1 === targetMatches) {
       const completedRestValues = [...completedRestGaps];
       const assignmentRestValues = [...assignmentRestGaps];
       const ongoingAvailableFiveTurnWaits = players
@@ -1801,6 +2335,30 @@ function createSessionResult(
     for (const candidate of refillAudit.combinedSoftCadenceFrontier) {
       for (const key of getPartitionRelationships(candidate.partition)) combinedSoftCadenceFrontierRelationshipCounts[key] = (combinedSoftCadenceFrontierRelationshipCounts[key] ?? 0) + 1;
     }
+    const measuredPolicyFrontiers = enginePolicy === "current"
+      ? [refillAudit.replayAllowance, refillAudit.combinedEntropyFrontier, refillAudit.combinedSoftCadenceFrontier]
+      : enginePolicy === "replay-envelope"
+        ? [refillAudit.legacyReplayAllowance, refillAudit.legacyCombinedEntropyFrontier, refillAudit.legacyCombinedSoftCadenceFrontier]
+        : enginePolicy === "strict"
+          ? [refillAudit.strictCadenceAdmissible, refillAudit.strictEntropyFrontier, refillAudit.strictSoftCadenceFrontier]
+          : enginePolicy === "type-first"
+            ? [refillAudit.cadenceAdmissible, refillAudit.relationshipEntropyFrontier, refillAudit.softCadenceFrontier]
+            : [refillAudit.balanceEnvelope, refillAudit.baselineEntropyFrontier, refillAudit.baselineSoftCadenceFrontier];
+    for (const candidate of measuredPolicyFrontiers[0]) {
+      for (const key of getPartitionRelationships(candidate.partition)) policyAdmissionRelationshipCounts[key] = (policyAdmissionRelationshipCounts[key] ?? 0) + 1;
+    }
+    for (const candidate of measuredPolicyFrontiers[1]) {
+      for (const key of getPartitionRelationships(candidate.partition)) policyEntropyFrontierRelationshipCounts[key] = (policyEntropyFrontierRelationshipCounts[key] ?? 0) + 1;
+    }
+    for (const candidate of measuredPolicyFrontiers[2]) {
+      for (const key of getPartitionRelationships(candidate.partition)) policyFinalFrontierRelationshipCounts[key] = (policyFinalFrontierRelationshipCounts[key] ?? 0) + 1;
+    }
+    if (refillAudit.bestZeroRestCount !== null) {
+      for (const candidate of refillAudit.balanceEnvelope.filter((item) =>
+        item.zeroRestCount === refillAudit.bestZeroRestCount! + 1 && !refillAudit.replayAllowanceKeys.has(exactCandidateKey(item.ids, item.partition)))) {
+        for (const key of getPartitionRelationships(candidate.partition)) coverageGateRejectedPlusOneRelationshipCounts[key] = (coverageGateRejectedPlusOneRelationshipCounts[key] ?? 0) + 1;
+      }
+    }
     const refill = callOptimizer(1);
     if (!refill.result.selection || refill.result.selection.selections.length !== 1) {
       throw new Error(`${sessionType}/${profile}/seed ${seed}: refill failed after completion ${eventIndex + 1} (${refill.result.debug.failureReason})`);
@@ -1824,32 +2382,32 @@ function createSessionResult(
     }
     const selectedOracleCandidate = refillAudit.balanceEnvelope.find((candidate) => exactCandidateKey(candidate.ids, candidate.partition) === chosenCandidateKey);
     if (!selectedOracleCandidate) throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was absent from independent balance candidate records after completion ${eventIndex + 1}`);
-    let productionReplayAudit: { candidate: OracleCandidate; replayEnvelopeCertified: boolean; engineCertified: boolean } | null = null;
-    let noStarvationReplayAudit: { candidate: OracleCandidate; replayEnvelopeCertified: boolean; engineCertified: boolean } | null = null;
+    let productionReplayAudit: { candidate: OracleCandidate; replayEnvelopeCertified: boolean; coverageGateCertified: boolean; engineCertified: boolean } | null = null;
+    let noStarvationReplayAudit: { candidate: OracleCandidate; replayEnvelopeCertified: boolean; coverageGateCertified: boolean; engineCertified: boolean } | null = null;
     let noStarvationAudit: RotationAudit | null = null;
-    if (enginePolicy === "current") {
+    if (enginePolicy === "replay-envelope") {
       productionReplayAudit = certifyReplaySelection(
         refill.productionProof,
         refillAudit,
-        `${sessionType}/${profile}/seed ${seed} production after ${eventIndex + 1} completed matches`
+        `${sessionType}/${profile}/seed ${seed} production after ${eventIndex + 1} completed matches`,
+        "replay-envelope"
       );
-      if (!productionReplayAudit) {
-        counters.productionReplayUncertified += 1;
-      } else {
+      if (!productionReplayAudit) counters.productionReplayUncertified += 1;
+      else {
         if (productionReplayAudit.replayEnvelopeCertified) counters.productionReplayEnvelopeCertified += 1;
         if (productionReplayAudit.engineCertified) counters.productionReplayCertified += 1;
         else counters.productionReplayUncertified += 1;
       }
       counters.noStarvationReplayRefillDecisions += 1;
       if (refill.meta.overdueAvailable > 0) counters.noStarvationCounterfactualDecisions += 1;
-      const noStarvationProof = refill.withoutStarvation;
       noStarvationAudit = refill.meta.overdueAvailable > 0
         ? auditRotationClass(players, sessionType, refillHistory, false)
         : refillAudit;
       noStarvationReplayAudit = certifyReplaySelection(
-        noStarvationProof,
+        refill.withoutStarvation,
         noStarvationAudit,
-        `${sessionType}/${profile}/seed ${seed} no-starvation counterfactual after ${eventIndex + 1} completed matches`
+        `${sessionType}/${profile}/seed ${seed} no-starvation counterfactual after ${eventIndex + 1} completed matches`,
+        "replay-envelope"
       );
       if (noStarvationReplayAudit?.replayEnvelopeCertified) counters.noStarvationReplayEnvelopeCertified += 1;
       if (noStarvationReplayAudit?.engineCertified) counters.noStarvationReplayCertified += 1;
@@ -1859,10 +2417,9 @@ function createSessionResult(
           selectedZeroRestCount === refillAudit.bestZeroRestCount + 1) {
         counters.acceptedPlusOneDecisions += 1;
       }
-      if (productionReplayAudit?.replayEnvelopeCertified && refillAudit.allowedZeroRestCount !== null && refillAudit.bestZeroRestCount !== null) {
-        const allowedReplayCount = refillAudit.allowedZeroRestCount;
+      if (productionReplayAudit?.replayEnvelopeCertified && refillAudit.bestZeroRestCount !== null && refillAudit.allowedZeroRestCount !== null) {
         const rejectedForEntropy = refillAudit.balanceEnvelope
-          .filter((candidate) => candidate.zeroRestCount > allowedReplayCount &&
+          .filter((candidate) => candidate.zeroRestCount > refillAudit.allowedZeroRestCount! &&
             candidate.effectiveCombinedEntropyGain > selectedOracleCandidate.effectiveCombinedEntropyGain)
           .sort((left, right) => right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
             left.zeroRestCount - right.zeroRestCount ||
@@ -1903,6 +2460,169 @@ function createSessionResult(
         }
       }
     }
+    if (enginePolicy === "current") {
+      productionReplayAudit = certifyReplaySelection(
+        refill.productionProof,
+        refillAudit,
+        `${sessionType}/${profile}/seed ${seed} production after ${eventIndex + 1} completed matches`
+      );
+      if (!productionReplayAudit) {
+        counters.productionReplayUncertified += 1;
+        counters.coverageGateUncertified += 1;
+      } else {
+        if (productionReplayAudit.replayEnvelopeCertified) counters.productionReplayEnvelopeCertified += 1;
+        if (productionReplayAudit.engineCertified) counters.productionReplayCertified += 1;
+        else counters.productionReplayUncertified += 1;
+        if (productionReplayAudit.coverageGateCertified) counters.coverageGateCertified += 1;
+        else counters.coverageGateUncertified += 1;
+      }
+      counters.noStarvationReplayRefillDecisions += 1;
+      if (refill.meta.overdueAvailable > 0) counters.noStarvationCounterfactualDecisions += 1;
+      const noStarvationProof = refill.withoutStarvation;
+      noStarvationAudit = refill.meta.overdueAvailable > 0
+        ? auditRotationClass(players, sessionType, refillHistory, false)
+        : refillAudit;
+      noStarvationReplayAudit = certifyReplaySelection(
+        noStarvationProof,
+        noStarvationAudit,
+        `${sessionType}/${profile}/seed ${seed} no-starvation counterfactual after ${eventIndex + 1} completed matches`
+      );
+      if (noStarvationReplayAudit?.replayEnvelopeCertified) counters.noStarvationReplayEnvelopeCertified += 1;
+      if (noStarvationReplayAudit?.engineCertified) counters.noStarvationReplayCertified += 1;
+      else counters.noStarvationReplayUncertified += 1;
+      if (noStarvationReplayAudit?.coverageGateCertified) counters.noStarvationCoverageGateCertified += 1;
+      else counters.noStarvationCoverageGateUncertified += 1;
+
+      const availablePlusOne = refillAudit.bestZeroRestCount === null ? [] : refillAudit.balanceEnvelope
+        .filter((candidate) => candidate.zeroRestCount === refillAudit.bestZeroRestCount! + 1);
+      const coverageEligiblePlusOne = refillAudit.bestZeroRestCount === null ? [] : availablePlusOne
+        .filter((candidate) => refillAudit.replayAllowanceKeys.has(exactCandidateKey(candidate.ids, candidate.partition)));
+      const rejectedWithoutCoverage = availablePlusOne.filter((candidate) => !coverageEligiblePlusOne.includes(candidate));
+      if (availablePlusOne.length) counters.plusOneAvailableDecisions += 1;
+      counters.plusOneAvailableCandidates += availablePlusOne.length;
+      if (coverageEligiblePlusOne.length) counters.plusOneCoverageEligibleDecisions += 1;
+      counters.plusOneCoverageEligibleCandidates += coverageEligiblePlusOne.length;
+      if (rejectedWithoutCoverage.length) counters.plusOneRejectedWithoutImprovedCoverageDecisions += 1;
+      counters.plusOneRejectedWithoutImprovedCoverageCandidates += rejectedWithoutCoverage.length;
+
+      if (productionReplayAudit?.coverageGateCertified && refillAudit.bestZeroRestCount !== null &&
+          selectedZeroRestCount === refillAudit.bestZeroRestCount + 1) {
+        counters.acceptedPlusOneDecisions += 1;
+        counters.plusOneSelectedDecisions += 1;
+        counters.plusOneSelectedCandidates += 1;
+        counters.acceptedGreaterCoverageDecisions += 1;
+        counters.acceptedGreaterCoverageCandidates += 1;
+      }
+      if (productionReplayAudit?.coverageGateCertified && refillAudit.allowedZeroRestCount !== null && refillAudit.bestZeroRestCount !== null) {
+        const allowedReplayCount = refillAudit.allowedZeroRestCount;
+        const rejectedForEntropy = refillAudit.balanceEnvelope
+          .filter((candidate) => candidate.zeroRestCount > allowedReplayCount &&
+            candidate.effectiveCombinedEntropyGain > selectedOracleCandidate.effectiveCombinedEntropyGain)
+          .sort((left, right) => right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
+            left.zeroRestCount - right.zeroRestCount ||
+            compareNumberVectors(left.softRest, right.softRest) ||
+            exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)));
+        if (rejectedForEntropy.length) {
+          counters.betterEntropyBeyondAllowanceDecisions += 1;
+          counters.betterEntropyBeyondAllowanceCandidateCount += rejectedForEntropy.length;
+          counters.higherEntropyBeyondAllowanceDecisions += 1;
+          counters.higherEntropyBeyondAllowanceCandidates += rejectedForEntropy.length;
+        }
+        if (selectedZeroRestCount === refillAudit.bestZeroRestCount + 1 || rejectedForEntropy.length) {
+          const playersById = new Map(players.map((player) => [player.userId, player]));
+          const counterfactualSelection = noStarvationReplayAudit?.candidate;
+          counters.replayEnvelopeWitnesses.push({
+            afterCompletedMatches: eventIndex + 1,
+            fairnessVector: selectedOracleCandidate.fairness,
+            starvationVector: selectedOracleCandidate.starvation,
+            balanceEnvelopeCandidateCount: refillAudit.balanceEnvelope.length,
+            bestImmediateReplayCount: refillAudit.bestZeroRestCount,
+            allowedImmediateReplayCount: refillAudit.allowedZeroRestCount,
+            chosenImmediateReplayCount: selectedOracleCandidate.zeroRestCount,
+            selected: toEntropyCandidateWitness(selectedOracleCandidate, playersById),
+            strongestRejectedCandidate: rejectedForEntropy[0]
+              ? toEntropyCandidateWitness(rejectedForEntropy[0], playersById) : null,
+            rejectedCandidateCount: rejectedForEntropy.length,
+            withoutStarvation: counterfactualSelection && noStarvationAudit
+              ? {
+                  ids: [...counterfactualSelection.ids].sort(),
+                  balanceGap: counterfactualSelection.balanceGap,
+                  zeroRestCount: counterfactualSelection.zeroRestCount,
+                  bestImmediateReplayCount: noStarvationAudit.bestZeroRestCount ?? -1,
+                  allowedImmediateReplayCount: noStarvationAudit.allowedZeroRestCount ?? -1,
+                  effectiveCombinedEntropyGain: counterfactualSelection.effectiveCombinedEntropyGain,
+                  replayEnvelopeCertified: noStarvationReplayAudit?.replayEnvelopeCertified ?? false,
+                  engineCertified: noStarvationReplayAudit?.engineCertified ?? false,
+                }
+              : null,
+          });
+        }
+
+        if (selectedZeroRestCount === refillAudit.bestZeroRestCount + 1 || rejectedForEntropy.length || rejectedWithoutCoverage.length) {
+          const playersById = new Map(players.map((player) => [player.userId, player]));
+          const bestMinimumCoverage = refillAudit.replayCoverageFrontier
+            .slice().sort((left, right) => right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
+              exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)))[0] ?? null;
+          const bestCoverageEligible = coverageEligiblePlusOne
+            .slice().sort((left, right) => compareCoverageUnits(right, left) ||
+              right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
+              exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)))[0] ?? null;
+          const bestCoverageRejected = rejectedWithoutCoverage
+            .slice().sort((left, right) => compareCoverageUnits(right, left) ||
+              right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
+              exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)))[0] ?? null;
+          const higherTypeGainRejectedCandidates = rejectedWithoutCoverage
+            .filter((candidate) => compareCoverageUnits(candidate, selectedOracleCandidate) === 0 &&
+              candidate.effectiveMatchTypeGain > selectedOracleCandidate.effectiveMatchTypeGain)
+            .filter((candidate) => candidate.immediateCoverageGainNumerator === BigInt(0))
+            .sort((left, right) => right.effectiveMatchTypeGain - left.effectiveMatchTypeGain ||
+              right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
+              exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)));
+          const higherTypeGainRejected = higherTypeGainRejectedCandidates[0] ?? null;
+          const minimumCoverageGainIsZero = refillAudit.bestMinimumReplayCoverageGainNumerator === BigInt(0) &&
+            selectedOracleCandidate.immediateCoverageGainNumerator === BigInt(0);
+          if (minimumCoverageGainIsZero && higherTypeGainRejectedCandidates.length) {
+            counters.zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions += 1;
+            counters.zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates += higherTypeGainRejectedCandidates.length;
+          }
+          const highestEntropyRejected = rejectedForEntropy[0] ?? null;
+          const counterfactualSelection = noStarvationReplayAudit?.candidate;
+          counters.coverageGateWitnesses.push({
+            afterCompletedMatches: eventIndex + 1,
+            bestImmediateReplayCount: refillAudit.bestZeroRestCount,
+            allowedImmediateReplayCount: refillAudit.allowedZeroRestCount,
+            chosenImmediateReplayCount: selectedOracleCandidate.zeroRestCount,
+            bestMinimumReplayCoverageGain: refillAudit.bestMinimumReplayCoverageGain ?? 0,
+            chosenImmediateCoverageGain: selectedOracleCandidate.immediateCoverageGain,
+            chosenReplayCoverageEligible: refillAudit.replayAllowanceKeys.has(chosenCandidateKey),
+            selected: toEntropyCandidateWitness(selectedOracleCandidate, playersById),
+            fairnessVector: selectedOracleCandidate.fairness,
+            starvationVector: selectedOracleCandidate.starvation,
+            minimumReplayCoverageGainIsZero: minimumCoverageGainIsZero,
+            higherTypeGainRejectedPlusOneCandidateCount: higherTypeGainRejectedCandidates.length,
+            bestMinimumReplayCoverageCandidate: bestMinimumCoverage ? toEntropyCandidateWitness(bestMinimumCoverage, playersById) : null,
+            bestCoverageEligiblePlusOne: bestCoverageEligible ? toEntropyCandidateWitness(bestCoverageEligible, playersById) : null,
+            bestCoverageRejectedPlusOne: bestCoverageRejected ? toEntropyCandidateWitness(bestCoverageRejected, playersById) : null,
+            higherTypeGainRejectedPlusOne: higherTypeGainRejected ? toEntropyCandidateWitness(higherTypeGainRejected, playersById) : null,
+            bestEntropyRejectedBeyondAllowance: highestEntropyRejected ? toEntropyCandidateWitness(highestEntropyRejected, playersById) : null,
+            plusOneAvailableCandidates: availablePlusOne.length,
+            plusOneCoverageEligibleCandidates: coverageEligiblePlusOne.length,
+            plusOneRejectedWithoutImprovedCoverageCandidates: rejectedWithoutCoverage.length,
+            withoutStarvation: counterfactualSelection && noStarvationAudit
+              ? {
+                  ids: [...counterfactualSelection.ids].sort(),
+                  bestImmediateReplayCount: noStarvationAudit.bestZeroRestCount ?? -1,
+                  allowedImmediateReplayCount: noStarvationAudit.allowedZeroRestCount ?? -1,
+                  bestMinimumReplayCoverageGain: noStarvationAudit.bestMinimumReplayCoverageGain ?? 0,
+                  chosenImmediateCoverageGain: counterfactualSelection.immediateCoverageGain,
+                  chosenImmediateReplayCount: counterfactualSelection.zeroRestCount,
+                  coverageGateCertified: noStarvationReplayAudit?.coverageGateCertified ?? false,
+                }
+              : null,
+          });
+        }
+      }
+    }
     if (enginePolicy === "strict" && !refillAudit.strictCadenceAdmissibleKeys.has(chosenCandidateKey)) {
       throw new Error(`${sessionType}/${profile}/seed ${seed}: selected quartet was outside independent strict cadence frontier after completion ${eventIndex + 1}`);
     }
@@ -1915,16 +2635,7 @@ function createSessionResult(
       const includes = (candidate: OracleCandidate) => candidate.ids.includes(player.userId);
       const bestBalanceCandidate = refillAudit.balanceEnvelope
         .filter(includes)
-        .sort((left, right) => (enginePolicy === "strict"
-          ? compareNumberVectors(left.rest, right.rest)
-          : enginePolicy === "current"
-            ? Number(left.zeroRestCount > (refillAudit.allowedZeroRestCount ?? -1)) - Number(right.zeroRestCount > (refillAudit.allowedZeroRestCount ?? -1)) ||
-              right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
-              compareNumberVectors(left.softRest, right.softRest)
-            : right.effectiveMatchTypeGain - left.effectiveMatchTypeGain ||
-              left.zeroRestCount - right.zeroRestCount ||
-              right.effectiveRelationshipGain - left.effectiveRelationshipGain ||
-              compareNumberVectors(left.softRest, right.softRest)) ||
+        .sort((left, right) => compareCandidatePolicyPriority(left, right, enginePolicy, refillAudit, sessionType) ||
           exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)))[0] ?? null;
       const candidateVsChosenCadence = bestBalanceCandidate
         ? compareNumberVectors(bestBalanceCandidate.rest, selectedRestVector)
@@ -1934,8 +2645,8 @@ function createSessionResult(
         : null;
       const candidateVsChosenSoftRest = bestBalanceCandidate &&
         (enginePolicy === "current"
-          ? bestBalanceCandidate.zeroRestCount <= (refillAudit.allowedZeroRestCount ?? -1) &&
-            selectedZeroRestCount <= (refillAudit.allowedZeroRestCount ?? -1) &&
+          ? refillAudit.replayAllowanceKeys.has(exactCandidateKey(bestBalanceCandidate.ids, bestBalanceCandidate.partition)) &&
+            refillAudit.replayAllowanceKeys.has(chosenCandidateKey) &&
             bestBalanceCandidate.effectiveCombinedEntropyGain === selectedOracleCandidate.effectiveCombinedEntropyGain
           : bestBalanceCandidate.effectiveMatchTypeGain === selectedOracleCandidate.effectiveMatchTypeGain &&
             bestBalanceCandidate.zeroRestCount === selectedZeroRestCount &&
@@ -1946,7 +2657,7 @@ function createSessionResult(
         ? bestBalanceCandidate.effectiveCombinedEntropyGain - selectedOracleCandidate.effectiveCombinedEntropyGain
         : null;
       const candidateVsChosenReplayAllowance = bestBalanceCandidate && refillAudit.allowedZeroRestCount !== null
-        ? bestBalanceCandidate.zeroRestCount <= refillAudit.allowedZeroRestCount
+        ? refillAudit.replayAllowanceKeys.has(exactCandidateKey(bestBalanceCandidate.ids, bestBalanceCandidate.partition))
         : null;
       const candidateVsChosenMatchType = bestBalanceCandidate
         ? bestBalanceCandidate.effectiveMatchTypeGain - selectedOracleCandidate.effectiveMatchTypeGain
@@ -1954,20 +2665,9 @@ function createSessionResult(
       const candidateVsChosenRelationship = bestBalanceCandidate
         ? bestBalanceCandidate.effectiveRelationshipGain - selectedOracleCandidate.effectiveRelationshipGain
         : null;
-      const candidatePriorityComparison = enginePolicy === "strict"
-        ? candidateVsChosenCadence
-        : enginePolicy === "current"
-          ? candidateVsChosenReplayAllowance === null ? null
-            : candidateVsChosenReplayAllowance !== (selectedZeroRestCount <= (refillAudit.allowedZeroRestCount ?? -1))
-              ? candidateVsChosenReplayAllowance ? -1 : 1
-              : candidateVsChosenCombinedEntropy !== null && candidateVsChosenCombinedEntropy !== 0
-                ? candidateVsChosenCombinedEntropy > 0 ? -1 : 1
-                : candidateVsChosenSoftRest
-        : candidateVsChosenMatchType === null ? null
-          : candidateVsChosenMatchType !== 0 ? (candidateVsChosenMatchType > 0 ? -1 : 1)
-            : candidateVsChosenZeroRest !== null && candidateVsChosenZeroRest !== 0 ? (candidateVsChosenZeroRest < 0 ? -1 : 1)
-              : candidateVsChosenRelationship !== null && candidateVsChosenRelationship !== 0 ? (candidateVsChosenRelationship > 0 ? -1 : 1)
-                : candidateVsChosenSoftRest;
+      const candidatePriorityComparison = bestBalanceCandidate
+        ? compareCandidatePolicyPriority(bestBalanceCandidate, selectedOracleCandidate, enginePolicy, refillAudit, sessionType)
+        : null;
       const cadenceFrontierCandidateCount = (enginePolicy === "strict"
         ? refillAudit.strictCadenceAdmissible
         : enginePolicy === "current" ? refillAudit.replayAllowance : refillAudit.cadenceAdmissible).filter(includes).length;
@@ -1981,8 +2681,21 @@ function createSessionResult(
       meta.hadSoftCadenceFrontierOpportunity ||= refillAudit.softCadenceFrontier.some(includes);
       meta.hadReplayMinimumOpportunity ||= refillAudit.replayMinimum.some(includes);
       meta.hadReplayAllowanceOpportunity ||= refillAudit.replayAllowance.some(includes);
+      if (refillAudit.bestZeroRestCount !== null) {
+        meta.hadCoverageGateRejectedPlusOneOpportunity ||= enginePolicy === "current" && refillAudit.balanceEnvelope.some((candidate) =>
+          candidate.ids.includes(player.userId) &&
+          candidate.zeroRestCount === refillAudit.bestZeroRestCount! + 1 &&
+          !refillAudit.replayAllowanceKeys.has(exactCandidateKey(candidate.ids, candidate.partition))
+        );
+        meta.hadBeyondReplayAllowanceOpportunity ||= refillAudit.balanceEnvelope.some((candidate) =>
+          candidate.ids.includes(player.userId) && candidate.zeroRestCount > refillAudit.bestZeroRestCount! + 1
+        );
+      }
       meta.hadCombinedEntropyFrontierOpportunity ||= refillAudit.combinedEntropyFrontier.some(includes);
       meta.hadCombinedSoftCadenceFrontierOpportunity ||= refillAudit.combinedSoftCadenceFrontier.some(includes);
+      meta.hadPolicyAdmissionOpportunity ||= measuredPolicyFrontiers[0].some(includes);
+      meta.hadPolicyEntropyFrontierOpportunity ||= measuredPolicyFrontiers[1].some(includes);
+      meta.hadPolicyFinalFrontierOpportunity ||= measuredPolicyFrontiers[2].some(includes);
       meta.hadCadenceOptimalOpportunity ||= candidatePriorityComparison !== null && candidatePriorityComparison <= 0;
       meta.hadSmootherAlternative ||= candidatePriorityComparison !== null && candidatePriorityComparison < 0;
       meta.hadCadenceSuboptimalOpportunity ||= candidatePriorityComparison !== null && candidatePriorityComparison > 0;
@@ -2058,23 +2771,30 @@ function createSessionResult(
     const newDecisionId = nextDecisionId++;
     refill.meta.pendingAssignments = 1;
     decisions.set(newDecisionId, refill.meta);
-    const replayContext: ReplayAssignmentContext | null = enginePolicy === "current" && productionReplayAudit &&
+    const replayContext: ReplayAssignmentContext | null = (enginePolicy === "current" || enginePolicy === "replay-envelope") && productionReplayAudit &&
       refillAudit.bestZeroRestCount !== null && refillAudit.allowedZeroRestCount !== null
       ? {
-          certified: productionReplayAudit.replayEnvelopeCertified,
+          certified: enginePolicy === "current" ? productionReplayAudit.coverageGateCertified : productionReplayAudit.replayEnvelopeCertified,
           bestImmediateReplayCount: refillAudit.bestZeroRestCount,
           allowedImmediateReplayCount: refillAudit.allowedZeroRestCount,
           chosenImmediateReplayCount: selectedOracleCandidate.zeroRestCount,
+          bestMinimumReplayCoverageGain: refillAudit.bestMinimumReplayCoverageGain ?? 0,
+          chosenImmediateCoverageGain: selectedOracleCandidate.immediateCoverageGain,
+          coverageGateCertified: enginePolicy === "current" ? productionReplayAudit.coverageGateCertified : false,
+          coverageEligiblePlusOne: selectedOracleCandidate.zeroRestCount === refillAudit.bestZeroRestCount + 1 &&
+            enginePolicy === "current" && refillAudit.replayAllowanceKeys.has(chosenCandidateKey),
+          coverageGatePolicy: enginePolicy === "current",
         }
       : null;
     assignSelection(completedCourt, selection, newDecisionId, refill.meta, refillAudit, eventIndex + 1, replayContext);
     counters.maximumBalanceGap = Math.max(counters.maximumBalanceGap, selection.balanceGap);
   }
 
-  if (!checkpointResults["20"] || !checkpointResults[String(targetMatches)]) {
-    throw new Error(`Benchmark must stop on exact 20 and ${targetMatches} completed-match checkpoints.`);
+  if (!checkpointResults["21"] || !checkpointResults[String(targetMatches)]) {
+    throw new Error(`Benchmark must stop on exact 21 and ${targetMatches} completed-match checkpoints.`);
   }
   const missingRelationships = buildUnseenRelationships(
+    enginePolicy,
     opportunities,
     observed,
     strongRelationshipCounts,
@@ -2086,7 +2806,11 @@ function createSessionResult(
     replayMinimumRelationshipCounts,
     replayAllowanceRelationshipCounts,
     combinedEntropyFrontierRelationshipCounts,
-    combinedSoftCadenceFrontierRelationshipCounts
+    combinedSoftCadenceFrontierRelationshipCounts,
+    policyAdmissionRelationshipCounts,
+    policyEntropyFrontierRelationshipCounts,
+    policyFinalFrontierRelationshipCounts,
+    coverageGateRejectedPlusOneRelationshipCounts
   );
   let staticBalanceFeasibility: StaticBalanceFeasibilityReport | null = null;
   let staticBalanceFeasibilityMs = 0;
@@ -2182,7 +2906,7 @@ export function runSocialCoverageBenchmark({
   seeds: number[];
   wideSeeds?: number[];
   includeWide?: boolean;
-  enginePolicy?: "current" | "strict" | "baseline";
+  enginePolicy?: "current" | "strict" | "baseline" | "type-first" | "replay-envelope";
   sourceRevision?: string;
   sourceProvenance?: BenchmarkReport["sourceProvenance"];
 }): BenchmarkReport {
@@ -2202,7 +2926,7 @@ export function runSocialCoverageBenchmark({
       sessionMode: "MIXICANO",
       courts: COURT_COUNT,
       completionSchedule: "Independent seeded event sequence; each event completes one occupied court, then refills that court.",
-      checkpoints: [20, 400],
+      checkpoints: [21, 400],
       coverageHistory: "Completed matches only; active assignments are used by matchmaking and excluded from coverage.",
       restDefinition: "Completed-match events while available; players in an active match do not accrue rest turns.",
       skillProfiles: {
@@ -2221,8 +2945,8 @@ export function runSocialCoverageRegressionProbe(
   seed: number,
   targetMatches = 120,
 ): BenchmarkSessionResult {
-  if (!Number.isSafeInteger(targetMatches) || targetMatches < 20) {
-    throw new Error("The regression probe requires at least 20 completed matches.");
+  if (!Number.isSafeInteger(targetMatches) || targetMatches < 21) {
+    throw new Error("The regression probe requires at least 21 completed matches.");
   }
   return createSessionResult("narrow", sessionType, seed, targetMatches, "current");
 }
@@ -2243,7 +2967,7 @@ function stats(values: number[]) {
   };
 }
 
-export function summarizeBenchmarkGroup(report: BenchmarkReport, profile: BenchmarkProfile, sessionType: SessionType, checkpoint: "20" | "400") {
+export function summarizeBenchmarkGroup(report: BenchmarkReport, profile: BenchmarkProfile, sessionType: SessionType, checkpoint: "21" | "400") {
   const sessions = report.sessions.filter((session) => session.profile === profile && session.sessionType === sessionType);
   const field = (key: keyof BenchmarkCheckpoint) => sessions.map((session) => session.checkpoints[checkpoint][key] as number | null);
   const hasUncertifiedOverdueDecision = sessions.some((session) =>
@@ -2358,7 +3082,7 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
     "| Format | Completed | Relationship coverage (mean; median; min–max) | Partner / opponent / courtmate | MIXED / OWN_SIDE | Normalized entropy | Back-to-back rate | Max assignment rest gap (mean of per-seed maxima) | Mean / p95 assignment rest | +1 / +2 threshold reaches | Starvation changes / overdue (certified, unknown; rates) | Checkpoint / max fairness spread |",
     "|---|---:|---:|---|---|---:|---:|---:|---:|---:|---:|---:|",
   ];
-  for (const [type, label] of formats) for (const checkpoint of ["20", "400"] as const) {
+  for (const [type, label] of formats) for (const checkpoint of ["21", "400"] as const) {
     const summary = summarizeBenchmarkGroup(report, "narrow", type, checkpoint);
     const base = matchedBaseline?.sessions.some((session) => session.profile === "narrow" && session.sessionType === type)
       ? summarizeBenchmarkGroup(matchedBaseline, "narrow", type, checkpoint)
@@ -2412,16 +3136,26 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
     lines.push("", "A replay-origin long-wait count is decision-level evidence: it means the episode involved a rest-zero player selected by a certified decision using the +1 allowance; it does not claim that this player was uniquely the marginal extra. Counterfactual certification separately reruns the strongest class, Balanced envelope, and replay allowance without starvation. Refill decisions are counted after completed events 1 through N−1 at checkpoint N; the last refill may still be active, and the opening two-court decision is excluded.");
   }
   lines.push("");
-  lines.push("## Completed match-type counts by session window", "", "These are actual completed matches, not player-level match-type coverage. Early and late refer to the first and last 100 completed matches of each 400-match run.", "", "| Format | At 20 completed: MIXED / OWN_SIDE | At 400 completed: MIXED / OWN_SIDE | First 100 OWN_SIDE | Last 100 OWN_SIDE |", "|---|---:|---:|---:|---:|");
+  lines.push("## Completed match-type counts by session window", "", "These are actual completed matches, not player-level match-type coverage. Early and late refer to the first and last 100 completed matches of each 400-match run.", "", "| Format | At 21 completed: MIXED / OWN_SIDE | At 400 completed: MIXED / OWN_SIDE | First 100 OWN_SIDE | Last 100 OWN_SIDE |", "|---|---:|---:|---:|---:|");
   for (const [type, label] of formats) {
-    const at20 = summarizeBenchmarkGroup(report, "narrow", type, "20");
+    const at21 = summarizeBenchmarkGroup(report, "narrow", type, "21");
     const at400 = summarizeBenchmarkGroup(report, "narrow", type, "400");
-    lines.push(`| ${label} | ${at20.completedMixedMatches.mean?.toFixed(1)} / ${at20.completedOwnSideMatches.mean?.toFixed(1)} | ${at400.completedMixedMatches.mean?.toFixed(1)} / ${at400.completedOwnSideMatches.mean?.toFixed(1)} | ${at400.first100OwnSideMatches.mean?.toFixed(1)} | ${at400.last100OwnSideMatches.mean?.toFixed(1)} |`);
+    lines.push(`| ${label} | ${at21.completedMixedMatches.mean?.toFixed(1)} / ${at21.completedOwnSideMatches.mean?.toFixed(1)} | ${at400.completedMixedMatches.mean?.toFixed(1)} / ${at400.completedOwnSideMatches.mean?.toFixed(1)} | ${at400.first100OwnSideMatches.mean?.toFixed(1)} | ${at400.last100OwnSideMatches.mean?.toFixed(1)} |`);
+  }
+  lines.push("", "Checkpoint-21 exact player match counts (each row is one seed; IDs are roster identities). The four aggregate columns show min/max/spread and whether all fourteen players have exactly six completed matches.", "", "| Format | Seed | P1–P14 completed-match counts | Min | Max | Spread | All exactly 6 |", "|---|---:|---|---:|---:|---:|---|");
+  for (const [type, label] of formats) {
+    const sessions = report.sessions.filter((session) => session.profile === "narrow" && session.sessionType === type)
+      .sort((left, right) => left.seed - right.seed);
+    for (const session of sessions) {
+      const checkpoint = session.checkpoints["21"];
+      const counts = checkpoint.playerMatchCounts.map(({ matchesPlayed }) => matchesPlayed).join(",");
+      lines.push(`| ${label} | ${session.seed} | ${counts} | ${checkpoint.minimumPlayerMatchCount} | ${checkpoint.maximumPlayerMatchCount} | ${checkpoint.matchCountSpread} | ${checkpoint.allPlayersExactlySixMatches ? "yes" : "no"} |`);
+    }
   }
   lines.push("");
   if (report.wideSeedCount) {
     lines.push("## Wide-skill guardrail sensitivity", "", "| Format | Completed | Relationship coverage | Partner / opponent / courtmate | Normalized entropy | Back-to-back rate | Max assignment rest gap | Starvation changes / certified / unknown (rate) | Checkpoint / max fairness spread |", "|---|---:|---:|---|---:|---:|---:|---:|---:|");
-    for (const [type, label] of formats.slice(1)) for (const checkpoint of ["20", "400"] as const) {
+    for (const [type, label] of formats.slice(1)) for (const checkpoint of ["21", "400"] as const) {
       const summary = summarizeBenchmarkGroup(report, "wide", type, checkpoint);
       lines.push(`| ${label} | ${checkpoint} | ${formatPct(summary.coverage.mean)} | ${formatPct(summary.partnerCoverage.mean)} / ${formatPct(summary.opponentCoverage.mean)} / ${formatPct(summary.courtmateCoverage.mean)} | ${formatPct(summary.normalizedEntropy.mean)} | ${formatPct(summary.backToBackRate.mean)} | ${summary.maxAssignmentRestGap.mean?.toFixed(2)} | ${summary.starvationInterventionCount.mean?.toFixed(2)} / ${summary.starvationDecisionCohort.certified} / ${summary.starvationDecisionCohort.uncertified} (${formatPct(summary.starvationInterventionRate.mean)}) | ${summary.fairnessSpread.mean?.toFixed(2)} / ${summary.maximumFairnessSpread.mean?.toFixed(2)} |`);
     }
@@ -2483,7 +3217,7 @@ export function makeBenchmarkReport({
   sourceRevision: string;
   seedCount: number;
   wideSeedCount: number;
-  enginePolicy?: "current" | "strict" | "baseline";
+  enginePolicy?: "current" | "strict" | "baseline" | "type-first" | "replay-envelope";
   sourceProvenance?: BenchmarkReport["sourceProvenance"];
 }): BenchmarkReport {
   return {
@@ -2509,7 +3243,7 @@ export function makeBenchmarkReport({
       sessionMode: "MIXICANO",
       courts: COURT_COUNT,
       completionSchedule: "Independent seeded event sequence; each event completes one occupied court, then refills that court.",
-      checkpoints: [20, 400],
+      checkpoints: [21, 400],
       coverageHistory: "Completed matches only; active assignments are used by matchmaking and excluded from coverage.",
       restDefinition: "Completed-match events while available; players in an active match do not accrue rest turns.",
       skillProfiles: {

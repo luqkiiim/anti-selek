@@ -5,7 +5,10 @@ import { findBestSingleCourtSelectionV3 } from "./singleCourt";
 import { findBestSocialBatchSelection } from "./socialBatch";
 import { buildCandidatePool } from "./candidatePool";
 import { getDoublesPartitions, isValidPartitionForMode, getPartitionBalanceGap, getPartitionPointDiffGap } from "./balance";
-import { buildSocialVarietyContext, getSocialVarietyGain, getSocialVarietyGains } from "./socialVariety";
+import {
+  buildSocialVarietyContext, createSocialVarietyCoverageScorer,
+  getSocialVarietyGain, getSocialVarietyGains,
+} from "./socialVariety";
 import { getExactPartitionKey } from "./rematch";
 import type { MatchmakerV3Player, V3CompletedMatch, V3DoublesPartition } from "./types";
 
@@ -22,10 +25,12 @@ const compare = (a: number[], b: number[]) => {
 describe("Social global batch solver", () => {
   it("checks every legal two-court partition pair in the 7+7 case", () => {
     const result = findBestSocialBatchSelection(makePlayers(14), { courtCount: 2, sessionMode: SessionMode.MIXICANO, randomFn: () => 0 });
+    expect(() => JSON.stringify(result)).not.toThrow();
     expect(result.selection?.selections).toHaveLength(2);
+    expect(result.selection?.selections.every((selection) => selection.socialVariety !== undefined)).toBe(true);
     expect(result.debug.validQuartetCount).toBe(1092);
     expect(result.debug.exploredBranches).toBeGreaterThan(0);
-    expect(result.debug.searchAttemptCount).toBe(2);
+    expect(result.debug.searchAttemptCount).toBe(3);
     expect(result.debug.replayCertified).toBe(true);
     expect(result.debug.allowedImmediateReplayCount).toBe(result.debug.bestImmediateReplayCount! + 1);
     expect(result.varietyOptimal).toBe(true);
@@ -36,16 +41,17 @@ describe("Social global batch solver", () => {
     const players = makePlayers(count).map((player, index) => ({ ...player, matchesPlayed: index % 3 === 0 ? 1 : 0, restTurns: index % 2, strength: 850 + index * 47 }));
     const history: V3CompletedMatch[] = [{ team1: ["P0", "P5"], team2: ["P1", "P6"] }];
     const context = buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO });
+    const coverageScorer = createSocialVarietyCoverageScorer(context);
     const byId = new Map(players.map((player) => [player.userId, player]));
-    const legal: Array<{ ids: [string, string, string, string]; partition: V3DoublesPartition; gains: ReturnType<typeof getSocialVarietyGains>; balance: number; point: number }> = [];
+    const legal: Array<{ ids: [string, string, string, string]; partition: V3DoublesPartition; gains: ReturnType<typeof getSocialVarietyGains>; coverage: bigint; balance: number; point: number }> = [];
     for (let a = 0; a < count - 3; a++) for (let b = a + 1; b < count - 2; b++) for (let c = b + 1; c < count - 1; c++) for (let d = c + 1; d < count; d++) {
       const ids: [string, string, string, string] = [a, b, c, d].map((index) => players[index].userId) as [string, string, string, string];
       for (const partition of getDoublesPartitions(ids)) if (isValidPartitionForMode(partition, byId, SessionMode.MIXICANO)) {
-        legal.push({ ids, partition, gains: getSocialVarietyGains(partition, context), balance: getPartitionBalanceGap(partition, byId)!, point: getPartitionPointDiffGap(partition, byId)! });
+        legal.push({ ids, partition, gains: getSocialVarietyGains(partition, context), coverage: coverageScorer.getPartitionGainUnits(partition), balance: getPartitionBalanceGap(partition, byId)!, point: getPartitionPointDiffGap(partition, byId)! });
       }
     }
     const canonicalSum = (values: number[]) => values.sort((a, b) => a - b).reduce((sum, value) => sum + value, 0);
-    const batches: Array<{ left: typeof legal[number]; right: typeof legal[number]; fairness: number[]; replay: number }> = [];
+    const batches: Array<{ left: typeof legal[number]; right: typeof legal[number]; fairness: number[]; replay: number; coverage: bigint }> = [];
     for (let a = 0; a < legal.length; a++) for (let b = a + 1; b < legal.length; b++) {
       if (new Set([...legal[a].ids, ...legal[b].ids]).size !== 8) continue;
       const selected = [...legal[a].ids, ...legal[b].ids].map((id) => byId.get(id)!);
@@ -54,13 +60,18 @@ describe("Social global batch solver", () => {
         right: legal[b],
         fairness: selected.map((player) => player.matchesPlayed).sort((x, y) => x - y),
         replay: selected.filter((player) => player.restTurns === 0).length,
+        // Selected courts are disjoint, so first-exposure deltas add exactly.
+        coverage: legal[a].coverage + legal[b].coverage,
       });
     }
     const strongestFairness = batches.map((batch) => batch.fairness).sort(compare)[0];
     const strongest = batches.filter((batch) => compare(batch.fairness, strongestFairness) === 0);
     const bestReplay = Math.min(...strongest.map((batch) => batch.replay));
+    const minimumReplay = strongest.filter((batch) => batch.replay === bestReplay);
+    const bestMinimumReplayCoverage = minimumReplay.reduce((best, batch) => batch.coverage > best ? batch.coverage : best, BigInt(0));
     const allowedReplay = bestReplay + 1;
-    const admissible = strongest.filter((batch) => batch.replay <= allowedReplay);
+    const admissible = strongest.filter((batch) => batch.replay === bestReplay ||
+      (batch.replay === allowedReplay && batch.coverage > bestMinimumReplayCoverage));
     const key = (batch: typeof admissible[number]) => {
       const { left, right } = batch;
       const facetTotal = (facet: keyof typeof left.gains) =>
@@ -87,6 +98,9 @@ describe("Social global batch solver", () => {
     const chosenReplay = chosenPlayers.filter((player) => player.restTurns === 0).length;
     expect(result.debug.bestImmediateReplayCount).toBe(bestReplay);
     expect(result.debug.allowedImmediateReplayCount).toBe(allowedReplay);
+    expect(result.debug.bestMinimumReplayCoverageGain).toBe(coverageScorer.toNormalizedScore(bestMinimumReplayCoverage));
+    expect(result.debug.coverageGateCertified).toBe(true);
+    expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
     expect(chosenReplay).toBeLessThanOrEqual(allowedReplay);
     const chosenBatch = batches.find((batch) =>
       new Set([...batch.left.ids, ...batch.right.ids]).size === 8 &&
@@ -107,9 +121,15 @@ describe("Social global batch solver", () => {
     expect(result.debug.chosenImmediateReplayCount).toBe(1);
     expect(result.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
     expect(result.debug.replayCertified).toBe(true);
+    expect(result.debug.coverageGateCertified).toBe(true);
+    expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
+    expect(result.debug.chosenReplayCoverageEligible).toBe(true);
     expect(result.selection?.socialStarvation).toMatchObject({ idealRestGap: 1, availableOverdueCount: 0 });
     const ignoreRest = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0, respectPlayerRest: false });
     expect(ignoreRest.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
+    expect(ignoreRest.debug.coverageGateStatus).toBe("DISABLED");
+    expect(ignoreRest.debug.coverageGateCertified).toBe(true);
+    expect(ignoreRest.debug.chosenReplayCoverageEligible).toBeNull();
   });
 
   it("keeps match-type entropy inactive when a Mixed context is reused for MEXICANO", () => {

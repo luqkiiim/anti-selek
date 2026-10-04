@@ -22,10 +22,13 @@ tolerance. Balance baselines must be certified inside the optimal stronger
 rotation class. After stronger rotation priorities, rest-sensitive Social
 search certifies the whole-batch minimum immediate-replay count and admits at
 most one additional replay. Balanced does the same only inside its already
-fixed balance envelope. The combined four-facet entropy score ranks batches
-inside that shared allowance; the ascending rest vector is a soft cadence
-preference only after entropy ties and uses completed-match events. Social
-entropy stays exact; Balanced applies its fixed bucket to the combined score.
-Starvation remains the recovery safety net. Setting `respectPlayerRest: false`
-disables the replay allowance and soft-cadence preference without disabling
-starvation.
+fixed balance envelope. The matcher freezes the maximum first-exposure
+coverage among exact-minimum-replay batches; a single additional replay is
+admitted only when its coverage is strictly higher. This gate uses the shared
+structural opportunity denominators and history and never widens Balanced's
+envelope. The combined four-facet entropy score ranks admitted batches next;
+the ascending rest vector is a soft cadence preference only after entropy ties
+and uses completed-match events. Social entropy stays exact; Balanced applies
+its fixed bucket to the combined score. Starvation remains the recovery safety
+net. Setting `respectPlayerRest: false` disables replay, first-exposure and
+soft-cadence gates without disabling starvation.

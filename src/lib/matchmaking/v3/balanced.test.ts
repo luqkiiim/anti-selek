@@ -27,6 +27,11 @@ describe("Balanced shared rotation policy and explicit balance envelope", () => 
     expect(new Set(result.selection!.selections.flatMap((selection) => selection.ids)).size).toBe(courtCount * 4);
     expect(result.debug.balanceCertified).toBe(true);
     expect(result.debug.balanceGuardrail?.baselineCertified).toBe(true);
+    if (count === 30 && courtCount === 4) {
+      expect(result.debug.replayCertified).toBe(true);
+      expect(result.debug.coverageGateCertified).toBe(true);
+      expect(result.debug.coverageGateUpperBoundCertified).toBe(true);
+    }
     expect(result.selection?.maxBalanceGap).toBeLessThanOrEqual(result.debug.balanceGuardrail!.allowedMaxBalanceGap);
     expect(result.debug.consideredCandidateCount).toBe(count);
   }, 15_000);

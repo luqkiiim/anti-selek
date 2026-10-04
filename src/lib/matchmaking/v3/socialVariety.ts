@@ -76,6 +76,18 @@ export interface SocialVarietyCoverage {
   readonly players: ReadonlyMap<string, SocialVarietyPlayerCoverage>;
 }
 
+/** Exact first-exposure coverage deltas for one fixed structural context. */
+export interface SocialVarietyCoverageScorer {
+  /** Shared denominator for exact BigInt deltas in this context. */
+  readonly denominator: bigint;
+  readonly eligiblePlayerCount: number;
+  getPartitionGainUnits(partition: V3DoublesPartition): bigint;
+  getBatchGainUnits(partitions: readonly V3DoublesPartition[]): bigint;
+  /** Optimistic first-exposure gain for one selected player in one match. */
+  getMaximumSingleMatchGainUnits(userId: string): bigint;
+  toNormalizedScore(gainUnits: bigint): number;
+}
+
 type FacetMaps = Record<SocialFacet, Map<string, number>>;
 type FacetOpportunities = Record<SocialFacet, Set<string>>;
 
@@ -417,6 +429,130 @@ export function getSocialVarietyCoverage(context: SocialVarietyContext): SocialV
       OWN_SIDE: meanPresent(playerCoverage.map((player) => player.matchTypes.OWN_SIDE.score)),
     },
     players,
+  };
+}
+
+function greatestCommonDivisor(left: bigint, right: bigint): bigint {
+  const zero = BigInt(0);
+  let a = left < zero ? -left : left;
+  let b = right < zero ? -right : right;
+  while (b !== zero) [a, b] = [b, a % b];
+  return a;
+}
+
+function leastCommonMultiple(left: bigint, right: bigint) {
+  const zero = BigInt(0);
+  return left === zero || right === zero ? zero : (left / greatestCommonDivisor(left, right)) * right;
+}
+
+/**
+ * Builds an exact scorer for the session's four-facet first-exposure coverage
+ * delta. Each first exposure contributes 1 / (eligible players × that
+ * player's feasible facet count × facet opportunity count). BigInt units make
+ * strict coverage-frontier comparisons deterministic without an epsilon.
+ * The context carries the history/reservations baseline, so only genuinely new
+ * first exposures in the supplied partitions earn coverage.
+ */
+export function createSocialVarietyCoverageScorer(
+  context: SocialVarietyContext,
+  sessionMode: SessionMode = context.sessionMode
+): SocialVarietyCoverageScorer {
+  const activeFacets: SocialFacet[] = sessionMode === SessionMode.MIXICANO
+    ? ["courtmates", "partners", "opponents", "matchType"]
+    : ["courtmates", "partners", "opponents"];
+  const playerFacets = [...context.playersByUserId].map(([userId, histograms]) => ({
+    userId,
+    feasible: activeFacets.filter((facet) => histograms[facet].opportunities.size > 0),
+  }));
+  const eligiblePlayerCount = playerFacets.filter((player) => player.feasible.length > 0).length;
+  const denominators: Array<{ userId: string; facet: SocialFacet; value: bigint }> = [];
+  for (const player of playerFacets) {
+    if (!player.feasible.length) continue;
+    const histograms = context.playersByUserId.get(player.userId)!;
+    for (const facet of player.feasible) {
+      denominators.push({
+        userId: player.userId,
+        facet,
+        value: BigInt(eligiblePlayerCount) * BigInt(player.feasible.length) * BigInt(histograms[facet].opportunities.size),
+      });
+    }
+  }
+  const denominator = denominators.reduce((common, item) => leastCommonMultiple(common, item.value), BigInt(1));
+  const weights = new Map<string, Map<SocialFacet, bigint>>();
+  for (const item of denominators) {
+    let playerWeights = weights.get(item.userId);
+    if (!playerWeights) {
+      playerWeights = new Map();
+      weights.set(item.userId, playerWeights);
+    }
+    playerWeights.set(item.facet, denominator / item.value);
+  }
+
+  const addPartitionGain = (partition: V3DoublesPartition, seen: Set<string>) => {
+    const zero = BigInt(0);
+    if (!getUniquePartitionIds(partition)) return zero;
+    const courtType = getCourtType(partition, context.effectiveSideByUserId);
+    let gain = zero;
+    visitExposures(
+      partition,
+      sessionMode === SessionMode.MIXICANO ? getMatchType(courtType) : null,
+      (userId, facet, experience) => {
+        const exposureKey = JSON.stringify([userId, facet, experience]);
+        if (seen.has(exposureKey)) return;
+        seen.add(exposureKey);
+        const histogram = context.playersByUserId.get(userId)?.[facet];
+        if (!histogram?.opportunities.has(experience) || (histogram.counts.get(experience) ?? 0) > 0) return;
+        gain += weights.get(userId)?.get(facet) ?? zero;
+      }
+    );
+    return gain;
+  };
+
+  const getMaximumSingleMatchGainUnits = (userId: string) => {
+    const zero = BigInt(0);
+    const histograms = context.playersByUserId.get(userId);
+    const playerWeights = weights.get(userId);
+    if (!histograms || !playerWeights) return zero;
+    const maximumExposures: Readonly<Record<SocialFacet, number>> = {
+      courtmates: 3,
+      partners: 1,
+      opponents: 2,
+      matchType: sessionMode === SessionMode.MIXICANO ? 1 : 0,
+    };
+    let gain = zero;
+    for (const facet of activeFacets) {
+      const weight = playerWeights.get(facet) ?? zero;
+      if (weight === zero) continue;
+      let unseen = 0;
+      for (const experience of histograms[facet].opportunities) {
+        if ((histograms[facet].counts.get(experience) ?? 0) <= 0) unseen += 1;
+      }
+      gain += BigInt(Math.min(maximumExposures[facet], unseen)) * weight;
+    }
+    return gain;
+  };
+
+  const toNormalizedScore = (gainUnits: bigint) => {
+    const zero = BigInt(0);
+    if (denominator <= zero || gainUnits <= zero) return 0;
+    // Keep the diagnostic number finite even if the exact common denominator
+    // grows beyond Number's range. Search decisions use the exact BigInt units.
+    const scale = BigInt(1_000_000_000_000_000);
+    return Number((gainUnits * scale) / denominator) / Number(scale);
+  };
+
+  return {
+    denominator,
+    eligiblePlayerCount,
+    getPartitionGainUnits: (partition) => addPartitionGain(partition, new Set()),
+    getBatchGainUnits: (partitions) => {
+      const seen = new Set<string>();
+      let gain = BigInt(0);
+      for (const partition of partitions) gain += addPartitionGain(partition, seen);
+      return gain;
+    },
+    getMaximumSingleMatchGainUnits,
+    toNormalizedScore,
   };
 }
 

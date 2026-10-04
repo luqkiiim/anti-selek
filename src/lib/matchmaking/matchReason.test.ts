@@ -186,7 +186,8 @@ describe("matchmaking reason", () => {
     );
 
     expect(reason.summary.join(" ")).toContain("fair turns, arrival priority, applicable player-group rules and overdue-turn protection");
-    expect(reason.summary.join(" ")).toContain("certifies the lowest immediate-replay count for the whole refill batch, then allows up to one additional replay");
+    expect(reason.summary.join(" ")).toContain("certifies the lowest immediate-replay count for the whole refill batch");
+    expect(reason.summary.join(" ")).toContain("one additional replay is admitted only when its first-exposure coverage strictly exceeds the best-replay frontier");
     expect(reason.summary.join(" ")).toContain("maximizes combined normalized entropy across courtmates, partners, opponents and match type");
     expect(reason.summary.join(" ")).toContain("smoother completed-match rest cadence breaks entropy ties");
     expect(reason.summary.join(" ")).toContain("completed-match rest turns");
@@ -219,7 +220,7 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("2 of 2 available players");
     expect(reason.summary.join(" ")).toContain("Normalized entropy gain");
     expect(reason.summary.join(" ")).toContain("match type");
-    expect(reason.summary.join(" ")).toContain("Starvation protection remains active, while ordinary replay and cadence preferences are disabled");
+    expect(reason.summary.join(" ")).toContain("Starvation protection remains active, while ordinary replay, first-exposure coverage and cadence gates are disabled");
     expect(reason.summary.join(" ")).toContain("combined normalized entropy across courtmates, partners, opponents and match type");
     expect(reason.summary.join(" ")).toContain("Exact rematch avoidance decided only after");
     expect(reason.summary.join(" ")).not.toMatch(/coverage penalty|Partner repeat penalty|Opponent repeat penalty|Shared-court repeat penalty/);
