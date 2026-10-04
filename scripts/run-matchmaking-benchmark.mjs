@@ -130,6 +130,10 @@ function runIn(workdir, label, enginePolicy, baselineJson = "", policyLabel = en
   });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
+  const savedReport = JSON.parse(readFileSync(jsonPath, "utf8"));
+  if (savedReport.validationStatus === "pending") {
+    throw new Error(`${label} benchmark JSON was written with validationStatus=pending; refusing to treat it as a completed report.`);
+  }
   return { jsonPath, markdownPath };
 }
 
@@ -246,6 +250,17 @@ const baselineReport = baselineJson && existsSync(baselineJson) ? JSON.parse(rea
 const strictReport = strictJson && existsSync(strictJson) ? JSON.parse(readFileSync(strictJson, "utf8")) : null;
 const typeFirstReport = typeFirstJson && existsSync(typeFirstJson) ? JSON.parse(readFileSync(typeFirstJson, "utf8")) : null;
 const replayEnvelopeReport = replayEnvelopeJson && existsSync(replayEnvelopeJson) ? JSON.parse(readFileSync(replayEnvelopeJson, "utf8")) : null;
+for (const [policyName, policyReport] of [
+  ["current", report],
+  ["entropy-first", baselineReport],
+  ["strict-cadence", strictReport],
+  ["type-entropy-first", typeFirstReport],
+  ["replay-envelope-best-plus-one", replayEnvelopeReport],
+]) {
+  if (policyReport?.validationStatus === "pending") {
+    throw new Error(`${policyName} JSON has validationStatus=pending; refusing to render or compare an unvalidated report.`);
+  }
+}
 const filterRequestedSessions = (policyReport) => policyReport ? {
   ...policyReport,
   sessions: policyReport.sessions.filter((session) =>

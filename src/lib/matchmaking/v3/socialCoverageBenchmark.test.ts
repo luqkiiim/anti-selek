@@ -9,6 +9,7 @@ import {
   classifyReplayOriginForBenchmark,
   findLowerZeroTypeGainCompetitor,
   formatBenchmarkHuman,
+  getReplayCoverageZeroDiagnostics,
   getLegacySocialRestVectorForBenchmark,
   measureIndependentCoverageGainForBenchmark,
   matchBenchmarkBaselineToCurrentSessions,
@@ -29,6 +30,19 @@ function parseSeeds(value: string | undefined, fallback: number[]) {
 describe("social relationship coverage benchmark", () => {
   it("retains the baseline entropy-first total-rest then descending-rest tie vector", () => {
     expect(getLegacySocialRestVectorForBenchmark([-1, -2, -3, -4])).toEqual([-10, -1, -4, -3, -2, -1]);
+  });
+
+  it("keeps a zero minimum-coverage frontier distinct from a positive selected +1 gain", () => {
+    expect(getReplayCoverageZeroDiagnostics(BigInt(0), BigInt(1))).toEqual({
+      minimumFrontierIsZero: true,
+      chosenGainIsZero: false,
+      minimumFrontierAndChosenGainAreZero: false,
+    });
+    expect(getReplayCoverageZeroDiagnostics(BigInt(0), BigInt(0))).toEqual({
+      minimumFrontierIsZero: true,
+      chosenGainIsZero: true,
+      minimumFrontierAndChosenGainAreZero: true,
+    });
   });
 
   it("matches a presentation baseline to the current profile, format, and seed subset", () => {
@@ -191,6 +205,17 @@ describe("social relationship coverage benchmark", () => {
       ? JSON.parse(process.env.BENCHMARK_SOURCE_PROVENANCE)
       : { commitSha: sourceRevision, workingTreeDirty: false, workingTreeNote: "No extra change note supplied.", policyLabel: enginePolicy, engineSourceSha256: null, measurementHarnessSha256: null, coreEngineTrackedDiffPaths: [], sharedVarietyTrackedDiffPaths: [], measurementHarnessTrackedDiffPaths: [] };
     const report = runSocialCoverageBenchmark({ seeds, wideSeeds, includeWide, enginePolicy, sourceRevision, sourceProvenance });
+    const jsonPath = process.env.BENCHMARK_OUTPUT_JSON;
+    const markdownPath = process.env.BENCHMARK_OUTPUT_MARKDOWN;
+    const writeJsonReport = () => {
+      if (!jsonPath) return;
+      mkdirSync(dirname(resolve(jsonPath)), { recursive: true });
+      writeFileSync(resolve(jsonPath), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    };
+    if (jsonPath) {
+      report.validationStatus = "pending";
+      writeJsonReport();
+    }
 
     for (const session of report.sessions) {
       const checkpoint21 = session.checkpoints["21"];
@@ -290,11 +315,9 @@ describe("social relationship coverage benchmark", () => {
     const baseline = baselinePath
       ? JSON.parse(readFileSync(baselinePath, "utf8")) as BenchmarkReport
       : undefined;
-    const jsonPath = process.env.BENCHMARK_OUTPUT_JSON;
-    const markdownPath = process.env.BENCHMARK_OUTPUT_MARKDOWN;
     if (jsonPath) {
-      mkdirSync(dirname(resolve(jsonPath)), { recursive: true });
-      writeFileSync(resolve(jsonPath), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+      report.validationStatus = "passed";
+      writeJsonReport();
     }
     if (markdownPath) {
       mkdirSync(dirname(resolve(markdownPath)), { recursive: true });

@@ -449,6 +449,8 @@ export interface DeferredRefillWitness {
 
 export interface BenchmarkReport {
   schemaVersion: 1;
+  /** Manual-run artifact status; pending means the simulation completed but assertions did not finish. */
+  validationStatus?: "pending" | "passed";
   sourceRevision: string;
   sourceProvenance: {
     commitSha: string;
@@ -894,6 +896,19 @@ export function measureIndependentCoverageGainForBenchmark(
     numerator: result.numerator.toString(),
     denominator: result.denominator.toString(),
     normalized: result.normalized,
+  };
+}
+
+export function getReplayCoverageZeroDiagnostics(
+  minimumFrontierGainUnits: bigint | null,
+  chosenGainUnits: bigint | null
+) {
+  const minimumFrontierIsZero = minimumFrontierGainUnits === BigInt(0);
+  const chosenGainIsZero = chosenGainUnits === BigInt(0);
+  return {
+    minimumFrontierIsZero,
+    chosenGainIsZero,
+    minimumFrontierAndChosenGainAreZero: minimumFrontierIsZero && chosenGainIsZero,
   };
 }
 
@@ -2579,9 +2594,12 @@ function createSessionResult(
               right.effectiveCombinedEntropyGain - left.effectiveCombinedEntropyGain ||
               exactCandidateKey(left.ids, left.partition).localeCompare(exactCandidateKey(right.ids, right.partition)));
           const higherTypeGainRejected = higherTypeGainRejectedCandidates[0] ?? null;
-          const minimumCoverageGainIsZero = refillAudit.bestMinimumReplayCoverageGainNumerator === BigInt(0) &&
-            selectedOracleCandidate.immediateCoverageGainNumerator === BigInt(0);
-          if (minimumCoverageGainIsZero && higherTypeGainRejectedCandidates.length) {
+          const coverageZeroDiagnostics = getReplayCoverageZeroDiagnostics(
+            refillAudit.bestMinimumReplayCoverageGainNumerator,
+            selectedOracleCandidate.immediateCoverageGainNumerator
+          );
+          const minimumCoverageGainIsZero = coverageZeroDiagnostics.minimumFrontierIsZero;
+          if (coverageZeroDiagnostics.minimumFrontierAndChosenGainAreZero && higherTypeGainRejectedCandidates.length) {
             counters.zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions += 1;
             counters.zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates += higherTypeGainRejectedCandidates.length;
           }
