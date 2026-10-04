@@ -24,10 +24,10 @@ import {
   getRotationVarietyScore,
 } from "./scoring";
 import {
-  buildSocialVarietyContext, createSocialVarietyCoverageScorer, getSocialVarietyGains,
+  buildSocialVarietyContext, createSocialHorizonCoverageScorer, createSocialVarietyCoverageScorer, getSocialVarietyGains,
   getSocialVarietySnapshot, sumSocialVarietyGains,
 } from "./socialVariety";
-import type { SocialVarietyContext, SocialVarietyCoverageScorer } from "./socialVariety";
+import type { SocialCoverageGainMetric, SocialVarietyContext, SocialVarietyCoverageScorer } from "./socialVariety";
 import type {
   ActiveMatchmakerV3Player, MatchmakerV3Player, SocialHistoryMatch,
   V3BatchPairingRandomMode, V3BatchPairingRandomSalts, V3BatchResult, V3BatchSelection,
@@ -92,6 +92,8 @@ export interface SocialBatchOptions<T extends MatchmakerV3Player> {
 export interface RotationBatchOptions<T extends MatchmakerV3Player> extends SocialBatchOptions<T> {
   sessionType: SessionType;
   balanceGuardrailPolicy?: Partial<Pick<BalanceGuardrailPolicy, "nearBestWindow" | "absoluteCeiling">>;
+  /** Benchmark-only opt-in. Omitted keeps the production legacy four-facet gate. */
+  coverageGainMetric?: "social-horizon-321";
 }
 
 export interface RotationStarvationInterventionMeasurement<T extends ActiveMatchmakerV3Player> {
@@ -122,6 +124,7 @@ export type SocialBatchResult<T extends ActiveMatchmakerV3Player> = V3BatchResul
   coverageGateCertified: boolean;
   coverageGateStatus: V3CoverageGateStatus;
   chosenReplayCoverageEligible: boolean | null;
+  coverageGainMetric: SocialCoverageGainMetric;
   varietyOptimal: boolean;
   balanceCertified?: boolean;
 };
@@ -257,7 +260,18 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         sessionMode: options.sessionMode,
         opportunityConstraints: profiles.flatMap((profile) => profile.courts.filter((court): court is V3SelectionConstraints<ActiveMatchmakerV3Player<T>> => Boolean(court))),
       });
-  const coverageScorer: SocialVarietyCoverageScorer = createSocialVarietyCoverageScorer(context, options.sessionMode);
+  const coverageGainMetric: SocialCoverageGainMetric = options.coverageGainMetric ?? "legacy-four-facet";
+  const coverageContext = coverageGainMetric === "social-horizon-321" &&
+    players.some((player) => !context.playersByUserId.has(player.userId))
+    ? buildSocialVarietyContext(players, options.socialHistoryMatches ?? history, {
+        sessionMode: options.sessionMode,
+        opportunityConstraints: profiles.flatMap((profile) => profile.courts.filter((court): court is V3SelectionConstraints<ActiveMatchmakerV3Player<T>> => Boolean(court))),
+        includePausedPlayers: true,
+      })
+    : context;
+  const coverageScorer: SocialVarietyCoverageScorer = coverageGainMetric === "social-horizon-321"
+    ? createSocialHorizonCoverageScorer(coverageContext)
+    : createSocialVarietyCoverageScorer(context, options.sessionMode);
   const playersById = new Map(active.map((player) => [player.userId, player]));
   const bits = new Map(active.map((player, index) => [player.userId, BigInt(1) << BigInt(index)]));
   const lockedMask = [...locked].reduce((mask, id) => mask | (bits.get(id) ?? BigInt(0)), BigInt(0));
@@ -1232,6 +1246,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     replayCertified, replayEnvelopeStatus,
     bestMinimumReplayCoverageGain, chosenImmediateCoverageGain,
     coverageGateCertified, coverageGateStatus, chosenReplayCoverageEligible,
+    coverageGainMetric,
     varietyOptimal,
     ...(balancePolicy ? { balanceCertified } : {}),
     debug: {
@@ -1262,6 +1277,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       replayCertified, replayEnvelopeStatus,
       bestMinimumReplayCoverageGain, chosenImmediateCoverageGain,
       coverageGateCertified, coverageGateUpperBoundCertified, coverageGateStatus, chosenReplayCoverageEligible,
+      coverageGainMetric,
       fairnessCertified, starvationCertified, varietyOptimal,
       ...(balancePolicy ? { balanceCertified, balanceGuardrail, fairnessVector: bestFairness ?? undefined, schedulingRank: bestRank === Infinity ? undefined : bestRank, finalTieBreak } : {}),
       socialIdealRestGap: idealRestGap,

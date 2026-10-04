@@ -77,6 +77,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       replayEnvelopeStatus: result.debug.replayEnvelopeStatus,
       bestMinimumReplayCoverageGain: result.debug.bestMinimumReplayCoverageGain,
       chosenImmediateCoverageGain: result.debug.chosenImmediateCoverageGain,
+      coverageGainMetric: result.debug.coverageGainMetric,
       coverageGateCertified: result.debug.coverageGateCertified,
       coverageGateUpperBoundCertified: result.debug.coverageGateUpperBoundCertified,
       coverageGateStatus: result.debug.coverageGateStatus,

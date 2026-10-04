@@ -2,6 +2,7 @@ import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import { SessionMode } from "../../../types/enums";
 
 import { getDoublesPartitions, isValidPartitionForMode } from "./balance";
+import { SOCIAL_HORIZON_CAPS, SOCIAL_HORIZON_WEIGHTS } from "./socialHorizonCoverageScoring";
 import type {
   ActiveMatchmakerV3Player,
   MatchmakerV3Player,
@@ -87,6 +88,8 @@ export interface SocialVarietyCoverageScorer {
   getMaximumSingleMatchGainUnits(userId: string): bigint;
   toNormalizedScore(gainUnits: bigint): number;
 }
+
+export type SocialCoverageGainMetric = "legacy-four-facet" | "social-horizon-321";
 
 type FacetMaps = Record<SocialFacet, Map<string, number>>;
 type FacetOpportunities = Record<SocialFacet, Set<string>>;
@@ -319,12 +322,14 @@ function buildConstrainedOpportunities<T extends MatchmakerV3Player>(
   sessionMode: SessionMode,
   sides: ReadonlyMap<string, "UPPER" | "LOWER" | null>,
   constraints: Array<V3SelectionConstraints<ActiveMatchmakerV3Player<T>>>,
-  opportunities: Map<string, FacetOpportunities>
+  opportunities: Map<string, FacetOpportunities>,
+  ignorePausedAvailability = false
 ) {
   // Structural rules see the whole roster without temporary busy/rest exclusions.
   const roster: ActiveMatchmakerV3Player<T>[] = players.map((player, rank) => ({
     ...player,
     isBusy: false,
+    ...(ignorePausedAvailability ? { isPaused: false } : {}),
     effectiveMatchCount: Math.max(player.matchesPlayed, player.matchmakingBaseline),
     restTurns: player.restTurns ?? 0,
     randomScore: 0,
@@ -557,6 +562,121 @@ export function createSocialVarietyCoverageScorer(
 }
 
 /**
+ * Builds the benchmark-only capped horizon coverage scorer used by the
+ * opt-in `social-horizon-321` replay gate. Its denominator is the fixed
+ * structural vocabulary in the supplied context, capped at 13 courtmates,
+ * 12 opponents and 6 partners. Per-player facet ratios use 3:2:1 weights,
+ * renormalized over facets with a nonempty capped denominator, and the session
+ * score averages only players with at least one such facet.
+ *
+ * Exact BigInt units keep the gate's strict first-exposure comparisons
+ * transitive. Batch additions are deduplicated and capped per player/facet so
+ * synthetic overlapping partitions cannot earn beyond that player's remaining
+ * horizon capacity.
+ */
+export function createSocialHorizonCoverageScorer(
+  context: SocialVarietyContext
+): SocialVarietyCoverageScorer {
+  const activeFacets = ["courtmates", "opponents", "partners"] as const;
+  type HorizonFacet = typeof activeFacets[number];
+  const eligiblePlayers = [...context.playersByUserId].map(([userId, histograms]) => {
+    const facets = activeFacets.flatMap((facet) => {
+      const histogram = histograms[facet];
+      const denominator = Math.min(histogram.opportunities.size, SOCIAL_HORIZON_CAPS[facet]);
+      if (denominator <= 0) return [];
+      let covered = 0;
+      for (const experience of histogram.opportunities) {
+        if ((histogram.counts.get(experience) ?? 0) > 0) covered += 1;
+      }
+      return [{ facet, denominator, remaining: Math.max(0, denominator - covered) }];
+    });
+    return {
+      userId,
+      facets,
+      activeWeight: facets.reduce((sum, item) => sum + SOCIAL_HORIZON_WEIGHTS[item.facet], 0),
+    };
+  }).filter((player) => player.activeWeight > 0);
+  const eligiblePlayerCount = eligiblePlayers.length;
+  const terms = eligiblePlayers.flatMap((player) => player.facets.map((item) =>
+    BigInt(eligiblePlayerCount) * BigInt(player.activeWeight) * BigInt(item.denominator)
+  ));
+  const denominator = terms.reduce(leastCommonMultiple, BigInt(1));
+  const weights = new Map<string, Map<HorizonFacet, bigint>>();
+  const remainingByPlayer = new Map<string, Map<HorizonFacet, number>>();
+  for (const player of eligiblePlayers) {
+    const playerWeights = new Map<HorizonFacet, bigint>();
+    const remaining = new Map<HorizonFacet, number>();
+    for (const item of player.facets) {
+      const term = BigInt(eligiblePlayerCount) * BigInt(player.activeWeight) * BigInt(item.denominator);
+      playerWeights.set(item.facet, BigInt(SOCIAL_HORIZON_WEIGHTS[item.facet]) * (denominator / term));
+      remaining.set(item.facet, item.remaining);
+    }
+    weights.set(player.userId, playerWeights);
+    remainingByPlayer.set(player.userId, remaining);
+  }
+
+  const addPartitionGain = (partition: V3DoublesPartition, seen: Set<string>, earned: Map<string, number>) => {
+    const zero = BigInt(0);
+    if (!getUniquePartitionIds(partition)) return zero;
+    let gain = zero;
+    visitExposures(partition, null, (userId, facet, experience) => {
+      if (facet === "matchType") return;
+      const horizonFacet = facet as HorizonFacet;
+      const exposureKey = JSON.stringify([userId, horizonFacet, experience]);
+      if (seen.has(exposureKey)) return;
+      seen.add(exposureKey);
+      const histogram = context.playersByUserId.get(userId)?.[horizonFacet];
+      if (!histogram?.opportunities.has(experience) || (histogram.counts.get(experience) ?? 0) > 0) return;
+      const playerKey = JSON.stringify([userId, horizonFacet]);
+      const playerFacetGainCount = earned.get(playerKey) ?? 0;
+      const maximum = remainingByPlayer.get(userId)?.get(horizonFacet) ?? 0;
+      if (playerFacetGainCount >= maximum) return;
+      earned.set(playerKey, playerFacetGainCount + 1);
+      gain += weights.get(userId)?.get(horizonFacet) ?? zero;
+    });
+    return gain;
+  };
+  const maximumExposures: Readonly<Record<HorizonFacet, number>> = {
+    courtmates: 3,
+    opponents: 2,
+    partners: 1,
+  };
+  const getMaximumSingleMatchGainUnits = (userId: string) => {
+    const zero = BigInt(0);
+    const playerWeights = weights.get(userId);
+    if (!playerWeights) return zero;
+    const remaining = remainingByPlayer.get(userId)!;
+    let gain = zero;
+    for (const facet of activeFacets) {
+      const weight = playerWeights.get(facet) ?? zero;
+      if (weight === zero) continue;
+      gain += BigInt(Math.min(maximumExposures[facet], remaining.get(facet) ?? 0)) * weight;
+    }
+    return gain;
+  };
+  const toNormalizedScore = (gainUnits: bigint) => {
+    const zero = BigInt(0);
+    if (denominator <= zero || gainUnits <= zero) return 0;
+    const scale = BigInt(1_000_000_000_000_000);
+    return Number((gainUnits * scale) / denominator) / Number(scale);
+  };
+  return {
+    denominator,
+    eligiblePlayerCount,
+    getPartitionGainUnits: (partition) => addPartitionGain(partition, new Set(), new Map()),
+    getBatchGainUnits: (partitions) => {
+      const seen = new Set<string>();
+      const earned = new Map<string, number>();
+      let gain = BigInt(0);
+      for (const partition of partitions) gain += addPartitionGain(partition, seen, earned);
+      return gain;
+    },
+    getMaximumSingleMatchGainUnits,
+    toNormalizedScore,
+  };
+}
+
+/**
  * Lifetime diversity, projected onto a fixed roster-level legal vocabulary.
  * Constraint entries are alternatives (a union of structural compositions).
  */
@@ -566,16 +686,19 @@ export function buildSocialVarietyContext<T extends MatchmakerV3Player>(
   {
     sessionMode,
     opportunityConstraints,
+    includePausedPlayers = false,
   }: {
     sessionMode: SessionMode;
     opportunityConstraints?: Array<V3SelectionConstraints<ActiveMatchmakerV3Player<T>>>;
+    /** Keep structurally feasible paused roster members in the vocabulary. */
+    includePausedPlayers?: boolean;
   }
 ): SocialVarietyContext {
   const sides = buildSideMap(players);
-  const roster = players.filter((player) => !player.isPaused);
+  const roster = includePausedPlayers ? [...players] : players.filter((player) => !player.isPaused);
   const opportunities = new Map(roster.map((player) => [player.userId, emptyOpportunities()]));
   if (opportunityConstraints?.length) {
-    buildConstrainedOpportunities(roster, sessionMode, sides, opportunityConstraints, opportunities);
+    buildConstrainedOpportunities(roster, sessionMode, sides, opportunityConstraints, opportunities, includePausedPlayers);
   } else {
     buildUnrestrictedOpportunities(roster, sessionMode, sides, opportunities);
   }

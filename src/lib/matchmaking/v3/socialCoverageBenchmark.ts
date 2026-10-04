@@ -5,6 +5,8 @@ import { getDoublesPartitions } from "./balance";
 import { buildSocialVarietyContext, buildSocialVarietySnapshot, getSocialVarietyCoverage, getSocialVarietyGains, getSocialVarietySnapshot } from "./socialVariety";
 import { analyzeStaticBalancedRelationshipFeasibility } from "./benchmarkBalanceFeasibility";
 import type { StaticBalanceFeasibilityReport } from "./benchmarkBalanceFeasibility";
+import { scoreSocialHorizon321 } from "./socialHorizonCoverageScoring";
+import type { SocialHorizon321Score } from "./socialHorizonCoverageScoring";
 import * as rotationApi from "./socialBatch";
 import type { RotationBatchOptions } from "./socialBatch";
 import type { MatchmakerV3Player, SocialHistoryMatch, SocialVarietySnapshot, V3DoublesPartition } from "./types";
@@ -21,6 +23,8 @@ export interface BenchmarkCheckpoint {
   completedMatches: number;
   completedMatchTypeCounts: { MIXED: number; OWN_SIDE: number };
   varietyCoverageScore: number | null;
+  /** Weighted C/O/P horizon score; absent only in older saved benchmark artifacts. */
+  socialHorizon321?: SocialHorizon321Score;
   partnerCoverage: number | null;
   opponentCoverage: number | null;
   courtmateCoverage: number | null;
@@ -309,6 +313,13 @@ export interface BenchmarkSessionResult {
   externalCompletionSchedule: Array<0 | 1>;
   /** Completed-only match types in event order, used for early/late session counts. */
   completedMatchTypes: Array<"MIXED" | "OWN_SIDE">;
+  /** Optional completed court/team tuples, emitted by the horizon rescore runner only. */
+  completedHistory?: Array<{
+    completedMatchNumber: number;
+    team1: [string, string];
+    team2: [string, string];
+    matchType: "MIXED" | "OWN_SIDE";
+  }>;
   checkpoints: Record<string, BenchmarkCheckpoint>;
   maximumMatchCountSpread: number;
   fiveGapEpisodes: FiveGapEpisode[];
@@ -481,6 +492,27 @@ export interface BenchmarkReport {
   sessions: BenchmarkSessionResult[];
 }
 
+export interface SocialHorizonCoverageReport {
+  schemaVersion: "social-horizon-321-v1";
+  sourceRevision: string;
+  sourceProvenance: BenchmarkReport["sourceProvenance"];
+  generatedAt: string;
+  enginePolicy: BenchmarkReport["enginePolicy"];
+  targetMatches: number;
+  matcherCoverageGainMetric: "legacy-equal" | "social-horizon-321";
+  seeds: number[];
+  metric: {
+    id: "social-horizon-321";
+    formula: "Per player: (3C + 2O + P) / the total weight of meaningful facets; C/O/P are capped unique feasible peers divided by min(feasible peers, 13/12/6).";
+    weights: { courtmates: 3; opponents: 2; partners: 1 };
+    caps: { courtmates: 13; opponents: 12; partners: 6 };
+    opportunityScope: "Full structural roster opportunity sets; availability, active status, player history, and balance are not filters.";
+    emptyFacetRule: "Exclude empty facets and renormalize the remaining per-player weights.";
+    historyRule: "Completed matches only; active assignments and reservations are excluded from the score.";
+  };
+  sessions: BenchmarkSessionResult[];
+}
+
 export function assertBenchmarkReportReadyForRendering(report: Pick<BenchmarkReport, "validationStatus">) {
   if (report.validationStatus === "pending") {
     throw new Error("Cannot render a benchmark report with validationStatus=pending.");
@@ -547,6 +579,7 @@ interface CounterfactualSelectionProof {
   coverageGateCertified?: boolean | null;
   coverageGateStatus?: "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION" | "DISABLED" | null;
   chosenReplayCoverageEligible?: boolean | null;
+  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321" | null;
 }
 
 interface WaitEpisodeMeta {
@@ -800,6 +833,7 @@ function canonicalSum(values: number[]) {
 }
 
 type CoverageGateFacet = "courtmates" | "partners" | "opponents" | "matchType";
+type BenchmarkCoverageGainMetric = "legacy-equal" | "social-horizon-321";
 interface IndependentCoverageGain {
   numerator: bigint;
   denominator: bigint;
@@ -828,8 +862,91 @@ function leastCommonMultiple(left: bigint, right: bigint) {
  */
 function getIndependentImmediateCoverageGain(
   partition: V3DoublesPartition,
-  context: ReturnType<typeof buildSocialVarietyContext>
+  context: ReturnType<typeof buildSocialVarietyContext>,
+  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
 ): IndependentCoverageGain {
+  if (coverageGainMetric === "social-horizon-321") {
+    const horizonFacets = ["courtmates", "opponents", "partners"] as const;
+    type HorizonFacet = typeof horizonFacets[number];
+    const caps: Record<HorizonFacet, number> = { courtmates: 13, opponents: 12, partners: 6 };
+    const facetWeights: Record<HorizonFacet, number> = { courtmates: 3, opponents: 2, partners: 1 };
+    const eligiblePlayers = [...context.playersByUserId].map(([userId, histograms]) => {
+      const facets = horizonFacets.flatMap((facet) => {
+        const denominator = Math.min(histograms[facet].opportunities.size, caps[facet]);
+        return denominator > 0 ? [{ facet, denominator }] : [];
+      });
+      return {
+        userId,
+        facets,
+        activeWeight: facets.reduce((sum, item) => sum + facetWeights[item.facet], 0),
+      };
+    }).filter((player) => player.activeWeight > 0);
+    const eligibleCount = eligiblePlayers.length;
+    const terms = eligiblePlayers.flatMap((player) => player.facets.map((item) =>
+      BigInt(eligibleCount) * BigInt(player.activeWeight) * BigInt(item.denominator)
+    ));
+    const denominator = terms.reduce(leastCommonMultiple, BigInt(1));
+    const weights = new Map<string, Map<HorizonFacet, bigint>>();
+    const remaining = new Map<string, Map<HorizonFacet, number>>();
+    for (const player of eligiblePlayers) {
+      const playerWeights = new Map<HorizonFacet, bigint>();
+      const playerRemaining = new Map<HorizonFacet, number>();
+      const histograms = context.playersByUserId.get(player.userId)!;
+      for (const item of player.facets) {
+        const term = BigInt(eligibleCount) * BigInt(player.activeWeight) * BigInt(item.denominator);
+        playerWeights.set(item.facet, BigInt(facetWeights[item.facet]) * (denominator / term));
+        let covered = 0;
+        for (const peer of histograms[item.facet].opportunities) {
+          if ((histograms[item.facet].counts.get(peer) ?? 0) > 0) covered += 1;
+        }
+        playerRemaining.set(item.facet, Math.max(0, item.denominator - covered));
+      }
+      weights.set(player.userId, playerWeights);
+      remaining.set(player.userId, playerRemaining);
+    }
+    const exposuresByPlayerFacet = new Map<string, Set<string>>();
+    const addRelationship = (userId: string, facet: HorizonFacet, experience: string) => {
+      const key = JSON.stringify([userId, facet]);
+      let experiences = exposuresByPlayerFacet.get(key);
+      if (!experiences) {
+        experiences = new Set<string>();
+        exposuresByPlayerFacet.set(key, experiences);
+      }
+      experiences.add(experience);
+    };
+    const teams = [partition.team1, partition.team2] as const;
+    for (let teamIndex = 0; teamIndex < teams.length; teamIndex += 1) {
+      const ownTeam = teams[teamIndex];
+      const opposingTeam = teams[1 - teamIndex];
+      for (const userId of ownTeam) {
+        const partnerId = ownTeam.find((peerId) => peerId !== userId)!;
+        addRelationship(userId, "partners", partnerId);
+        addRelationship(userId, "courtmates", partnerId);
+        for (const opponentId of opposingTeam) {
+          addRelationship(userId, "opponents", opponentId);
+          addRelationship(userId, "courtmates", opponentId);
+        }
+      }
+    }
+    let numerator = BigInt(0);
+    for (const [playerFacet, experiences] of exposuresByPlayerFacet) {
+      const [userId, facet] = JSON.parse(playerFacet) as [string, HorizonFacet];
+      const histogram = context.playersByUserId.get(userId)?.[facet];
+      if (!histogram) continue;
+      const availableExperiences = [...experiences].sort((left, right) => left.localeCompare(right))
+        .filter((experience) => histogram.opportunities.has(experience) && (histogram.counts.get(experience) ?? 0) === 0);
+      const capacity = remaining.get(userId)?.get(facet) ?? 0;
+      const firstExposures = Math.min(availableExperiences.length, capacity);
+      const weight = weights.get(userId)?.get(facet) ?? BigInt(0);
+      numerator += BigInt(firstExposures) * weight;
+    }
+    const scale = BigInt(1_000_000_000_000_000);
+    const normalized = denominator > BigInt(0)
+      ? Number((numerator * scale) / denominator) / Number(scale)
+      : 0;
+    return { numerator, denominator, normalized };
+  }
+
   const activeFacets: CoverageGateFacet[] = context.sessionMode === SessionMode.MIXICANO
     ? ["courtmates", "partners", "opponents", "matchType"]
     : ["courtmates", "partners", "opponents"];
@@ -894,10 +1011,14 @@ function getIndependentImmediateCoverageGain(
 export function measureIndependentCoverageGainForBenchmark(
   partition: V3DoublesPartition,
   players: readonly MatchmakerV3Player[],
-  history: readonly SocialHistoryMatch[]
+  history: readonly SocialHistoryMatch[],
+  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
 ) {
-  const context = buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO });
-  const result = getIndependentImmediateCoverageGain(partition, context);
+  const context = buildSocialVarietyContext(players, history, {
+    sessionMode: SessionMode.MIXICANO,
+    includePausedPlayers: coverageGainMetric === "social-horizon-321",
+  });
+  const result = getIndependentImmediateCoverageGain(partition, context, coverageGainMetric);
   return {
     numerator: result.numerator.toString(),
     denominator: result.denominator.toString(),
@@ -972,7 +1093,8 @@ function auditRotationClass(
   players: BenchmarkPlayer[],
   sessionType: SessionType,
   socialHistory: SocialHistoryMatch[],
-  respectStarvation = true
+  respectStarvation = true,
+  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
 ): RotationAudit {
   const available = players.filter((player) => !player.isBusy && !player.isPaused);
   const playersById = new Map(players.map((player) => [player.userId, player]));
@@ -1033,7 +1155,15 @@ function auditRotationClass(
     balanceEnvelope = rotationClass.filter((candidate) => candidate.balanceGap <= guardrail.allowedMaxBalanceGap &&
       (guardrail.allowedTotalBalanceGap === null || candidate.balanceGap <= guardrail.allowedTotalBalanceGap));
   }
-  const context = buildSocialVarietyContext(players, socialHistory, { sessionMode: SessionMode.MIXICANO });
+  const context = buildSocialVarietyContext(players, socialHistory, {
+    sessionMode: SessionMode.MIXICANO,
+  });
+  const coverageContext = coverageGainMetric === "social-horizon-321"
+    ? buildSocialVarietyContext(players, socialHistory, {
+      sessionMode: SessionMode.MIXICANO,
+      includePausedPlayers: true,
+    })
+    : context;
   for (const candidate of balanceEnvelope) {
     const gains = getSocialVarietyGains(candidate.partition, context);
     candidate.rawMatchTypeGain = gains.matchType;
@@ -1048,7 +1178,7 @@ function auditRotationClass(
       candidate.rawRelationshipGain,
     ]);
     candidate.effectiveCombinedEntropyGain = getEffectiveEntropyGain(candidate.rawCombinedEntropyGain, sessionType);
-    const coverageGain = getIndependentImmediateCoverageGain(candidate.partition, context);
+    const coverageGain = getIndependentImmediateCoverageGain(candidate.partition, coverageContext, coverageGainMetric);
     candidate.immediateCoverageGain = coverageGain.normalized;
     candidate.immediateCoverageGainNumerator = coverageGain.numerator;
     candidate.immediateCoverageGainDenominator = coverageGain.denominator;
@@ -1265,7 +1395,8 @@ function certifyReplaySelection(
   proof: CounterfactualSelectionProof | null,
   audit: RotationAudit,
   description: string,
-  policy: "current" | "replay-envelope" = "current"
+  policy: "current" | "replay-envelope" = "current",
+  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
 ): { candidate: OracleCandidate; replayEnvelopeCertified: boolean; coverageGateCertified: boolean; engineCertified: boolean } | null {
   if (!proof || proof.selections.length !== 1) return null;
   const selection = proof.selections[0];
@@ -1293,9 +1424,11 @@ function certifyReplaySelection(
     throw new Error(`${description}: engine certified combined entropy/soft cadence, but the independent frontier disagreed.`);
   }
   const expectedCoverageGain = candidate.immediateCoverageGain;
+  const expectedEngineCoverageMetric = coverageGainMetric === "social-horizon-321" ? "social-horizon-321" : "legacy-four-facet";
+  const coverageMetricMatches = proof.coverageGainMetric === expectedEngineCoverageMetric;
   const coverageValuesMatch = proof.bestMinimumReplayCoverageGain === audit.bestMinimumReplayCoverageGain &&
     proof.chosenImmediateCoverageGain === expectedCoverageGain &&
-    proof.chosenReplayCoverageEligible === audit.replayAllowanceKeys.has(key);
+    proof.chosenReplayCoverageEligible === audit.replayAllowanceKeys.has(key) && coverageMetricMatches;
   if (policy === "current" && proof.coverageGateCertified === true && !coverageValuesMatch) {
     throw new Error(`${description}: engine coverage-gate score disagreed with the independent rational first-exposure oracle.`);
   }
@@ -1441,6 +1574,10 @@ function getCheckpoint(
   completedMatches: number
 ): BenchmarkCheckpoint {
   const context = buildSocialVarietyContext(players, completed, { sessionMode: SessionMode.MIXICANO });
+  const fullRosterContext = buildSocialVarietyContext(players, completed, {
+    sessionMode: SessionMode.MIXICANO,
+    includePausedPlayers: true,
+  });
   const coverage = getSocialVarietyCoverage(context);
   const relationshipEntropies: number[] = [];
   const matchTypeEntropies: number[] = [];
@@ -1469,6 +1606,7 @@ function getCheckpoint(
       return counts;
     }, { MIXED: 0, OWN_SIDE: 0 }),
     varietyCoverageScore: coverage.score,
+    socialHorizon321: scoreSocialHorizon321(fullRosterContext),
     partnerCoverage: coverage.partnerScore,
     opponentCoverage: coverage.opponentScore,
     courtmateCoverage: coverage.courtmateScore,
@@ -1916,7 +2054,9 @@ function createSessionResult(
   sessionType: SessionType,
   seed: number,
   targetMatches = 400,
-  enginePolicy: "current" | "strict" | "baseline" | "type-first" | "replay-envelope" = "current"
+  enginePolicy: "current" | "strict" | "baseline" | "type-first" | "replay-envelope" = "current",
+  captureCompletedHistory = false,
+  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
 ): BenchmarkSessionResult {
   const startTime = performance.now();
   const players = createRoster(sessionType, profile);
@@ -2058,6 +2198,7 @@ function createSessionResult(
       sessionType,
       respectPlayerRest: true,
       completedMatches: completed,
+      ...(coverageGainMetric === "social-horizon-321" ? { coverageGainMetric } : {}),
       socialHistoryMatches: [...completed, ...[...active.values()].map((assignment) => ({
         id: `active-${assignment.decisionId}-${assignment.court}`,
         ...assignment.partition,
@@ -2078,6 +2219,7 @@ function createSessionResult(
         coverageGateCertified?: boolean | null;
         coverageGateStatus?: CounterfactualSelectionProof["coverageGateStatus"];
         chosenReplayCoverageEligible?: boolean | null;
+        coverageGainMetric?: CounterfactualSelectionProof["coverageGainMetric"];
       };
       const debug = candidate.debug as unknown as {
         bestImmediateReplayCount?: number | null;
@@ -2090,6 +2232,7 @@ function createSessionResult(
         coverageGateCertified?: boolean | null;
         coverageGateStatus?: CounterfactualSelectionProof["coverageGateStatus"];
         chosenReplayCoverageEligible?: boolean | null;
+        coverageGainMetric?: CounterfactualSelectionProof["coverageGainMetric"];
       };
       return {
         selections: candidate.selection?.selections.map((selection) => ({
@@ -2109,6 +2252,7 @@ function createSessionResult(
         coverageGateCertified: resultReplay.coverageGateCertified ?? debug.coverageGateCertified ?? null,
         coverageGateStatus: resultReplay.coverageGateStatus ?? debug.coverageGateStatus ?? null,
         chosenReplayCoverageEligible: resultReplay.chosenReplayCoverageEligible ?? debug.chosenReplayCoverageEligible ?? null,
+        coverageGainMetric: resultReplay.coverageGainMetric ?? debug.coverageGainMetric ?? null,
       };
     };
     const recordResultDiagnostics = (result: OptimizerResult) => {
@@ -2323,7 +2467,7 @@ function createSessionResult(
       socialVariety: assignment.socialVariety,
     }))];
     const refillAudit = eventIndex + 1 < targetMatches
-      ? auditRotationClass(players, sessionType, refillHistory)
+      ? auditRotationClass(players, sessionType, refillHistory, true, coverageGainMetric)
       : null;
     if (eventIndex + 1 === 21 || eventIndex + 1 === 400 || eventIndex + 1 === targetMatches) {
       const completedRestValues = [...completedRestGaps];
@@ -2435,7 +2579,8 @@ function createSessionResult(
         refill.productionProof,
         refillAudit,
         `${sessionType}/${profile}/seed ${seed} production after ${eventIndex + 1} completed matches`,
-        "replay-envelope"
+        "replay-envelope",
+        coverageGainMetric
       );
       if (!productionReplayAudit) counters.productionReplayUncertified += 1;
       else {
@@ -2446,13 +2591,14 @@ function createSessionResult(
       counters.noStarvationReplayRefillDecisions += 1;
       if (refill.meta.overdueAvailable > 0) counters.noStarvationCounterfactualDecisions += 1;
       noStarvationAudit = refill.meta.overdueAvailable > 0
-        ? auditRotationClass(players, sessionType, refillHistory, false)
+        ? auditRotationClass(players, sessionType, refillHistory, false, coverageGainMetric)
         : refillAudit;
       noStarvationReplayAudit = certifyReplaySelection(
         refill.withoutStarvation,
         noStarvationAudit,
         `${sessionType}/${profile}/seed ${seed} no-starvation counterfactual after ${eventIndex + 1} completed matches`,
-        "replay-envelope"
+        "replay-envelope",
+        coverageGainMetric
       );
       if (noStarvationReplayAudit?.replayEnvelopeCertified) counters.noStarvationReplayEnvelopeCertified += 1;
       if (noStarvationReplayAudit?.engineCertified) counters.noStarvationReplayCertified += 1;
@@ -2509,7 +2655,9 @@ function createSessionResult(
       productionReplayAudit = certifyReplaySelection(
         refill.productionProof,
         refillAudit,
-        `${sessionType}/${profile}/seed ${seed} production after ${eventIndex + 1} completed matches`
+        `${sessionType}/${profile}/seed ${seed} production after ${eventIndex + 1} completed matches`,
+        "current",
+        coverageGainMetric
       );
       if (!productionReplayAudit) {
         counters.productionReplayUncertified += 1;
@@ -2525,12 +2673,14 @@ function createSessionResult(
       if (refill.meta.overdueAvailable > 0) counters.noStarvationCounterfactualDecisions += 1;
       const noStarvationProof = refill.withoutStarvation;
       noStarvationAudit = refill.meta.overdueAvailable > 0
-        ? auditRotationClass(players, sessionType, refillHistory, false)
+        ? auditRotationClass(players, sessionType, refillHistory, false, coverageGainMetric)
         : refillAudit;
       noStarvationReplayAudit = certifyReplaySelection(
         noStarvationProof,
         noStarvationAudit,
-        `${sessionType}/${profile}/seed ${seed} no-starvation counterfactual after ${eventIndex + 1} completed matches`
+        `${sessionType}/${profile}/seed ${seed} no-starvation counterfactual after ${eventIndex + 1} completed matches`,
+        "current",
+        coverageGainMetric
       );
       if (noStarvationReplayAudit?.replayEnvelopeCertified) counters.noStarvationReplayEnvelopeCertified += 1;
       if (noStarvationReplayAudit?.engineCertified) counters.noStarvationReplayCertified += 1;
@@ -2895,6 +3045,14 @@ function createSessionResult(
         : "points-like strength units: 10 + 0.1 × latent rank",
     externalCompletionSchedule,
     completedMatchTypes,
+    ...(captureCompletedHistory ? {
+      completedHistory: completed.map((match, index) => ({
+        completedMatchNumber: index + 1,
+        team1: [...match.team1] as [string, string],
+        team2: [...match.team2] as [string, string],
+        matchType: match.socialVariety?.courtType === "MIXED" ? "MIXED" as const : "OWN_SIDE" as const,
+      })),
+    } : {}),
     checkpoints: checkpointResults,
     maximumMatchCountSpread: counters.maximumFairnessSpread,
     fiveGapEpisodes,
@@ -2982,6 +3140,70 @@ export function runSocialCoverageBenchmark({
         wide: "Same latent rank profile; Points strength 10+1×rank, Rating strength 900+40×rank (40 rating units per point).",
       },
       pointDiff: "0 for all players; the benchmark has no match score outcomes.",
+    },
+    sessions,
+  };
+}
+
+/**
+ * Runs the fixed narrow-profile 21/400 horizon dataset and captures completed
+ * match tuples for an independent rescore. The matcher gain metric is explicit
+ * so legacy and social-horizon gate policies can be measured separately.
+ */
+export function runSocialHorizonCoverageBenchmark({
+  seeds,
+  enginePolicy = "current",
+  sourceRevision = "recorded by runner",
+  sourceProvenance = {
+    commitSha: sourceRevision,
+    workingTreeDirty: false,
+    workingTreeNote: "No extra change note supplied.",
+    policyLabel: enginePolicy,
+    engineSourceSha256: null,
+    measurementHarnessSha256: null,
+    coreEngineTrackedDiffPaths: [],
+    sharedVarietyTrackedDiffPaths: [],
+    measurementHarnessTrackedDiffPaths: [],
+  },
+  targetMatches = 21,
+  coverageGainMetric = "legacy-equal",
+}: {
+  seeds: number[];
+  enginePolicy?: BenchmarkReport["enginePolicy"];
+  sourceRevision?: string;
+  sourceProvenance?: BenchmarkReport["sourceProvenance"];
+  targetMatches?: 21 | 400;
+  coverageGainMetric?: "legacy-equal" | "social-horizon-321";
+}): SocialHorizonCoverageReport {
+  if (seeds.length === 0 || seeds.some((seed) => !Number.isSafeInteger(seed)) || new Set(seeds).size !== seeds.length) {
+    throw new Error("Social horizon benchmark seeds must be a non-empty list of unique safe integers.");
+  }
+  if (targetMatches !== 21 && targetMatches !== 400) {
+    throw new Error("Social horizon benchmark target must be exactly 21 or 400 completed matches.");
+  }
+  if (coverageGainMetric === "social-horizon-321" && enginePolicy !== "current") {
+    throw new Error("The social-horizon-321 matcher coverage gain is only available with the current engine policy.");
+  }
+  const sessions = seeds.flatMap((seed) => FORMAT_ORDER.map((sessionType) =>
+    createSessionResult("narrow", sessionType, seed, targetMatches, enginePolicy, true, coverageGainMetric)
+  ));
+  return {
+    schemaVersion: "social-horizon-321-v1",
+    sourceRevision,
+    sourceProvenance,
+    generatedAt: new Date().toISOString(),
+    enginePolicy,
+    targetMatches,
+    matcherCoverageGainMetric: coverageGainMetric,
+    seeds: [...seeds],
+    metric: {
+      id: "social-horizon-321",
+      formula: "Per player: (3C + 2O + P) / the total weight of meaningful facets; C/O/P are capped unique feasible peers divided by min(feasible peers, 13/12/6).",
+      weights: { courtmates: 3, opponents: 2, partners: 1 },
+      caps: { courtmates: 13, opponents: 12, partners: 6 },
+      opportunityScope: "Full structural roster opportunity sets; availability, active status, player history, and balance are not filters.",
+      emptyFacetRule: "Exclude empty facets and renormalize the remaining per-player weights.",
+      historyRule: "Completed matches only; active assignments and reservations are excluded from the score.",
     },
     sessions,
   };

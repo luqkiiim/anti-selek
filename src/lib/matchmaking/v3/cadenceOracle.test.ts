@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { SessionMode, SessionType } from "../../../types/enums";
 import { findBestRotationBatchSelection, measureRotationStarvationIntervention } from "./socialBatch";
-import { buildSocialVarietyContext, createSocialVarietyCoverageScorer } from "./socialVariety";
-import type { SocialVarietyContext } from "./socialVariety";
+import { buildSocialVarietyContext, createSocialHorizonCoverageScorer, createSocialVarietyCoverageScorer } from "./socialVariety";
+import type { SocialVarietyContext, SocialVarietyHistogram } from "./socialVariety";
 import type {
   ActiveMatchmakerV3Player,
   MatchmakerV3Player,
@@ -203,6 +203,9 @@ function repeatedHistory(layout: FixedLayout, count: number): V3CompletedMatch[]
 }
 
 type OracleCoverageFacet = "courtmates" | "partners" | "opponents" | "matchType";
+type HorizonCoverageFacet = "courtmates" | "partners" | "opponents";
+const horizonCaps: Readonly<Record<HorizonCoverageFacet, number>> = { courtmates: 13, opponents: 12, partners: 6 };
+const horizonWeights: Readonly<Record<HorizonCoverageFacet, number>> = { courtmates: 3, opponents: 2, partners: 1 };
 
 /** Recomputes first-exposure coverage directly from opportunity/count sets. */
 function oracleFirstExposureCoverage(
@@ -281,6 +284,127 @@ function oracleFirstExposureCoverage(
     }
   }
   return total;
+}
+
+/** Independent completed-relationship 3:2:1 marginal model; match type is absent. */
+function oracleHorizonCoverageGain(
+  partitionsToPlay: readonly V3DoublesPartition[],
+  context: SocialVarietyContext
+): OracleFraction {
+  const additions = new Map<string, Map<HorizonCoverageFacet, Set<string>>>();
+  const remember = (userId: string, facet: HorizonCoverageFacet, experience: string) => {
+    const byFacet = additions.get(userId) ?? new Map<HorizonCoverageFacet, Set<string>>();
+    const experiences = byFacet.get(facet) ?? new Set<string>();
+    experiences.add(experience);
+    byFacet.set(facet, experiences);
+    additions.set(userId, byFacet);
+  };
+  for (const partition of partitionsToPlay) {
+    const teams = [partition.team1, partition.team2] as const;
+    for (let side = 0; side < 2; side += 1) {
+      const team = teams[side];
+      const opponents = teams[1 - side];
+      for (let seat = 0; seat < 2; seat += 1) {
+        const userId = team[seat];
+        const partner = team[1 - seat];
+        remember(userId, "courtmates", partner);
+        remember(userId, "partners", partner);
+        for (const opponent of opponents) {
+          remember(userId, "courtmates", opponent);
+          remember(userId, "opponents", opponent);
+        }
+      }
+    }
+  }
+
+  const eligible = [...context.playersByUserId].flatMap(([userId, histograms]) => {
+    const facets = (Object.keys(horizonCaps) as HorizonCoverageFacet[]).flatMap((facet) => {
+      const histogram = histograms[facet];
+      const denominator = Math.min(horizonCaps[facet], histogram.opportunities.size);
+      return denominator > 0 ? [{ facet, denominator, histogram }] : [];
+    });
+    return facets.length ? [{ userId, facets, activeWeight: facets.reduce((sum, item) => sum + horizonWeights[item.facet], 0) }] : [];
+  });
+  if (!eligible.length) return oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE);
+
+  let gain = oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE);
+  for (const player of eligible) {
+    for (const item of player.facets) {
+      const covered = [...item.histogram.opportunities].filter((experience) =>
+        (item.histogram.counts.get(experience) ?? 0) > 0
+      ).length;
+      const already = Math.min(item.denominator, covered);
+      const possible = [...(additions.get(player.userId)?.get(item.facet) ?? [])].filter((experience) =>
+        item.histogram.opportunities.has(experience) && (item.histogram.counts.get(experience) ?? 0) === 0
+      ).length;
+      const newlyCovered = Math.min(Math.max(0, item.denominator - already), possible);
+      if (!newlyCovered) continue;
+      gain = addOracleFractions(gain, oracleFraction(
+        BigInt(newlyCovered * horizonWeights[item.facet]),
+        BigInt(eligible.length * player.activeWeight * item.denominator)
+      ));
+    }
+  }
+  return gain;
+}
+
+function oracleHistogram(opportunities: readonly string[], counts: Readonly<Record<string, number>> = {}): SocialVarietyHistogram {
+  const countMap = new Map(Object.entries(counts).filter(([, count]) => count > 0));
+  const total = [...countMap.values()].reduce((sum, count) => sum + count, 0);
+  const countLogCountSum = [...countMap.values()].reduce((sum, count) => sum + count * Math.log(count), 0);
+  return { opportunities: new Set(opportunities), counts: countMap, total, countLogCountSum };
+}
+
+function oracleHorizonContext(
+  playerFacets: Readonly<Record<string, Partial<Record<HorizonCoverageFacet, { opportunities: string[]; counts?: Record<string, number> }>>>>,
+  sessionMode = SessionMode.MEXICANO
+): SocialVarietyContext {
+  const empty = () => oracleHistogram([]);
+  return {
+    sessionMode,
+    effectiveSideByUserId: new Map(),
+    playersByUserId: new Map(Object.entries(playerFacets).map(([userId, facets]) => [userId, {
+      courtmates: facets.courtmates ? oracleHistogram(facets.courtmates.opportunities, facets.courtmates.counts) : empty(),
+      partners: facets.partners ? oracleHistogram(facets.partners.opportunities, facets.partners.counts) : empty(),
+      opponents: facets.opponents ? oracleHistogram(facets.opponents.opportunities, facets.opponents.counts) : empty(),
+      matchType: empty(),
+    }])),
+  };
+}
+
+function horizonGateFixture(bestReplayCount: number) {
+  const groups = ["A", "B", "C"] as const;
+  const layouts = groups.map((group): FixedLayout => ({
+    ids: [0, 1, 2, 3].map((index) => `${group}${index}`),
+    partition: { team1: [`${group}0`, `${group}1`], team2: [`${group}2`, `${group}3`] },
+  }));
+  const replayCounts = [bestReplayCount, bestReplayCount + 1, bestReplayCount + 2];
+  const players = groups.flatMap((group, groupIndex) => [0, 1, 2, 3].map((index) => makePlayer(`${group}${index}`, {
+    matchesPlayed: 5,
+    restTurns: index < replayCounts[groupIndex] ? 0 : 1,
+  })));
+  const playerFacets: Record<string, Partial<Record<HorizonCoverageFacet, { opportunities: string[]; counts?: Record<string, number> }>>> = {
+    A0: {
+      courtmates: { opportunities: ["A1", "A2", "A3"], counts: { A1: 1, A2: 1, A3: 1 } },
+      partners: { opportunities: ["A1", "A4"], counts: { A1: 1 } },
+      opponents: { opportunities: ["A2", "A3"], counts: { A2: 1, A3: 1 } },
+    },
+    B0: {
+      courtmates: { opportunities: ["B1", "B2", "B3"], counts: { B2: 1, B3: 1 } },
+      partners: { opportunities: ["B1", "B4"], counts: { B4: 1 } },
+      opponents: { opportunities: ["B2", "B3"], counts: { B2: 1, B3: 1 } },
+    },
+    C0: {
+      courtmates: { opportunities: ["C1", "C2", "C3"] },
+      partners: { opportunities: ["C1", "C4"] },
+      opponents: { opportunities: ["C2", "C3"] },
+    },
+  };
+  for (const group of groups) {
+    for (let index = 1; index < 4; index += 1) playerFacets[`${group}${index}`] = {};
+  }
+  const context = oracleHorizonContext(playerFacets);
+  return { players, layouts, context };
 }
 
 function runFixedOneCourt(
@@ -632,6 +756,58 @@ describe("independent cadence oracle", () => {
     expect(compareOracleFractions(meanOracleFractions([]), oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE))).toBe(0);
   });
 
+  it("uses the independent capped horizon marginal at five-to-six partners and saturates after six", () => {
+    const peerIds = Array.from({ length: 13 }, (_value, index) => `P${index + 1}`);
+    const partitionFor = (partner: string): V3DoublesPartition => ({
+      team1: ["P0", partner], team2: ["X", "Y"],
+    });
+    const makeContext = (coveredCount: number) => oracleHorizonContext({
+      P0: { partners: { opportunities: peerIds, counts: Object.fromEntries(peerIds.slice(0, coveredCount).map((id) => [id, 1])) } },
+    });
+    const beforeSixth = makeContext(5);
+    const atSix = makeContext(6);
+    const sixthPartner = partitionFor("P6");
+    const seventhPartner = partitionFor("P7");
+    const expectedSixth = oracleHorizonCoverageGain([sixthPartner], beforeSixth);
+    const expectedSeventh = oracleHorizonCoverageGain([seventhPartner], atSix);
+    const scorerBefore = createSocialHorizonCoverageScorer(beforeSixth);
+    const scorerAtCap = createSocialHorizonCoverageScorer(atSix);
+
+    expect(expectedSixth).toEqual(oracleFraction(ORACLE_BIG_ONE, BigInt(6)));
+    expect(scorerBefore.toNormalizedScore(scorerBefore.getPartitionGainUnits(sixthPartner))).toBeCloseTo(1 / 6, 14);
+    expect(scorerBefore.toNormalizedScore(scorerBefore.getPartitionGainUnits(sixthPartner))).toBeCloseTo(
+      Number(expectedSixth.numerator) / Number(expectedSixth.denominator), 14
+    );
+    expect(expectedSeventh).toEqual(oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE));
+    expect(scorerAtCap.getPartitionGainUnits(seventhPartner)).toBe(BigInt(0));
+
+    const selected: V3DoublesPartition = { team1: ["P0", "P1"], team2: ["P2", "P3"] };
+    const courtmatePeers = Array.from({ length: 13 }, (_value, index) => `P${index + 1}`);
+    const courtmatesOneShort = oracleHorizonContext({
+      P0: { courtmates: { opportunities: courtmatePeers, counts: Object.fromEntries(courtmatePeers.filter((id) => id !== "P3").map((id) => [id, 1])) } },
+    });
+    const courtmatesAtCap = oracleHorizonContext({
+      P0: { courtmates: { opportunities: courtmatePeers, counts: Object.fromEntries(courtmatePeers.map((id) => [id, 1])) } },
+    });
+    const opponentPeers = Array.from({ length: 12 }, (_value, index) => `P${index + 2}`);
+    const opponentsOneShort = oracleHorizonContext({
+      P0: { opponents: { opportunities: opponentPeers, counts: Object.fromEntries(opponentPeers.filter((id) => id !== "P3").map((id) => [id, 1])) } },
+    });
+    const opponentsAtCap = oracleHorizonContext({
+      P0: { opponents: { opportunities: opponentPeers, counts: Object.fromEntries(opponentPeers.map((id) => [id, 1])) } },
+    });
+    expect(oracleHorizonCoverageGain([selected], courtmatesOneShort)).toEqual(oracleFraction(ORACLE_BIG_ONE, BigInt(13)));
+    expect(createSocialHorizonCoverageScorer(courtmatesOneShort).toNormalizedScore(
+      createSocialHorizonCoverageScorer(courtmatesOneShort).getPartitionGainUnits(selected)
+    )).toBeCloseTo(1 / 13, 14);
+    expect(createSocialHorizonCoverageScorer(courtmatesAtCap).getPartitionGainUnits(selected)).toBe(BigInt(0));
+    expect(oracleHorizonCoverageGain([selected], opponentsOneShort)).toEqual(oracleFraction(ORACLE_BIG_ONE, BigInt(12)));
+    expect(createSocialHorizonCoverageScorer(opponentsOneShort).toNormalizedScore(
+      createSocialHorizonCoverageScorer(opponentsOneShort).getPartitionGainUnits(selected)
+    )).toBeCloseTo(1 / 12, 14);
+    expect(createSocialHorizonCoverageScorer(opponentsAtCap).getPartitionGainUnits(selected)).toBe(BigInt(0));
+  });
+
   it("activates the type facet from the actual search mode, not a reused Mixed context", () => {
     const roster = standardMixedRoster();
     const mixed: FixedLayout = {
@@ -675,6 +851,104 @@ describe("independent cadence oracle", () => {
       Number(wronglyMixed.numerator) / Number(wronglyMixed.denominator), 12
     );
     expect(result.debug.coverageGateCertified).toBe(true);
+
+    const horizonWithStaleContext = findBestRotationBatchSelection(roster, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      rotationPlayerCount: 14,
+      socialVarietyContext: staleMixedContext,
+      coverageGainMetric: "social-horizon-321",
+      randomFn: () => 0,
+    });
+    const horizonWithOpenContext = findBestRotationBatchSelection(roster, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      rotationPlayerCount: 14,
+      socialVarietyContext: openContext,
+      coverageGainMetric: "social-horizon-321",
+      randomFn: () => 0,
+    });
+    const horizonOracle = oracleHorizonCoverageGain(
+      horizonWithOpenContext.selection!.selections.map((selection) => selection.partition), openContext
+    );
+    expect(horizonWithStaleContext.debug.coverageGainMetric).toBe("social-horizon-321");
+    expect(horizonWithStaleContext.debug.bestMinimumReplayCoverageGain).toBeCloseTo(
+      horizonWithOpenContext.debug.bestMinimumReplayCoverageGain!, 14
+    );
+    expect(horizonWithStaleContext.debug.chosenImmediateCoverageGain).toBeCloseTo(
+      Number(horizonOracle.numerator) / Number(horizonOracle.denominator), 14
+    );
+  });
+
+  it("keeps paused roster members in the horizon structural denominator", () => {
+    const roster = standardMixedRoster().map((player, index) => ({ ...player, isPaused: index === 13 }));
+    const activeContext = buildSocialVarietyContext(roster, [], { sessionMode: SessionMode.MEXICANO });
+    const fullStructuralContext = buildSocialVarietyContext(roster, [], {
+      sessionMode: SessionMode.MEXICANO,
+      includePausedPlayers: true,
+    });
+    expect(activeContext.playersByUserId.size).toBe(13);
+    expect(fullStructuralContext.playersByUserId.size).toBe(14);
+    const result = findBestRotationBatchSelection(roster, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      rotationPlayerCount: 14,
+      lockedPlayerIds: new Set(["m0", "m1", "f0", "f1"]),
+      socialHistoryMatches: [],
+      socialVarietyContext: activeContext,
+      coverageGainMetric: "social-horizon-321",
+      randomFn: () => 0,
+    });
+    const chosenPartitions = result.selection!.selections.map((selection) => selection.partition);
+    const expectedFullRoster = oracleHorizonCoverageGain(chosenPartitions, fullStructuralContext);
+    const wrongActiveOnly = oracleHorizonCoverageGain(chosenPartitions, activeContext);
+
+    expect(result.debug.bestMinimumReplayCoverageGain).toBeCloseTo(
+      Number(expectedFullRoster.numerator) / Number(expectedFullRoster.denominator), 14
+    );
+    expect(result.debug.bestMinimumReplayCoverageGain).not.toBeCloseTo(
+      Number(wrongActiveOnly.numerator) / Number(wrongActiveOnly.denominator), 14
+    );
+  });
+
+  it.each(rotationTypes)("uses the capped 3:2:1 first-exposure gate for dynamic replay minima in %s", (sessionType) => {
+    for (const bestReplayCount of [0, 1]) {
+      const { players, layouts, context } = horizonGateFixture(bestReplayCount);
+      const profile: Profile = { rank: 0, courts: [fixedLayouts(...layouts)] };
+      const gains = layouts.map((layout) => oracleHorizonCoverageGain([layout.partition], context));
+      expect(gains[0]).toEqual(oracleFraction(ORACLE_BIG_ZERO, ORACLE_BIG_ONE));
+      expect(compareOracleFractions(gains[1]!, gains[0]!)).toBeGreaterThan(0);
+      expect(compareOracleFractions(gains[2]!, gains[1]!)).toBeGreaterThan(0);
+
+      const result = findBestRotationBatchSelection(players, {
+        courtCount: 1,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType,
+        rotationPlayerCount: 14,
+        schedules: [profile],
+        socialVarietyContext: context,
+        coverageGainMetric: "social-horizon-321",
+        randomFn: () => 0,
+      });
+
+      expect(selectedIds(result)).toEqual(layouts[1]!.ids.sort());
+      expect(result.debug.coverageGainMetric).toBe("social-horizon-321");
+      expect(result.debug.bestImmediateReplayCount).toBe(bestReplayCount);
+      expect(result.debug.allowedImmediateReplayCount).toBe(bestReplayCount + 1);
+      expect(result.debug.chosenImmediateReplayCount).toBe(bestReplayCount + 1);
+      expect(result.debug.bestMinimumReplayCoverageGain).toBeCloseTo(0, 14);
+      expect(result.debug.chosenImmediateCoverageGain).toBeCloseTo(
+        Number(gains[1]!.numerator) / Number(gains[1]!.denominator), 14
+      );
+      expect(result.debug.replayCertified).toBe(true);
+      expect(result.debug.coverageGateCertified).toBe(true);
+      expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
+      expect(result.debug.chosenReplayCoverageEligible).toBe(true);
+      expect(result.varietyOptimal).toBe(true);
+    }
   });
 
   it.each(rotationTypes)("recomputes the coverage threshold from a nonzero replay minimum and disables both gates on opt-out in %s", (sessionType) => {
@@ -953,7 +1227,7 @@ describe("independent cadence oracle", () => {
       rank: 0,
       courts: [fixedLayouts(...first), fixedLayouts(...second)],
     });
-    const run = (profile: Profile) => findBestRotationBatchSelection(players, {
+    const run = (profile: Profile, coverageGainMetric?: "social-horizon-321") => findBestRotationBatchSelection(players, {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
       sessionType,
@@ -961,6 +1235,7 @@ describe("independent cadence oracle", () => {
       schedules: [profile],
       socialHistoryMatches: history,
       socialVarietyContext: context,
+      ...(coverageGainMetric ? { coverageGainMetric } : {}),
       randomFn: () => 0,
     });
     const bestRestOnly = run(profileFor([a0], [a1]));
@@ -979,6 +1254,25 @@ describe("independent cadence oracle", () => {
     expect(combined.debug.coverageGateCertified).toBe(true);
     expect(combined.debug.coverageGateStatus).toBe("CERTIFIED");
     expect(combined.debug.chosenReplayCoverageEligible).toBe(true);
+
+    const horizonA = oracleHorizonCoverageGain([a0.partition, a1.partition], context);
+    const horizonB = oracleHorizonCoverageGain([b0.partition, b1.partition], context);
+    expect(compareOracleFractions(horizonB, horizonA)).toBeGreaterThan(0);
+    const horizonCombined = run(profileFor([a0, b0], [a1, b1]), "social-horizon-321");
+    expect(selectedIds(horizonCombined)).toEqual(selectedIds(oneReplayHigherEntropy));
+    expect(horizonCombined.selection?.selections.flatMap((selection) => selection.players)).toHaveLength(8);
+    expect(horizonCombined.debug.coverageGainMetric).toBe("social-horizon-321");
+    expect(horizonCombined.debug.bestImmediateReplayCount).toBe(0);
+    expect(horizonCombined.debug.allowedImmediateReplayCount).toBe(1);
+    expect(horizonCombined.debug.chosenImmediateReplayCount).toBe(1);
+    expect(horizonCombined.debug.bestMinimumReplayCoverageGain).toBeCloseTo(
+      Number(horizonA.numerator) / Number(horizonA.denominator), 14
+    );
+    expect(horizonCombined.debug.chosenImmediateCoverageGain).toBeCloseTo(
+      Number(horizonB.numerator) / Number(horizonB.denominator), 14
+    );
+    expect(horizonCombined.debug.coverageGateCertified).toBe(true);
+    expect(horizonCombined.debug.chosenReplayCoverageEligible).toBe(true);
   });
 
   it.each(rotationTypes)("matches the brute-force 3-court oracle through the cadence-bound DFS for %s", (sessionType) => {
@@ -1102,7 +1396,7 @@ describe("independent cadence oracle", () => {
       rank: 0,
       courts: layouts.map((courtLayouts) => fixedLayouts(...courtLayouts)),
     });
-    const run = (layouts: FixedLayout[][]) => findBestRotationBatchSelection(players, {
+    const run = (layouts: FixedLayout[][], coverageGainMetric?: "social-horizon-321") => findBestRotationBatchSelection(players, {
       courtCount: 3,
       sessionMode: SessionMode.MIXICANO,
       sessionType: SessionType.SOCIAL_MIX,
@@ -1110,6 +1404,7 @@ describe("independent cadence oracle", () => {
       schedules: [profileFor(layouts)],
       socialHistoryMatches: history,
       socialVarietyContext: buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO }),
+      ...(coverageGainMetric ? { coverageGainMetric } : {}),
       searchLimits: { maxBranches: 50_000, maxMs: 30_000 },
       randomFn: () => 0,
     });
@@ -1139,6 +1434,23 @@ describe("independent cadence oracle", () => {
     expect(combined.debug.chosenReplayCoverageEligible).toBe(true);
     expect(combinedSelection.selections.map((selection) => selection.socialVariety?.courtType))
       .toEqual(["UPPER", "LOWER", "MIXED"]);
+
+    const context = buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO });
+    const horizonA = oracleHorizonCoverageGain(allMixed.map((layout) => layout.partition), context);
+    const horizonB = oracleHorizonCoverageGain(typeFavoredBatch.map((layout) => layout.partition), context);
+    expect(compareOracleFractions(horizonB, horizonA)).toBeGreaterThan(0);
+    const horizonCombined = run([[a0, b0], [a1, b1], [a2, b2]], "social-horizon-321");
+    expect(selectedIds(horizonCombined)).toEqual(selectedIds(typeFavoredOnly));
+    expect(horizonCombined.varietyOptimal).toBe(true);
+    expect(immediateReplayCount(horizonCombined.selection!.restSummary.restTurnVector)).toBe(1);
+    expect(horizonCombined.debug.bestImmediateReplayCount).toBe(0);
+    expect(horizonCombined.debug.allowedImmediateReplayCount).toBe(1);
+    expect(horizonCombined.debug.chosenImmediateReplayCount).toBe(1);
+    expect(horizonCombined.debug.chosenImmediateCoverageGain).toBeCloseTo(
+      Number(horizonB.numerator) / Number(horizonB.denominator), 14
+    );
+    expect(horizonCombined.debug.coverageGateCertified).toBe(true);
+    expect(horizonCombined.debug.chosenReplayCoverageEligible).toBe(true);
   });
 
   it.each(rotationTypes)("uses soft rest only after the combined entropy gains tie for %s", (sessionType) => {
@@ -1250,7 +1562,7 @@ describe("independent cadence oracle", () => {
 
     const history = [...repeatedHistory(a0, 20), ...repeatedHistory(a1, 20)];
     const context = buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO });
-    const run = (court0: FixedLayout[], court1: FixedLayout[]) => findBestRotationBatchSelection(players, {
+    const run = (court0: FixedLayout[], court1: FixedLayout[], coverageGainMetric?: "social-horizon-321") => findBestRotationBatchSelection(players, {
       courtCount: 2,
       sessionMode: SessionMode.MIXICANO,
       sessionType,
@@ -1258,6 +1570,7 @@ describe("independent cadence oracle", () => {
       schedules: [{ rank: 0, courts: [fixedLayouts(...court0), fixedLayouts(...court1)] }],
       socialHistoryMatches: history,
       socialVarietyContext: context,
+      ...(coverageGainMetric ? { coverageGainMetric } : {}),
       randomFn: () => 0,
     });
     const candidateA = run([a0], [a1]);
@@ -1273,6 +1586,23 @@ describe("independent cadence oracle", () => {
     expect(combined.debug.chosenImmediateReplayCount).toBe(1);
     expect(combined.debug.replayCertified).toBe(true);
     expect(combined.debug.replayEnvelopeStatus).toBe("CERTIFIED");
+
+    const horizonA = oracleHorizonCoverageGain([a0.partition, a1.partition], context);
+    const horizonB = oracleHorizonCoverageGain([b0.partition, b1.partition], context);
+    const horizonC = oracleHorizonCoverageGain([c0.partition, c1.partition], context);
+    expect(compareOracleFractions(horizonB, horizonA)).toBeGreaterThan(0);
+    expect(compareOracleFractions(horizonC, horizonB)).toBeGreaterThan(0);
+    const horizonCombined = run([a0, b0, c0], [a1, b1, c1], "social-horizon-321");
+    expect(selectedIds(horizonCombined)).toEqual(selectedIds(candidateB));
+    expect(horizonCombined.selection?.selections.flatMap((selection) => selection.players)).toHaveLength(8);
+    expect(horizonCombined.debug.bestImmediateReplayCount).toBe(0);
+    expect(horizonCombined.debug.allowedImmediateReplayCount).toBe(1);
+    expect(horizonCombined.debug.chosenImmediateReplayCount).toBe(1);
+    expect(horizonCombined.debug.chosenImmediateCoverageGain).toBeCloseTo(
+      Number(horizonB.numerator) / Number(horizonB.denominator), 14
+    );
+    expect(horizonCombined.debug.coverageGateCertified).toBe(true);
+    expect(horizonCombined.debug.chosenReplayCoverageEligible).toBe(true);
   });
 
   it.each(rotationTypes)("keeps count fairness ahead of rest smoothing and starvation for %s", (sessionType) => {
@@ -1328,12 +1658,43 @@ describe("independent cadence oracle", () => {
       expect(selectedIds(result)).toEqual(oracle!.ids.sort());
       expect(result.selection?.maxBalanceGap).toBe(result.selection?.balanceGuardrail?.bestMaxBalanceGap);
       expect(result.selection?.maxBalanceGap).toBeLessThanOrEqual(result.selection?.balanceGuardrail?.allowedMaxBalanceGap ?? -1);
-    expect(result.debug.bestImmediateReplayCount).toBe(4);
-    expect(result.debug.allowedImmediateReplayCount).toBe(5);
-    expect(result.debug.chosenImmediateReplayCount).toBe(4);
-    expect(result.debug.coverageGateCertified).toBe(true);
-    expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
-    expect(result.debug.chosenReplayCoverageEligible).toBe(true);
+      expect(result.debug.bestImmediateReplayCount).toBe(4);
+      expect(result.debug.allowedImmediateReplayCount).toBe(5);
+      expect(result.debug.chosenImmediateReplayCount).toBe(4);
+      expect(result.debug.coverageGateCertified).toBe(true);
+      expect(result.debug.coverageGateStatus).toBe("CERTIFIED");
+      expect(result.debug.chosenReplayCoverageEligible).toBe(true);
+
+      const horizonBOnly = findBestRotationBatchSelection(players, {
+        courtCount: 1, sessionMode: SessionMode.MEXICANO, sessionType,
+        rotationPlayerCount: 14, schedules: [{ rank: 0, courts: [allowedQuartets(b)] }],
+        socialHistoryMatches: history, socialVarietyContext: context,
+        balanceGuardrailPolicy: { nearBestWindow: 0 },
+        coverageGainMetric: "social-horizon-321", randomFn: () => 0,
+      });
+      const horizonResult = findBestRotationBatchSelection(players, {
+        courtCount: 1, sessionMode: SessionMode.MEXICANO, sessionType,
+        rotationPlayerCount: 14, schedules: [profile],
+        socialHistoryMatches: history, socialVarietyContext: context,
+        balanceGuardrailPolicy: { nearBestWindow: 0 },
+        coverageGainMetric: "social-horizon-321", randomFn: () => 0,
+      });
+      const horizonA = oracleHorizonCoverageGain([aLayout.partition], context);
+      const horizonB = oracleHorizonCoverageGain([{
+        team1: [b[0], b[1]], team2: [b[2], b[3]],
+      }], context);
+      expect(compareOracleFractions(horizonB, horizonA)).toBeGreaterThan(0);
+      expect(selectedIds(horizonBOnly)).toEqual(b.sort());
+      expect(selectedIds(horizonResult)).toEqual(a.sort());
+      expect(horizonResult.selection?.maxBalanceGap).toBe(horizonResult.selection?.balanceGuardrail?.bestMaxBalanceGap);
+      expect(horizonResult.selection?.maxBalanceGap).toBeLessThanOrEqual(horizonResult.selection?.balanceGuardrail?.allowedMaxBalanceGap ?? -1);
+      expect(horizonBOnly.selection?.maxBalanceGap).toBeGreaterThan(horizonResult.selection?.balanceGuardrail?.allowedMaxBalanceGap ?? Infinity);
+      expect(horizonResult.debug.coverageGainMetric).toBe("social-horizon-321");
+      expect(horizonResult.debug.bestImmediateReplayCount).toBe(4);
+      expect(horizonResult.debug.allowedImmediateReplayCount).toBe(5);
+      expect(horizonResult.debug.chosenImmediateReplayCount).toBe(4);
+      expect(horizonResult.debug.coverageGateCertified).toBe(true);
+      expect(horizonResult.debug.chosenReplayCoverageEligible).toBe(true);
     }
   });
 
@@ -1429,6 +1790,7 @@ describe("independent cadence oracle", () => {
       sessionType: SessionType.SOCIAL_MIX,
       rotationPlayerCount: 14,
       schedules: [profile],
+      coverageGainMetric: "social-horizon-321",
       searchLimits: { maxBranches: 0, maxMs: 30_000 },
       randomFn: () => 0,
     });
@@ -1465,6 +1827,7 @@ describe("independent cadence oracle", () => {
       schedules: [profile],
       socialHistoryMatches: history,
       socialVarietyContext: buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MEXICANO }),
+      coverageGainMetric: "social-horizon-321",
       respectPlayerRest: false,
       randomFn: () => 0,
     });
@@ -1476,6 +1839,15 @@ describe("independent cadence oracle", () => {
     expect(measured.production.debug.coverageGateStatus).toBe("DISABLED");
     expect(measured.production.debug.coverageGateCertified).toBe(true);
     expect(measured.production.debug.chosenReplayCoverageEligible).toBeNull();
+    expect(measured.production.debug.coverageGainMetric).toBe("social-horizon-321");
+    expect(measured.production.debug.bestMinimumReplayCoverageGain).toBeNull();
+    const horizonOracle = oracleHorizonCoverageGain(
+      measured.production.selection!.selections.map((selection) => selection.partition),
+      buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MEXICANO })
+    );
+    expect(measured.production.debug.chosenImmediateCoverageGain).toBeCloseTo(
+      Number(horizonOracle.numerator) / Number(horizonOracle.denominator), 14
+    );
   });
 
   it("replays identical random draws without perturbing the production RNG stream", () => {

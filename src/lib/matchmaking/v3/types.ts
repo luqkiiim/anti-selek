@@ -218,6 +218,7 @@ export interface V3SingleCourtDebug {
   replayEnvelopeStatus?: V3ReplayEnvelopeStatus;
   bestMinimumReplayCoverageGain?: number | null;
   chosenImmediateCoverageGain?: number | null;
+  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321";
   coverageGateCertified?: boolean;
   coverageGateUpperBoundCertified?: boolean;
   coverageGateStatus?: V3CoverageGateStatus;
@@ -328,6 +329,7 @@ export interface V3BatchDebug {
   replayEnvelopeStatus: V3ReplayEnvelopeStatus;
   bestMinimumReplayCoverageGain?: number | null;
   chosenImmediateCoverageGain?: number | null;
+  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321";
   coverageGateCertified?: boolean;
   coverageGateUpperBoundCertified?: boolean;
   coverageGateStatus?: V3CoverageGateStatus;

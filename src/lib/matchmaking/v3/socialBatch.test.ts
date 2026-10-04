@@ -6,7 +6,7 @@ import { findBestSocialBatchSelection } from "./socialBatch";
 import { buildCandidatePool } from "./candidatePool";
 import { getDoublesPartitions, isValidPartitionForMode, getPartitionBalanceGap, getPartitionPointDiffGap } from "./balance";
 import {
-  buildSocialVarietyContext, createSocialVarietyCoverageScorer,
+  buildSocialVarietyContext, createSocialHorizonCoverageScorer, createSocialVarietyCoverageScorer,
   getSocialVarietyGain, getSocialVarietyGains,
 } from "./socialVariety";
 import { getExactPartitionKey } from "./rematch";
@@ -130,6 +130,84 @@ describe("Social global batch solver", () => {
     expect(ignoreRest.debug.coverageGateStatus).toBe("DISABLED");
     expect(ignoreRest.debug.coverageGateCertified).toBe(true);
     expect(ignoreRest.debug.chosenReplayCoverageEligible).toBeNull();
+  });
+
+  it("keeps the legacy gate as default and reports opt-in horizon coverage gains", () => {
+    const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index < 4 ? 1 : 0 }));
+    const completedMatches: V3CompletedMatch[] = Array.from({ length: 4 }, () => ({
+      team1: ["P0", "P1"], team2: ["P2", "P3"],
+    }));
+    const options = {
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      completedMatches,
+      randomFn: () => 0,
+    };
+    const legacy = findBestSingleCourtSelectionV3(players, options);
+    const horizon = findBestSingleCourtSelectionV3(players, {
+      ...options,
+      coverageGainMetric: "social-horizon-321",
+    });
+    const horizonWithRestOptOut = findBestSingleCourtSelectionV3(players, {
+      ...options,
+      coverageGainMetric: "social-horizon-321",
+      respectPlayerRest: false,
+    });
+    const context = buildSocialVarietyContext(players, completedMatches, { sessionMode: SessionMode.MEXICANO });
+    const horizonScorer = createSocialHorizonCoverageScorer(context);
+
+    expect(legacy.debug.coverageGainMetric).toBe("legacy-four-facet");
+    expect(horizon.debug.coverageGainMetric).toBe("social-horizon-321");
+    expect(() => JSON.stringify(horizon)).not.toThrow();
+    expect(horizon.debug.coverageGateCertified).toBe(true);
+    expect(horizon.debug.chosenImmediateCoverageGain).toBeCloseTo(
+      horizonScorer.toNormalizedScore(horizonScorer.getPartitionGainUnits(horizon.selection!.partition)), 14
+    );
+    expect(horizonWithRestOptOut.debug.coverageGateStatus).toBe("DISABLED");
+    expect(horizonWithRestOptOut.debug.replayEnvelopeStatus).toBe("DISABLED");
+    expect(horizonWithRestOptOut.debug.starvationCertified).toBe(true);
+  });
+
+  it("keeps paused players in the opt-in structural coverage denominator", () => {
+    const players = makePlayers(8).map((player, index) => ({
+      ...player,
+      restTurns: 1,
+      isPaused: index === 7,
+    }));
+    const context = buildSocialVarietyContext(players, [], {
+      sessionMode: SessionMode.MEXICANO,
+      includePausedPlayers: true,
+    });
+    const scorer = createSocialHorizonCoverageScorer(context);
+    const active = players.filter((player) => !player.isPaused);
+    let bestCoverage = BigInt(0);
+    for (let a = 0; a < active.length - 3; a += 1) {
+      for (let b = a + 1; b < active.length - 2; b += 1) {
+        for (let c = b + 1; c < active.length - 1; c += 1) {
+          for (let d = c + 1; d < active.length; d += 1) {
+            const quartet = [active[a].userId, active[b].userId, active[c].userId, active[d].userId] as [string, string, string, string];
+            for (const partition of getDoublesPartitions(quartet)) {
+              const gain = scorer.getPartitionGainUnits(partition);
+              if (gain > bestCoverage) bestCoverage = gain;
+            }
+          }
+        }
+      }
+    }
+    const result = findBestSingleCourtSelectionV3(players, {
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      coverageGainMetric: "social-horizon-321",
+      randomFn: () => 0,
+    });
+
+    expect(context.playersByUserId.size).toBe(8);
+    expect(scorer.eligiblePlayerCount).toBe(8);
+    expect(result.debug.coverageGainMetric).toBe("social-horizon-321");
+    expect(result.debug.bestImmediateReplayCount).toBe(0);
+    expect(result.debug.bestMinimumReplayCoverageGain).toBe(scorer.toNormalizedScore(bestCoverage));
+    expect(result.debug.coverageGateCertified).toBe(true);
+    expect(result.selection?.players.some((player) => player.isPaused)).toBe(false);
   });
 
   it("keeps match-type entropy inactive when a Mixed context is reused for MEXICANO", () => {

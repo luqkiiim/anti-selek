@@ -5,6 +5,7 @@ import { getDoublesPartitions } from "./balance";
 import {
   buildSocialVarietyContext,
   buildSocialVarietySnapshot,
+  createSocialHorizonCoverageScorer,
   createSocialVarietyCoverageScorer,
   getSocialVarietyCoverage,
   getSocialVarietyGains,
@@ -12,6 +13,8 @@ import {
   sumSocialVarietyGains,
   withSocialVarietySnapshot,
 } from "./socialVariety";
+import { scoreSocialHorizon321 } from "./socialHorizonCoverageScoring";
+import type { SocialVarietyContext, SocialVarietyHistogram } from "./socialVariety";
 import type { MatchmakerV3Player, SocialHistoryMatch, V3DoublesPartition } from "./types";
 
 function createRoster(upperCount: number, lowerCount: number): MatchmakerV3Player[] {
@@ -42,6 +45,86 @@ function histogramEntropy(counts: ReadonlyMap<string, number>, opportunities: Re
 }
 
 describe("Social lifetime normalized diversity", () => {
+  it("matches an independent 3:2:1 horizon-score before/after delta", () => {
+    const players = createRoster(7, 7);
+    const before = buildSocialVarietyContext(players, [], { sessionMode: SessionMode.MIXICANO });
+    const after = buildSocialVarietyContext(players, [mixed], { sessionMode: SessionMode.MIXICANO });
+    const scorer = createSocialHorizonCoverageScorer(before);
+    const expectedDelta = scoreSocialHorizon321(after).score! - scoreSocialHorizon321(before).score!;
+
+    expect(scorer.toNormalizedScore(scorer.getPartitionGainUnits(mixed))).toBeCloseTo(expectedDelta, 14);
+    expect(scorer.eligiblePlayerCount).toBe(14);
+  });
+
+  it("keeps the horizon denominator fixed across busy, rest and paused availability", () => {
+    const roster = createRoster(7, 7);
+    const withHistory = [mixed];
+    const availabilityRule = {
+      isQuartetAllowed: (quartet: [MatchmakerV3Player, MatchmakerV3Player, MatchmakerV3Player, MatchmakerV3Player]) =>
+        quartet.every((player) => player.isBusy !== true && player.isPaused !== true),
+    };
+    const baseline = buildSocialVarietyContext(roster, withHistory, {
+      sessionMode: SessionMode.MIXICANO,
+      opportunityConstraints: [availabilityRule],
+    });
+    const transientlyUnavailable = roster.map((player, index) => ({
+      ...player,
+      isBusy: index < 4,
+      restTurns: index,
+    }));
+    const busyAndResting = buildSocialVarietyContext(transientlyUnavailable, withHistory, {
+      sessionMode: SessionMode.MIXICANO,
+      opportunityConstraints: [availabilityRule],
+    });
+    const pausedRoster = roster.map((player, index) => ({ ...player, isPaused: index === 13 }));
+    const pausedButStructural = buildSocialVarietyContext(pausedRoster, withHistory, {
+      sessionMode: SessionMode.MIXICANO,
+      includePausedPlayers: true,
+      opportunityConstraints: [availabilityRule],
+    });
+    const baselineScorer = createSocialHorizonCoverageScorer(baseline);
+    const busyScorer = createSocialHorizonCoverageScorer(busyAndResting);
+    const pausedScorer = createSocialHorizonCoverageScorer(pausedButStructural);
+
+    expect(busyScorer.denominator).toBe(baselineScorer.denominator);
+    expect(pausedScorer.denominator).toBe(baselineScorer.denominator);
+    expect(busyScorer.getPartitionGainUnits(mixed)).toBe(baselineScorer.getPartitionGainUnits(mixed));
+    expect(pausedScorer.getPartitionGainUnits(mixed)).toBe(baselineScorer.getPartitionGainUnits(mixed));
+    // The default lifetime-coverage context keeps its established active-roster semantics.
+    expect(buildSocialVarietyContext(pausedRoster, withHistory, { sessionMode: SessionMode.MIXICANO }).playersByUserId.size).toBe(13);
+  });
+
+  it("caps overlapping batch exposures at each player's remaining horizon capacity", () => {
+    const emptyHistogram = (): SocialVarietyHistogram => ({
+      opportunities: new Set(), counts: new Map(), total: 0, countLogCountSum: 0,
+    });
+    const partnerIds = Array.from({ length: 13 }, (_value, index) => `P${index + 1}`);
+    const contextForCoveredPartners = (covered: number): SocialVarietyContext => {
+      const partners: SocialVarietyHistogram = {
+        opportunities: new Set(partnerIds),
+        counts: new Map(partnerIds.slice(0, covered).map((userId) => [userId, 1])),
+        total: covered,
+        countLogCountSum: 0,
+      };
+      return {
+        sessionMode: SessionMode.MEXICANO,
+        effectiveSideByUserId: new Map(),
+        playersByUserId: new Map([["P0", {
+          courtmates: emptyHistogram(), partners, opponents: emptyHistogram(), matchType: emptyHistogram(),
+        }]]),
+      };
+    };
+    const first: V3DoublesPartition = { team1: ["P0", "P6"], team2: ["P2", "P3"] };
+    const second: V3DoublesPartition = { team1: ["P0", "P7"], team2: ["P4", "P5"] };
+    const oneRemaining = createSocialHorizonCoverageScorer(contextForCoveredPartners(5));
+    const saturated = createSocialHorizonCoverageScorer(contextForCoveredPartners(6));
+
+    expect(oneRemaining.getBatchGainUnits([first, second])).toBe(oneRemaining.getPartitionGainUnits(first));
+    expect(oneRemaining.getBatchGainUnits([first, second])).toBe(oneRemaining.getPartitionGainUnits(second));
+    expect(oneRemaining.toNormalizedScore(oneRemaining.getPartitionGainUnits(first))).toBeCloseTo(1 / 6, 14);
+    expect(saturated.getBatchGainUnits([first, second])).toBe(BigInt(0));
+  });
+
   it("scores first-exposure coverage as an exact weighted mean over feasible facets", () => {
     const players = createRoster(7, 7);
     const mixedContext = buildSocialVarietyContext(players, [], { sessionMode: SessionMode.MIXICANO });
