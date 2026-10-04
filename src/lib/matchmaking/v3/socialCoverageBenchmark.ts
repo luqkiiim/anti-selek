@@ -3190,13 +3190,13 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
     const at400 = summarizeBenchmarkGroup(report, "narrow", type, "400");
     lines.push(`| ${label} | ${at21.completedMixedMatches.mean?.toFixed(1)} / ${at21.completedOwnSideMatches.mean?.toFixed(1)} | ${at400.completedMixedMatches.mean?.toFixed(1)} / ${at400.completedOwnSideMatches.mean?.toFixed(1)} | ${at400.first100OwnSideMatches.mean?.toFixed(1)} | ${at400.last100OwnSideMatches.mean?.toFixed(1)} |`);
   }
-  lines.push("", "Checkpoint-21 exact player match counts (each row is one seed; IDs are roster identities). The four aggregate columns show min/max/spread and whether all fourteen players have exactly six completed matches.", "", "| Format | Seed | P1–P14 completed-match counts | Min | Max | Spread | All exactly 6 |", "|---|---:|---|---:|---:|---:|---|");
+  lines.push("", "Checkpoint-21 exact player match counts (each row is one seed; IDs are roster identities). The four aggregate columns show min/max/spread and whether all fourteen players have exactly six completed matches.", "", "| Format | Seed | Completed counts by player ID | Min | Max | Spread | All exactly 6 |", "|---|---:|---|---:|---:|---:|---|");
   for (const [type, label] of formats) {
     const sessions = report.sessions.filter((session) => session.profile === "narrow" && session.sessionType === type)
       .sort((left, right) => left.seed - right.seed);
     for (const session of sessions) {
       const checkpoint = session.checkpoints["21"];
-      const counts = checkpoint.playerMatchCounts.map(({ matchesPlayed }) => matchesPlayed).join(",");
+      const counts = checkpoint.playerMatchCounts.map(({ userId, matchesPlayed }) => `${userId}=${matchesPlayed}`).join(",");
       lines.push(`| ${label} | ${session.seed} | ${counts} | ${checkpoint.minimumPlayerMatchCount} | ${checkpoint.maximumPlayerMatchCount} | ${checkpoint.matchCountSpread} | ${checkpoint.allPlayersExactlySixMatches ? "yes" : "no"} |`);
     }
   }
