@@ -1,0 +1,22 @@
+# Vercel CLI upload exclusions. Git-connected deployments use .gitignore.
+/private/
+.env*
+*.pem
+
+# Local database snapshots and SQLite sidecars
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+
+# Tool output and deployment metadata
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+/.next/
+/coverage/
+/playwright-report/
+/test-results*
