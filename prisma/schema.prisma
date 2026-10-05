@@ -9,69 +9,105 @@ datasource db {
 }
 
 model User {
-  clubJoinRequests ClubJoinRequest[]
-  id                String    @id @default(cuid())
-  email             String?   @unique
-  passwordHash      String?
-  name              String
-  avatarKey         String?
-  selfNameChangedAt DateTime?
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  avatarKey           String?
+  selfNameChangedAt   DateTime?
   selfGenderChangedAt DateTime?
-  isClaimed         Boolean   @default(false)
-  gender            String    @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
-  partnerPreference String    @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
-  mixedSideOverride String? // UPPER, LOWER
-  elo               Int       @default(1000)
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  gender              String    @default("UNSPECIFIED")
+  isActive            Boolean   @default(true)
+  sessionVersion      Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  sessionPlayers                SessionPlayer[]
-  clubMemberships               ClubMember[]
+  players                       Player[]
+  clubAccess                    ClubAccess[]
+  rosterOwnership               ClubMember[]                 @relation("RosterOwner")
+  clubAdmissionRequests         ClubAdmissionRequest[]       @relation("AdmissionRequester")
+  reviewedClubAdmissions        ClubAdmissionRequest[]       @relation("AdmissionReviewer")
+  clubAdmissionEvents           ClubAdmissionEvent[]
   createdClubs                  Club[]                       @relation("ClubCreator")
   requestedSessionClubs         SessionClub[]                @relation("SessionClubRequester")
   reviewedSessionClubs          SessionClub[]                @relation("SessionClubReviewer")
-  matchEloAdjustments           MatchEloAdjustment[]
+  submittedMatchScores          Match[]                      @relation("ScoreSubmitterAccount")
   claimRequestsMade             ClaimRequest[]               @relation("ClaimRequester")
-  claimRequestsTargeted         ClaimRequest[]               @relation("ClaimTarget")
   reviewedClaimRequests         ClaimRequest[]               @relation("ClaimReviewer")
-  offlineIdentityMembers        OfflineIdentityMember[]
   createdOfflineIdentities      OfflineIdentity[]            @relation("OfflineIdentityCreator")
   resolvedOfflineIdentities     OfflineIdentity[]            @relation("OfflineIdentityResolver")
-  offlineIdentityLinksAsSource  OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkSourceUser")
-  offlineIdentityLinksAsTarget  OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetUser")
   requestedOfflineIdentityLinks OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkRequester")
   reviewedOfflineIdentityLinks  OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkReviewer")
   passwordResetTokens           PasswordResetToken[]
   tutorialProgress              TutorialProgress[]
   clubNewsLikes                 ClubNewsLike[]
-  clubNotificationsReceived     ClubNotification[]           @relation("ClubNotificationRecipient")
   clubNotificationsActed        ClubNotification[]           @relation("ClubNotificationActor")
+  clubRatingAdjustments          ClubRatingAdjustment[]       @relation("ClubRatingAdjustmentActor")
+
+  @@map("Account")
+}
+
+model Player {
+  id                  String    @id @default(cuid())
+  ownerUserId         String?
+  // Retained for migration provenance only. Authentication reads Account.
+  legacyEmail         String?   @unique @map("email") @ignore
+  legacyPasswordHash  String?   @map("passwordHash") @ignore
+  name                String
+  avatarKey           String?
+  selfNameChangedAt   DateTime?
+  selfGenderChangedAt DateTime?
+  legacyIsClaimed     Boolean   @default(false) @map("isClaimed") @ignore
+  gender              String    @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
+  partnerPreference   String    @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
+  mixedSideOverride   String? // UPPER, LOWER
+  elo                 Int       @default(1000)
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  sessionPlayers               SessionPlayer[]
+  clubMemberships              ClubMember[]
+  ownerUser                    User?                        @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  creditedHostSessionClubs     SessionClub[]                @relation("SessionClubHostPlayer")
+  submittedMatchScores         Match[]                      @relation("ScoreSubmitterPlayer")
+  matchEloAdjustments          MatchEloAdjustment[]
+  claimRequestsTargeted        ClaimRequest[]               @relation("ClaimTarget")
+  offlineIdentityMembers       OfflineIdentityMember[]
+  offlineIdentityLinksAsSource OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkSourcePlayer")
+  offlineIdentityLinksAsTarget OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetPlayer")
+  requestedClubAdmissions      ClubAdmissionRequest[]       @relation("AdmissionRequestedPlayer")
+  approvedClubAdmissions       ClubAdmissionRequest[]       @relation("AdmissionApprovedPlayer")
+  clubNotificationsReceived    ClubNotification[]           @relation("ClubNotificationRecipient")
 
   // Match relations (team memberships)
   matchesAsTeam1Player1 Match[] @relation("Team1Player1")
   matchesAsTeam1Player2 Match[] @relation("Team1Player2")
   matchesAsTeam2Player1 Match[] @relation("Team2Player1")
   matchesAsTeam2Player2 Match[] @relation("Team2Player2")
+
+  @@index([ownerUserId])
+  @@map("User")
 }
 
 model Club {
-  allowJoinRequests Boolean @default(false)
-  joinRequests ClubJoinRequest[]
-  id                  String   @id @default(cuid())
-  name                String   @unique
-  rules               String   @default("")
+  allowJoinRequests   Boolean                @default(false)
+  joinRequests        ClubAdmissionRequest[]
+  id                  String                 @id @default(cuid())
+  name                String                 @unique
+  rules               String                 @default("")
   avatarKey           String?
-  isPasswordProtected Boolean  @default(false)
+  isPasswordProtected Boolean                @default(false)
   passwordHash        String?
   createdById         String
-  isTutorial          Boolean  @default(false)
-  tutorialOwnerId     String?  @unique
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  isTutorial          Boolean                @default(false)
+  tutorialOwnerId     String?                @unique
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
-  createdBy                       User                         @relation("ClubCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdBy                       User                         @relation("ClubCreator", fields: [createdById], references: [id], onDelete: Restrict)
   members                         ClubMember[]
+  accountAccess                   ClubAccess[]
   sessions                        Session[]
   sessionClubs                    SessionClub[]
   matchEloAdjustments             MatchEloAdjustment[]
@@ -87,69 +123,90 @@ model Club {
 }
 
 model ClubRatingAdjustment {
-  id String @id @default(cuid())
-  memberId String
-  actorId String
+  id        String     @id @default(cuid())
+  memberId  String
+  actorId   String
   actorName String
   beforeElo Int
-  afterElo Int
-  reason String
-  createdAt DateTime @default(now())
-  member ClubMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  afterElo  Int
+  reason    String
+  createdAt DateTime   @default(now())
+  member    ClubMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  actor     User       @relation("ClubRatingAdjustmentActor", fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([memberId, createdAt])
 }
 
 model ClubMember {
-  achievementPreferencesJson String @default("{}")
-  ratingAdjustments ClubRatingAdjustment[]
-  id            String   @id @default(cuid())
-  clubId        String   @map("communityId")
-  userId        String
-  role          String   @default("MEMBER") // MEMBER, STAFF, or ADMIN
-  status        String   @default("CORE") // CORE or OCCASIONAL
-  preferredPool String   @default("B") // A = Competitive, B = Social
-  needsMoreRest Boolean  @default(false)
-  elo           Int      @default(1000)
-  createdAt     DateTime @default(now())
+  achievementPreferencesJson String                 @default("{}")
+  ratingAdjustments          ClubRatingAdjustment[]
+  id                         String                 @id @default(cuid())
+  clubId                     String                 @map("communityId")
+  playerId                   String                 @map("userId")
+  ownerUserId                String?
+  legacyRole                 String                 @default("MEMBER") @map("role") @ignore
+  status                     String                 @default("CORE") // CORE or OCCASIONAL
+  preferredPool              String                 @default("B") // A = Competitive, B = Social
+  needsMoreRest              Boolean                @default(false)
+  elo                        Int                    @default(1000)
+  createdAt                  DateTime               @default(now())
+  archivedAt                 DateTime?
 
-  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club      Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  player    Player @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  ownerUser User?  @relation("RosterOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
 
-  @@unique([clubId, userId])
+  @@unique([clubId, playerId])
+  @@unique([clubId, ownerUserId])
   @@map("CommunityMember")
 }
 
+model ClubAccess {
+  id        String   @id @default(cuid())
+  clubId    String
+  userId    String
+  role      String   @default("MEMBER") // OWNER, ADMIN, STAFF, MEMBER
+  status    String   @default("ACTIVE") // ACTIVE, REVOKED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([clubId, userId])
+  @@index([userId, status])
+}
+
 model Session {
-  achievementEligibilityJson String @default("{}")
-  id                     String    @id @default(cuid())
-  code                   String    @unique
-  clubId                 String?   @map("communityId")
-  name                   String
-  type                   String    @default("POINTS") // POINTS or ELO
-  mode                   String    @default("MEXICANO") // MEXICANO or MIXICANO
-  collabFormat           String    @default("FREE_PLAY") // FREE_PLAY or INTERCLUB
-  scoringType            String    @default("POINTS")
-  matchmakingStyle       String    @default("BALANCED")
-  balanceMetric          String    @default("SESSION_POINTS")
-  pairingMode            String    @default("OPEN")
-  status                 String    @default("WAITING") // WAITING, ACTIVE, COMPLETED
-  isTest                 Boolean   @default(false)
-  sourceSessionId        String?
-  autoQueueEnabled       Boolean   @default(true)
-  respectPlayerRest      Boolean   @default(true)
-  poolsEnabled           Boolean   @default(false)
-  poolAssignmentsInitialized Boolean @default(false)
-  poolAName              String?
-  poolBName              String?
-  poolACourtAssignments  Int       @default(0)
-  poolBCourtAssignments  Int       @default(0)
-  poolAMissedTurns       Int       @default(0)
-  poolBMissedTurns       Int       @default(0)
-  crossoverMissThreshold Int       @default(1)
-  crossoverFrequency     String    @default("BALANCED")
-  createdAt              DateTime  @default(now())
-  endedAt                DateTime?
+  achievementEligibilityJson String    @default("{}")
+  id                         String    @id @default(cuid())
+  code                       String    @unique
+  clubId                     String?   @map("communityId")
+  name                       String
+  type                       String    @default("POINTS") // POINTS or ELO
+  mode                       String    @default("MEXICANO") // MEXICANO or MIXICANO
+  collabFormat               String    @default("FREE_PLAY") // FREE_PLAY or INTERCLUB
+  scoringType                String    @default("POINTS")
+  matchmakingStyle           String    @default("BALANCED")
+  balanceMetric              String    @default("SESSION_POINTS")
+  pairingMode                String    @default("OPEN")
+  status                     String    @default("WAITING") // WAITING, ACTIVE, COMPLETED
+  isTest                     Boolean   @default(false)
+  sourceSessionId            String?
+  autoQueueEnabled           Boolean   @default(true)
+  respectPlayerRest          Boolean   @default(true)
+  poolsEnabled               Boolean   @default(false)
+  poolAssignmentsInitialized Boolean   @default(false)
+  poolAName                  String?
+  poolBName                  String?
+  poolACourtAssignments      Int       @default(0)
+  poolBCourtAssignments      Int       @default(0)
+  poolAMissedTurns           Int       @default(0)
+  poolBMissedTurns           Int       @default(0)
+  crossoverMissThreshold     Int       @default(1)
+  crossoverFrequency         String    @default("BALANCED")
+  createdAt                  DateTime  @default(now())
+  endedAt                    DateTime?
 
   club          Club?              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   sessionClubs  SessionClub[]
@@ -162,21 +219,23 @@ model Session {
 }
 
 model SessionClub {
-  id            String    @id @default(cuid())
-  sessionId     String
-  clubId        String    @map("communityId")
-  role          String    @default("PARTNER") // HOST or PARTNER
-  status        String    @default("PENDING") // PENDING, ACCEPTED, or REJECTED
-  requestedById String?
-  reviewedById  String?
-  reviewedAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  sessionId            String
+  clubId               String    @map("communityId")
+  role                 String    @default("PARTNER") // HOST or PARTNER
+  status               String    @default("PENDING") // PENDING, ACCEPTED, or REJECTED
+  requestedById        String?
+  reviewedById         String?
+  creditedHostPlayerId String?
+  reviewedAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  session     Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  club        Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  requestedBy User?   @relation("SessionClubRequester", fields: [requestedById], references: [id], onDelete: SetNull)
-  reviewedBy  User?   @relation("SessionClubReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  session            Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  club               Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  requestedBy        User?   @relation("SessionClubRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  reviewedBy         User?   @relation("SessionClubReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  creditedHostPlayer Player? @relation("SessionClubHostPlayer", fields: [creditedHostPlayerId], references: [id], onDelete: Restrict)
 
   @@unique([sessionId, clubId])
   @@index([clubId, status])
@@ -197,59 +256,60 @@ model Court {
 }
 
 model SessionPlayer {
-  id                 String  @id @default(cuid())
-  sessionId          String
-  userId             String
-  representingClubId String?
-  isGuest            Boolean @default(false)
-  gender             String  @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
-  partnerPreference  String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
-  mixedSideOverride  String? // UPPER, LOWER
-  pool               String  @default("A") // A, B
-  pendingPool        String? // deferred A/B change while playing or manually queued
-  needsMoreRest      Boolean @default(false)
-  sessionPoints      Int     @default(0)
-  lastPartnerId      String? // player ID of last partner (for repeat-partner penalty)
-  isPaused           Boolean @default(false)
+  id                  String  @id @default(cuid())
+  sessionId           String
+  playerId            String  @map("userId")
+  representingClubId  String?
+  isGuest             Boolean @default(false)
+  gender              String  @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
+  partnerPreference   String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
+  mixedSideOverride   String? // UPPER, LOWER
+  pool                String  @default("A") // A, B
+  pendingPool         String? // deferred A/B change while playing or manually queued
+  needsMoreRest       Boolean @default(false)
+  sessionPoints       Int     @default(0)
+  lastPartnerPlayerId String? @map("lastPartnerId") // Raw historical ID; dangling legacy values are retained.
+  isPaused            Boolean @default(false)
 
   // Persisted matchmaking state
-  matchesPlayed            Int       @default(0)
-  matchmakingMatchesCredit Int       @default(0)
-  availableSince           DateTime  @default(now())
-  lastPlayedAt             DateTime?
-  pausedAt                 DateTime?
-  joinedAt                 DateTime  @default(now())
-  ladderEntryAt            DateTime  @default(now())
-  arrivalPriorityAt        DateTime?
-  skipNextMatchAt          DateTime?
+  matchesPlayed              Int       @default(0)
+  matchmakingMatchesCredit   Int       @default(0)
+  availableSince             DateTime  @default(now())
+  lastPlayedAt               DateTime?
+  pausedAt                   DateTime?
+  joinedAt                   DateTime  @default(now())
+  ladderEntryAt              DateTime  @default(now())
+  arrivalPriorityAt          DateTime?
+  skipNextMatchAt            DateTime?
   skipNextMatchRequestedById String?
-  inactiveSeconds          Int       @default(0)
+  inactiveSeconds            Int       @default(0)
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Restrict)
 
-  @@unique([sessionId, userId])
+  @@unique([sessionId, playerId])
   @@index([sessionId, representingClubId])
 }
 
 model Match {
-  id                     String  @id @default(cuid())
-  sessionId              String
-  courtId                String
-  status                 String  @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, PENDING_APPROVAL
-  scoreSubmittedByUserId String?
+  id                       String  @id @default(cuid())
+  sessionId                String
+  courtId                  String
+  status                   String  @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, PENDING_APPROVAL
+  scoreSubmittedByUserId   String?
+  scoreSubmittedByPlayerId String?
 
   // Team 1
-  team1User1Id String
-  team1User2Id String
-  team1ClubId  String?
-  team1Score   Int?
+  team1Player1Id String  @map("team1User1Id")
+  team1Player2Id String  @map("team1User2Id")
+  team1ClubId    String?
+  team1Score     Int?
 
   // Team 2
-  team2User1Id String
-  team2User2Id String
-  team2ClubId  String?
-  team2Score   Int?
+  team2Player1Id String  @map("team2User1Id")
+  team2Player2Id String  @map("team2User2Id")
+  team2ClubId    String?
+  team2Score     Int?
 
   winnerTeam            Int? // 1 or 2
   team1EloChange        Int?
@@ -262,14 +322,16 @@ model Match {
   createdAt   DateTime  @default(now())
   completedAt DateTime?
 
-  session             Session              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  court               Court                @relation(fields: [courtId], references: [id], onDelete: Cascade)
-  courtAsCurrentMatch Court?               @relation("CourtCurrentMatch")
-  eloAdjustments      MatchEloAdjustment[]
-  team1User1          User                 @relation("Team1Player1", fields: [team1User1Id], references: [id], onDelete: Cascade)
-  team1User2          User                 @relation("Team1Player2", fields: [team1User2Id], references: [id], onDelete: Cascade)
-  team2User1          User                 @relation("Team2Player1", fields: [team2User1Id], references: [id], onDelete: Cascade)
-  team2User2          User                 @relation("Team2Player2", fields: [team2User2Id], references: [id], onDelete: Cascade)
+  session                Session              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  court                  Court                @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  courtAsCurrentMatch    Court?               @relation("CourtCurrentMatch")
+  eloAdjustments         MatchEloAdjustment[]
+  team1Player1           Player               @relation("Team1Player1", fields: [team1Player1Id], references: [id], onDelete: Restrict)
+  team1Player2           Player               @relation("Team1Player2", fields: [team1Player2Id], references: [id], onDelete: Restrict)
+  team2Player1           Player               @relation("Team2Player1", fields: [team2Player1Id], references: [id], onDelete: Restrict)
+  team2Player2           Player               @relation("Team2Player2", fields: [team2Player2Id], references: [id], onDelete: Restrict)
+  scoreSubmittedByUser   User?                @relation("ScoreSubmitterAccount", fields: [scoreSubmittedByUserId], references: [id], onDelete: Restrict)
+  scoreSubmittedByPlayer Player?              @relation("ScoreSubmitterPlayer", fields: [scoreSubmittedByPlayerId], references: [id], onDelete: Restrict)
 
   @@index([sessionId, team1ClubId])
   @@index([sessionId, team2ClubId])
@@ -279,29 +341,29 @@ model MatchEloAdjustment {
   id        String   @id @default(cuid())
   matchId   String
   clubId    String   @map("communityId")
-  userId    String
+  playerId  String   @map("userId")
   delta     Int
   beforeElo Int
   afterElo  Int
   createdAt DateTime @default(now())
 
-  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  club  Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match  Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  club   Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Restrict)
 
-  @@unique([matchId, clubId, userId])
-  @@index([clubId, userId])
-  @@index([userId])
+  @@unique([matchId, clubId, playerId])
+  @@index([clubId, playerId])
+  @@index([playerId])
 }
 
 model QueuedMatch {
   id                    String   @id @default(cuid())
   sessionId             String   @unique
-  team1User1Id          String
-  team1User2Id          String
+  team1Player1Id        String   @map("team1User1Id")
+  team1Player2Id        String   @map("team1User2Id")
   team1ClubId           String?
-  team2User1Id          String
-  team2User2Id          String
+  team2Player1Id        String   @map("team2User1Id")
+  team2Player2Id        String   @map("team2User2Id")
   team2ClubId           String?
   targetPool            String? // A, B
   courtGroupType        String? // COMPETITIVE, SOCIAL, CROSSOVER, OPEN_OVERFLOW
@@ -318,7 +380,7 @@ model ClaimRequest {
   id              String    @id @default(cuid())
   clubId          String    @map("communityId")
   requesterUserId String
-  targetUserId    String
+  targetPlayerId  String    @map("targetUserId")
   status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
   note            String?
   reviewedById    String?
@@ -326,14 +388,14 @@ model ClaimRequest {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  club       Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  requester  User  @relation("ClaimRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
-  target     User  @relation("ClaimTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
-  reviewedBy User? @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  club       Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  requester  User   @relation("ClaimRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  target     Player @relation("ClaimTarget", fields: [targetPlayerId], references: [id], onDelete: Restrict)
+  reviewedBy User?  @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([clubId, status])
   @@index([requesterUserId, status])
-  @@index([targetUserId, status])
+  @@index([targetPlayerId, status])
 }
 
 model OfflineIdentity {
@@ -354,17 +416,17 @@ model OfflineIdentityMember {
   id                String   @id @default(cuid())
   offlineIdentityId String
   clubId            String   @map("communityId")
-  userId            String
+  playerId          String   @map("userId")
   addedById         String?
   createdAt         DateTime @default(now())
 
   offlineIdentity OfflineIdentity @relation(fields: [offlineIdentityId], references: [id], onDelete: Cascade)
   club            Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  player          Player          @relation(fields: [playerId], references: [id], onDelete: Restrict)
 
   @@unique([offlineIdentityId, clubId])
-  @@unique([clubId, userId])
-  @@unique([userId])
+  @@unique([clubId, playerId])
+  @@unique([playerId])
   @@index([clubId])
 }
 
@@ -372,9 +434,9 @@ model OfflineIdentityLinkRequest {
   id                String    @id @default(cuid())
   offlineIdentityId String?
   sourceClubId      String    @map("sourceCommunityId")
-  sourceUserId      String
+  sourcePlayerId    String    @map("sourceUserId")
   targetClubId      String    @map("targetCommunityId")
-  targetUserId      String
+  targetPlayerId    String    @map("targetUserId")
   status            String    @default("PENDING") // PENDING, ACCEPTED, or REJECTED
   requestedById     String?
   reviewedById      String?
@@ -385,12 +447,12 @@ model OfflineIdentityLinkRequest {
   offlineIdentity OfflineIdentity? @relation(fields: [offlineIdentityId], references: [id], onDelete: SetNull)
   sourceClub      Club             @relation("OfflineIdentityLinkSourceClub", fields: [sourceClubId], references: [id], onDelete: Cascade)
   targetClub      Club             @relation("OfflineIdentityLinkTargetClub", fields: [targetClubId], references: [id], onDelete: Cascade)
-  sourceUser      User             @relation("OfflineIdentityLinkSourceUser", fields: [sourceUserId], references: [id], onDelete: Cascade)
-  targetUser      User             @relation("OfflineIdentityLinkTargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  sourcePlayer    Player           @relation("OfflineIdentityLinkSourcePlayer", fields: [sourcePlayerId], references: [id], onDelete: Restrict)
+  targetPlayer    Player           @relation("OfflineIdentityLinkTargetPlayer", fields: [targetPlayerId], references: [id], onDelete: Restrict)
   requestedBy     User?            @relation("OfflineIdentityLinkRequester", fields: [requestedById], references: [id], onDelete: SetNull)
   reviewedBy      User?            @relation("OfflineIdentityLinkReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  @@unique([sourceClubId, sourceUserId, targetClubId, targetUserId])
+  @@unique([sourceClubId, sourcePlayerId, targetClubId, targetPlayerId])
   @@index([sourceClubId, status])
   @@index([targetClubId, status])
   @@index([offlineIdentityId])
@@ -456,40 +518,71 @@ model ClubNewsLike {
 }
 
 model ClubNotification {
-  id              String    @id @default(cuid())
-  clubId          String    @map("communityId")
-  sessionId       String
-  recipientUserId String
-  actorUserId     String
-  type            String
-  newsItemId      String
-  newsType        String
-  title           String
-  detail          String
-  value           String
-  readAt          DateTime?
-  createdAt       DateTime  @default(now())
+  id                String    @id @default(cuid())
+  clubId            String    @map("communityId")
+  sessionId         String
+  recipientPlayerId String    @map("recipientUserId")
+  actorUserId       String
+  type              String
+  newsItemId        String
+  newsType          String
+  title             String
+  detail            String
+  value             String
+  readAt            DateTime?
+  createdAt         DateTime  @default(now())
 
-  club      Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  recipient User    @relation("ClubNotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
-  actor     User    @relation("ClubNotificationActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+  club            Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  session         Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  recipientPlayer Player  @relation("ClubNotificationRecipient", fields: [recipientPlayerId], references: [id], onDelete: Restrict)
+  actor           User    @relation("ClubNotificationActor", fields: [actorUserId], references: [id], onDelete: Cascade)
 
-  @@unique([type, newsItemId, actorUserId, recipientUserId])
-  @@index([clubId, recipientUserId, readAt, createdAt])
-  @@index([recipientUserId, createdAt])
+  @@unique([type, newsItemId, actorUserId, recipientPlayerId])
+  @@index([clubId, recipientPlayerId, readAt, createdAt])
+  @@index([recipientPlayerId, createdAt])
 }
 
-model ClubJoinRequest {
-  id String @id @default(cuid())
-  clubId String
-  userId String
-  status String @default("PENDING")
-  createdAt DateTime @default(now())
-  reviewedAt DateTime?
-  reviewedById String?
-  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@unique([clubId, userId])
+model ClubAdmissionRequest {
+  id                   String               @id @default(cuid())
+  clubId               String
+  requesterUserId      String               @map("userId")
+  kind                 String               @default("NEW_PLAYER") // EXISTING_PLAYER, NEW_PLAYER, OWNED_PLAYER
+  status               String               @default("PENDING")
+  requestedPlayerId    String?
+  approvedPlayerId     String?
+  proposedPlayerName   String?
+  proposedGender       String?
+  note                 String?
+  decision             String?
+  revision             Int                  @default(0)
+  legacyClaimRequestId String?              @unique
+  idempotencyKey       String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  reviewedAt           DateTime?
+  reviewedByUserId     String?              @map("reviewedById")
+  club                 Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  requester            User                 @relation("AdmissionRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  requestedPlayer      Player?              @relation("AdmissionRequestedPlayer", fields: [requestedPlayerId], references: [id], onDelete: Restrict)
+  approvedPlayer       Player?              @relation("AdmissionApprovedPlayer", fields: [approvedPlayerId], references: [id], onDelete: Restrict)
+  reviewedBy           User?                @relation("AdmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  events               ClubAdmissionEvent[]
+
+  @@unique([requesterUserId, idempotencyKey])
   @@index([clubId, status])
+  @@map("ClubJoinRequest")
+}
+
+model ClubAdmissionEvent {
+  id                 String               @id @default(cuid())
+  admissionRequestId String
+  actorUserId        String?
+  action             String
+  revision           Int
+  detailsJson        String               @default("{}")
+  createdAt          DateTime             @default(now())
+  admissionRequest   ClubAdmissionRequest @relation(fields: [admissionRequestId], references: [id], onDelete: Restrict)
+  actor              User?                @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([admissionRequestId, revision])
 }

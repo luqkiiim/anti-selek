@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { resolveAvatarUrl } from "@/lib/avatar";
-import { cleanupSupersededAvatar } from "@/lib/avatarStorage";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -37,6 +36,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
     const { name, email, elo, isActive } = body;
+    if (email !== undefined || body.ownerUserId !== undefined) return NextResponse.json({ error: "Manage account credentials and identity claims separately" }, { status: 400 });
 
     if (
       name !== undefined &&
@@ -66,7 +66,7 @@ export async function PATCH(
     }
 
     // Check if user exists
-    const user = await prisma.user.findUnique({
+    const user = await prisma.player.findUnique({
       where: { id },
     });
 
@@ -75,31 +75,31 @@ export async function PATCH(
     }
     if (
       typeof name === "string" &&
-      user.isClaimed &&
+      user.ownerUserId &&
       name.trim() !== user.name
     ) {
       return NextResponse.json(
-        { error: "Claimed members manage their own account name" },
+        { error: "Player owners manage their own player name" },
         { status: 403 }
       );
     }
 
-    const updated = await prisma.user.update({
+    const updated = await prisma.player.update({
       where: { id },
       data: {
         name: name !== undefined ? name.trim() : undefined,
-        email: email !== undefined ? (email ? email.trim() : null) : undefined,
+
         elo: elo !== undefined ? elo : undefined,
         isActive: isActive !== undefined ? isActive : undefined,
       },
       select: {
         id: true,
         name: true,
-        email: true,
+        ownerUserId: true,
         avatarKey: true,
         elo: true,
         isActive: true,
-        isClaimed: true,
+
         createdAt: true,
       },
     });
@@ -107,7 +107,7 @@ export async function PATCH(
     const { avatarKey, ...rest } = updated;
     return NextResponse.json({
       ...rest,
-      avatarUrl: resolveAvatarUrl(avatarKey),
+      avatarUrl: resolveAvatarUrl(avatarKey), email: null, isClaimed: !!updated.ownerUserId,
     });
   } catch (error) {
     logError("Admin update player error details", error);
@@ -139,12 +139,12 @@ export async function DELETE(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     // Don't allow deleting yourself
-    if (id === session.user.id) {
+    if ((await prisma.player.findUnique({ where: { id }, select: { ownerUserId: true } }))?.ownerUserId === session.user.id) {
       return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
     }
 
     // Check if user exists
-    const user = await prisma.user.findUnique({
+    const user = await prisma.player.findUnique({
       where: { id },
       select: {
         id: true,
@@ -157,18 +157,13 @@ export async function DELETE(
       return invalidTargetResponse(request, "api:admin:players:id");
     }
 
-    // Delete the user (cascades will handle SessionPlayer and Match records)
-    await prisma.user.delete({
-      where: { id },
-    });
+    // Archive the durable sporting identity; all historical references remain intact.
+    await prisma.player.update({ where: { id }, data: { isActive: false } });
 
-    await cleanupSupersededAvatar({
-      previousAvatarKey: user.avatarKey,
-      nextAvatarKey: null,
-    });
+
 
     logAuditEvent({
-      action: "admin.user.delete",
+      action: "admin.player.archive",
       actor: {
         email: session.user.email ?? null,
         isGlobalAdmin: !!session.user.isAdmin,
@@ -182,7 +177,7 @@ export async function DELETE(
       target: {
         id: user.id,
         name: user.name,
-        type: "user",
+        type: "player",
       },
     });
 

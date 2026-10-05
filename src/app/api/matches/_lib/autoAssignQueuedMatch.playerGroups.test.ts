@@ -132,10 +132,10 @@ describe("automatic assignment after player-group queue changes", () => {
   it("assigns the queued immutable snapshot and explicit manual source", async () => {
     const queuedMatch = {
       id: "queue-1",
-      team1User1Id: "a1",
-      team1User2Id: "b1",
-      team2User1Id: "a2",
-      team2User2Id: "b2",
+      team1Player1Id: "a1",
+      team1Player2Id: "b1",
+      team2Player1Id: "a2",
+      team2Player2Id: "b2",
       team1ClubId: null,
       team2ClubId: null,
       matchmakingReasonJson: "legacy-reason-present",
@@ -165,10 +165,10 @@ describe("automatic assignment after player-group queue changes", () => {
   it("releases pending players when an invalid manual queue is discarded", async () => {
     const manualQueue = {
       id: "queue-1",
-      team1User1Id: "a1",
-      team1User2Id: "b1",
-      team2User1Id: "a2",
-      team2User2Id: "b2",
+      team1Player1Id: "a1",
+      team1Player2Id: "b1",
+      team2Player1Id: "a2",
+      team2Player2Id: "b2",
       team1ClubId: null,
       team2ClubId: null,
       matchmakingReasonJson: "legacy-reason-present",

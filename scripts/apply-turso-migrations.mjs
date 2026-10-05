@@ -4,6 +4,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@libsql/client";
+import { MANAGED_MARKER, managedMigrationSql } from "./account-player-preservation.mjs";
 
 const MIGRATION_TABLE = "_turso_sql_migrations";
 
@@ -111,19 +112,30 @@ async function main() {
 
     console.log(`Applying Turso migration ${migrationDir}...`);
 
-    await client.executeMultiple(`
+    const ledgerInsert = `INSERT INTO "${MIGRATION_TABLE}" (name, applied_at) VALUES ('${escapeSqlString(migrationDir)}', CURRENT_TIMESTAMP);`;
+    if (migrationSql.includes(MANAGED_MARKER)) {
+      // A rebuilding migration must disable foreign keys before its transaction.
+      // Recording success inside that same transaction keeps data and ledger atomic.
+      try {
+        await client.executeMultiple(managedMigrationSql(migrationSql, ledgerInsert));
+      } catch (error) {
+        await client.executeMultiple("ROLLBACK; PRAGMA foreign_keys=ON;").catch(() => {});
+        throw error;
+      }
+    } else {
+      await client.executeMultiple(`
 BEGIN;
 ${migrationSql}
-INSERT INTO "${MIGRATION_TABLE}" (name, applied_at)
-VALUES ('${escapeSqlString(migrationDir)}', CURRENT_TIMESTAMP);
+${ledgerInsert}
 COMMIT;
 `);
+    }
   }
 
   console.log(`Applied ${pendingDirs.length} Turso migration(s).`);
 }
 
 main().catch((error) => {
-  console.error("Turso migration runner failed:", error);
+  console.error("Turso migration runner failed:", error instanceof Error ? error.message.replace(/(?:libsql|https?):\/\/\S+/g, "[redacted endpoint]") : "unknown error");
   process.exitCode = 1;
 });

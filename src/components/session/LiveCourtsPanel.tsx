@@ -31,6 +31,7 @@ interface LiveCourtsPanelProps {
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;
+  currentAccountId?: string;
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
@@ -249,6 +250,7 @@ export function LiveCourtsPanel({
   queuedMatch,
   poolsEnabled,
   currentUserId,
+  currentAccountId,
   isAdmin,
   isClaimedUser,
   canSubmitScores,
@@ -650,6 +652,7 @@ export function LiveCourtsPanel({
             sessionStatus={sessionStatus}
             court={court}
             poolLabel={getMatchPoolLabel(court.currentMatch)}
+            currentAccountId={currentAccountId}
             currentUserId={currentUserId}
             isAdmin={isAdmin}
             isClaimedUser={isClaimedUser}

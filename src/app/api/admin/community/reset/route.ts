@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     // Use a transaction to reset everything performance-related
     await prisma.$transaction([
       // 1. Reset all players ELO to 1000
-      prisma.user.updateMany({
+      prisma.player.updateMany({
         data: { elo: 1000 }
       }),
       // 2. Delete all matches

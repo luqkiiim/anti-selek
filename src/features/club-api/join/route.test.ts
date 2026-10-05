@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   clubFindMany: vi.fn(),
   clubMemberUpsert: vi.fn(),
+  account: vi.fn(),
+  submit: vi.fn(),
   rateLimit: vi.fn(async () => null),
 }));
 
@@ -18,12 +20,11 @@ vi.mock("@/lib/prisma", () => ({
     club: {
       findMany: mocks.clubFindMany,
     },
-    clubMember: {
-      upsert: mocks.clubMemberUpsert,
-    },
+    user: { findUnique: mocks.account },
   },
 }));
 
+vi.mock("@/lib/clubAdmissions", () => ({ admissionTransaction: async (_db: unknown, callback: (tx: object) => unknown) => callback({}), submitClubAdmission: mocks.submit }));
 vi.mock("@/lib/globalAdmin", () => ({
   isGlobalAdminEmail: vi.fn(() => false),
 }));
@@ -49,6 +50,8 @@ describe("club join API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.rateLimit.mockResolvedValue(null);
+    mocks.account.mockResolvedValue({ id: "viewer-1", name: "Account Name", gender: "MALE", isActive: true });
+    mocks.submit.mockResolvedValue({ id: "request-1", status: "PENDING" });
     mocks.auth.mockResolvedValue({
       user: {
         id: "viewer-1",
@@ -88,6 +91,8 @@ describe("club join API", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(body.status).toBe("PENDING");
+    expect(mocks.clubMemberUpsert).not.toHaveBeenCalled();
     expectClubContractAliases(body);
     expect(body.clubId).toBe("community-1");
     expect(body.communityId).toBe("community-1");

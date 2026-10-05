@@ -1,0 +1,190 @@
+.admission-form,
+.admission-search {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.admission-form input,
+.admission-search input,
+.admission-form textarea,
+.admission-search textarea,
+.sheet-content .field-label textarea {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #e8ddef;
+  border-radius: 12px;
+  background: #fffdfb;
+  padding: 12px;
+  color: #291440;
+  font: inherit;
+  font-size: 16px;
+}
+.admission-form textarea,
+.admission-search textarea,
+.sheet-content .field-label textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+.admission-club-heading {
+  padding: 2px 0 4px;
+}
+.admission-club-heading h3 {
+  margin-top: 4px;
+  font-size: 23px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+.admission-question {
+  margin-top: 2px;
+}
+.admission-choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.admission-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 104px;
+  padding: 15px 13px;
+  border: 1px solid #e8ddef;
+  border-radius: 15px;
+  background: #fffdfb;
+  color: #291440;
+  text-align: left;
+}
+.admission-choice strong {
+  font-size: 14px;
+  line-height: 1.25;
+}
+.admission-choice span,
+.admission-empty {
+  color: #80718b;
+  font-size: 12px;
+}
+.admission-back {
+  align-self: flex-start;
+  padding-left: 0;
+  margin-top: -7px;
+}
+.admission-search {
+  flex-direction: row;
+  align-items: flex-end;
+  margin: 8px 0;
+}
+.admission-search .field-label {
+  flex: 1;
+  min-width: 0;
+}
+.admission-search .secondary {
+  flex-shrink: 0;
+}
+.admission-player-list,
+.admission-owned {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.admission-player-choice,
+.admission-owned-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 1px solid #e9e1e9;
+  border-radius: 13px;
+  background: #fffdfb;
+  color: #291440;
+  text-align: left;
+}
+.admission-player-choice[aria-pressed="true"],
+.admission-owned-choice.selected {
+  border-color: #a989d0;
+  background: #f6f0fc;
+}
+.admission-player-choice > span:not(.avatar) {
+  flex: 1;
+  min-width: 0;
+}
+.admission-player-choice strong,
+.admission-player-choice small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.admission-player-choice strong,
+.admission-owned-choice strong {
+  font-size: 13px;
+}
+.admission-player-choice small {
+  margin-top: 2px;
+  color: #80718b;
+  font-size: 11px;
+}
+.admission-player-choice > b,
+.admission-owned-choice > span:last-child {
+  color: #7040cf;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.admission-owned {
+  padding-top: 10px;
+  border-top: 1px solid #eee5ef;
+}
+.admission-owned h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.admission-owned > p {
+  margin: 0 0 5px;
+}
+.admission-owned-choice > strong {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.admission-status {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 15px;
+  border: 1px solid #e9e1e9;
+  border-radius: 15px;
+  background: #f8f4fb;
+}
+.admission-status strong {
+  font-size: 15px;
+}
+.admission-status span,
+.admission-status small {
+  color: #6e5d76;
+  font-size: 13px;
+}
+.admission-status small {
+  font-size: 11px;
+}
+.admission-status.is-approved {
+  border-color: #cfe5d3;
+  background: #f2faf3;
+}
+.admission-status.is-rejected {
+  border-color: #efd5d8;
+  background: #fff6f6;
+}
+.admission-status .text-button {
+  align-self: flex-start;
+  padding-left: 0;
+}
+.admission-change-club {
+  display: block;
+  margin: 4px auto 0;
+}
+@media (max-width: 360px) {
+  .admission-choice-grid {
+    grid-template-columns: 1fr;
+  }
+  .admission-choice {
+    min-height: 78px;
+  }
+}

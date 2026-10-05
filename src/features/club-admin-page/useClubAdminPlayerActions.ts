@@ -30,7 +30,7 @@ interface ClubAdminRouter {
 
 export function useClubAdminPlayerActions({
   clubId,
-  currentUserId,
+  currentPlayerId,
   players,
   setPlayers,
   refreshClubData,
@@ -39,7 +39,7 @@ export function useClubAdminPlayerActions({
   setSuccess,
 }: {
   clubId: string;
-  currentUserId?: string | null;
+  currentPlayerId?: string | null;
   players: ClubAdminPlayer[];
   setPlayers: Dispatch<SetStateAction<ClubAdminPlayer[]>>;
   refreshClubData: () => Promise<void>;
@@ -336,7 +336,7 @@ export function useClubAdminPlayerActions({
           throw new Error(data.error || "Failed to remove player");
         }
 
-        const isSelfRemoval = player.id === currentUserId;
+        const isSelfRemoval = player.id === currentPlayerId;
         setSuccess(
           isSelfRemoval
             ? "You left the club."

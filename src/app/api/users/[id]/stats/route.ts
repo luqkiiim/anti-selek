@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { clubGuestWhere } from "@/lib/clubGuest";
 import { guestRatingFromMatches } from "@/lib/guestRating";
@@ -5,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { getClubStatUserResolver } from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { buildProfileClubRankWindow } from "@/lib/profileClubRank";
 import { buildMemberProfileData } from "@/lib/memberProfile";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
@@ -43,13 +45,13 @@ async function getUserStatsRoute(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return sportingJson({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { id } = await params;
 
   if (typeof id !== "string" || id.length === 0) {
-    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
   }
 
   const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:users:id:stats");
@@ -68,7 +70,7 @@ async function getUserStatsRoute(
     }
   );
 
-  const user = await prisma.user.findUnique({
+  const user = await prisma.player.findUnique({
     where: { id },
     select: {
       id: true,
@@ -103,14 +105,14 @@ async function getUserStatsRoute(
   let viewerCanManageClub = false;
   let canAddGuestToClub = false;
   let leaderboardMembers: Array<{
-    userId: string;
+    playerId: string;
     elo: number;
-    user: {
+    player: {
       name: string;
     };
   }> = [];
   let leaderboardMatchCountByUserId = new Map<string, number>();
-  let resolveClubStatUserId = (userId: string) => userId;
+  let resolveClubStatUserId = (playerId: string) => playerId;
 
   if (clubId) {
     if (!canQuickAccessClub(session, clubId)) {
@@ -118,27 +120,27 @@ async function getUserStatsRoute(
     }
 
     const [requesterMembership, targetMembership] = await Promise.all([
-      prisma.clubMember.findUnique({
+      prisma.clubAccess.findUnique({
         where: {
           clubId_userId: {
             clubId,
             userId: session.user.id,
           },
         },
-        select: { role: true },
+        select: { role: true, status: true },
       }),
       prisma.clubMember.findUnique({
         where: {
-          clubId_userId: {
+          clubId_playerId: {
             clubId,
-            userId: id,
+            playerId: id,
           },
         },
         select: {
           id: true,
           elo: true,
           status: true,
-          user: {
+          player: {
             select: {
               id: true,
               name: true,
@@ -148,7 +150,10 @@ async function getUserStatsRoute(
       }),
     ]);
 
-    if (!requesterMembership) {
+    const quickAccessMembership = isQuickAccessSession(session) && session.user.guestPlayerId
+      ? await prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId: session.user.guestPlayerId } }, select: { id: true } })
+      : null;
+    if (requesterMembership?.status !== "ACTIVE" && !quickAccessMembership && !session.user.isAdmin) {
       return invalidTargetResponse(request, "api:users:id:stats");
     }
 
@@ -159,7 +164,7 @@ async function getUserStatsRoute(
 
     viewerCanManageClub =
       !isQuickAccessSession(session) &&
-      (requesterMembership.role === "ADMIN" || !!session.user.isAdmin);
+      ((requesterMembership?.status === "ACTIVE" && (requesterMembership.role === "ADMIN" || requesterMembership.role === "OWNER")) || !!session.user.isAdmin);
     canAddGuestToClub = !targetMembership && viewerCanManageClub;
     targetMemberStatus = targetMembership?.status ?? null;
     targetMemberId = targetMembership?.id ?? null;
@@ -174,9 +179,9 @@ async function getUserStatsRoute(
         },
       },
       select: {
-        userId: true,
+        playerId: true,
         elo: true,
-        user: {
+        player: {
           select: {
             name: true,
           },
@@ -185,7 +190,7 @@ async function getUserStatsRoute(
     });
     resolveClubStatUserId = await getClubStatUserResolver(prisma, {
       clubId,
-      memberUserIds: leaderboardMembers.map((member) => member.userId),
+      memberUserIds: leaderboardMembers.map((member) => member.playerId),
     });
 
     const leaderboardMatches = await prisma.match.findMany({
@@ -194,23 +199,23 @@ async function getUserStatsRoute(
         session: getClubScopedSessionWhere(clubId),
       },
       select: {
-        team1User1Id: true,
-        team1User2Id: true,
-        team2User1Id: true,
-        team2User2Id: true,
+        team1Player1Id: true,
+        team1Player2Id: true,
+        team2Player1Id: true,
+        team2Player2Id: true,
       },
     });
     leaderboardMatchCountByUserId = new Map(
-      leaderboardMembers.map((member) => [member.userId, 0])
+      leaderboardMembers.map((member) => [member.playerId, 0])
     );
 
     for (const match of leaderboardMatches) {
       const participantIds = new Set(
         [
-          match.team1User1Id,
-          match.team1User2Id,
-          match.team2User1Id,
-          match.team2User2Id,
+          match.team1Player1Id,
+          match.team1Player2Id,
+          match.team2Player1Id,
+          match.team2Player2Id,
         ].map(resolveClubStatUserId)
       );
 
@@ -232,18 +237,18 @@ async function getUserStatsRoute(
         ? getClubScopedSessionWhere(clubId)
         : { isTest: false },
       OR: [
-        { team1User1Id: id },
-        { team1User2Id: id },
-        { team2User1Id: id },
-        { team2User2Id: id },
+        { team1Player1Id: id },
+        { team1Player2Id: id },
+        { team2Player1Id: id },
+        { team2Player2Id: id },
       ],
     },
     orderBy: { completedAt: "desc" },
     include: {
-      team1User1: { select: { id: true, name: true, avatarKey: true } },
-      team1User2: { select: { id: true, name: true, avatarKey: true } },
-      team2User1: { select: { id: true, name: true, avatarKey: true } },
-      team2User2: { select: { id: true, name: true, avatarKey: true } },
+      team1Player1: { select: { id: true, name: true, avatarKey: true } },
+      team1Player2: { select: { id: true, name: true, avatarKey: true } },
+      team2Player1: { select: { id: true, name: true, avatarKey: true } },
+      team2Player2: { select: { id: true, name: true, avatarKey: true } },
       session: {
         select: {
           id: true,
@@ -257,20 +262,20 @@ async function getUserStatsRoute(
           endedAt: true,
           players: {
             select: {
-              userId: true,
+              playerId: true,
               isGuest: true,
               sessionPoints: true,
-              user: { select: { id: true, name: true, avatarKey: true } },
+              player: { select: { id: true, name: true, avatarKey: true } },
             },
           },
           matches: {
             where: { status: MatchStatus.COMPLETED },
             select: {
               id: true,
-              team1User1Id: true,
-              team1User2Id: true,
-              team2User1Id: true,
-              team2User2Id: true,
+              team1Player1Id: true,
+              team1Player2Id: true,
+              team2Player1Id: true,
+              team2Player2Id: true,
               team1Score: true,
               team2Score: true,
               winnerTeam: true,
@@ -281,26 +286,26 @@ async function getUserStatsRoute(
     },
   });
   if (!usesClubRating) {
-    effectiveElo = guestRatingFromMatches(id, effectiveElo, matches.filter((match) =>
-      match.session.players.some((player) => player.userId === id && player.isGuest)
+    effectiveElo = guestRatingFromMatches(id, effectiveElo, withLegacySportingAliases(matches.filter((match) =>
+      match.session.players.some((player) => player.playerId === id && player.isGuest))
     ));
   }
   const profileData = buildPlayerProfileDerivedData(
     id,
-    matches.map((match) => ({
+    withLegacySportingAliases(matches.map((match) => ({
       ...match,
-      team1User1: serializeAvatarEntity(match.team1User1),
-      team1User2: serializeAvatarEntity(match.team1User2),
-      team2User1: serializeAvatarEntity(match.team2User1),
-      team2User2: serializeAvatarEntity(match.team2User2),
+      team1Player1: serializeAvatarEntity(match.team1Player1),
+      team1Player2: serializeAvatarEntity(match.team1Player2),
+      team2Player1: serializeAvatarEntity(match.team2Player1),
+      team2Player2: serializeAvatarEntity(match.team2Player2),
       session: {
         ...match.session,
         players: match.session.players.map((player) => ({
           ...player,
-          user: serializeAvatarEntity(player.user),
+          player: serializeAvatarEntity(player.player),
         })),
       },
-    }))
+    })))
   );
 
   if (clubId) {
@@ -318,10 +323,10 @@ async function getUserStatsRoute(
               },
             },
             select: {
-              team1User1Id: true,
-              team1User2Id: true,
-              team2User1Id: true,
-              team2User2Id: true,
+              team1Player1Id: true,
+              team1Player2Id: true,
+              team2Player1Id: true,
+              team2Player2Id: true,
               team1EloChange: true,
               team2EloChange: true,
             },
@@ -335,13 +340,13 @@ async function getUserStatsRoute(
       rankContext: buildProfileClubRankWindow(
         id,
         leaderboardMembers.map((member) => ({
-          userId: member.userId,
-          name: member.user.name,
+          userId: member.playerId,
+          name: member.player.name,
           elo: member.elo,
           isLeaderboardEligible:
-            (leaderboardMatchCountByUserId.get(member.userId) ?? 0) > 0,
+            (leaderboardMatchCountByUserId.get(member.playerId) ?? 0) > 0,
         })),
-        rankWindowMatches
+        withLegacySportingAliases(rankWindowMatches)
       ),
     });
   }
@@ -350,21 +355,21 @@ async function getUserStatsRoute(
     clubId,
     userId: id,
     memberStatus: targetMemberStatus,
-    currentCoreMemberIds: leaderboardMembers.map(member => member.userId),
-    matches: matches.map(match => ({ ...match,
-      team1User1: serializeAvatarEntity(match.team1User1),
-      team1User2: serializeAvatarEntity(match.team1User2),
-      team2User1: serializeAvatarEntity(match.team2User1),
-      team2User2: serializeAvatarEntity(match.team2User2),
-    })),
-    matchEloAdjustments: await prisma.matchEloAdjustment.findMany({ where: { clubId, userId: id } }),
+    currentCoreMemberIds: leaderboardMembers.map(member => member.playerId),
+    matches: withLegacySportingAliases(matches.map(match => ({ ...match,
+      team1Player1: serializeAvatarEntity(match.team1Player1),
+      team1Player2: serializeAvatarEntity(match.team1Player2),
+      team2Player1: serializeAvatarEntity(match.team2Player1),
+      team2Player2: serializeAvatarEntity(match.team2Player2),
+    }))),
+    matchEloAdjustments: withLegacySportingAliases(await prisma.matchEloAdjustment.findMany({ where: { clubId, playerId: id } })),
     manualRatingAdjustments: await prisma.clubRatingAdjustment.findMany({ where: { memberId: targetMemberId } }),
     historyOffset: Number(url.searchParams.get("historyOffset") ?? 0),
     historyLimit: Number(url.searchParams.get("historyLimit") ?? 3),
   }) : undefined;
 
-  return NextResponse.json({
-    user: {
+  return sportingJson({
+    player: {
       ...serializeAvatarEntity(user),
       elo: effectiveElo,
     },
@@ -382,7 +387,7 @@ export async function GET(...args: Parameters<typeof getUserStatsRoute>) {
     return await getUserStatsRoute(...args);
   } catch (error) {
     if (error instanceof ClubContractAliasConflictError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return sportingJson({ error: error.message }, { status: 400 });
     }
     logError("Load user stats error", error);
     return safeErrorResponse();

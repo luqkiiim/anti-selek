@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import { FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
-import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
+import { deleteAccountAvatar, uploadAccountAvatar } from "@/lib/avatarClient";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { normalizeNameLookupKey } from "@/lib/quickAccess";
 import { PlayerGender } from "@/types/enums";
@@ -148,17 +148,17 @@ export default function SettingsPage() {
     setNameError("");
 
     if (!isFullAccount) {
-      setNameError("Only full accounts can change player names.");
+      setNameError("Only full accounts can change account names.");
       return;
     }
 
     if (!normalizeNameLookupKey(trimmedDraftName)) {
-      setNameError("Player name must include letters or numbers.");
+      setNameError("Account name must include letters or numbers.");
       return;
     }
 
     if (!hasNameChange) {
-      setSuccessMessage("Your player name is already up to date.");
+      setSuccessMessage("Your account name is already up to date.");
       return;
     }
 
@@ -177,12 +177,12 @@ export default function SettingsPage() {
       const payload = (await safeJson(response)) as Partial<CurrentUserSettingsPayload>;
 
       if (!response.ok || !payload.user) {
-        throw new Error(getResponseError(payload, "Failed to update player name"));
+        throw new Error(getResponseError(payload, "Failed to update account name"));
       }
 
       setUser(payload.user);
       setDraftName(payload.user.name);
-      setSuccessMessage("Player name updated.");
+      setSuccessMessage("Account name updated.");
 
       try {
         await update({ name: payload.user.name });
@@ -194,7 +194,7 @@ export default function SettingsPage() {
       router.refresh();
     } catch (error) {
       setNameError(
-        error instanceof Error ? error.message : "Failed to update player name"
+        error instanceof Error ? error.message : "Failed to update account name"
       );
     } finally {
       setSavingName(false);
@@ -206,7 +206,7 @@ export default function SettingsPage() {
       throw new Error("Settings are still loading.");
     }
 
-    const response = await uploadUserAvatar(user.id, file);
+    const response = await uploadAccountAvatar(file);
     setUser((current) =>
       current
         ? {
@@ -239,7 +239,7 @@ export default function SettingsPage() {
       }
 
       setUser(payload.user);
-      setSuccessMessage("Gender for Mixed pairing updated.");
+      setSuccessMessage("Account gender updated.");
       router.refresh();
     } catch (error) {
       setGenderError(
@@ -255,7 +255,7 @@ export default function SettingsPage() {
       throw new Error("Settings are still loading.");
     }
 
-    await deleteUserAvatar(user.id);
+    await deleteAccountAvatar();
     setUser((current) =>
       current
         ? {
@@ -284,9 +284,9 @@ export default function SettingsPage() {
       <main className="app-page">
         <div className="app-shell-narrow space-y-6">
           <HeroCard
-            eyebrow="Player settings"
+            eyebrow="Account settings"
             title="Account settings"
-            description="Manage the name and avatar tied to your full player account."
+            description="Manage the name, gender, and photo on your account."
             backHref="/"
           />
           <FlashMessage tone="error">{pageError}</FlashMessage>
@@ -303,9 +303,9 @@ export default function SettingsPage() {
     <main className="app-page">
       <div className="app-shell-narrow space-y-6">
         <HeroCard
-          eyebrow="Player settings"
+          eyebrow="Account settings"
           title="Account settings"
-          description="Manage the global player identity tied to your full account."
+          description="Manage account details. These settings do not change your sporting profiles."
           backHref="/"
         />
 
@@ -318,7 +318,7 @@ export default function SettingsPage() {
           <SectionCard
             eyebrow="Unavailable"
             title="Settings require a full account"
-            description="Quick-access profiles and placeholder accounts cannot manage global player settings."
+            description="Quick-access profiles and placeholder accounts cannot manage account settings."
           >
             <Link href="/" className="app-button-secondary px-4 py-2">
               Return home
@@ -327,9 +327,9 @@ export default function SettingsPage() {
         ) : (
           <>
             <SectionCard
-              eyebrow="Mixed pairing"
-              title="Gender"
-              description="This is your profile value and takes priority over any placeholder a club host created for you."
+              eyebrow="Account detail"
+              title="Account gender"
+              description="This is account metadata. Sporting profiles keep their own gender and mixed-pairing preferences."
               action={
                 <span
                   className={`app-chip ${
@@ -367,8 +367,8 @@ export default function SettingsPage() {
                   })}
                 </div>
                 <p className="text-sm text-gray-600">
-                  Used for Mixed team rules. Changing it affects future
-                  tournaments, not completed match history.
+                  This value does not update a Player profile or affect
+                  tournament pairing.
                 </p>
                 {genderError ? (
                   <p className="text-sm font-semibold text-rose-600">
@@ -379,9 +379,9 @@ export default function SettingsPage() {
             </SectionCard>
 
             <SectionCard
-              eyebrow="Display name"
-              title="One-time player rename"
-              description="This updates the name shown across your profile, clubs, and tournaments."
+              eyebrow="Account detail"
+              title="One-time account name change"
+              description="This changes your account display name. Sporting profile names are managed separately."
               action={
                 <span
                   className={`app-chip ${
@@ -397,13 +397,13 @@ export default function SettingsPage() {
               <form onSubmit={handleSaveName} className="space-y-4">
                 <div className="space-y-2">
                   <label
-                    htmlFor="player-name"
+                    htmlFor="account-name"
                     className="text-sm font-semibold text-gray-900"
                   >
-                    Player name
+                    Account name
                   </label>
                   <input
-                    id="player-name"
+                    id="account-name"
                     type="text"
                     value={draftName}
                     onChange={(event) => {
@@ -419,7 +419,7 @@ export default function SettingsPage() {
 
                 <div className="space-y-2 text-sm text-gray-600">
                   <p>
-                    Choose carefully. You can only change your player name once
+                    Choose carefully. You can only change your account name once
                     from this page.
                   </p>
                   {user.canRenameName ? (
@@ -447,20 +447,20 @@ export default function SettingsPage() {
                   }
                   className="app-button-primary px-4 py-2"
                 >
-                  {savingName ? "Saving..." : "Save player name"}
+                  {savingName ? "Saving..." : "Save account name"}
                 </button>
               </form>
             </SectionCard>
 
             <SectionCard
               eyebrow="Avatar"
-              title="Profile photo"
-              description="Upload, crop, replace, or remove the avatar tied to your player account."
+              title="Account photo"
+              description="Upload, crop, replace, or remove your account photo. Sporting profile photos are managed on each Player profile."
             >
               <AvatarUploader
                 name={user.name}
                 avatarUrl={user.avatarUrl}
-                helperText="Use a clear photo so other players can recognize you across clubs and tournaments. We compress the final cropped avatar before saving."
+                helperText="This photo represents your account. Player profiles have separate photos. We compress the final crop before saving."
                 onUpload={handleUploadAvatar}
                 onRemove={handleRemoveAvatar}
               />

@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
@@ -32,26 +33,26 @@ export async function PATCH(
   { params }: { params: Promise<{ code: string; userId: string }> }
 ) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:sessions:code:players:userId:preferences:patch", { limit: 15, windowMs: 60_000 });
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:players:playerId:preferences:patch", { limit: 15, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { code, userId } = await params;
+    const { code, userId: playerId } = await params;
 
-    if (typeof code !== "string" || code.length === 0 || typeof userId !== "string" || userId.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    if (typeof code !== "string" || code.length === 0 || typeof playerId !== "string" || playerId.length === 0) {
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
-    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:players:userId:preferences");
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:players:playerId:preferences");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return sportingJson({ error: "Invalid request body" }, { status: 400 });
     }
 
     const {
@@ -73,30 +74,30 @@ export async function PATCH(
     );
 
     if (gender !== undefined && !isValidPlayerGender(gender)) {
-      return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
+      return sportingJson({ error: "Invalid gender" }, { status: 400 });
     }
     if (
       partnerPreference !== undefined &&
       !isValidPartnerPreference(partnerPreference)
     ) {
-      return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
+      return sportingJson({ error: "Invalid partner preference" }, { status: 400 });
     }
     if (
       mixedSideOverride !== undefined &&
       mixedSideOverride !== null &&
       !isValidMixedSide(mixedSideOverride)
     ) {
-      return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
+      return sportingJson({ error: "Invalid mixed side override" }, { status: 400 });
     }
     if (pool !== undefined && !isValidSessionPool(pool)) {
-      return NextResponse.json({ error: "Invalid pool" }, { status: 400 });
+      return sportingJson({ error: "Invalid pool" }, { status: 400 });
     }
     if (
       hasRepresentingClubInput &&
       representingClubId !== null &&
       typeof representingClubId !== "string"
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid representing club" },
         { status: 400 }
       );
@@ -117,20 +118,20 @@ export async function PATCH(
             id: true,
             createdAt: true,
             isAutomatic: true,
-            team1User1Id: true,
-            team1User2Id: true,
-            team2User1Id: true,
-            team2User2Id: true,
+            team1Player1Id: true,
+            team1Player2Id: true,
+            team2Player1Id: true,
+            team2Player2Id: true,
           },
         },
         courts: {
           select: {
             currentMatch: {
               select: {
-                team1User1Id: true,
-                team1User2Id: true,
-                team2User1Id: true,
-                team2User2Id: true,
+                team1Player1Id: true,
+                team1Player2Id: true,
+                team2Player1Id: true,
+                team2Player2Id: true,
               },
             },
           },
@@ -139,10 +140,10 @@ export async function PATCH(
       },
     });
     if (!sessionData) {
-      return invalidTargetResponse(request, "api:sessions:code:players:userId:preferences");
+      return invalidTargetResponse(request, "api:sessions:code:players:playerId:preferences");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Tournament already completed" },
         { status: 400 }
       );
@@ -155,14 +156,14 @@ export async function PATCH(
     });
 
     if (!session.user.isAdmin && !operatorMembership) {
-      return NextResponse.json({ error: "Only admins or staff can update preferences" }, { status: 403 });
+      return sportingJson({ error: "Only admins or staff can update preferences" }, { status: 403 });
     }
 
     const existing = await prisma.sessionPlayer.findUnique({
       where: {
-        sessionId_userId: {
+        sessionId_playerId: {
           sessionId: sessionData.id,
-          userId,
+          playerId,
         },
       },
       select: {
@@ -176,7 +177,7 @@ export async function PATCH(
       },
     });
     if (!existing) {
-      return invalidTargetResponse(request, "api:sessions:code:players:userId:preferences");
+      return invalidTargetResponse(request, "api:sessions:code:players:playerId:preferences");
     }
 
     const hasPoolInput = isValidSessionPool(pool);
@@ -190,7 +191,7 @@ export async function PATCH(
       sessionData.mode === SessionMode.MIXICANO &&
       ![PlayerGender.MALE, PlayerGender.FEMALE].includes(nextGender)
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: `${mixedModeLabel} requires MALE/FEMALE gender for all players` },
         { status: 400 }
       );
@@ -200,7 +201,7 @@ export async function PATCH(
     if (hasRepresentingClubInput) {
       if (!isInterclubSession(sessionData)) {
         if (representingClubId !== null && representingClubId !== "") {
-          return NextResponse.json(
+          return sportingJson(
             {
               error:
                 "Representing club only applies to club vs club tournaments",
@@ -222,7 +223,7 @@ export async function PATCH(
           locked &&
           requestedRepresentingClubId !== existing.representingClubId
         ) {
-          return NextResponse.json(
+          return sportingJson(
             {
               error:
                 "Club side assignments are locked after the first club vs club match is created.",
@@ -238,7 +239,7 @@ export async function PATCH(
           const validClubIds = new Set(acceptedClubIds);
 
           if (!validClubIds.has(requestedRepresentingClubId)) {
-            return NextResponse.json(
+            return sportingJson(
               { error: "Player must represent one of the two clubs" },
               { status: 400 }
             );
@@ -248,14 +249,14 @@ export async function PATCH(
             const clubBadges = await getPlayerClubBadges(
               prisma,
               acceptedClubIds,
-              [userId]
+              [playerId]
             );
             const eligibleClubIds = new Set(
-              (clubBadges.get(userId) ?? []).map((badge) => badge.id)
+              (clubBadges.get(playerId) ?? []).map((badge) => badge.id)
             );
 
             if (!eligibleClubIds.has(requestedRepresentingClubId)) {
-              return NextResponse.json(
+              return sportingJson(
                 { error: "Player can only represent a club they belong to" },
                 { status: 400 }
               );
@@ -298,20 +299,20 @@ export async function PATCH(
                 id: true,
                 createdAt: true,
                 isAutomatic: true,
-                team1User1Id: true,
-                team1User2Id: true,
-                team2User1Id: true,
-                team2User2Id: true,
+                team1Player1Id: true,
+                team1Player2Id: true,
+                team2Player1Id: true,
+                team2Player2Id: true,
               },
             },
             courts: {
               select: {
                 currentMatch: {
                   select: {
-                    team1User1Id: true,
-                    team1User2Id: true,
-                    team2User1Id: true,
-                    team2User2Id: true,
+                    team1Player1Id: true,
+                    team1Player2Id: true,
+                    team2Player1Id: true,
+                    team2Player2Id: true,
                   },
                 },
               },
@@ -320,9 +321,9 @@ export async function PATCH(
         }),
         tx.sessionPlayer.findUnique({
           where: {
-            sessionId_userId: {
+            sessionId_playerId: {
               sessionId: sessionData.id,
-              userId,
+              playerId,
             },
           },
           select: { pool: true, pendingPool: true },
@@ -351,11 +352,11 @@ export async function PATCH(
           return (
             !!match &&
             [
-              match.team1User1Id,
-              match.team1User2Id,
-              match.team2User1Id,
-              match.team2User2Id,
-            ].includes(userId)
+              match.team1Player1Id,
+              match.team1Player2Id,
+              match.team2Player1Id,
+              match.team2Player2Id,
+            ].includes(playerId)
           );
         });
         if (isPlaying) {
@@ -364,7 +365,7 @@ export async function PATCH(
         if (
           freshSession.queuedMatch &&
           !freshSession.queuedMatch.isAutomatic &&
-          hasQueuedMatchUser(freshSession.queuedMatch, userId)
+          hasQueuedMatchUser(freshSession.queuedMatch, playerId)
         ) {
           return { kind: "manual-queue-conflict" } as const;
         }
@@ -372,9 +373,9 @@ export async function PATCH(
 
       const updated = await tx.sessionPlayer.update({
         where: {
-          sessionId_userId: {
+          sessionId_playerId: {
             sessionId: sessionData.id,
-            userId,
+            playerId,
           },
         },
         data: {
@@ -393,7 +394,7 @@ export async function PATCH(
             : undefined,
         },
         include: {
-          user: { select: { id: true, name: true } },
+          player: { select: { id: true, name: true } },
         },
       });
 
@@ -419,23 +420,23 @@ export async function PATCH(
     if (mutation.kind === "missing") {
       return invalidTargetResponse(
         request,
-        "api:sessions:code:players:userId:preferences"
+        "api:sessions:code:players:playerId:preferences"
       );
     }
     if (mutation.kind === "completed") {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Tournament already completed" },
         { status: 400 }
       );
     }
     if (mutation.kind === "live-match-conflict") {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Player group cannot be changed during a live match" },
         { status: 409 }
       );
     }
     if (mutation.kind === "manual-queue-conflict") {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Player group cannot be changed while manually queued" },
         { status: 409 }
       );
@@ -453,7 +454,7 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({
+    return sportingJson({
       ...updated,
       ...(queuedMatch !== undefined ? { queuedMatch } : {}),
     });

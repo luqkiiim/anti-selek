@@ -58,21 +58,21 @@ export async function GET(
       }),
       isGlobalAdmin
         ? Promise.resolve(null)
-        : prisma.clubMember.findUnique({
+        : prisma.clubAccess.findUnique({
             where: {
               clubId_userId: {
                 clubId: hostClubId,
                 userId: session.user.id,
               },
             },
-            select: { role: true },
+            select: { role: true, status: true },
           }),
     ]);
 
     if (
       !hostClub ||
       hostClub.isTutorial ||
-      (!isGlobalAdmin && !isClubOperatorRole(hostMembership?.role))
+      (!isGlobalAdmin && !(hostMembership?.status === "ACTIVE" && isClubOperatorRole(hostMembership.role)))
     ) {
       return invalidTargetResponse(
         request,

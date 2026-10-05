@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
@@ -27,13 +28,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
 
     if (typeof id !== "string" || id.length === 0) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid request parameters" },
         { status: 400 }
       );
@@ -62,14 +63,14 @@ export async function POST(
     }
 
     if (match.status !== MatchStatus.COMPLETED) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only completed matches can be undone." },
         { status: 400 }
       );
     }
 
     if (match.session.status !== SessionStatus.ACTIVE) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only active tournaments can undo completed matches." },
         { status: 400 }
       );
@@ -90,7 +91,7 @@ export async function POST(
     }
 
     const result = await undoCompletedMatchResult({ matchId: match.id });
-    return NextResponse.json(result);
+    return sportingJson(result);
   } catch (error: unknown) {
     if (error instanceof UndoCompletedMatchError) {
       if (error.code === "MATCH_NOT_FOUND") {
@@ -98,10 +99,10 @@ export async function POST(
       }
 
       if (error.code === "NOT_LATEST_COMPLETED_MATCH") {
-        return NextResponse.json({ error: error.message }, { status: 409 });
+        return sportingJson({ error: error.message }, { status: 409 });
       }
 
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return sportingJson({ error: error.message }, { status: 400 });
     }
 
     logError("Undo completed match error", error);

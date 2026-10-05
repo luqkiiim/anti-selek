@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { buildClubPulse } from "@/lib/clubPulse";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { prisma } from "@/lib/prisma";
 import { listSessionsForClub } from "@/app/api/sessions/listSessionsService";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -30,9 +31,9 @@ async function buildCurrentClubPulse({
 }) {
   const [members, completedMatches, sessions] = await Promise.all([
     prisma.clubMember.findMany({
-      where: { clubId },
+      where: { clubId, archivedAt: null },
       include: {
-        user: {
+        player: {
           select: {
             id: true,
             name: true,
@@ -63,22 +64,22 @@ async function buildCurrentClubPulse({
         id: true,
         completedAt: true,
         winnerTeam: true,
-        team1User1Id: true,
-        team1User2Id: true,
-        team2User1Id: true,
-        team2User2Id: true,
+        team1Player1Id: true,
+        team1Player2Id: true,
+        team2Player1Id: true,
+        team2Player2Id: true,
         team1Score: true,
         team2Score: true,
         team1EloChange: true,
         team2EloChange: true,
-        team1User1: { select: { id: true, name: true, avatarKey: true } },
-        team1User2: { select: { id: true, name: true, avatarKey: true } },
-        team2User1: { select: { id: true, name: true, avatarKey: true } },
-        team2User2: { select: { id: true, name: true, avatarKey: true } },
+        team1Player1: { select: { id: true, name: true, avatarKey: true } },
+        team1Player2: { select: { id: true, name: true, avatarKey: true } },
+        team2Player1: { select: { id: true, name: true, avatarKey: true } },
+        team2Player2: { select: { id: true, name: true, avatarKey: true } },
         eloAdjustments: {
           where: { clubId },
           select: {
-            userId: true,
+            playerId: true,
             delta: true,
             beforeElo: true,
             afterElo: true,
@@ -105,19 +106,19 @@ async function buildCurrentClubPulse({
 
   return buildClubPulse({
     members: members.map((member) => ({
-      id: member.user.id,
-      name: member.user.name,
-      avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
+      id: member.player.id,
+      name: member.player.name,
+      avatarUrl: serializeAvatarEntity(member.player).avatarUrl,
       elo: member.elo,
       status: member.status,
     })),
-    sessions,
-    completedMatches: completedMatches.map((match) => ({
+    sessions: withLegacySportingAliases(sessions),
+    completedMatches: withLegacySportingAliases(completedMatches).map((match) => ({
       ...match,
-      team1User1: serializeAvatarEntity(match.team1User1),
-      team1User2: serializeAvatarEntity(match.team1User2),
-      team2User1: serializeAvatarEntity(match.team2User1),
-      team2User2: serializeAvatarEntity(match.team2User2),
+      team1User1: serializeAvatarEntity(match.team1Player1),
+      team1User2: serializeAvatarEntity(match.team1Player2),
+      team2User1: serializeAvatarEntity(match.team2Player1),
+      team2User2: serializeAvatarEntity(match.team2Player2),
     })),
   });
 }
@@ -184,14 +185,14 @@ export async function POST(
 
     const viewerId = session.user.id;
     const [membership, club] = await Promise.all([
-      prisma.clubMember.findUnique({
+      prisma.clubAccess.findUnique({
         where: {
           clubId_userId: {
             clubId: id,
             userId: viewerId,
           },
         },
-        select: { role: true },
+        select: { role: true, status: true },
       }),
       prisma.club.findUnique({
         where: { id },
@@ -208,17 +209,17 @@ export async function POST(
       return invalidTargetResponse(request, "api:clubs:id:news-likes");
     }
 
-    const viewerIsOwner = club.createdById === viewerId;
+    const viewerIsOwner = club.createdById === viewerId && membership?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(membership.role);
     const viewerCanAdminClub =
       !!session.user.isAdmin ||
       viewerIsOwner ||
-      membership?.role === ClubRole.ADMIN;
+      (membership?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(membership.role));
 
     if (club.isTutorial && club.tutorialOwnerId !== viewerId) {
       return invalidTargetResponse(request, "api:clubs:id:news-likes");
     }
 
-    if (!membership && !session.user.isAdmin && !viewerIsOwner) {
+    if (membership?.status !== "ACTIVE" && !session.user.isAdmin && !viewerIsOwner) {
       return invalidTargetResponse(request, "api:clubs:id:news-likes");
     }
 
@@ -238,6 +239,8 @@ export async function POST(
       );
     }
 
+    const ownPlayers = await prisma.player.findMany({ where: { ownerUserId: viewerId }, select: { id: true } });
+    const ownedPlayerIds = new Set(ownPlayers.map(p => p.id));
     const notificationRecipientIds = Array.from(
       new Set(
         (newsItem.featuredPlayers?.length > 0
@@ -245,7 +248,7 @@ export async function POST(
           : newsItem.players
         ).map((player) => player.id)
       )
-    ).filter((recipientId) => recipientId !== viewerId);
+    ).filter((recipientId) => !ownedPlayerIds.has(recipientId));
 
     if (liked) {
       await prisma.$transaction([
@@ -264,14 +267,14 @@ export async function POST(
             userId: viewerId,
           },
         }),
-        ...notificationRecipientIds.map((recipientUserId) =>
+        ...notificationRecipientIds.map((recipientPlayerId) =>
           prisma.clubNotification.upsert({
             where: {
-              type_newsItemId_actorUserId_recipientUserId: {
+              type_newsItemId_actorUserId_recipientPlayerId: {
                 type: NEWS_LIKE_NOTIFICATION_TYPE,
                 newsItemId,
                 actorUserId: viewerId,
-                recipientUserId,
+                recipientPlayerId,
               },
             },
             update: {
@@ -285,7 +288,7 @@ export async function POST(
               detail: newsItem.detail,
               newsItemId,
               newsType: newsItem.type,
-              recipientUserId,
+              recipientPlayerId,
               sessionId: newsItem.session.id,
               title: newsItem.title,
               type: NEWS_LIKE_NOTIFICATION_TYPE,

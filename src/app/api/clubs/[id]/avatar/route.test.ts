@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   clubFindUnique: vi.fn(),
   clubUpdate: vi.fn(),
-  clubMemberFindUnique: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
   uploadAvatarObject: vi.fn(),
   cleanupSupersededAvatar: vi.fn(),
   rollbackUploadedAvatar: vi.fn(),
@@ -22,8 +22,8 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.clubFindUnique,
       update: mocks.clubUpdate,
     },
-    clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
+    clubAccess: {
+      findUnique: mocks.clubAccessFindUnique,
     },
   },
 }));
@@ -79,15 +79,15 @@ describe("club avatar route", () => {
     process.env.BLOB_READ_WRITE_TOKEN = "blob_rw_token";
 
     mocks.auth.mockResolvedValue({
-      user: { id: "admin-1", isAdmin: false, isQuickAccess: false },
+      user: { id: "account-admin", isAdmin: false, isQuickAccess: false },
     });
     mocks.clubFindUnique.mockResolvedValue({
       id: "community-1",
       avatarKey: "https://blob.vercel-storage.com/avatars/clubs/community-1/old.png",
-      createdById: "owner-1",
+      createdById: "account-owner",
       isTutorial: false,
     });
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
     mocks.uploadAvatarObject.mockResolvedValue(
       "https://blob.vercel-storage.com/avatars/clubs/community-1/new.png"
     );
@@ -138,9 +138,20 @@ describe("club avatar route", () => {
 
   it("rejects non-admin club members", async () => {
     mocks.auth.mockResolvedValue({
-      user: { id: "member-1", isAdmin: false, isQuickAccess: false },
+      user: { id: "account-member", isAdmin: false, isQuickAccess: false },
     });
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "MEMBER", status: "ACTIVE" });
+
+    const response = await POST(createAvatarRequest(), {
+      params: Promise.resolve({ id: "community-1" }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
+  });
+
+  it("does not treat a revoked account grant that still says ADMIN as current access", async () => {
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "REVOKED" });
 
     const response = await POST(createAvatarRequest(), {
       params: Promise.resolve({ id: "community-1" }),
@@ -164,7 +175,7 @@ describe("club avatar route", () => {
 
   it("rejects quick-access sessions", async () => {
     mocks.auth.mockResolvedValue({
-      user: { id: "admin-1", isAdmin: false, isQuickAccess: true },
+      user: { id: "account-admin", isAdmin: false, isQuickAccess: true },
     });
 
     const response = await POST(createAvatarRequest(), {
@@ -247,7 +258,7 @@ describe("club avatar route", () => {
 
   it("removes a club avatar for a global admin", async () => {
     mocks.auth.mockResolvedValue({
-      user: { id: "global-admin", isAdmin: true, isQuickAccess: false },
+      user: { id: "account-global-admin", isAdmin: true, isQuickAccess: false },
     });
 
     const response = await DELETE(
@@ -271,5 +282,6 @@ describe("club avatar route", () => {
         "https://blob.vercel-storage.com/avatars/clubs/community-1/old.png",
       nextAvatarKey: null,
     });
+    expect(mocks.clubAccessFindUnique).not.toHaveBeenCalled();
   });
 });

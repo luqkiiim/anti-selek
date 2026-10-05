@@ -12,25 +12,25 @@ export async function getClubEloByUserId(
   const rows = await prisma.clubMember.findMany({
     where: {
       clubId,
-      userId: { in: uniqueUserIds },
+      playerId: { in: uniqueUserIds },
     },
-    select: { userId: true, elo: true },
+    select: { playerId: true, elo: true },
   });
 
-  return new Map(rows.map((row) => [row.userId, row.elo]));
+  return new Map(rows.map((row) => [row.playerId, row.elo]));
 }
 
 export function withClubElo<
-  T extends { userId: string; user: { elo: number } }
+  T extends { playerId: string; player: { elo: number } }
 >(players: T[], eloByUserId: Map<string, number>): T[] {
   return players.map((player) => {
-    const elo = eloByUserId.get(player.userId);
+    const elo = eloByUserId.get(player.playerId);
     if (typeof elo !== "number") return player;
 
     return {
       ...player,
-      user: {
-        ...player.user,
+      player: {
+        ...player.player,
         elo,
       },
     };

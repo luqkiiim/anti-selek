@@ -473,15 +473,21 @@ export default function SessionPage() {
     !!user?.isAdmin ||
     !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
-  const currentUserId = session?.user?.id || "";
   const viewerIsQuickAccess =
     sessionData?.viewerIsQuickAccess === true ||
     user?.isQuickAccess === true ||
     session?.user?.isQuickAccess === true;
+  const currentAccountId =
+    sessionData?.viewerUserId !== undefined
+      ? sessionData.viewerUserId ?? ""
+      : session?.user?.id ?? "";
+  const currentPlayerId =
+    sessionData?.viewerPlayerId ??
+    (viewerIsQuickAccess ? user?.playerId ?? "" : "");
   const canSubmitScores = !viewerIsQuickAccess;
   const isTutorialPlayground =
     sessionData?.isTutorialClub === true &&
-    sessionData.tutorialOwnerId === currentUserId;
+    sessionData.tutorialOwnerId === currentAccountId;
   const canOpenPlayerManager =
     isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
   const canOpenSettings =
@@ -1463,7 +1469,8 @@ export default function SessionPage() {
                   poolsEnabled={sessionData.poolsEnabled}
                   poolAName={sessionData.poolAName}
                   poolBName={sessionData.poolBName}
-                  currentUserId={currentUserId}
+                  currentAccountId={currentAccountId}
+                  currentUserId={currentPlayerId}
                   isAdmin={isAdmin}
                   isClaimedUser={isClaimedUser}
                   canSubmitScores={canSubmitScores}
@@ -1571,7 +1578,7 @@ export default function SessionPage() {
                 <LiveStandingsTable
                   sessionType={sessionData.type}
                   players={sessionView.sortedPlayers}
-                  currentUserId={currentUserId}
+                  currentUserId={currentPlayerId}
                   pointDiffByUserId={sessionView.pointDiffByUserId}
                   getPlayerProfileHref={sessionView.getPlayerProfileHref}
                   calculatePlayerSessionStats={(userId) =>
@@ -1651,7 +1658,7 @@ export default function SessionPage() {
         key={showPlayersModal ? "session-players-open" : "session-players-closed"}
         open={showPlayersModal}
         players={sessionData.players}
-        currentUserId={currentUserId}
+        currentUserId={currentPlayerId}
         canEditPreferences={!sessionView.isCompletedSession}
         canManagePlayers={isAdmin}
         poolsEnabled={sessionData.poolsEnabled}

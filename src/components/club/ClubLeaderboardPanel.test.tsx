@@ -121,6 +121,27 @@ describe("ClubLeaderboardPanel", () => {
     expect(markup).not.toContain("Request Claim");
   });
 
+  it("hides claim controls for the signed-in Player when Account and Player IDs differ", () => {
+    const markup = renderPanel(
+      buildPlayer({ id: "player-owned-by-requester" }),
+      buildClaimState({
+        currentUser: {
+          id: "account-requester",
+          userId: "account-requester",
+          playerId: "player-owned-by-requester",
+          name: "New Signup",
+          email: "new@example.com",
+          avatarUrl: null,
+          elo: 1000,
+          gender: PlayerGender.UNSPECIFIED,
+          partnerPreference: PartnerPreference.OPEN,
+        },
+      })
+    );
+
+    expect(markup).not.toContain("Request Claim");
+  });
+
   it("renders an up movement arrow with the number below it", () => {
     const markup = renderPanel(
       buildPlayer({ rankDelta: 2, previousRank: 3 }),

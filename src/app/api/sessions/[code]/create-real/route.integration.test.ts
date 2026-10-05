@@ -65,7 +65,8 @@ async function removeDatabaseFiles() {
 }
 
 async function createClubAdmin(prefix: string) {
-  const adminUserId = `${prefix}-admin`;
+  const adminUserId = `${prefix}-account-admin`;
+  const adminPlayerId = `${prefix}-player-admin`;
   const clubId = `${prefix}-community`;
 
   await prisma.user.create({
@@ -74,11 +75,19 @@ async function createClubAdmin(prefix: string) {
       email: `${prefix}-admin@example.com`,
       passwordHash: "test-password-hash",
       name: `${prefix} Admin`,
-      isClaimed: true,
+    },
+  });
+
+  await prisma.player.create({
+    data: {
+      id: adminPlayerId,
+      ownerUserId: adminUserId,
+      name: `${prefix} Admin`,
       gender: PlayerGender.MALE,
       partnerPreference: PartnerPreference.OPEN,
     },
   });
+  expect(adminUserId).not.toBe(adminPlayerId);
 
   await prisma.club.create({
     data: {
@@ -88,11 +97,12 @@ async function createClubAdmin(prefix: string) {
     },
   });
 
-  await prisma.clubMember.create({
+  await prisma.clubAccess.create({
     data: {
       clubId,
       userId: adminUserId,
-      role: "ADMIN",
+      role: "OWNER",
+      status: "ACTIVE",
     },
   });
 
@@ -107,13 +117,10 @@ async function createClubAdmin(prefix: string) {
 }
 
 async function createPlayers(prefix: string, clubId: string, keys: string[]) {
-  await prisma.user.createMany({
+  await prisma.player.createMany({
     data: keys.map((key) => ({
       id: `${prefix}-${key}`,
-      email: `${prefix}-${key}@example.com`,
-      passwordHash: "test-password-hash",
       name: `${prefix}-${key}`,
-      isClaimed: true,
       gender: PlayerGender.MALE,
       partnerPreference: PartnerPreference.OPEN,
       elo: 1000,
@@ -123,8 +130,7 @@ async function createPlayers(prefix: string, clubId: string, keys: string[]) {
   await prisma.clubMember.createMany({
     data: keys.map((key) => ({
       clubId,
-      userId: `${prefix}-${key}`,
-      role: "MEMBER",
+      playerId: `${prefix}-${key}`,
       elo: 1000,
     })),
   });
@@ -149,8 +155,8 @@ async function createTestSessionWithMatch(prefix: string, clubId: string) {
       isTest: true,
       crossoverFrequency: SessionCrossoverFrequency.FREQUENT,
       players: {
-        create: playerIds.map((userId) => ({
-          userId,
+        create: playerIds.map((playerId) => ({
+          playerId,
           isGuest: false,
           gender: PlayerGender.MALE,
           partnerPreference: PartnerPreference.OPEN,
@@ -176,10 +182,10 @@ async function createTestSessionWithMatch(prefix: string, clubId: string) {
       sessionId,
       courtId,
       status: MatchStatus.COMPLETED,
-      team1User1Id: playerIds[0],
-      team1User2Id: playerIds[1],
-      team2User1Id: playerIds[2],
-      team2User2Id: playerIds[3],
+      team1Player1Id: playerIds[0],
+      team1Player2Id: playerIds[1],
+      team2Player1Id: playerIds[2],
+      team2Player2Id: playerIds[3],
       team1Score: 11,
       team2Score: 9,
       winnerTeam: 1,
@@ -194,10 +200,10 @@ async function createTestSessionWithMatch(prefix: string, clubId: string) {
       sessionId,
       courtId,
       status: MatchStatus.IN_PROGRESS,
-      team1User1Id: playerIds[0],
-      team1User2Id: playerIds[2],
-      team2User1Id: playerIds[1],
-      team2User2Id: playerIds[3],
+      team1Player1Id: playerIds[0],
+      team1Player2Id: playerIds[2],
+      team2Player1Id: playerIds[1],
+      team2Player2Id: playerIds[3],
       createdAt: new Date("2026-05-02T11:00:00.000Z"),
     },
   });
@@ -235,13 +241,13 @@ beforeAll(async () => {
 
   const prismaBinary = getPrismaBinary();
   if (process.platform === "win32") {
-    execFileSync("cmd.exe", ["/c", prismaBinary, "db", "push", "--skip-generate"], {
+    execFileSync("cmd.exe", ["/c", prismaBinary, "migrate", "deploy"], {
       cwd: process.cwd(),
       env: process.env as NodeJS.ProcessEnv,
       stdio: "inherit",
     });
   } else {
-    execFileSync(prismaBinary, ["db", "push", "--skip-generate"], {
+    execFileSync(prismaBinary, ["migrate", "deploy"], {
       cwd: process.cwd(),
       env: process.env as NodeJS.ProcessEnv,
       stdio: "inherit",
@@ -344,36 +350,36 @@ describe("create real session route integration", () => {
 
     const copiedPlayers = await prisma.sessionPlayer.findMany({
       where: { sessionId: payload.id },
-      orderBy: { userId: "asc" },
+      orderBy: { playerId: "asc" },
     });
-    const copiedPlayerByUserId = new Map(
-      copiedPlayers.map((player) => [player.userId, player])
+    const copiedPlayerById = new Map(
+      copiedPlayers.map((player) => [player.playerId, player])
     );
 
-    expect(copiedPlayerByUserId.get(playerIds[0])?.sessionPoints).toBe(3);
-    expect(copiedPlayerByUserId.get(playerIds[1])?.sessionPoints).toBe(3);
-    expect(copiedPlayerByUserId.get(playerIds[2])?.sessionPoints).toBe(0);
-    expect(copiedPlayerByUserId.get(playerIds[3])?.sessionPoints).toBe(0);
+    expect(copiedPlayerById.get(playerIds[0])?.sessionPoints).toBe(3);
+    expect(copiedPlayerById.get(playerIds[1])?.sessionPoints).toBe(3);
+    expect(copiedPlayerById.get(playerIds[2])?.sessionPoints).toBe(0);
+    expect(copiedPlayerById.get(playerIds[3])?.sessionPoints).toBe(0);
     expect(copiedPlayers.every((player) => player.matchesPlayed === 1)).toBe(
       true
     );
-    expect(copiedPlayerByUserId.get(playerIds[0])?.lastPartnerId).toBe(
+    expect(copiedPlayerById.get(playerIds[0])?.lastPartnerPlayerId).toBe(
       playerIds[1]
     );
-    expect(copiedPlayerByUserId.get(playerIds[2])?.lastPartnerId).toBe(
+    expect(copiedPlayerById.get(playerIds[2])?.lastPartnerPlayerId).toBe(
       playerIds[3]
     );
 
     const clubMembers = await prisma.clubMember.findMany({
-      where: { clubId, userId: { in: playerIds } },
+      where: { clubId, playerId: { in: playerIds } },
     });
-    const eloByUserId = new Map(
-      clubMembers.map((member) => [member.userId, member.elo])
+    const eloByPlayerId = new Map(
+      clubMembers.map((member) => [member.playerId, member.elo])
     );
-    expect(eloByUserId.get(playerIds[0])).toBe(1016);
-    expect(eloByUserId.get(playerIds[1])).toBe(1016);
-    expect(eloByUserId.get(playerIds[2])).toBe(984);
-    expect(eloByUserId.get(playerIds[3])).toBe(984);
+    expect(eloByPlayerId.get(playerIds[0])).toBe(1016);
+    expect(eloByPlayerId.get(playerIds[1])).toBe(1016);
+    expect(eloByPlayerId.get(playerIds[2])).toBe(984);
+    expect(eloByPlayerId.get(playerIds[3])).toBe(984);
 
     const sourceMatches = await prisma.match.findMany({
       where: { sessionId },

@@ -141,8 +141,8 @@ export interface TutorialPlaygroundSummary {
   isTutorial: true;
 }
 
-function getTutorialClubName(userId: string) {
-  return `${TUTORIAL_PLAYGROUND_LABEL} ${userId.slice(-8)}`;
+function getTutorialClubName(playerId: string) {
+  return `${TUTORIAL_PLAYGROUND_LABEL} ${playerId.slice(-8)}`;
 }
 
 export function getTutorialClubDisplayName(club: {
@@ -359,17 +359,44 @@ async function summarizeTutorialPlayground(
   });
 }
 
-async function createTutorialClub(tx: TutorialTx, userId: string) {
+async function getUniqueOwnedTutorialPlayerId(
+  tx: TutorialTx,
+  ownerUserId: string
+) {
+  const players = await tx.player.findMany({
+    where: { ownerUserId },
+    select: { id: true },
+    take: 2,
+  });
+  if (players.length !== 1) {
+    throw new Error(
+      players.length > 1
+        ? "Choose one owned player profile before opening the tutorial playground."
+        : "The tutorial playground requires an owned player profile."
+    );
+  }
+  return players[0].id;
+}
+
+async function createTutorialClub(tx: TutorialTx, ownerUserId: string) {
+  const ownerPlayerId = await getUniqueOwnedTutorialPlayerId(tx, ownerUserId);
   return tx.club.create({
     data: {
-      name: getTutorialClubName(userId),
-      createdById: userId,
+      name: getTutorialClubName(ownerUserId),
+      createdById: ownerUserId,
       isTutorial: true,
-      tutorialOwnerId: userId,
+      tutorialOwnerId: ownerUserId,
+      accountAccess: {
+        create: {
+          userId: ownerUserId,
+          role: "OWNER",
+          status: "ACTIVE",
+        },
+      },
       members: {
         create: {
-          userId,
-          role: "ADMIN",
+          playerId: ownerPlayerId,
+          ownerUserId,
           status: ClubPlayerStatus.CORE,
         },
       },
@@ -383,22 +410,23 @@ async function seedTutorialPlaygroundData(
   clubId: string,
   ownerUserId: string
 ) {
+  const ownerPlayerId = await getUniqueOwnedTutorialPlayerId(tx, ownerUserId);
   await tx.clubMember.upsert({
     where: {
-      clubId_userId: {
+      clubId_playerId: {
         clubId,
-        userId: ownerUserId,
+        playerId: ownerPlayerId,
       },
     },
     update: {
-      role: "ADMIN",
+      ownerUserId,
       status: ClubPlayerStatus.CORE,
       elo: 1000,
     },
     create: {
       clubId,
-      userId: ownerUserId,
-      role: "ADMIN",
+      playerId: ownerPlayerId,
+      ownerUserId,
       status: ClubPlayerStatus.CORE,
       elo: 1000,
     },
@@ -406,12 +434,10 @@ async function seedTutorialPlaygroundData(
 
   const fakeUsers = [];
   for (const player of TUTORIAL_FAKE_PLAYERS) {
-    const user = await tx.user.create({
+    const user = await tx.player.create({
       data: {
         name: player.name,
-        email: null,
-        passwordHash: null,
-        isClaimed: false,
+        ownerUserId: null,
         elo: player.elo,
         gender: player.gender,
         partnerPreference: player.partnerPreference,
@@ -430,8 +456,8 @@ async function seedTutorialPlaygroundData(
   await tx.clubMember.createMany({
     data: fakeUsers.map((user, index) => ({
       clubId,
-      userId: user.id,
-      role: "MEMBER",
+      playerId: user.id,
+
       status:
         index % 6 === 4
           ? ClubPlayerStatus.OCCASIONAL
@@ -517,7 +543,7 @@ async function seedCompletedPracticeSessions(
         },
         players: {
           create: fakeUsers.map((user) => ({
-            userId: user.id,
+            playerId: user.id,
             isGuest: false,
             gender: user.gender,
             partnerPreference: user.partnerPreference,
@@ -546,10 +572,10 @@ async function seedCompletedPracticeSessions(
           sessionId,
           courtId: courtIds[matchIndex % courtIds.length],
           status: MatchStatus.COMPLETED,
-          team1User1Id: team1[0].id,
-          team1User2Id: team1[1].id,
-          team2User1Id: team2[0].id,
-          team2User2Id: team2[1].id,
+          team1Player1Id: team1[0].id,
+          team1Player2Id: team1[1].id,
+          team2Player1Id: team2[0].id,
+          team2Player2Id: team2[1].id,
           team1Score: seed.team1Score,
           team2Score: seed.team2Score,
           winnerTeam: team1Won ? 1 : 2,
@@ -589,7 +615,7 @@ async function seedCompletedPracticeSessions(
             return {
               matchId,
               clubId,
-              userId: player.id,
+              playerId: player.id,
               delta: team.delta,
               beforeElo,
               afterElo,
@@ -603,16 +629,16 @@ async function seedCompletedPracticeSessions(
     for (const user of fakeUsers) {
       await tx.sessionPlayer.update({
         where: {
-          sessionId_userId: {
+          sessionId_playerId: {
             sessionId,
-            userId: user.id,
+            playerId: user.id,
           },
         },
         data: {
           sessionPoints: sessionPointsByUserId.get(user.id) ?? 0,
           matchesPlayed: matchesPlayedByUserId.get(user.id) ?? 0,
           matchmakingMatchesCredit: matchesPlayedByUserId.get(user.id) ?? 0,
-          lastPartnerId: lastPartnerByUserId.get(user.id) ?? null,
+          lastPartnerPlayerId: lastPartnerByUserId.get(user.id) ?? null,
           lastPlayedAt:
             (matchesPlayedByUserId.get(user.id) ?? 0) > 0 ? endedAt : null,
           availableSince: endedAt,
@@ -624,9 +650,9 @@ async function seedCompletedPracticeSessions(
   for (const user of fakeUsers) {
     await tx.clubMember.update({
       where: {
-        clubId_userId: {
+        clubId_playerId: {
           clubId,
-          userId: user.id,
+          playerId: user.id,
         },
       },
       data: {
@@ -670,12 +696,13 @@ async function seedActiveTutorialSession(
           status: SessionClubStatus.ACCEPTED,
           requestedById: ownerUserId,
           reviewedById: ownerUserId,
+          creditedHostPlayerId: await getUniqueOwnedTutorialPlayerId(tx, ownerUserId),
           reviewedAt: now,
         },
       },
       players: {
         create: fakeUsers.map((user) => ({
-          userId: user.id,
+          playerId: user.id,
           isGuest: false,
           gender: user.gender,
           partnerPreference: user.partnerPreference,
@@ -707,10 +734,10 @@ async function seedActiveTutorialSession(
         sessionId,
         courtId: seed.courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: seed.users[0].id,
-        team1User2Id: seed.users[1].id,
-        team2User1Id: seed.users[2].id,
-        team2User2Id: seed.users[3].id,
+        team1Player1Id: seed.users[0].id,
+        team1Player2Id: seed.users[1].id,
+        team2Player1Id: seed.users[2].id,
+        team2Player2Id: seed.users[3].id,
       },
       select: { id: true },
     });
@@ -726,16 +753,15 @@ async function getSeededFakeUsers(tx: TutorialTx, clubId: string) {
   const members = await tx.clubMember.findMany({
     where: {
       clubId,
-      user: {
-        email: null,
-        isClaimed: false,
+      player: {
+        ownerUserId: null,
         name: {
           in: TUTORIAL_FAKE_PLAYERS.map((player) => player.name),
         },
       },
     },
     include: {
-      user: {
+      player: {
         select: {
           id: true,
           name: true,
@@ -746,7 +772,7 @@ async function getSeededFakeUsers(tx: TutorialTx, clubId: string) {
     },
   });
   const memberByName = new Map(
-    members.map((member) => [member.user.name, member.user])
+    members.map((member) => [member.player.name, member.player])
   );
 
   const fakeUsers: TutorialSeedUser[] = [];
@@ -862,7 +888,7 @@ async function ensureCompletedPracticeHistory(
   await tx.clubMember.updateMany({
     where: {
       clubId,
-      userId: { in: fakeUsers.map((user) => user.id) },
+      playerId: { in: fakeUsers.map((user) => user.id) },
     },
     data: { elo: 1000 },
   });
@@ -872,9 +898,9 @@ async function ensureCompletedPracticeHistory(
     if (!user) continue;
     await tx.clubMember.update({
       where: {
-        clubId_userId: {
+        clubId_playerId: {
           clubId,
-          userId: user.id,
+          playerId: user.id,
         },
       },
       data: { elo: player.elo },
@@ -935,36 +961,32 @@ async function clearTutorialPlaygroundData(
   const fakeMembers = await tx.clubMember.findMany({
     where: {
       clubId,
-      userId: { not: ownerUserId },
-      user: {
-        email: null,
-        isClaimed: false,
+      player: {
+        ownerUserId: null,
       },
     },
-    select: { userId: true },
+    select: { playerId: true },
   });
-  const fakeUserIds = fakeMembers.map((member) => member.userId);
+  const fakeUserIds = fakeMembers.map((member) => member.playerId);
 
   if (fakeUserIds.length > 0) {
     await tx.clubMember.deleteMany({
       where: {
         clubId,
-        userId: { in: fakeUserIds },
+        playerId: { in: fakeUserIds },
       },
     });
-    await tx.user.deleteMany({
+    await tx.player.deleteMany({
       where: {
         id: { in: fakeUserIds },
-        email: null,
-        isClaimed: false,
+        ownerUserId: null,
       },
     });
   }
 
   await tx.clubMember.updateMany({
-    where: { clubId, userId: ownerUserId },
+    where: { clubId, ownerUserId },
     data: {
-      role: "ADMIN",
       status: ClubPlayerStatus.CORE,
       elo: 1000,
     },
@@ -978,9 +1000,9 @@ async function clearTutorialPlaygroundData(
   });
 }
 
-export async function getTutorialPlaygroundSummary(userId: string) {
+export async function getTutorialPlaygroundSummary(playerId: string) {
   const playground = await prisma.club.findUnique({
-    where: { tutorialOwnerId: userId },
+    where: { tutorialOwnerId: playerId },
     select: { id: true, isTutorial: true },
   });
 
@@ -993,48 +1015,48 @@ export async function getTutorialPlaygroundSummary(userId: string) {
   );
 }
 
-export async function ensureTutorialPlayground(userId: string) {
+export async function ensureTutorialPlayground(playerId: string) {
   return prisma.$transaction(async (tx) => {
     let playground = await tx.club.findUnique({
-      where: { tutorialOwnerId: userId },
+      where: { tutorialOwnerId: playerId },
       select: { id: true, isTutorial: true },
     });
 
     if (!playground) {
-      playground = await createTutorialClub(tx, userId);
-      await seedTutorialPlaygroundData(tx, playground.id, userId);
+      playground = await createTutorialClub(tx, playerId);
+      await seedTutorialPlaygroundData(tx, playground.id, playerId);
     } else if (!playground.isTutorial) {
       throw new Error("Tutorial owner is attached to a non-tutorial club");
     } else if (!(await ensureCompletedPracticeHistory(tx, playground.id))) {
-      await clearTutorialPlaygroundData(tx, playground.id, userId);
-      await seedTutorialPlaygroundData(tx, playground.id, userId);
+      await clearTutorialPlaygroundData(tx, playground.id, playerId);
+      await seedTutorialPlaygroundData(tx, playground.id, playerId);
     }
 
     return summarizeTutorialPlayground(tx, playground.id);
   });
 }
 
-export async function resetTutorialPlayground(userId: string) {
+export async function resetTutorialPlayground(playerId: string) {
   return prisma.$transaction(async (tx) => {
     let playground = await tx.club.findUnique({
-      where: { tutorialOwnerId: userId },
+      where: { tutorialOwnerId: playerId },
       select: { id: true, isTutorial: true },
     });
 
     if (!playground) {
-      playground = await createTutorialClub(tx, userId);
+      playground = await createTutorialClub(tx, playerId);
     } else if (!playground.isTutorial) {
       throw new Error("Tutorial owner is attached to a non-tutorial club");
     } else {
-      await clearTutorialPlaygroundData(tx, playground.id, userId);
+      await clearTutorialPlaygroundData(tx, playground.id, playerId);
     }
 
-    await seedTutorialPlaygroundData(tx, playground.id, userId);
+    await seedTutorialPlaygroundData(tx, playground.id, playerId);
     return summarizeTutorialPlayground(tx, playground.id);
   });
 }
 
-export async function deleteTutorialPlayground(userId: string, clubId: string) {
+export async function deleteTutorialPlayground(playerId: string, clubId: string) {
   return prisma.$transaction(async (tx) => {
     const playground = await tx.club.findUnique({
       where: { id: clubId },
@@ -1047,12 +1069,12 @@ export async function deleteTutorialPlayground(userId: string, clubId: string) {
 
     if (
       !playground?.isTutorial ||
-      playground.tutorialOwnerId !== userId
+      playground.tutorialOwnerId !== playerId
     ) {
       throw new Error("Tutorial playground not found");
     }
 
-    await clearTutorialPlaygroundData(tx, playground.id, userId);
+    await clearTutorialPlaygroundData(tx, playground.id, playerId);
     await tx.club.delete({ where: { id: playground.id } });
 
     return { success: true };

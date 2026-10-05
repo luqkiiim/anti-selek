@@ -15,14 +15,14 @@ import {
 async function ensureManagePermission(
   sessionId: string,
   clubId: string | null | undefined,
-  userId: string,
+  accountUserId: string,
   requesterIsAdmin: boolean
 ) {
   if (requesterIsAdmin) return;
 
   const membership = await getSessionOperatorMembership(prisma, {
     session: { id: sessionId, clubId },
-    userId,
+    userId: accountUserId,
     acceptedOnly: true,
   });
 
@@ -33,13 +33,13 @@ async function ensureManagePermission(
 
 export async function loadGenerateMatchContext({
   code,
-  userId,
+  requesterAccountId,
   requesterIsAdmin,
   requestedCourtIds,
   forceReshuffle,
 }: {
   code: string;
-  userId: string;
+  requesterAccountId: string;
   requesterIsAdmin: boolean;
   requestedCourtIds: string[];
   forceReshuffle: boolean;
@@ -56,7 +56,7 @@ export async function loadGenerateMatchContext({
   await ensureManagePermission(
     sessionData.id,
     sessionData.clubId,
-    userId,
+    requesterAccountId,
     requesterIsAdmin
   );
 
@@ -77,19 +77,19 @@ export async function loadGenerateMatchContext({
     forceReshuffle && targetCourt.currentMatch
       ? {
           ids: [
-            targetCourt.currentMatch.team1User1Id,
-            targetCourt.currentMatch.team1User2Id,
-            targetCourt.currentMatch.team2User1Id,
-            targetCourt.currentMatch.team2User2Id,
+            targetCourt.currentMatch.team1Player1Id,
+            targetCourt.currentMatch.team1Player2Id,
+            targetCourt.currentMatch.team2Player1Id,
+            targetCourt.currentMatch.team2Player2Id,
           ] as [string, string, string, string],
           partition: {
             team1: [
-              targetCourt.currentMatch.team1User1Id,
-              targetCourt.currentMatch.team1User2Id,
+              targetCourt.currentMatch.team1Player1Id,
+              targetCourt.currentMatch.team1Player2Id,
             ] as [string, string],
             team2: [
-              targetCourt.currentMatch.team2User1Id,
-              targetCourt.currentMatch.team2User2Id,
+              targetCourt.currentMatch.team2Player1Id,
+              targetCourt.currentMatch.team2Player2Id,
             ] as [string, string],
           },
         }
@@ -123,10 +123,10 @@ export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt) {
     return applyPendingPlayerGroupChangesInTransaction(tx, {
       sessionId: targetCourt.sessionId,
       userIds: [
-        targetCourt.currentMatch!.team1User1Id,
-        targetCourt.currentMatch!.team1User2Id,
-        targetCourt.currentMatch!.team2User1Id,
-        targetCourt.currentMatch!.team2User2Id,
+        targetCourt.currentMatch!.team1Player1Id,
+        targetCourt.currentMatch!.team1Player2Id,
+        targetCourt.currentMatch!.team2Player1Id,
+        targetCourt.currentMatch!.team2Player2Id,
       ],
     });
   });

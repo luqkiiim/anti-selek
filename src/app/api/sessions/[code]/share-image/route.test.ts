@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   sessionFindUnique: vi.fn(),
   getSessionMembership: vi.fn(),
+  isAccountSessionPlayer: vi.fn(),
   canQuickAccessClub: vi.fn(),
+  getQuickAccessPlayerId: vi.fn(),
   isQuickAccessSession: vi.fn(),
   invalidTargetResponse: vi.fn(),
   rateLimit: vi.fn(),
@@ -42,10 +44,12 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/sessionCollab", () => ({
   getSessionMembership: mocks.getSessionMembership,
+  isAccountSessionPlayer: mocks.isAccountSessionPlayer,
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
   canQuickAccessClub: mocks.canQuickAccessClub,
+  getQuickAccessPlayerId: mocks.getQuickAccessPlayerId,
   isQuickAccessSession: mocks.isQuickAccessSession,
 }));
 
@@ -65,13 +69,13 @@ function createSessionData({
   communityIsTutorial?: boolean;
 } = {}) {
   const players = Array.from({ length: 13 }, (_, index) => ({
-    userId: `u${index + 1}`,
+    playerId: `player-${index + 1}`,
     sessionPoints: 30 - index,
     joinedAt: new Date("2026-05-01T00:00:00.000Z"),
     ladderEntryAt: new Date("2026-05-01T00:00:00.000Z"),
     isGuest: false,
-    user: {
-      id: `u${index + 1}`,
+    player: {
+      id: `player-${index + 1}`,
       name: index === 0 ? "Lina Kay" : `Player ${index + 1}`,
       avatarKey: null as string | null,
     },
@@ -110,10 +114,10 @@ function createSessionData({
     players,
     matches: [
       {
-        team1User1Id: "u1",
-        team1User2Id: "u3",
-        team2User1Id: "u2",
-        team2User2Id: "u4",
+        team1Player1Id: "player-1",
+        team1Player2Id: "player-3",
+        team2Player1Id: "player-2",
+        team2Player2Id: "player-4",
         team1Score: 21,
         team2Score: 17,
         winnerTeam: 1,
@@ -131,7 +135,9 @@ describe("session share image route", () => {
     mocks.auth.mockResolvedValue({ user: { id: "viewer", isAdmin: false } });
     mocks.sessionFindUnique.mockResolvedValue(createSessionData());
     mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
+    mocks.isAccountSessionPlayer.mockResolvedValue(false);
     mocks.canQuickAccessClub.mockReturnValue(true);
+    mocks.getQuickAccessPlayerId.mockImplementation((session: { user?: { isQuickAccess?: boolean; guestPlayerId?: string | null } } | null | undefined) => session?.user?.isQuickAccess ? session.user.guestPlayerId ?? null : null);
     mocks.isQuickAccessSession.mockReturnValue(false);
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
@@ -191,7 +197,7 @@ describe("session share image route", () => {
       ...createSessionData(),
       players: createSessionData().players.map((player) => ({
         ...player,
-        userId: `other-${player.userId}`,
+        playerId: `other-${player.playerId}`,
       })),
     });
 
@@ -240,7 +246,7 @@ describe("session share image route", () => {
 
   it("falls back to initials when avatar fetching fails", async () => {
     const sessionData = createSessionData();
-    sessionData.players[0].user.avatarKey = "https://cdn.test/lina.png";
+    sessionData.players[0].player.avatarKey = "https://cdn.test/lina.png";
     mocks.sessionFindUnique.mockResolvedValue(sessionData);
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network")));
 

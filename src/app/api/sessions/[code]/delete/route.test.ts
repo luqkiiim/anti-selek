@@ -5,7 +5,9 @@ vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
-    clubMember: { findUnique: vi.fn() },
+    club: { findUnique: vi.fn() },
+    clubAccess: { findUnique: vi.fn() },
+    clubMember: { findMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -35,11 +37,21 @@ function request() {
 describe("delete session", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(auth).mockResolvedValue({ user: { id: "host", isAdmin: false } } as never);
+    vi.mocked(auth).mockResolvedValue({ user: { id: "host-account", isAdmin: false } } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session", code: "CODE", clubId: "club", isTest: false, status: SessionStatus.ACTIVE,
     } as never);
-    vi.mocked(prisma.clubMember.findUnique).mockResolvedValue({ role: ClubRole.STAFF } as never);
+    vi.mocked(prisma.club.findUnique).mockResolvedValue({
+      id: "club",
+      createdById: "another-account",
+      isTutorial: false,
+      tutorialOwnerId: null,
+    } as never);
+    vi.mocked(prisma.clubAccess.findUnique).mockResolvedValue({
+      role: ClubRole.STAFF,
+      status: "ACTIVE",
+    } as never);
+    vi.mocked(prisma.clubMember.findMany).mockResolvedValue([] as never);
   });
 
   it("lets a host operator cancel an active session and reverses its rating changes", async () => {
@@ -58,7 +70,10 @@ describe("delete session", () => {
   });
 
   it("rejects an ordinary member before deleting any data", async () => {
-    vi.mocked(prisma.clubMember.findUnique).mockResolvedValue({ role: ClubRole.MEMBER } as never);
+    vi.mocked(prisma.clubAccess.findUnique).mockResolvedValue({
+      role: ClubRole.MEMBER,
+      status: "ACTIVE",
+    } as never);
     const response = await request();
     expect(response.status).toBe(403);
     expect(prisma.$transaction).not.toHaveBeenCalled();

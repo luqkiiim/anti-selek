@@ -89,25 +89,25 @@ export async function GET(
         where: { id: partnerClubId },
         select: { isTutorial: true },
       }),
-      prisma.clubMember.findUnique({
+      prisma.clubAccess.findUnique({
         where: {
           clubId_userId: {
             clubId: hostClubId,
             userId: session.user.id,
           },
         },
-        select: { role: true },
+        select: { role: true, status: true },
       }),
       session.user.isAdmin
         ? Promise.resolve(null)
-        : prisma.clubMember.findUnique({
+        : prisma.clubAccess.findUnique({
             where: {
               clubId_userId: {
                 clubId: partnerClubId,
                 userId: session.user.id,
               },
             },
-            select: { role: true },
+            select: { role: true, status: true },
           }),
       prisma.offlineIdentityLinkRequest.findFirst({
         where: {
@@ -128,7 +128,7 @@ export async function GET(
     ]);
     const hasPartnerRosterAccess =
       session.user.isAdmin ||
-      isClubOperatorRole(partnerMembership?.role) ||
+      (partnerMembership?.status === "ACTIVE" && isClubOperatorRole(partnerMembership.role)) ||
       !!acceptedIdentityLink;
 
     if (
@@ -137,7 +137,7 @@ export async function GET(
       hostClub.isTutorial ||
       partnerClub.isTutorial ||
       (!session.user.isAdmin &&
-        (!isClubOperatorRole(hostMembership?.role) ||
+        (!(hostMembership?.status === "ACTIVE" && isClubOperatorRole(hostMembership.role)) ||
           !hasPartnerRosterAccess))
     ) {
       return invalidTargetResponse(request, "api:communities:id:collab-roster");
@@ -145,21 +145,21 @@ export async function GET(
 
     const memberships = await prisma.clubMember.findMany({
       where: {
-        clubId: { in: [hostClubId, partnerClubId] },
+        clubId: { in: [hostClubId, partnerClubId] }, archivedAt: null,
       },
       include: {
         club: { select: { id: true, name: true } },
-        user: {
+        player: {
           select: {
             id: true,
             name: true,
-            email: true,
+            ownerUserId: true,
             avatarKey: true,
             gender: true,
             partnerPreference: true,
             mixedSideOverride: true,
             isActive: true,
-            isClaimed: true,
+
             createdAt: true,
           },
         },
@@ -169,13 +169,13 @@ export async function GET(
 
     const offlineIdentityInfoByUserId = await getOfflineIdentityInfoByUserId(
       prisma,
-      memberships.map((membership) => membership.userId)
+      memberships.map((membership) => membership.playerId)
     );
 
     const byIdentityKey = new Map<
       string,
       {
-        user: (typeof memberships)[number]["user"];
+        user: (typeof memberships)[number]["player"];
         offlineIdentityId: string | null;
         memberships: Array<{
           id: string;
@@ -191,27 +191,27 @@ export async function GET(
 
     for (const membership of memberships) {
       const offlineIdentityInfo = offlineIdentityInfoByUserId.get(
-        membership.userId
+        membership.playerId
       );
-      const groupKey = offlineIdentityInfo?.offlineIdentityId ?? membership.userId;
+      const groupKey = offlineIdentityInfo?.offlineIdentityId ?? membership.playerId;
       const current =
         byIdentityKey.get(groupKey) ??
         {
-          user: membership.user,
+          user: membership.player,
           offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
           memberships: [],
         };
       current.memberships.push({
         id: membership.club.id,
         name: membership.club.name,
-        userId: membership.userId,
+        userId: membership.playerId,
         elo: membership.elo,
         status: membership.status,
-        role: membership.role,
+        role: "MEMBER",
         preferredPool: membership.preferredPool,
       });
       if (membership.club.id === hostClubId) {
-        current.user = membership.user;
+        current.user = membership.player;
       }
       byIdentityKey.set(groupKey, current);
     }
@@ -226,7 +226,7 @@ export async function GET(
           return {
             id: user.id,
             name: user.name,
-            email: user.email,
+            email: null,
             avatarUrl: serializeAvatarEntity(user).avatarUrl,
             status:
               preferred.status === ClubPlayerStatus.OCCASIONAL
@@ -249,7 +249,7 @@ export async function GET(
               ? preferred.preferredPool
               : SessionPool.B,
             isActive: user.isActive,
-            isClaimed: user.isClaimed,
+            isClaimed: !!user.ownerUserId,
             createdAt: user.createdAt,
             wins: 0,
             losses: 0,

@@ -7,7 +7,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
-    clubMember: { findUnique: vi.fn() },
+    player: { findFirst: vi.fn() },
     match: { findFirst: vi.fn() },
     sessionPlayer: { findUnique: vi.fn(), findMany: vi.fn() },
     queuedMatch: { findUnique: vi.fn(), delete: vi.fn() },
@@ -19,6 +19,12 @@ vi.mock("@/lib/playerGroupPreferences", () => ({
   applyPendingPlayerGroupChangesInTransaction: vi.fn(),
 }));
 
+vi.mock("@/lib/sessionCollab", () => ({
+  getAcceptedSessionClubIds: vi.fn(),
+  getSessionMembership: vi.fn(),
+  getSessionOperatorMembership: vi.fn(),
+}));
+
 vi.mock("../queue-match/shared", () => ({
   tryRebuildAutomaticQueuedMatchForCode: vi.fn(),
   tryRebuildQueuedMatchForCode: vi.fn(),
@@ -28,15 +34,20 @@ import { auth } from "@/lib/auth";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
 import {
+  getAcceptedSessionClubIds,
+  getSessionMembership,
+  getSessionOperatorMembership,
+} from "@/lib/sessionCollab";
+import {
   tryRebuildAutomaticQueuedMatchForCode,
   tryRebuildQueuedMatchForCode,
 } from "../queue-match/shared";
 import { POST } from "./route";
 
-function createRequest(userId: string, isPaused: boolean, extra: Record<string, unknown> = {}) {
+function createRequest(playerId: string, isPaused: boolean, extra: Record<string, unknown> = {}) {
   return new Request("http://localhost/api/sessions/ABC/pause-player", {
     method: "POST",
-    body: JSON.stringify({ userId, isPaused, ...extra }),
+    body: JSON.stringify({ playerId, isPaused, ...extra }),
   });
 }
 
@@ -69,14 +80,18 @@ describe("pause player route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "admin-1", isAdmin: true },
+      user: { id: "global-admin-account", isAdmin: true },
     } as never);
+    vi.mocked(prisma.player.findFirst).mockResolvedValue(null as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session-1",
       clubId: null,
       type: "POINTS",
       status: "ACTIVE",
     } as never);
+    vi.mocked(getAcceptedSessionClubIds).mockResolvedValue([] as never);
+    vi.mocked(getSessionMembership).mockResolvedValue(null as never);
+    vi.mocked(getSessionOperatorMembership).mockResolvedValue(null as never);
     vi.mocked(prisma.match.findFirst).mockResolvedValue(null);
     vi.mocked(tryRebuildAutomaticQueuedMatchForCode).mockResolvedValue(null);
     vi.mocked(tryRebuildQueuedMatchForCode).mockResolvedValue(null);
@@ -165,7 +180,7 @@ describe("pause player route", () => {
     expect(prisma.sessionPlayer.findMany).toHaveBeenCalledWith({
       where: {
         sessionId: "session-1",
-        userId: { not: "late-player" },
+        playerId: { not: "late-player" },
         isPaused: false,
         pool: "A",
       },
@@ -226,7 +241,7 @@ describe("pause player route", () => {
 
   it("blocks quick-access users from pausing players", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "active-player", isAdmin: false, isQuickAccess: true },
+      user: { id: "quick-access-account", isAdmin: false, isQuickAccess: true },
     } as never);
 
     const response = await POST(createRequest("active-player", true), {
@@ -236,6 +251,76 @@ describe("pause player route", () => {
     expect(response.status).toBe(403);
     expect(prisma.sessionPlayer.findUnique).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("denies an owned Player self-pause without active club access", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: "account-owner", isAdmin: false },
+    } as never);
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({
+      id: "session-1",
+      clubId: "club-1",
+      type: "POINTS",
+      status: "ACTIVE",
+    } as never);
+    vi.mocked(prisma.player.findFirst).mockResolvedValue({
+      id: "player-profile-1",
+    } as never);
+    vi.mocked(getAcceptedSessionClubIds).mockResolvedValue(["club-1"] as never);
+    vi.mocked(getSessionMembership).mockResolvedValue(null as never);
+
+    const response = await POST(createRequest("player-profile-1", true), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(prisma.sessionPlayer.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("allows an active MEMBER to self-pause a Player with a different account id", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: "account-owner", isAdmin: false },
+    } as never);
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({
+      id: "session-1",
+      clubId: "club-1",
+      type: "POINTS",
+      status: "ACTIVE",
+    } as never);
+    vi.mocked(prisma.player.findFirst).mockResolvedValue({
+      id: "player-profile-1",
+    } as never);
+    vi.mocked(getAcceptedSessionClubIds).mockResolvedValue(["club-1"] as never);
+    vi.mocked(getSessionMembership).mockResolvedValue({
+      clubId: "club-1",
+      role: "MEMBER",
+    } as never);
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: null,
+      inactiveSeconds: 0,
+      matchesPlayed: 0,
+      matchmakingMatchesCredit: 0,
+      pool: "A",
+    } as never);
+    const updateSpy = vi.fn(async ({ data }) => ({ id: "player-profile-1", ...data }));
+    mockTransaction(updateSpy);
+
+    const response = await POST(createRequest("player-profile-1", true), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(getSessionMembership).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "account-owner",
+        acceptedOnly: true,
+      })
+    );
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isPaused: true }) })
+    );
   });
 
   it("clears skip-next state when pausing a player", async () => {
@@ -276,10 +361,10 @@ describe("pause player route", () => {
       id: "queue-1",
       isAutomatic: false,
       matchmakingReasonJson: JSON.stringify({ legacy: "present" }),
-      team1User1Id: "active-player",
-      team1User2Id: "p2",
-      team2User1Id: "p3",
-      team2User2Id: "p4",
+      team1Player1Id: "active-player",
+      team1Player2Id: "p2",
+      team2Player1Id: "p3",
+      team2Player2Id: "p4",
     };
     const updateSpy = vi.fn(async ({ data }) => ({ id: "player-1", ...data }));
     const tx = mockTransaction(updateSpy, manualQueue);
@@ -308,10 +393,10 @@ describe("pause player route", () => {
     } as never);
     vi.mocked(prisma.match.findFirst).mockResolvedValue({
       id: "court-match-1",
-      team1User1Id: "active-player",
-      team1User2Id: "p2",
-      team2User1Id: "p3",
-      team2User2Id: "p4",
+      team1Player1Id: "active-player",
+      team1Player2Id: "p2",
+      team2Player1Id: "p3",
+      team2Player2Id: "p4",
     } as never);
     const updateSpy = vi.fn(async ({ data }) => ({ id: "player-1", ...data }));
     const tx = mockTransaction(updateSpy);
@@ -376,7 +461,11 @@ describe("pause player route", () => {
 
   it("does not allow a player to clear their court by pausing themselves", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "active-player", isAdmin: false },
+      user: { id: "account-owner", isAdmin: false },
+    } as never);
+    vi.mocked(prisma.player.findFirst).mockResolvedValue({
+      id: "active-player",
+      ownerUserId: "account-owner",
     } as never);
     const updateSpy = vi.fn();
     mockTransaction(updateSpy);
@@ -402,10 +491,10 @@ describe("pause player route", () => {
     } as never);
     vi.mocked(prisma.match.findFirst).mockResolvedValue({
       id: "court-match-1",
-      team1User1Id: "active-player",
-      team1User2Id: "p2",
-      team2User1Id: "p3",
-      team2User2Id: "p4",
+      team1Player1Id: "active-player",
+      team1Player2Id: "p2",
+      team2Player1Id: "p3",
+      team2Player2Id: "p4",
     } as never);
     const updateSpy = vi.fn();
     const tx = mockTransaction(updateSpy);
@@ -435,10 +524,10 @@ describe("pause player route", () => {
       id: "queue-1",
       isAutomatic: true,
       matchmakingReasonJson: null,
-      team1User1Id: "active-player",
-      team1User2Id: "p2",
-      team2User1Id: "p3",
-      team2User2Id: "p4",
+      team1Player1Id: "active-player",
+      team1Player2Id: "p2",
+      team2Player1Id: "p3",
+      team2Player2Id: "p4",
     });
 
     const response = await POST(createRequest("active-player", true), {
@@ -592,10 +681,10 @@ describe("pause player route", () => {
         where: expect.objectContaining({
           NOT: {
             OR: expect.arrayContaining([
-              { team1User1Id: "resumed-player" },
-              { team1User2Id: "resumed-player" },
-              { team2User1Id: "resumed-player" },
-              { team2User2Id: "resumed-player" },
+              { team1Player1Id: "resumed-player" },
+              { team1Player2Id: "resumed-player" },
+              { team2Player1Id: "resumed-player" },
+              { team2Player2Id: "resumed-player" },
             ]),
           },
         }),

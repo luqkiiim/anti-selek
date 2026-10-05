@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense, useState } from "react";
-import { getSession, signIn } from "next-auth/react";
+import { getSession, signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { FlashMessage } from "@/components/ui/chrome";
@@ -21,6 +21,7 @@ import styles from "./signin.module.css";
 type AccessMode = "account" | "quick";
 
 function SigninForm() {
+  const { status: sessionStatus } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [clubName, setClubName] = useState("");
@@ -41,7 +42,7 @@ function SigninForm() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (loading) return;
+    if (loading || sessionStatus === "loading") return;
 
     setError("");
     setLoading(true);
@@ -69,7 +70,7 @@ function SigninForm() {
 
   const handleQuickAccessSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (quickLoading) return;
+    if (quickLoading || sessionStatus === "loading") return;
 
     setError("");
     setQuickLoading(true);
@@ -175,7 +176,7 @@ function SigninForm() {
           {accessMode === "account" ? (
             <form
               onSubmit={handleSubmit}
-              aria-busy={loading}
+              aria-busy={loading || sessionStatus === "loading"}
               className={styles.form}
             >
               <label className={styles.fieldLabel}>
@@ -189,7 +190,7 @@ function SigninForm() {
                   }}
                   className={styles.field}
                   autoComplete="email"
-                  disabled={loading}
+                  disabled={loading || sessionStatus === "loading"}
                   required
                 />
               </label>
@@ -205,7 +206,7 @@ function SigninForm() {
                   }}
                   className={styles.field}
                   autoComplete="current-password"
-                  disabled={loading}
+                  disabled={loading || sessionStatus === "loading"}
                   required
                 />
               </label>
@@ -218,7 +219,7 @@ function SigninForm() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || sessionStatus === "loading"}
                 className={styles.primaryButton}
               >
                 {loading ? "Signing in..." : "Sign in"}
@@ -238,7 +239,7 @@ function SigninForm() {
               </p>
               <form
                 onSubmit={handleQuickAccessSubmit}
-                aria-busy={quickLoading}
+                aria-busy={quickLoading || sessionStatus === "loading"}
                 className={styles.form}
               >
                 <label className={styles.fieldLabel}>
@@ -252,7 +253,7 @@ function SigninForm() {
                     }}
                     className={styles.field}
                     autoComplete="organization"
-                    disabled={quickLoading}
+                    disabled={quickLoading || sessionStatus === "loading"}
                     required
                   />
                 </label>
@@ -268,7 +269,7 @@ function SigninForm() {
                     }}
                     className={styles.field}
                     autoComplete="name"
-                    disabled={quickLoading}
+                    disabled={quickLoading || sessionStatus === "loading"}
                     required
                   />
                 </label>
@@ -276,7 +277,7 @@ function SigninForm() {
                 <button
                   type="submit"
                   disabled={
-                    quickLoading || !clubName.trim() || !playerName.trim()
+                    quickLoading || sessionStatus === "loading" || !clubName.trim() || !playerName.trim()
                   }
                   className={styles.primaryButton}
                 >

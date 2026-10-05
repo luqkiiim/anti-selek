@@ -6,14 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlayerProfileConnectionSummary } from "@/lib/profileStats";
 
 const mocks = vi.hoisted(() => ({
-  deleteUserAvatar: vi.fn(),
+  deletePlayerAvatar: vi.fn(),
   fetch: vi.fn(),
   router: {
     back: vi.fn(),
     push: vi.fn(),
     refresh: vi.fn(),
   },
-  uploadUserAvatar: vi.fn(),
+  uploadPlayerAvatar: vi.fn(),
   useSession: vi.fn(),
 }));
 
@@ -41,8 +41,8 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/lib/avatarClient", () => ({
-  deleteUserAvatar: mocks.deleteUserAvatar,
-  uploadUserAvatar: mocks.uploadUserAvatar,
+  deletePlayerAvatar: mocks.deletePlayerAvatar,
+  uploadPlayerAvatar: mocks.uploadPlayerAvatar,
 }));
 
 import { PlayerProfileView } from "./PlayerProfileView";
@@ -148,7 +148,7 @@ function buildProfileResponse(overrides?: Partial<{
 
   return {
     user: {
-      id: "user-1",
+      id: "player-1",
       name,
       avatarUrl,
       elo: 1320,
@@ -282,6 +282,8 @@ describe("PlayerProfileView", () => {
       },
       status: "authenticated",
     });
+    mocks.deletePlayerAvatar.mockResolvedValue({ avatarUrl: null });
+    mocks.uploadPlayerAvatar.mockResolvedValue({ avatarUrl: "https://cdn.test/avatars/new.png" });
   });
 
   afterEach(async () => {
@@ -300,6 +302,7 @@ describe("PlayerProfileView", () => {
       isClaimed: true,
       isQuickAccess: false,
       avatarUrl: null,
+      players: [],
     },
     mode = "standalone",
   }: {
@@ -310,6 +313,7 @@ describe("PlayerProfileView", () => {
       isClaimed?: boolean;
       isQuickAccess?: boolean;
       avatarUrl?: string | null;
+      players?: Array<{ id: string }>;
     };
     mode?: "standalone" | "embedded";
   } = {}) {
@@ -321,7 +325,7 @@ describe("PlayerProfileView", () => {
             ? input.toString()
             : input.url;
 
-      if (url.includes("/api/users/user-1/stats")) {
+      if (url.includes("/api/users/player-1/stats")) {
         return Promise.resolve(createJsonResponse(profileResponse));
       }
 
@@ -329,6 +333,7 @@ describe("PlayerProfileView", () => {
         return Promise.resolve(
           createJsonResponse({
             user: currentUser,
+            players: currentUser.players ?? [],
           })
         );
       }
@@ -337,7 +342,7 @@ describe("PlayerProfileView", () => {
     });
 
     await act(async () => {
-      root.render(<PlayerProfileView userId="user-1" mode={mode} />);
+      root.render(<PlayerProfileView playerId="player-1" mode={mode} />);
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -745,11 +750,12 @@ describe("PlayerProfileView", () => {
   it("opens the enlarged photo viewer from the editable self avatar menu", async () => {
     await renderView({
       currentUser: {
-        id: "user-1",
+        id: "account-1",
         isAdmin: false,
         isClaimed: true,
         isQuickAccess: false,
         avatarUrl: null,
+        players: [{ id: "player-1" }],
       },
     });
 
@@ -785,5 +791,53 @@ describe("PlayerProfileView", () => {
       "https://cdn.test/avatars/alex.jpg"
     );
     expect(document.body.textContent).not.toContain("View photo");
+  });
+
+  it("uses owned Player IDs to manage a profile photo, never the account ID", async () => {
+    await renderView({
+      currentUser: {
+        id: "account-1",
+        isAdmin: false,
+        isClaimed: true,
+        isQuickAccess: false,
+        avatarUrl: null,
+        players: [{ id: "player-1" }],
+      },
+    });
+
+    const avatarMenuButton = container.querySelector(
+      'button[aria-label="Change profile photo for Alex Lee"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      avatarMenuButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    const removeButton = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Remove"
+    );
+    await act(async () => {
+      removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.deletePlayerAvatar).toHaveBeenCalledWith("player-1", undefined);
+  });
+
+  it("does not treat a matching account ID as ownership of a Player", async () => {
+    await renderView({
+      currentUser: {
+        id: "player-1",
+        isAdmin: false,
+        isClaimed: true,
+        isQuickAccess: false,
+        avatarUrl: null,
+        players: [],
+      },
+    });
+
+    expect(
+      container.querySelector('button[aria-label="Change profile photo for Alex Lee"]')
+    ).toBeNull();
   });
 });

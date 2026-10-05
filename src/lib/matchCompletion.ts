@@ -52,10 +52,10 @@ export interface FinalizableMatch {
   id: string;
   sessionId: string;
   courtId: string;
-  team1User1Id: string;
-  team1User2Id: string;
-  team2User1Id: string;
-  team2User2Id: string;
+  team1Player1Id: string;
+  team1Player2Id: string;
+  team2Player1Id: string;
+  team2Player2Id: string;
   team1Score?: number | null;
   team2Score?: number | null;
   session: {
@@ -64,10 +64,10 @@ export interface FinalizableMatch {
     balanceMetric?: string;
     isTest: boolean;
   };
-  team1User1: MatchUserSnapshot;
-  team1User2: MatchUserSnapshot;
-  team2User1: MatchUserSnapshot;
-  team2User2: MatchUserSnapshot;
+  team1Player1: MatchUserSnapshot;
+  team1Player2: MatchUserSnapshot;
+  team2Player1: MatchUserSnapshot;
+  team2Player2: MatchUserSnapshot;
 }
 
 interface FinalizeMatchResultArgs {
@@ -76,6 +76,7 @@ interface FinalizeMatchResultArgs {
   finalTeam1Score: number;
   finalTeam2Score: number;
   scoreSubmittedByUserId?: string | null;
+  scoreSubmittedByPlayerId?: string | null;
   completedAt?: Date;
 }
 
@@ -131,7 +132,7 @@ async function getUserEloByUserIdInTransaction(
     return new Map<string, number>();
   }
 
-  const rows = await tx.user.findMany({
+  const rows = await tx.player.findMany({
     where: { id: { in: uniqueUserIds } },
     select: { id: true, elo: true },
   });
@@ -147,7 +148,7 @@ interface TeamEloDeltas {
 interface EloAdjustmentInput {
   matchId: string;
   clubId: string;
-  userId: string;
+  playerId: string;
   sourceUserId?: string;
   delta: number;
   beforeElo: number;
@@ -158,7 +159,7 @@ function toPersistedEloAdjustment(adjustment: EloAdjustmentInput) {
   return {
     matchId: adjustment.matchId,
     clubId: adjustment.clubId,
-    userId: adjustment.userId,
+    playerId: adjustment.playerId,
     delta: adjustment.delta,
     beforeElo: adjustment.beforeElo,
     afterElo: adjustment.afterElo,
@@ -178,14 +179,14 @@ function getMatchEloAdjustmentDelegate(tx: Prisma.TransactionClient) {
           select: {
             matchId?: true;
             clubId: true;
-            userId: true;
+            playerId: true;
             delta: true;
           };
         }) => Promise<
           Array<{
             matchId?: string;
             clubId: string;
-            userId: string;
+            playerId: string;
             delta: number;
           }>
         >;
@@ -244,11 +245,11 @@ function calculateTeamEloDeltas({
   };
 }
 
-function getPlayerSnapshotElo(match: FinalizableMatch, userId: string) {
-  if (match.team1User1Id === userId) return match.team1User1.elo;
-  if (match.team1User2Id === userId) return match.team1User2.elo;
-  if (match.team2User1Id === userId) return match.team2User1.elo;
-  if (match.team2User2Id === userId) return match.team2User2.elo;
+function getPlayerSnapshotElo(match: FinalizableMatch, playerId: string) {
+  if (match.team1Player1Id === playerId) return match.team1Player1.elo;
+  if (match.team1Player2Id === playerId) return match.team1Player2.elo;
+  if (match.team2Player1Id === playerId) return match.team2Player1.elo;
+  if (match.team2Player2Id === playerId) return match.team2Player2.elo;
   return 1000;
 }
 
@@ -261,13 +262,13 @@ function getDisplayPlayerEloChanges({
 }) {
   const byUserId = new Map<string, EloAdjustmentInput[]>();
   for (const adjustment of adjustments) {
-    const displayUserId = adjustment.sourceUserId ?? adjustment.userId;
+    const displayUserId = adjustment.sourceUserId ?? adjustment.playerId;
     const displayCurrent = byUserId.get(displayUserId) ?? [];
     displayCurrent.push(adjustment);
     byUserId.set(displayUserId, displayCurrent);
   }
 
-  return Array.from(byUserId.entries()).map(([userId, userAdjustments]) => {
+  return Array.from(byUserId.entries()).map(([playerId, userAdjustments]) => {
     const preferred = preferredClubId
       ? userAdjustments.find(
           (adjustment) => adjustment.clubId === preferredClubId
@@ -276,7 +277,7 @@ function getDisplayPlayerEloChanges({
     const selected = preferred ?? userAdjustments[0];
 
     return {
-      userId,
+      playerId,
       delta: selected.delta,
       clubId: selected.clubId,
     };
@@ -325,34 +326,34 @@ async function buildClubEloAdjustments({
   });
   const membershipUserIds = Array.from(
     new Set(
-      playerIds.flatMap((userId) => linkedUserResolver.getLinkedUserIds(userId))
+      playerIds.flatMap((playerId) => linkedUserResolver.getLinkedUserIds(playerId))
     )
   );
   const memberships = await tx.clubMember.findMany({
     where: {
       clubId: { in: clubIds },
-      userId: { in: membershipUserIds },
+      playerId: { in: membershipUserIds },
     },
     select: {
       clubId: true,
-      userId: true,
+      playerId: true,
       elo: true,
     },
   });
   const membershipByClubAndUser = new Map<string, number>();
   for (const membership of memberships) {
     membershipByClubAndUser.set(
-      `${membership.clubId}:${membership.userId}`,
+      `${membership.clubId}:${membership.playerId}`,
       membership.elo
     );
   }
 
   const hostClubId = match.session.clubId;
   const sourceEloByUserId = new Map<string, number>();
-  for (const userId of playerIds) {
+  for (const playerId of playerIds) {
     const playerClubIds = clubIds.filter((clubId) => {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
-        userId,
+        playerId,
         clubId
       );
       return membershipByClubAndUser.has(`${clubId}:${linkedUserId}`);
@@ -362,8 +363,8 @@ async function buildClubEloAdjustments({
         ? hostClubId
         : playerClubIds[0]) ?? null;
     const sourceClubUserId = sourceClubId
-      ? linkedUserResolver.getUserIdForClub(userId, sourceClubId)
-      : userId;
+      ? linkedUserResolver.getUserIdForClub(playerId, sourceClubId)
+      : playerId;
     const sourceElo = sourceClubId
       ? membershipByClubAndUser.get(
           `${sourceClubId}:${sourceClubUserId}`
@@ -371,29 +372,29 @@ async function buildClubEloAdjustments({
       : undefined;
 
     sourceEloByUserId.set(
-      userId,
+      playerId,
       sourceElo ??
-        userEloByUserId.get(userId) ??
-        getPlayerSnapshotElo(match, userId)
+        userEloByUserId.get(playerId) ??
+        getPlayerSnapshotElo(match, playerId)
     );
   }
 
-  const team1Ids = [match.team1User1Id, match.team1User2Id];
-  const team2Ids = [match.team2User1Id, match.team2User2Id];
+  const team1Ids = [match.team1Player1Id, match.team1Player2Id];
+  const team2Ids = [match.team2Player1Id, match.team2Player2Id];
   const teamDeltasByClubId = new Map<string, TeamEloDeltas>();
   const adjustments: EloAdjustmentInput[] = [];
 
   for (const clubId of clubIds) {
-    const getRating = (userId: string) => {
+    const getRating = (playerId: string) => {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
-        userId,
+        playerId,
         clubId
       );
       return (
         membershipByClubAndUser.get(`${clubId}:${linkedUserId}`) ??
-        sourceEloByUserId.get(userId) ??
-        userEloByUserId.get(userId) ??
-        getPlayerSnapshotElo(match, userId)
+        sourceEloByUserId.get(playerId) ??
+        userEloByUserId.get(playerId) ??
+        getPlayerSnapshotElo(match, playerId)
       );
     };
 
@@ -409,46 +410,46 @@ async function buildClubEloAdjustments({
     });
     teamDeltasByClubId.set(clubId, deltas);
 
-    for (const userId of team1Ids) {
+    for (const playerId of team1Ids) {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
-        userId,
+        playerId,
         clubId
       );
       const beforeElo = membershipByClubAndUser.get(
         `${clubId}:${linkedUserId}`
       );
-      if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
+      if (beforeElo === undefined || isGuestByUserId.get(playerId) === true) {
         continue;
       }
 
       adjustments.push({
         matchId: match.id,
         clubId,
-        userId: linkedUserId,
-        sourceUserId: userId,
+        playerId: linkedUserId,
+        sourceUserId: playerId,
         delta: deltas.team1Delta,
         beforeElo,
         afterElo: beforeElo + deltas.team1Delta,
       });
     }
 
-    for (const userId of team2Ids) {
+    for (const playerId of team2Ids) {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
-        userId,
+        playerId,
         clubId
       );
       const beforeElo = membershipByClubAndUser.get(
         `${clubId}:${linkedUserId}`
       );
-      if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
+      if (beforeElo === undefined || isGuestByUserId.get(playerId) === true) {
         continue;
       }
 
       adjustments.push({
         matchId: match.id,
         clubId,
-        userId: linkedUserId,
-        sourceUserId: userId,
+        playerId: linkedUserId,
+        sourceUserId: playerId,
         delta: deltas.team2Delta,
         beforeElo,
         afterElo: beforeElo + deltas.team2Delta,
@@ -494,26 +495,26 @@ async function buildMatchRatingOutcomeInTransaction(
   const awardsStandingPoints = match.session.type !== SessionType.LADDER;
 
   const playerIds = [
-    match.team1User1Id,
-    match.team1User2Id,
-    match.team2User1Id,
-    match.team2User2Id,
+    match.team1Player1Id,
+    match.team1Player2Id,
+    match.team2Player1Id,
+    match.team2Player2Id,
   ];
   const sessionPlayerRows = await tx.sessionPlayer.findMany({
     where: {
       sessionId: match.sessionId,
-      userId: { in: playerIds },
+      playerId: { in: playerIds },
     },
     select: {
-      userId: true,
+      playerId: true,
       isGuest: true,
     },
   });
   const isGuestByUserId = new Map<string, boolean>(
-    sessionPlayerRows.map((player) => [player.userId, player.isGuest])
+    sessionPlayerRows.map((player) => [player.playerId, player.isGuest])
   );
   const guestCount = playerIds.filter(
-    (userId) => isGuestByUserId.get(userId) === true
+    (playerId) => isGuestByUserId.get(playerId) === true
   ).length;
   const guestImpactMultiplier = match.session.balanceMetric === SessionBalanceMetric.RATING
     ? 1
@@ -539,20 +540,20 @@ async function buildMatchRatingOutcomeInTransaction(
   const fallbackDeltas = calculateTeamEloDeltas({
     winnerTeam,
     team1AvgElo:
-      ((clubEloResult.sourceEloByUserId.get(match.team1User1Id) ??
-        userEloByUserId.get(match.team1User1Id) ??
-        match.team1User1.elo) +
-        (clubEloResult.sourceEloByUserId.get(match.team1User2Id) ??
-          userEloByUserId.get(match.team1User2Id) ??
-          match.team1User2.elo)) /
+      ((clubEloResult.sourceEloByUserId.get(match.team1Player1Id) ??
+        userEloByUserId.get(match.team1Player1Id) ??
+        match.team1Player1.elo) +
+        (clubEloResult.sourceEloByUserId.get(match.team1Player2Id) ??
+          userEloByUserId.get(match.team1Player2Id) ??
+          match.team1Player2.elo)) /
       2,
     team2AvgElo:
-      ((clubEloResult.sourceEloByUserId.get(match.team2User1Id) ??
-        userEloByUserId.get(match.team2User1Id) ??
-        match.team2User1.elo) +
-        (clubEloResult.sourceEloByUserId.get(match.team2User2Id) ??
-          userEloByUserId.get(match.team2User2Id) ??
-          match.team2User2.elo)) /
+      ((clubEloResult.sourceEloByUserId.get(match.team2Player1Id) ??
+        userEloByUserId.get(match.team2Player1Id) ??
+        match.team2Player1.elo) +
+        (clubEloResult.sourceEloByUserId.get(match.team2Player2Id) ??
+          userEloByUserId.get(match.team2Player2Id) ??
+          match.team2Player2.elo)) /
       2,
     team1Points,
     team2Points,
@@ -591,16 +592,16 @@ async function applyRatingOutcomeInTransaction(
 ) {
   if (match.session.isTest) return;
 
-  const team1Ids = [match.team1User1Id, match.team1User2Id];
-  const team2Ids = [match.team2User1Id, match.team2User2Id];
+  const team1Ids = [match.team1Player1Id, match.team1Player2Id];
+  const team2Ids = [match.team2Player1Id, match.team2Player2Id];
 
   if (outcome.clubEloResult.adjustments.length > 0) {
     for (const adjustment of outcome.clubEloResult.adjustments) {
       await tx.clubMember.update({
         where: {
-          clubId_userId: {
+          clubId_playerId: {
             clubId: adjustment.clubId,
-            userId: adjustment.userId,
+            playerId: adjustment.playerId,
           },
         },
         data: {
@@ -617,17 +618,17 @@ async function applyRatingOutcomeInTransaction(
 
   if (match.session.clubId) {
     const team1ClubMemberIds = team1Ids.filter(
-      (userId) => outcome.isGuestByUserId.get(userId) !== true
+      (playerId) => outcome.isGuestByUserId.get(playerId) !== true
     );
     const team2ClubMemberIds = team2Ids.filter(
-      (userId) => outcome.isGuestByUserId.get(userId) !== true
+      (playerId) => outcome.isGuestByUserId.get(playerId) !== true
     );
 
     if (team1ClubMemberIds.length > 0) {
       await tx.clubMember.updateMany({
         where: {
           clubId: match.session.clubId,
-          userId: { in: team1ClubMemberIds },
+          playerId: { in: team1ClubMemberIds },
         },
         data: { elo: { increment: outcome.persistedTeam1EloChange } },
       });
@@ -636,7 +637,7 @@ async function applyRatingOutcomeInTransaction(
       await tx.clubMember.updateMany({
         where: {
           clubId: match.session.clubId,
-          userId: { in: team2ClubMemberIds },
+          playerId: { in: team2ClubMemberIds },
         },
         data: { elo: { increment: outcome.persistedTeam2EloChange } },
       });
@@ -645,20 +646,20 @@ async function applyRatingOutcomeInTransaction(
   }
 
   const team1CoreIds = team1Ids.filter(
-    (userId) => outcome.isGuestByUserId.get(userId) !== true
+    (playerId) => outcome.isGuestByUserId.get(playerId) !== true
   );
   const team2CoreIds = team2Ids.filter(
-    (userId) => outcome.isGuestByUserId.get(userId) !== true
+    (playerId) => outcome.isGuestByUserId.get(playerId) !== true
   );
 
   if (team1CoreIds.length > 0) {
-    await tx.user.updateMany({
+    await tx.player.updateMany({
       where: { id: { in: team1CoreIds } },
       data: { elo: { increment: outcome.persistedTeam1EloChange } },
     });
   }
   if (team2CoreIds.length > 0) {
-    await tx.user.updateMany({
+    await tx.player.updateMany({
       where: { id: { in: team2CoreIds } },
       data: { elo: { increment: outcome.persistedTeam2EloChange } },
     });
@@ -673,6 +674,7 @@ export async function finalizeMatchResultInTransaction(
     finalTeam1Score,
     finalTeam2Score,
     scoreSubmittedByUserId,
+    scoreSubmittedByPlayerId,
     completedAt,
   }: FinalizeMatchResultArgs
 ) {
@@ -694,6 +696,7 @@ export async function finalizeMatchResultInTransaction(
       status: MatchStatus.COMPLETED,
       completedAt: finalizedAt,
       ...(scoreSubmittedByUserId !== undefined ? { scoreSubmittedByUserId } : {}),
+      ...(scoreSubmittedByPlayerId !== undefined ? { scoreSubmittedByPlayerId } : {}),
     },
   });
 
@@ -708,7 +711,7 @@ export async function finalizeMatchResultInTransaction(
   await tx.sessionPlayer.updateMany({
     where: {
       sessionId: match.sessionId,
-      userId: { in: [match.team1User1Id, match.team1User2Id] },
+      playerId: { in: [match.team1Player1Id, match.team1Player2Id] },
     },
     data: {
       ...(outcome.awardsStandingPoints
@@ -723,7 +726,7 @@ export async function finalizeMatchResultInTransaction(
   await tx.sessionPlayer.updateMany({
     where: {
       sessionId: match.sessionId,
-      userId: { in: [match.team2User1Id, match.team2User2Id] },
+      playerId: { in: [match.team2Player1Id, match.team2Player2Id] },
     },
     data: {
       ...(outcome.awardsStandingPoints
@@ -737,39 +740,39 @@ export async function finalizeMatchResultInTransaction(
 
   await tx.sessionPlayer.update({
     where: {
-      sessionId_userId: {
+      sessionId_playerId: {
         sessionId: match.sessionId,
-        userId: match.team1User1Id,
+        playerId: match.team1Player1Id,
       },
     },
-    data: { lastPartnerId: match.team1User2Id },
+    data: { lastPartnerPlayerId: match.team1Player2Id },
   });
   await tx.sessionPlayer.update({
     where: {
-      sessionId_userId: {
+      sessionId_playerId: {
         sessionId: match.sessionId,
-        userId: match.team1User2Id,
+        playerId: match.team1Player2Id,
       },
     },
-    data: { lastPartnerId: match.team1User1Id },
+    data: { lastPartnerPlayerId: match.team1Player1Id },
   });
   await tx.sessionPlayer.update({
     where: {
-      sessionId_userId: {
+      sessionId_playerId: {
         sessionId: match.sessionId,
-        userId: match.team2User1Id,
+        playerId: match.team2Player1Id,
       },
     },
-    data: { lastPartnerId: match.team2User2Id },
+    data: { lastPartnerPlayerId: match.team2Player2Id },
   });
   await tx.sessionPlayer.update({
     where: {
-      sessionId_userId: {
+      sessionId_playerId: {
         sessionId: match.sessionId,
-        userId: match.team2User2Id,
+        playerId: match.team2Player2Id,
       },
     },
-    data: { lastPartnerId: match.team2User1Id },
+    data: { lastPartnerPlayerId: match.team2Player1Id },
   });
 
   await applyRatingOutcomeInTransaction(tx, { match, outcome });
@@ -783,10 +786,10 @@ export async function finalizeMatchResultInTransaction(
     await applyPendingPlayerGroupChangesInTransaction(tx, {
     sessionId: match.sessionId,
     userIds: [
-      match.team1User1Id,
-      match.team1User2Id,
-      match.team2User1Id,
-      match.team2User2Id,
+      match.team1Player1Id,
+      match.team1Player2Id,
+      match.team2Player1Id,
+      match.team2Player2Id,
     ],
     });
 
@@ -818,17 +821,17 @@ export async function finalizeMatchResultInTransaction(
 
 function getMatchPartnerIdForUser(
   match: {
-    team1User1Id: string;
-    team1User2Id: string;
-    team2User1Id: string;
-    team2User2Id: string;
+    team1Player1Id: string;
+    team1Player2Id: string;
+    team2Player1Id: string;
+    team2Player2Id: string;
   },
-  userId: string
+  playerId: string
 ) {
-  if (match.team1User1Id === userId) return match.team1User2Id;
-  if (match.team1User2Id === userId) return match.team1User1Id;
-  if (match.team2User1Id === userId) return match.team2User2Id;
-  if (match.team2User2Id === userId) return match.team2User1Id;
+  if (match.team1Player1Id === playerId) return match.team1Player2Id;
+  if (match.team1Player2Id === playerId) return match.team1Player1Id;
+  if (match.team2Player1Id === playerId) return match.team2Player2Id;
+  if (match.team2Player2Id === playerId) return match.team2Player1Id;
   return null;
 }
 
@@ -844,36 +847,36 @@ async function restoreSessionPlayerRotationState(
     availableSince: Date;
   }
 ) {
-  for (const userId of userIds) {
+  for (const playerId of userIds) {
     const previousCompletedMatch = await tx.match.findFirst({
       where: {
         sessionId,
         status: MatchStatus.COMPLETED,
         OR: [
-          { team1User1Id: userId },
-          { team1User2Id: userId },
-          { team2User1Id: userId },
-          { team2User2Id: userId },
+          { team1Player1Id: playerId },
+          { team1Player2Id: playerId },
+          { team2Player1Id: playerId },
+          { team2Player2Id: playerId },
         ],
       },
       orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       select: {
         completedAt: true,
         createdAt: true,
-        team1User1Id: true,
-        team1User2Id: true,
-        team2User1Id: true,
-        team2User2Id: true,
+        team1Player1Id: true,
+        team1Player2Id: true,
+        team2Player1Id: true,
+        team2Player2Id: true,
       },
     });
 
     await tx.sessionPlayer.updateMany({
-      where: { sessionId, userId },
+      where: { sessionId, playerId },
       data: {
         availableSince,
         lastPlayedAt: previousCompletedMatch?.completedAt ?? null,
-        lastPartnerId: previousCompletedMatch
-          ? getMatchPartnerIdForUser(previousCompletedMatch, userId)
+        lastPartnerPlayerId: previousCompletedMatch
+          ? getMatchPartnerIdForUser(previousCompletedMatch, playerId)
           : null,
       },
     });
@@ -908,16 +911,16 @@ function compareCompletedMatchOrder(
 }
 
 function getMatchUserIds(match: {
-  team1User1Id: string;
-  team1User2Id: string;
-  team2User1Id: string;
-  team2User2Id: string;
+  team1Player1Id: string;
+  team1Player2Id: string;
+  team2Player1Id: string;
+  team2Player2Id: string;
 }) {
   return [
-    match.team1User1Id,
-    match.team1User2Id,
-    match.team2User1Id,
-    match.team2User2Id,
+    match.team1Player1Id,
+    match.team1Player2Id,
+    match.team2Player1Id,
+    match.team2Player2Id,
   ];
 }
 
@@ -926,8 +929,8 @@ function getTeamUserIds(
   team: 1 | 2
 ): [string, string] {
   return team === 1
-    ? [match.team1User1Id, match.team1User2Id]
-    : [match.team2User1Id, match.team2User2Id];
+    ? [match.team1Player1Id, match.team1Player2Id]
+    : [match.team2Player1Id, match.team2Player2Id];
 }
 
 async function assertNoNewerOutsideRatingMatches(
@@ -984,10 +987,10 @@ async function assertNoNewerOutsideRatingMatches(
               { OR: newerCompletedMatchTimeFilter },
               {
                 OR: [
-                  { team1User1Id: { in: userIds } },
-                  { team1User2Id: { in: userIds } },
-                  { team2User1Id: { in: userIds } },
-                  { team2User2Id: { in: userIds } },
+                  { team1Player1Id: { in: userIds } },
+                  { team1Player2Id: { in: userIds } },
+                  { team2Player1Id: { in: userIds } },
+                  { team2Player2Id: { in: userIds } },
                 ],
               },
             ],
@@ -1018,10 +1021,10 @@ async function reverseLegacyMatchRatingInTransaction(
   const team1ReverseEloDelta = -(match.team1EloChange ?? 0);
   const team2ReverseEloDelta = -(match.team2EloChange ?? 0);
   const team1CoreIds = getTeamUserIds(match, 1).filter(
-    (userId) => isGuestByUserId.get(userId) !== true
+    (playerId) => isGuestByUserId.get(playerId) !== true
   );
   const team2CoreIds = getTeamUserIds(match, 2).filter(
-    (userId) => isGuestByUserId.get(userId) !== true
+    (playerId) => isGuestByUserId.get(playerId) !== true
   );
 
   if (match.session.clubId) {
@@ -1029,7 +1032,7 @@ async function reverseLegacyMatchRatingInTransaction(
       await tx.clubMember.updateMany({
         where: {
           clubId: match.session.clubId,
-          userId: { in: team1CoreIds },
+          playerId: { in: team1CoreIds },
         },
         data: { elo: { increment: team1ReverseEloDelta } },
       });
@@ -1038,7 +1041,7 @@ async function reverseLegacyMatchRatingInTransaction(
       await tx.clubMember.updateMany({
         where: {
           clubId: match.session.clubId,
-          userId: { in: team2CoreIds },
+          playerId: { in: team2CoreIds },
         },
         data: { elo: { increment: team2ReverseEloDelta } },
       });
@@ -1047,13 +1050,13 @@ async function reverseLegacyMatchRatingInTransaction(
   }
 
   if (team1CoreIds.length > 0 && team1ReverseEloDelta !== 0) {
-    await tx.user.updateMany({
+    await tx.player.updateMany({
       where: { id: { in: team1CoreIds } },
       data: { elo: { increment: team1ReverseEloDelta } },
     });
   }
   if (team2CoreIds.length > 0 && team2ReverseEloDelta !== 0) {
-    await tx.user.updateMany({
+    await tx.player.updateMany({
       where: { id: { in: team2CoreIds } },
       data: { elo: { increment: team2ReverseEloDelta } },
     });
@@ -1077,15 +1080,15 @@ async function reverseReplayRatingEffectsInTransaction(
   const sessionPlayerRows = await tx.sessionPlayer.findMany({
     where: {
       sessionId: replayMatches[0]?.sessionId,
-      userId: { in: replayUserIds },
+      playerId: { in: replayUserIds },
     },
     select: {
-      userId: true,
+      playerId: true,
       isGuest: true,
     },
   });
   const isGuestByUserId = new Map<string, boolean>(
-    sessionPlayerRows.map((player) => [player.userId, player.isGuest])
+    sessionPlayerRows.map((player) => [player.playerId, player.isGuest])
   );
 
   const matchEloAdjustmentDelegate = getMatchEloAdjustmentDelegate(tx);
@@ -1095,7 +1098,7 @@ async function reverseReplayRatingEffectsInTransaction(
       select: {
         matchId: true,
         clubId: true,
-        userId: true,
+        playerId: true,
         delta: true,
       },
     })) ?? [];
@@ -1110,13 +1113,13 @@ async function reverseReplayRatingEffectsInTransaction(
 
   const reverseDeltaByClubAndUserId = new Map<
     string,
-    { clubId: string; userId: string; delta: number }
+    { clubId: string; playerId: string; delta: number }
   >();
   for (const adjustment of ledgerAdjustments) {
-    const key = `${adjustment.clubId}:${adjustment.userId}`;
+    const key = `${adjustment.clubId}:${adjustment.playerId}`;
     const current = reverseDeltaByClubAndUserId.get(key) ?? {
       clubId: adjustment.clubId,
-      userId: adjustment.userId,
+      playerId: adjustment.playerId,
       delta: 0,
     };
     current.delta -= adjustment.delta;
@@ -1128,7 +1131,7 @@ async function reverseReplayRatingEffectsInTransaction(
     await tx.clubMember.updateMany({
       where: {
         clubId: item.clubId,
-        userId: item.userId,
+        playerId: item.playerId,
       },
       data: { elo: { increment: item.delta } },
     });
@@ -1184,7 +1187,7 @@ async function applySessionPointCorrectionInTransaction(
     await tx.sessionPlayer.updateMany({
       where: {
         sessionId: targetMatch.sessionId,
-        userId: { in: getTeamUserIds(targetMatch, 1) },
+        playerId: { in: getTeamUserIds(targetMatch, 1) },
       },
       data: { sessionPoints: { increment: team1Delta } },
     });
@@ -1193,7 +1196,7 @@ async function applySessionPointCorrectionInTransaction(
     await tx.sessionPlayer.updateMany({
       where: {
         sessionId: targetMatch.sessionId,
-        userId: { in: getTeamUserIds(targetMatch, 2) },
+        playerId: { in: getTeamUserIds(targetMatch, 2) },
       },
       data: { sessionPoints: { increment: team2Delta } },
     });
@@ -1227,10 +1230,10 @@ export async function correctCompletedMatchScoreInTransaction(
           balanceMetric: true,
         },
       },
-      team1User1: { select: { id: true, name: true, elo: true } },
-      team1User2: { select: { id: true, name: true, elo: true } },
-      team2User1: { select: { id: true, name: true, elo: true } },
-      team2User2: { select: { id: true, name: true, elo: true } },
+      team1Player1: { select: { id: true, name: true, elo: true } },
+      team1Player2: { select: { id: true, name: true, elo: true } },
+      team2Player1: { select: { id: true, name: true, elo: true } },
+      team2Player2: { select: { id: true, name: true, elo: true } },
     },
   });
 
@@ -1286,10 +1289,10 @@ export async function correctCompletedMatchScoreInTransaction(
           balanceMetric: true,
         },
       },
-      team1User1: { select: { id: true, name: true, elo: true } },
-      team1User2: { select: { id: true, name: true, elo: true } },
-      team2User1: { select: { id: true, name: true, elo: true } },
-      team2User2: { select: { id: true, name: true, elo: true } },
+      team1Player1: { select: { id: true, name: true, elo: true } },
+      team1Player2: { select: { id: true, name: true, elo: true } },
+      team2Player1: { select: { id: true, name: true, elo: true } },
+      team2Player2: { select: { id: true, name: true, elo: true } },
     },
     orderBy: [{ completedAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
   })) as CompletedReplayMatch[];
@@ -1456,21 +1459,21 @@ export async function undoCompletedMatchResultInTransaction(
     );
   }
 
-  const team1Ids = [match.team1User1Id, match.team1User2Id];
-  const team2Ids = [match.team2User1Id, match.team2User2Id];
+  const team1Ids = [match.team1Player1Id, match.team1Player2Id];
+  const team2Ids = [match.team2Player1Id, match.team2Player2Id];
   const affectedUserIds = [...team1Ids, ...team2Ids];
   const sessionPlayerRows = await tx.sessionPlayer.findMany({
     where: {
       sessionId: match.sessionId,
-      userId: { in: affectedUserIds },
+      playerId: { in: affectedUserIds },
     },
     select: {
-      userId: true,
+      playerId: true,
       isGuest: true,
     },
   });
   const isGuestByUserId = new Map(
-    sessionPlayerRows.map((player) => [player.userId, player.isGuest])
+    sessionPlayerRows.map((player) => [player.playerId, player.isGuest])
   );
 
   const ledgerAdjustments =
@@ -1478,7 +1481,7 @@ export async function undoCompletedMatchResultInTransaction(
       where: { matchId: match.id },
       select: {
         clubId: true,
-        userId: true,
+        playerId: true,
         delta: true,
       },
     })) ?? [];
@@ -1492,7 +1495,7 @@ export async function undoCompletedMatchResultInTransaction(
       await tx.clubMember.updateMany({
         where: {
           clubId: adjustment.clubId,
-          userId: adjustment.userId,
+          playerId: adjustment.playerId,
         },
         data: {
           elo: { increment: -adjustment.delta },
@@ -1501,10 +1504,10 @@ export async function undoCompletedMatchResultInTransaction(
     }
   } else if (!match.session.isTest) {
     const team1CoreIds = team1Ids.filter(
-      (userId) => isGuestByUserId.get(userId) !== true
+      (playerId) => isGuestByUserId.get(playerId) !== true
     );
     const team2CoreIds = team2Ids.filter(
-      (userId) => isGuestByUserId.get(userId) !== true
+      (playerId) => isGuestByUserId.get(playerId) !== true
     );
 
     if (match.session.clubId) {
@@ -1512,7 +1515,7 @@ export async function undoCompletedMatchResultInTransaction(
         await tx.clubMember.updateMany({
           where: {
             clubId: match.session.clubId,
-            userId: { in: team1CoreIds },
+            playerId: { in: team1CoreIds },
           },
           data: { elo: { increment: team1ReverseEloDelta } },
         });
@@ -1521,20 +1524,20 @@ export async function undoCompletedMatchResultInTransaction(
         await tx.clubMember.updateMany({
           where: {
             clubId: match.session.clubId,
-            userId: { in: team2CoreIds },
+            playerId: { in: team2CoreIds },
           },
           data: { elo: { increment: team2ReverseEloDelta } },
         });
       }
     } else {
       if (team1CoreIds.length > 0 && team1ReverseEloDelta !== 0) {
-        await tx.user.updateMany({
+        await tx.player.updateMany({
           where: { id: { in: team1CoreIds } },
           data: { elo: { increment: team1ReverseEloDelta } },
         });
       }
       if (team2CoreIds.length > 0 && team2ReverseEloDelta !== 0) {
-        await tx.user.updateMany({
+        await tx.player.updateMany({
           where: { id: { in: team2CoreIds } },
           data: { elo: { increment: team2ReverseEloDelta } },
         });
@@ -1558,7 +1561,7 @@ export async function undoCompletedMatchResultInTransaction(
   await tx.sessionPlayer.updateMany({
     where: {
       sessionId: match.sessionId,
-      userId: { in: team1Ids },
+      playerId: { in: team1Ids },
     },
     data: {
       ...(team1StandingPoints > 0
@@ -1570,7 +1573,7 @@ export async function undoCompletedMatchResultInTransaction(
   await tx.sessionPlayer.updateMany({
     where: {
       sessionId: match.sessionId,
-      userId: { in: team2Ids },
+      playerId: { in: team2Ids },
     },
     data: {
       ...(team2StandingPoints > 0

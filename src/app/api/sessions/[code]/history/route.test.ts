@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   getSessionOperatorMembership: vi.fn(),
   invalidTargetResponse: vi.fn(),
   isQuickAccessSession: vi.fn(),
+  getQuickAccessPlayerId: vi.fn(),
+  isAccountSessionPlayer: vi.fn(),
   matchFindFirst: vi.fn(),
   sessionFindUnique: vi.fn(),
   rateLimit: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/quickAccess", () => ({
   canQuickAccessSessionRead: mocks.canQuickAccessSessionRead,
+  getQuickAccessPlayerId: mocks.getQuickAccessPlayerId,
   isQuickAccessSession: mocks.isQuickAccessSession,
 }));
 
@@ -50,6 +53,7 @@ vi.mock("@/lib/sessionCollab", () => ({
   getSessionAdminMembership: mocks.getSessionAdminMembership,
   getSessionMembership: mocks.getSessionMembership,
   getSessionOperatorMembership: mocks.getSessionOperatorMembership,
+  isAccountSessionPlayer: mocks.isAccountSessionPlayer,
 }));
 
 import { GET } from "./route";
@@ -81,27 +85,27 @@ function createHistorySessionBase() {
         status: SessionClubStatus.ACCEPTED,
       },
     ],
-    players: [{ userId: "admin-1" }, { userId: "a1" }],
+    players: [{ playerId: "player-admin-1" }, { playerId: "player-a1" }],
     matches: [
       {
         id: "match-1",
         status: MatchStatus.COMPLETED,
         createdAt: new Date("2026-05-02T09:25:00.000Z"),
         completedAt: new Date("2026-05-02T09:45:00.000Z"),
-        team1User1Id: "a1",
-        team1User2Id: "a2",
-        team2User1Id: "b1",
-        team2User2Id: "b2",
+        team1Player1Id: "player-a1",
+        team1Player2Id: "player-a2",
+        team2Player1Id: "player-b1",
+        team2Player2Id: "player-b2",
         winnerTeam: 1,
         team1Score: 21,
         team2Score: 18,
         team1EloChange: 10,
         team2EloChange: -10,
         court: { courtNumber: 1, label: null },
-        team1User1: { id: "a1", name: "A1" },
-        team1User2: { id: "a2", name: "A2" },
-        team2User1: { id: "b1", name: "B1" },
-        team2User2: { id: "b2", name: "B2" },
+        team1Player1: { id: "player-a1", name: "A1" },
+        team1Player2: { id: "player-a2", name: "A2" },
+        team2Player1: { id: "player-b1", name: "B1" },
+        team2Player2: { id: "player-b2", name: "B2" },
       },
     ],
   };
@@ -146,6 +150,8 @@ describe("session history route correction availability", () => {
       }
     );
     mocks.isQuickAccessSession.mockReturnValue(false);
+    mocks.getQuickAccessPlayerId.mockImplementation((session: { user?: { isQuickAccess?: boolean; guestPlayerId?: string | null } } | null | undefined) => session?.user?.isQuickAccess ? session.user.guestPlayerId ?? null : null);
+    mocks.isAccountSessionPlayer.mockResolvedValue(false);
     mocks.invalidTargetResponse.mockImplementation(async () =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
@@ -181,7 +187,7 @@ describe("session history route correction availability", () => {
     const firstResponse = await GET(new Request(url, { headers }), params);
     expect(firstResponse.status).toBe(200);
 
-    mocks.auth.mockResolvedValueOnce({ user: { id: "a1", isAdmin: false } });
+    mocks.auth.mockResolvedValueOnce({ user: { id: "account-a1", isAdmin: false } });
     const secondResponse = await GET(new Request(url, { headers }), params);
     expect(secondResponse.status).toBe(200);
 
@@ -202,7 +208,7 @@ describe("session history route correction availability", () => {
       "api:sessions:code:history:get",
       {
         applyHighRiskBucket: false,
-        identity: "a1",
+        identity: "account-a1",
         limit: 120,
         windowMs: 60_000,
       }
@@ -223,6 +229,23 @@ describe("session history route correction availability", () => {
     expect(response.status).toBe(200);
     expect(body.canCorrectCompletedScores).toBe(true);
     expect(body.correctionBlockedReason).toBeNull();
+  });
+
+  it("allows an account to read history through its owned Player participant", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "account-viewer", isAdmin: false } });
+    mocks.getSessionMembership.mockResolvedValue(null);
+    mocks.getSessionOperatorMembership.mockResolvedValue(null);
+    mocks.getSessionAdminMembership.mockResolvedValue(null);
+    mocks.isAccountSessionPlayer.mockResolvedValue(true);
+
+    const response = await getHistory();
+
+    expect(response.status).toBe(200);
+    expect(mocks.isAccountSessionPlayer).toHaveBeenCalledWith(
+      expect.anything(),
+      "session-1",
+      "account-viewer"
+    );
   });
 
   it("returns a blocked reason when newer outside matches exist", async () => {
@@ -256,7 +279,8 @@ describe("session history route correction availability", () => {
   it("allows quick-access spectators to read accepted session history without management controls", async () => {
     mocks.auth.mockResolvedValue({
       user: {
-        id: "quick-1",
+        id: "guest:quick-1",
+        guestPlayerId: "quick-1",
         isAdmin: false,
         isQuickAccess: true,
         quickAccessClubId: "community-1",

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   userFindUnique: vi.fn(),
-  clubMemberFindUnique: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
   clubFindUnique: vi.fn(),
   clubFindMany: vi.fn(),
   clubUpdate: vi.fn(),
@@ -26,9 +26,13 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findUnique: mocks.userFindUnique,
     },
+    clubAccess: {
+      findUnique: async (...args: unknown[]) => { const grant = await mocks.clubAccessFindUnique(...args); return grant ? { ...grant, status: "ACTIVE" } : null; },
+      findMany: async () => [{ userId: "account-viewer-1", role: "ADMIN" }],
+    },
     clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
-      findMany: mocks.clubMemberFindMany,
+      findFirst: async () => ({ playerId: "viewer-1", elo: 1120, player: { ...(await mocks.userFindUnique()), id: "viewer-1", ownerUserId: "account-viewer-1" } }),
+      findMany: async () => (await mocks.clubMemberFindMany()).map((m: { player: { id: string; isClaimed: boolean }; [key: string]: unknown }) => ({ ...m, id: `cm-${m.player.id}`, playerId: m.player.id, player: { ...m.player, ownerUserId: m.player.isClaimed ? "account-viewer-1" : null } })),
     },
     club: {
       findUnique: mocks.clubFindUnique,
@@ -59,6 +63,7 @@ vi.mock("@/app/api/sessions/listSessionsService", () => ({
 
 vi.mock("@/lib/clubPulse", () => ({
   buildClubPulse: mocks.buildClubPulse,
+  applyClubPulseNewsLikes: (pulse: unknown) => pulse,
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
@@ -88,7 +93,7 @@ describe("club snapshot route", () => {
     vi.clearAllMocks();
 
     mocks.auth.mockResolvedValue({
-      user: { id: "viewer-1", isAdmin: false },
+      user: { id: "account-viewer-1", isAdmin: false },
     });
     mocks.userFindUnique.mockResolvedValue({
       id: "viewer-1",
@@ -100,7 +105,7 @@ describe("club snapshot route", () => {
       partnerPreference: "OPEN",
       mixedSideOverride: null,
     });
-    mocks.clubMemberFindUnique.mockResolvedValue({
+    mocks.clubAccessFindUnique.mockResolvedValue({
       role: "ADMIN",
       elo: 1120,
     });
@@ -108,7 +113,7 @@ describe("club snapshot route", () => {
       id: "community-1",
       name: "Club One",
       avatarKey: "https://blob.vercel-storage.com/avatars/clubs/community-1/logo.webp",
-      createdById: "viewer-1",
+      createdById: "account-viewer-1",
       isTutorial: false,
       tutorialOwnerId: null,
       isPasswordProtected: false,
@@ -126,7 +131,7 @@ describe("club snapshot route", () => {
         role: "ADMIN",
         status: "CORE",
         elo: 1120,
-        user: {
+        player: {
           id: "viewer-1",
           name: "Viewer",
           email: "viewer@example.com",
@@ -143,7 +148,7 @@ describe("club snapshot route", () => {
         role: "MEMBER",
         status: "CORE",
         elo: 1010,
-        user: {
+        player: {
           id: "player-2",
           name: "Player Two",
           email: null,
@@ -169,7 +174,7 @@ describe("club snapshot route", () => {
         createdAt: new Date("2026-05-18T00:00:00.000Z"),
         players: [
           {
-            user: {
+            player: {
               id: "viewer-1",
               name: "Viewer",
               avatarUrl: "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg",
@@ -226,6 +231,8 @@ describe("club snapshot route", () => {
       "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );
     expect(body.notifications).toEqual({ unreadCount: 0 });
+    expect(body.viewer.id).toBe("account-viewer-1");
+    expect(body.viewer.playerId).toBe("viewer-1");
   });
 
   it("serves the canonical clubs route with legacy response aliases", async () => {
@@ -290,7 +297,7 @@ describe("club snapshot route", () => {
         role: "ADMIN",
         status: "CORE",
         elo: 1030,
-        user: {
+        player: {
           id: "viewer-1",
           name: "Alice",
           email: "viewer@example.com",
@@ -307,7 +314,7 @@ describe("club snapshot route", () => {
         role: "MEMBER",
         status: "CORE",
         elo: 1020,
-        user: {
+        player: {
           id: "player-2",
           name: "Ben",
           email: null,
@@ -324,7 +331,7 @@ describe("club snapshot route", () => {
         role: "MEMBER",
         status: "CORE",
         elo: 1000,
-        user: {
+        player: {
           id: "player-3",
           name: "Cara",
           email: null,
@@ -353,21 +360,21 @@ describe("club snapshot route", () => {
     ]);
     mocks.matchFindMany.mockResolvedValueOnce([
       {
-        id: "match-1",
+        id: "match-1", sessionId: "session-1",
         completedAt: new Date("2026-05-18T01:00:00.000Z"),
         winnerTeam: 1,
-        team1User1Id: "viewer-1",
-        team1User2Id: "guest-1",
-        team2User1Id: "player-2",
-        team2User2Id: "guest-2",
+        team1Player1Id: "viewer-1",
+        team1Player2Id: "guest-1",
+        team2Player1Id: "player-2",
+        team2Player2Id: "guest-2",
         team1Score: 21,
         team2Score: 18,
         team1EloChange: 20,
         team2EloChange: -20,
-        team1User1: { id: "viewer-1", name: "Alice", avatarKey: null },
-        team1User2: { id: "guest-1", name: "Guest One", avatarKey: null },
-        team2User1: { id: "player-2", name: "Ben", avatarKey: null },
-        team2User2: { id: "guest-2", name: "Guest Two", avatarKey: null },
+        team1Player1: { id: "viewer-1", name: "Alice", avatarKey: null },
+        team1Player2: { id: "guest-1", name: "Guest One", avatarKey: null },
+        team2Player1: { id: "player-2", name: "Ben", avatarKey: null },
+        team2Player2: { id: "guest-2", name: "Guest Two", avatarKey: null },
         session: {
           id: "session-1",
           code: "ABC123",
@@ -416,9 +423,9 @@ describe("club snapshot route", () => {
     mocks.clubFindUnique.mockResolvedValueOnce({
       id: "community-1",
       name: "Tutorial playground viewer-1",
-      createdById: "viewer-1",
+      createdById: "account-viewer-1",
       isTutorial: true,
-      tutorialOwnerId: "viewer-1",
+      tutorialOwnerId: "account-viewer-1",
       isPasswordProtected: false,
       _count: { members: 2, sessions: 1 },
     });
@@ -436,7 +443,7 @@ describe("club snapshot route", () => {
   });
 
   it("allows admins to remove a club password and make it public", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValueOnce({
+    mocks.clubAccessFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
     });
     mocks.clubFindUnique.mockResolvedValueOnce({
@@ -475,6 +482,7 @@ describe("club snapshot route", () => {
         id: true,
         name: true,
         isPasswordProtected: true,
+        rules: true,
         updatedAt: true,
       },
     });
@@ -482,7 +490,7 @@ describe("club snapshot route", () => {
   });
 
   it("requires a password when enabling protection for an open club", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValueOnce({
+    mocks.clubAccessFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
     });
     mocks.clubFindUnique.mockResolvedValueOnce({
@@ -509,14 +517,14 @@ describe("club snapshot route", () => {
   });
 
   it("rejects direct settings updates for tutorial playgrounds", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValueOnce({
+    mocks.clubAccessFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
     });
     mocks.clubFindUnique.mockResolvedValueOnce({
       id: "community-1",
       isPasswordProtected: false,
       isTutorial: true,
-      tutorialOwnerId: "viewer-1",
+      tutorialOwnerId: "account-viewer-1",
     });
 
     const response = await PATCH(

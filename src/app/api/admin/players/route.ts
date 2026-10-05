@@ -1,105 +1,26 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
-import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
-
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { serializeAvatarEntity } from "@/lib/avatar";
 export const dynamic = "force-dynamic";
-
 export async function POST(request: Request) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:admin:players:post", { limit: 15, windowMs: 60_000 });
-    if (rateLimitResponse) return rateLimitResponse;
-
-    const session = await auth();
-
-    if (!session?.user?.isAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
+    const limited = await rateLimit(request, "api:admin:players:post", { limit: 15, windowMs: 60000 }); if (limited) return limited;
+    const session = await auth(); if (!session?.user?.isAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-    }
-
-    const { email, name, password } = body as {
-      email?: string | null;
-      name?: string | null;
-      password?: string | null;
-    };
-
-    if (!name) {
-      return NextResponse.json(
-        { error: "Missing required field: name" },
-        { status: 400 }
-      );
-    }
-
-    // Check if email already exists if provided
-    if (email) {
-      const existingUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (existingUser) {
-        return NextResponse.json(
-          { error: "Email already registered" },
-          { status: 400 }
-        );
-      }
-    }
-
-    const passwordHash = password ? await bcrypt.hash(password, 10) : null;
-
-    const user = await prisma.user.create({
-      data: {
-        email: email || null,
-        name,
-        passwordHash,
-        isClaimed: !!email,
-      },
-    });
-
-    return NextResponse.json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      isClaimed: user.isClaimed,
-    });
-  } catch (error) {
-    logError("Admin add player error", error);
-    return safeErrorResponse();
-  }
+    if (!body || typeof body.name !== "string" || body.name.trim().length < 2 || body.name.trim().length > 100) return NextResponse.json({ error: "Enter a player name" }, { status: 400 });
+    if (body.email || body.password || body.ownerUserId) return NextResponse.json({ error: "Create an offline Player here. Accounts register and request an approved profile connection separately." }, { status: 400 });
+    const player = await prisma.player.create({ data: { name: body.name.trim() } });
+    return NextResponse.json({ ...serializeAvatarEntity(player), email: null, isClaimed: false });
+  } catch (error) { logError("Admin add player", error); return safeErrorResponse(); }
 }
-
 export async function GET(request: Request) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:admin:players:get", { limit: 20, windowMs: 60_000 });
-    if (rateLimitResponse) return rateLimitResponse;
-
-    const session = await auth();
-
-    if (!session?.user?.isAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
-    const players = await prisma.user.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        elo: true,
-        isActive: true,
-        isClaimed: true,
-        createdAt: true,
-      },
-    });
-
-    return NextResponse.json(players);
-  } catch (error) {
-    logError("Admin list players error", error);
-    return safeErrorResponse();
-  }
+    const limited = await rateLimit(request, "api:admin:players:get", { limit: 20, windowMs: 60000 }); if (limited) return limited;
+    const session = await auth(); if (!session?.user?.isAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const players = await prisma.player.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, avatarKey: true, elo: true, ownerUserId: true, isActive: true, createdAt: true } });
+    return NextResponse.json(players.map(player => ({ ...serializeAvatarEntity(player), email: null, isClaimed: !!player.ownerUserId })));
+  } catch (error) { logError("Admin list players", error); return safeErrorResponse(); }
 }

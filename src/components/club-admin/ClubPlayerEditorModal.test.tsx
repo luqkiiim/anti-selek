@@ -59,18 +59,18 @@ function renderModal(
   {
     canDemoteAdmins = false,
     canOpenEmergencyPasswordReset = false,
-    currentUserId = null,
+    currentPlayerId = null,
   }: {
     canDemoteAdmins?: boolean;
     canOpenEmergencyPasswordReset?: boolean;
-    currentUserId?: string | null;
+    currentPlayerId?: string | null;
   } = {}
 ) {
   return renderToStaticMarkup(
     <ClubPlayerEditorModal
       player={player}
       clubId="community-1"
-      currentUserId={currentUserId}
+      currentPlayerId={currentPlayerId}
       editorName={player.name}
       editorRating={String(player.elo)}
       savingName={false}
@@ -248,12 +248,13 @@ describe("ClubPlayerEditorModal", () => {
   it("shows leave club for the current admin", () => {
     const markup = renderModal(
       buildPlayer({
-        id: "admin-1",
+        id: "player-admin-1",
+        ownerUserId: "account-admin-1",
         isClaimed: true,
         email: "admin@example.com",
         role: "ADMIN",
       }),
-      { currentUserId: "admin-1" }
+      { currentPlayerId: "player-admin-1" }
     );
 
     expect(markup).toContain("Leave club");

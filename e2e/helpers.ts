@@ -18,6 +18,7 @@ export const adminControlsClubId = "community-admin-controls-e2e";
 export const claimClubId = "community-claim-e2e";
 export const claimRequesterUserId = "user-claim-requester-e2e";
 export const claimPlaceholderUserId = "user-claim-placeholder-e2e";
+export const claimRequesterAccountId = `account-${claimRequesterUserId}`;
 export const scoreSessionCode = "session-score-e2e";
 
 interface SessionPlayerSnapshot {
@@ -38,6 +39,8 @@ interface ClubMemberSnapshot {
   id: string;
   name: string;
   elo: number;
+  ownerUserId: string | null;
+  isClaimed: boolean;
 }
 
 interface ClubSessionSnapshot {

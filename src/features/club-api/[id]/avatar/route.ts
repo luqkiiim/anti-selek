@@ -45,21 +45,21 @@ async function canManageClubAvatar({
   requesterId: string;
   requesterIsAdmin: boolean;
 }) {
-  if (requesterIsAdmin || createdById === requesterId) {
+  if (requesterIsAdmin) {
     return true;
   }
 
-  const membership = await prisma.clubMember.findUnique({
+  const membership = await prisma.clubAccess.findUnique({
     where: {
       clubId_userId: {
         clubId,
         userId: requesterId,
       },
     },
-    select: { role: true },
+    select: { role: true, status: true },
   });
 
-  return membership?.role === ClubRole.ADMIN;
+  return membership?.status === "ACTIVE" && (membership.role === ClubRole.ADMIN || membership.role === ClubRole.OWNER);
 }
 
 async function assertCanManageClubAvatar({

@@ -202,9 +202,9 @@ export async function POST(
     const created = await prisma.$transaction((tx) =>
       createOfflineIdentityLinkRequest(tx, {
         sourceClubId,
-        sourceUserId,
+        sourcePlayerId: sourceUserId,
         targetClubId,
-        targetUserId,
+        targetPlayerId: targetUserId,
         requestedById: session.user.id,
         autoApprove: canManageTarget,
       })

@@ -62,7 +62,7 @@ describe("session end route", () => {
 
     mocks.captureAchievementEligibility.mockResolvedValue(undefined);
     mocks.auth.mockResolvedValue({
-      user: { id: "staff-1", isAdmin: false },
+      user: { id: "staff-account-1", isAdmin: false },
     });
     mocks.rateLimit.mockResolvedValue(null);
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
@@ -94,17 +94,17 @@ describe("session end route", () => {
       courts: [],
       players: [
         {
-          userId: "u1",
+          playerId: "player-u1",
           sessionPoints: 18,
           isPaused: false,
           isGuest: false,
           gender: "UNSPECIFIED",
           partnerPreference: "OPEN",
           pool: "A",
-          user: {
-            id: "u1",
+          player: {
+            id: "player-u1",
             name: "Alex Lee",
-            avatarKey: "https://blob.vercel-storage.com/avatars/u1/photo.jpg",
+            avatarKey: "https://blob.vercel-storage.com/avatars/player-u1/photo.jpg",
             elo: 1200,
           },
         },
@@ -146,7 +146,7 @@ describe("session end route", () => {
 
     expect(response.status).toBe(200);
     expect(body.players[0].user.avatarUrl).toBe(
-      "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
+      "https://blob.vercel-storage.com/avatars/player-u1/photo.jpg"
     );
     expect(body.players[0].user.avatarKey).toBeUndefined();
     expect(body.queuedMatch).toBeNull();

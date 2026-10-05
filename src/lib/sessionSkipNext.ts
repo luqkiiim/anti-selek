@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 export interface SkipNextPlayer {
-  userId: string;
+  playerId: string;
   skipNextMatchAt?: Date | string | null;
 }
 
@@ -13,7 +13,7 @@ export function getPendingSkipNextUserIds(players: readonly SkipNextPlayer[]) {
   return new Set(
     players
       .filter(hasPendingSkipNextMatch)
-      .map((player) => player.userId)
+      .map((player) => player.playerId)
   );
 }
 
@@ -23,7 +23,7 @@ export function getSkippedSelectionUserIds(
   ignoredUserIds: ReadonlySet<string> = new Set()
 ) {
   return selectedUserIds.filter(
-    (userId) => pendingSkipUserIds.has(userId) && !ignoredUserIds.has(userId)
+    (playerId) => pendingSkipUserIds.has(playerId) && !ignoredUserIds.has(playerId)
   );
 }
 
@@ -48,7 +48,7 @@ export async function consumeSkipNextMatches(
   await tx.sessionPlayer.updateMany({
     where: {
       sessionId,
-      userId: { in: uniqueUserIds },
+      playerId: { in: uniqueUserIds },
       skipNextMatchAt: { not: null },
     },
     data: {

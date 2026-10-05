@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
@@ -35,13 +36,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:start");
@@ -51,7 +52,7 @@ export async function POST(
       where: { code },
       include: {
         players: {
-          include: { user: { select: { name: true } } },
+          include: { player: { select: { name: true } } },
         },
         sessionClubs: true,
       },
@@ -67,11 +68,11 @@ export async function POST(
       acceptedOnly: true,
     });
     if (!session.user.isAdmin && !operatorMembership) {
-      return NextResponse.json({ error: "Admin or staff only" }, { status: 403 });
+      return sportingJson({ error: "Admin or staff only" }, { status: 403 });
     }
 
     if (sessionData.status !== SessionStatus.WAITING) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Tournament already started" },
         { status: 400 }
       );
@@ -81,7 +82,7 @@ export async function POST(
       (link) => link.status !== SessionClubStatus.ACCEPTED
     );
     if (pendingPartner) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Partner club must approve this collab before it can start" },
         { status: 409 }
       );
@@ -98,7 +99,7 @@ export async function POST(
         (player) => player.pool === SessionPool.B
       ).length;
       if (competitiveCount < 2 || socialCount < 2) {
-        return NextResponse.json(
+        return sportingJson(
           {
             error:
               "Player groups require at least 2 Competitive and 2 Social players before starting",
@@ -114,10 +115,10 @@ export async function POST(
           player.gender !== PlayerGender.FEMALE
       );
       if (playerMissingGender) {
-        return NextResponse.json(
+        return sportingJson(
           {
             error:
-              `Mixed pairing requires a gender for ${playerMissingGender.user.name}`,
+              `Mixed pairing requires a gender for ${playerMissingGender.player.name}`,
           },
           { status: 400 }
         );
@@ -144,14 +145,14 @@ export async function POST(
         courts: { include: { currentMatch: true } },
         players: {
           include: {
-            user: { select: { id: true, name: true, avatarKey: true, elo: true } },
+            player: { select: { id: true, name: true, avatarKey: true, elo: true } },
           },
         },
       },
     });
 
     const linkedClubIds = clubLinks.map((link) => link.clubId);
-    const playerIds = updated.players.map((p) => p.userId);
+    const playerIds = updated.players.map((p) => p.playerId);
     const players =
       linkedClubIds.length > 1 && updated.players.length > 0
         ? withPlayerClubBadges(
@@ -167,13 +168,13 @@ export async function POST(
           : updated.players;
     const serializedPlayers = players.map((player) => ({
       ...player,
-      user: serializeAvatarEntity(player.user),
+      player: serializeAvatarEntity(player.player),
     }));
 
-    return NextResponse.json({ ...updated, players: serializedPlayers });
+    return sportingJson({ ...updated, players: serializedPlayers });
   } catch (error) {
     if (error instanceof GenerateMatchError) {
-      return NextResponse.json(
+      return sportingJson(
         { error: error.message },
         { status: error.status }
       );

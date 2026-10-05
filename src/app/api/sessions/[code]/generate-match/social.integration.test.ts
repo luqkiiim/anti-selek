@@ -1,3 +1,4 @@
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CourtGroupType,
@@ -49,8 +50,8 @@ function player(
   gender = PlayerGender.MALE,
   overrides: Partial<GenerateMatchSession["players"][number]> = {}
 ): GenerateMatchSession["players"][number] {
-  return {
-    userId,
+  return withLegacySportingAliases({
+    playerId: userId,
     gender,
     partnerPreference: gender === PlayerGender.FEMALE ? PartnerPreference.FEMALE_FLEX : PartnerPreference.OPEN,
     mixedSideOverride: null,
@@ -60,15 +61,15 @@ function player(
     sessionPoints: 0,
     isPaused: false,
     isGuest: false,
-    lastPartnerId: null,
+    lastPartnerPlayerId: null,
     representingClubId: null,
     availableSince,
     joinedAt,
     arrivalPriorityAt: null,
     inactiveSeconds: 0,
-    user: { id: userId, name: userId, elo: 1000 },
+    player: { id: userId, name: userId, elo: 1000, ownerUserId: `account-${userId}` },
     ...overrides,
-  } as GenerateMatchSession["players"][number];
+  }) as GenerateMatchSession["players"][number];
 }
 
 function session(overrides: Partial<GenerateMatchSession> = {}): GenerateMatchSession {
@@ -99,22 +100,22 @@ function match(
   status = MatchStatus.COMPLETED,
   overrides: Partial<GenerateMatchSession["matches"][number]> = {}
 ): GenerateMatchSession["matches"][number] {
-  return {
+  return withLegacySportingAliases({
     id,
     sessionId: "social-session",
     courtId: "court-1",
     status,
-    team1User1Id: partition.team1[0],
-    team1User2Id: partition.team1[1],
-    team2User1Id: partition.team2[0],
-    team2User2Id: partition.team2[1],
+    team1Player1Id: partition.team1[0],
+    team1Player2Id: partition.team1[1],
+    team2Player1Id: partition.team2[0],
+    team2Player2Id: partition.team2[1],
     team1Score: null,
     team2Score: null,
     completedAt: status === MatchStatus.COMPLETED ? completedAt : null,
     createdAt: joinedAt,
     matchmakingReasonJson: withSocialVarietySnapshot(null, partition, players),
     ...overrides,
-  } as GenerateMatchSession["matches"][number];
+  }) as GenerateMatchSession["matches"][number];
 }
 
 function contextPlayers(data: GenerateMatchSession): ContextPlayer[] {

@@ -15,7 +15,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    user: {
+    player: {
       findUnique: mocks.userFindUnique,
       update: mocks.userUpdate,
     },
@@ -32,7 +32,7 @@ vi.mock("@/lib/avatar", () => ({
   resolveAvatarUrl: (avatarKey: string | null | undefined) => avatarKey ?? null,
 }));
 
-import { PATCH } from "./route";
+import { PATCH, DELETE } from "./route";
 
 function patchAdminPlayer(body: unknown) {
   return PATCH(
@@ -65,14 +65,14 @@ describe("admin update player route", () => {
       id: "user-1",
       name: "Claimed Player",
       email: "claimed@example.com",
-      isClaimed: true,
+      ownerUserId: "account-other",
     });
 
     const response = await patchAdminPlayer({ name: "Renamed Claimed Player" });
     const body = await response.json();
 
     expect(response.status).toBe(403);
-    expect(body.error).toBe("Claimed members manage their own account name");
+    expect(body.error).toBe("Player owners manage their own player name");
     expect(mocks.userUpdate).not.toHaveBeenCalled();
   });
 
@@ -81,7 +81,7 @@ describe("admin update player route", () => {
       id: "user-1",
       name: "Placeholder",
       email: null,
-      isClaimed: false,
+      ownerUserId: null,
     });
     mocks.userUpdate.mockResolvedValue({
       id: "user-1",
@@ -90,7 +90,7 @@ describe("admin update player route", () => {
       avatarKey: null,
       elo: 1000,
       isActive: true,
-      isClaimed: false,
+      ownerUserId: null,
       createdAt: new Date("2026-05-19T00:00:00.000Z"),
     });
 
@@ -103,20 +103,32 @@ describe("admin update player route", () => {
       where: { id: "user-1" },
       data: {
         name: "Renamed Placeholder",
-        email: undefined,
         elo: undefined,
         isActive: undefined,
       },
       select: {
         id: true,
         name: true,
-        email: true,
         avatarKey: true,
         elo: true,
         isActive: true,
-        isClaimed: true,
+        ownerUserId: true,
         createdAt: true,
       },
     });
   });
+
+it("archives a durable Player instead of cascading historical deletion", async () => {
+  mocks.userFindUnique.mockResolvedValue({ id: "historical-player", name: "Historical Player", ownerUserId: "different-account", avatarKey: null });
+  const response = await DELETE(new Request("http://localhost/api/admin/players/historical-player", { method: "DELETE" }), { params: Promise.resolve({ id: "historical-player" }) });
+  expect(response.status).toBe(200);
+  expect(mocks.userUpdate).toHaveBeenCalledWith({ where: { id: "historical-player" }, data: { isActive: false } });
+});
+it("recognizes the actor's own Player using ownership when IDs differ", async () => {
+  mocks.userFindUnique.mockResolvedValue({ ownerUserId: "global-admin-1" });
+  const response = await DELETE(new Request("http://localhost/api/admin/players/historical-player", { method: "DELETE" }), { params: Promise.resolve({ id: "historical-player" }) });
+  expect(response.status).toBe(400);
+  expect(mocks.userUpdate).not.toHaveBeenCalled();
+});
+
 });

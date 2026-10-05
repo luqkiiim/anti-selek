@@ -1,221 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ClubPlayerStatus,
-  PartnerPreference,
-  PlayerGender,
-} from "@/types/enums";
-
-const mocks = vi.hoisted(() => ({
-  auth: vi.fn(),
-  isQuickAccessSession: vi.fn(),
-  rateLimit: vi.fn(),
-  checkInvalidTargetRateLimit: vi.fn(),
-  invalidTargetResponse: vi.fn(),
-  getClubAdminAccess: vi.fn(),
-  clubMemberFindMany: vi.fn(),
-  clubMemberUpsert: vi.fn(),
-  userCreate: vi.fn(),
-  userFindUnique: vi.fn(),
-  userUpdate: vi.fn(),
-  resolveMixedSideState: vi.fn(),
-  serializeAvatarEntity: vi.fn(),
-}));
-
-vi.mock("@/lib/auth", () => ({
-  auth: mocks.auth,
-}));
-
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    clubMember: {
-      findMany: mocks.clubMemberFindMany,
-      upsert: mocks.clubMemberUpsert,
-    },
-    user: {
-      create: mocks.userCreate,
-      findUnique: mocks.userFindUnique,
-      update: mocks.userUpdate,
-    },
-  },
-}));
-
-vi.mock("@/lib/avatar", () => ({
-  serializeAvatarEntity: mocks.serializeAvatarEntity,
-}));
-
-vi.mock("@/lib/clubAdminPermissions", () => ({
-  getClubAdminAccess: mocks.getClubAdminAccess,
-}));
-
-vi.mock("@/lib/mixedSide", () => ({
-  isValidMixedSide: (value: unknown) =>
-    value === "UPPER" || value === "LOWER",
-  isValidPartnerPreference: (value: unknown) =>
-    value === PartnerPreference.OPEN || value === PartnerPreference.FEMALE_FLEX,
-  isValidPlayerGender: (value: unknown) =>
-    value === PlayerGender.MALE ||
-    value === PlayerGender.FEMALE ||
-    value === PlayerGender.UNSPECIFIED,
-  resolveMixedSideState: mocks.resolveMixedSideState,
-}));
-
-vi.mock("@/lib/rateLimit", () => ({
-  rateLimit: mocks.rateLimit,
-  checkInvalidTargetRateLimit: mocks.checkInvalidTargetRateLimit,
-  invalidTargetResponse: mocks.invalidTargetResponse,
-}));
-
-vi.mock("@/lib/quickAccess", () => ({
-  getQuickAccessDeniedMessage: () => "Quick access not allowed",
-  isQuickAccessSession: mocks.isQuickAccessSession,
-  normalizeNameLookupKey: (value: string) =>
-    value.trim().toLowerCase().replace(/\s+/g, " "),
-}));
-
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), access: vi.fn(), members: vi.fn(), create: vi.fn(), membership: vi.fn(), roster: vi.fn(), transaction: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
+vi.mock("@/lib/rateLimit", () => ({ rateLimit: async () => null }));
+vi.mock("@/lib/clubAdminPermissions", () => ({ getClubAdminAccess: mocks.access }));
+vi.mock("@/lib/clubRoster", () => ({ getClubRoster: mocks.roster }));
+vi.mock("@/lib/prisma", () => ({ prisma: { clubMember: { findMany: mocks.members, create: mocks.membership }, player: { create: mocks.create }, $transaction: mocks.transaction } }));
+import { prisma } from "@/lib/prisma";
 import { POST } from "./route";
-
-function postMember(body: unknown) {
-  return POST(
-    new Request("http://localhost/api/clubs/community-1/members", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-    { params: Promise.resolve({ id: "community-1" }) }
-  );
-}
-
-describe("club admin create member route", () => {
-  beforeEach(() => {
-    Object.values(mocks).forEach((mock) => mock.mockReset());
-
-    mocks.auth.mockResolvedValue({
-      user: { id: "admin-1", isAdmin: false },
-    });
-    mocks.isQuickAccessSession.mockReturnValue(false);
-    mocks.rateLimit.mockResolvedValue(null);
-    mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
-    mocks.invalidTargetResponse.mockImplementation(() =>
-      Response.json({ error: "Unauthorized" }, { status: 403 })
-    );
-    mocks.getClubAdminAccess.mockResolvedValue({
-      canAdmin: true,
-      createdById: "owner-1",
-    });
-    mocks.resolveMixedSideState.mockReturnValue({
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.serializeAvatarEntity.mockReturnValue({ avatarUrl: null });
+function create(body: unknown) { return POST(new Request("http://localhost/api/clubs/club/members", { method: "POST", body: JSON.stringify(body) }), { params: Promise.resolve({ id: "club" }) }); }
+beforeEach(() => {
+  vi.resetAllMocks(); mocks.auth.mockResolvedValue({ user: { id: "account-admin" } });
+  mocks.access.mockResolvedValue({ canAdmin: true }); mocks.members.mockResolvedValue([]);
+  mocks.transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
+  mocks.create.mockResolvedValue({ id: "offline-player" }); mocks.roster.mockResolvedValue([{ id: "offline-player", name: "Offline Player" }]);
+});
+describe("offline roster creation", () => {
+  it("creates a Player and ClubMember without an Account or permissions", async () => {
+    expect((await create({ name: "Offline Player", gender: "FEMALE", mixedSideOverride: null, needsMoreRest: true })).status).toBe(201);
+    expect(mocks.create).toHaveBeenCalledWith({ data: { name: "Offline Player", gender: "FEMALE", partnerPreference: "FEMALE_FLEX", mixedSideOverride: null } });
+    expect(mocks.membership).toHaveBeenCalledWith({ data: { clubId: "club", playerId: "offline-player", ownerUserId: null, status: "CORE", preferredPool: "B" } });
   });
-
-  it.each([
-    {
-      label: "explicit mixed-side Default",
-      input: { mixedSideOverride: null },
-      expectedPreferenceInput: undefined,
-    },
-    {
-      label: "legacy preference-only Default",
-      input: { partnerPreference: PartnerPreference.FEMALE_FLEX },
-      expectedPreferenceInput: PartnerPreference.FEMALE_FLEX,
-    },
-  ])("clears an existing female Upper Side with $label", async ({ input, expectedPreferenceInput }) => {
-    const createdAt = new Date("2026-06-24T00:00:00.000Z");
-    mocks.userFindUnique.mockResolvedValue({
-      id: "player-1",
-      name: "Upper Player",
-      email: "upper@example.com",
-      avatarKey: null,
-      gender: PlayerGender.FEMALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: "UPPER",
-      isActive: true,
-      isClaimed: true,
-      createdAt,
-    });
-    mocks.resolveMixedSideState.mockReturnValue({
-      partnerPreference: PartnerPreference.FEMALE_FLEX,
-      mixedSideOverride: null,
-    });
-    mocks.clubMemberUpsert.mockResolvedValue({
-      role: "MEMBER",
-      elo: 1000,
-      status: ClubPlayerStatus.CORE,
-      preferredPool: "B",
-    });
-
-    const response = await postMember({
-      name: "Upper Player",
-      email: "upper@example.com",
-      ...input,
-    });
-
-    expect(response.status).toBe(200);
-    expect(mocks.resolveMixedSideState).toHaveBeenCalledWith({
-      gender: PlayerGender.FEMALE,
-      mixedSideOverride: null,
-      partnerPreference: expectedPreferenceInput,
-    });
-    expect(mocks.userUpdate).toHaveBeenCalledWith({
-      where: { id: "player-1" },
-      data: {
-        gender: PlayerGender.FEMALE,
-        partnerPreference: PartnerPreference.FEMALE_FLEX,
-        mixedSideOverride: null,
-      },
-    });
+  it.each(["email", "password", "ownerUserId"])("does not infer account ownership from %s", async field => {
+    expect((await create({ name: "Offline Player", gender: "MALE", [field]: "unsafe" })).status).toBe(400);
+    expect(mocks.create).not.toHaveBeenCalled();
   });
-
-  it("ignores legacy more-rest input when creating placeholders", async () => {
-    const createdAt = new Date("2026-06-24T00:00:00.000Z");
-    mocks.clubMemberFindMany.mockResolvedValue([]);
-    mocks.userCreate.mockResolvedValue({
-      id: "player-1",
-      name: "Rest Player",
-      email: null,
-      avatarKey: null,
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-      isActive: true,
-      isClaimed: false,
-      createdAt,
-    });
-    mocks.clubMemberUpsert.mockResolvedValue({
-      role: "MEMBER",
-      elo: 1000,
-      status: ClubPlayerStatus.CORE,
-      needsMoreRest: true,
-      preferredPool: "B",
-    });
-
-    const response = await postMember({
-      name: "Rest Player",
-      gender: PlayerGender.MALE,
-      needsMoreRest: true,
-    });
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(mocks.clubMemberUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          clubId: "community-1",
-          userId: "player-1",
-        }),
-        select: {
-          role: true,
-          elo: true,
-          status: true,
-          preferredPool: true,
-        },
-      })
-    );
-    expect(mocks.clubMemberUpsert.mock.calls[0]?.[0].create).not.toHaveProperty(
-      "needsMoreRest"
-    );
-    expect(body).not.toHaveProperty("needsMoreRest");
-    expect(body.preferredPool).toBe("B");
+  it("warns about a same-name existing Player without changing it", async () => {
+    mocks.members.mockResolvedValue([{ playerId: "existing-player", player: { name: "Offline Player" } }]);
+    const response = await create({ name: "Offline Player", gender: "MALE" });
+    expect(response.status).toBe(409); expect(await response.json()).toMatchObject({ existingPlayerId: "existing-player" });
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+  it("requires account administration", async () => {
+    mocks.access.mockResolvedValue({ canAdmin: false });
+    expect((await create({ name: "Offline Player", gender: "MALE" })).status).toBe(403);
   });
 });

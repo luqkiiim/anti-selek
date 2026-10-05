@@ -20,7 +20,7 @@ import { useClubPageActions } from "./useClubPageActions";
 import { useClubPageData } from "./useClubPageData";
 
 export function useClubPage() {
-  const { data: authSession, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const clubId = typeof params.id === "string" ? params.id : "";
@@ -84,7 +84,7 @@ export function useClubPage() {
   const canManageClub =
     (!!data.club && isClubOperatorRole(data.club.role)) ||
     !!data.user?.isAdmin;
-  const viewerIsQuickAccess = authSession?.user?.isQuickAccess === true;
+  const viewerIsQuickAccess = data.user?.isQuickAccess === true;
   const baseSelectablePlayers = useMemo(
     () =>
       data.clubMembers
@@ -92,13 +92,13 @@ export function useClubPage() {
     [data.clubMembers]
   );
   const currentUserClubMember =
-    data.clubMembers.find((member) => member.id === data.user?.id) ?? null;
+    data.clubMembers.find((member) => member.id === data.user?.playerId) ?? null;
   const currentUserHasClubSessionHistory = useMemo(
     () =>
       data.sessions.some((sessionItem) =>
-        sessionItem.players.some((playerItem) => playerItem.user.id === data.user?.id)
+        sessionItem.players.some((playerItem) => playerItem.user.id === data.user?.playerId)
       ),
-    [data.sessions, data.user?.id]
+    [data.sessions, data.user?.playerId]
   );
   const currentUserClaimEligibility = getClaimRequesterEligibility({
     isClaimed: currentUserClubMember?.isClaimed ?? false,

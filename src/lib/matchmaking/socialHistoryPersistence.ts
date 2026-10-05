@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { getEffectiveSessionType } from "@/lib/sessionSettings";
 import { usesRotationMatchmaking } from "./v3/socialBatch";
 import type { V3DoublesPartition } from "./v3/types";
@@ -36,14 +37,14 @@ export async function resolveSocialHistoryReasonJson(
   const players = await tx.sessionPlayer.findMany({
     where: {
       sessionId,
-      userId: { in: [...partition.team1, ...partition.team2] },
+      playerId: { in: [...partition.team1, ...partition.team2] },
     },
     select: {
-      userId: true,
+      playerId: true,
       gender: true,
       partnerPreference: true,
       mixedSideOverride: true,
     },
   });
-  return withSocialVarietySnapshot(reasonJson, partition, players);
+  return withSocialVarietySnapshot(reasonJson, partition, withLegacySportingAliases(players));
 }

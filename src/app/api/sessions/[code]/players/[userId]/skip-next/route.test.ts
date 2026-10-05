@@ -8,6 +8,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
     sessionPlayer: { findUnique: vi.fn() },
+    player: { findFirst: vi.fn() },
     queuedMatch: { findUnique: vi.fn(), delete: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -18,6 +19,8 @@ vi.mock("@/lib/playerGroupPreferences", () => ({
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
+  getAcceptedSessionClubIds: vi.fn(),
+  getSessionMembership: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
 }));
 
@@ -28,7 +31,11 @@ vi.mock("../../../queue-match/shared", () => ({
 import { auth } from "@/lib/auth";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
-import { getSessionOperatorMembership } from "@/lib/sessionCollab";
+import {
+  getAcceptedSessionClubIds,
+  getSessionMembership,
+  getSessionOperatorMembership,
+} from "@/lib/sessionCollab";
 import { tryRebuildQueuedMatchForSessionId } from "../../../queue-match/shared";
 import { PATCH } from "./route";
 
@@ -70,7 +77,11 @@ describe("skip next match route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "p1", isAdmin: false },
+      user: { id: "account-player", isAdmin: false },
+    } as never);
+    vi.mocked(prisma.player.findFirst).mockResolvedValue({
+      id: "p1",
+      ownerUserId: "account-player",
     } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session-1",
@@ -78,9 +89,14 @@ describe("skip next match route", () => {
       status: "ACTIVE",
     } as never);
     vi.mocked(prisma.sessionPlayer.findUnique)
-      .mockResolvedValueOnce({ userId: "p1" } as never)
-      .mockResolvedValue({ userId: "p1", skipNextMatchAt: null } as never);
+      .mockResolvedValueOnce({ playerId: "p1" } as never)
+      .mockResolvedValue({ playerId: "p1", skipNextMatchAt: null } as never);
     vi.mocked(getSessionOperatorMembership).mockResolvedValue(null as never);
+    vi.mocked(getAcceptedSessionClubIds).mockResolvedValue(["club-1"] as never);
+    vi.mocked(getSessionMembership).mockResolvedValue({
+      clubId: "club-1",
+      role: "MEMBER",
+    } as never);
     vi.mocked(tryRebuildQueuedMatchForSessionId).mockResolvedValue(null);
     vi.mocked(applyPendingPlayerGroupChangesInTransaction).mockResolvedValue({
       appliedCount: 0,
@@ -89,7 +105,7 @@ describe("skip next match route", () => {
     });
   });
 
-  it("allows a player to skip themselves", async () => {
+  it("allows an active club member to skip their independently identified Player", async () => {
     const { update } = mockTransactions();
 
     const response = await PATCH(createRequest(true), {
@@ -97,21 +113,41 @@ describe("skip next match route", () => {
     });
 
     expect(response.status).toBe(200);
+    expect(getSessionMembership).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "account-player",
+        acceptedOnly: true,
+      })
+    );
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           skipNextMatchAt: expect.any(Date),
-          skipNextMatchRequestedById: "p1",
+          skipNextMatchRequestedById: "account-player",
         }),
       })
     );
   });
 
+  it("denies an owned Player self-mutation without active club access", async () => {
+    vi.mocked(getSessionMembership).mockResolvedValue(null as never);
+
+    const response = await PATCH(createRequest(true), {
+      params: Promise.resolve({ code: "ABC", userId: "p1" }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(prisma.sessionPlayer.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("allows an operator to skip another player", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "staff-1", isAdmin: false },
+      user: { id: "staff-account", isAdmin: false },
     } as never);
-    vi.mocked(getSessionOperatorMembership).mockResolvedValue({ id: "m1" } as never);
+    vi.mocked(prisma.player.findFirst).mockResolvedValue(null as never);
+    vi.mocked(getSessionOperatorMembership).mockResolvedValue({ clubId: "club-1", role: "STAFF" } as never);
     mockTransactions();
 
     const response = await PATCH(createRequest(true), {
@@ -123,8 +159,9 @@ describe("skip next match route", () => {
 
   it("allows an admin to skip another player", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "admin-1", isAdmin: true },
+      user: { id: "global-admin-account", isAdmin: true },
     } as never);
+    vi.mocked(prisma.player.findFirst).mockResolvedValue(null as never);
     mockTransactions();
 
     const response = await PATCH(createRequest(true), {
@@ -136,8 +173,9 @@ describe("skip next match route", () => {
 
   it("blocks unauthorized users from skipping another player", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "stranger-1", isAdmin: false },
+      user: { id: "stranger-account", isAdmin: false },
     } as never);
+    vi.mocked(prisma.player.findFirst).mockResolvedValue(null as never);
 
     const response = await PATCH(createRequest(true), {
       params: Promise.resolve({ code: "ABC", userId: "p1" }),
@@ -149,7 +187,7 @@ describe("skip next match route", () => {
 
   it("blocks quick-access users", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "p1", isAdmin: false, isQuickAccess: true },
+      user: { id: "quick-access-account", isAdmin: false, isQuickAccess: true },
     } as never);
 
     const response = await PATCH(createRequest(true), {
@@ -184,10 +222,10 @@ describe("skip next match route", () => {
       queuedMatch: {
         id: "queue-1",
         isAutomatic: true,
-        team1User1Id: "p1",
-        team1User2Id: "p2",
-        team2User1Id: "p3",
-        team2User2Id: "p4",
+        team1Player1Id: "p1",
+        team1Player2Id: "p2",
+        team2Player1Id: "p3",
+        team2Player2Id: "p4",
       },
     });
 
@@ -218,10 +256,10 @@ describe("skip next match route", () => {
       id: "queue-1",
       isAutomatic: false,
       matchmakingReasonJson: JSON.stringify({ legacy: "present" }),
-      team1User1Id: "p1",
-      team1User2Id: "p2",
-      team2User1Id: "p3",
-      team2User2Id: "p4",
+      team1Player1Id: "p1",
+      team1Player2Id: "p2",
+      team2Player1Id: "p3",
+      team2Player2Id: "p4",
     };
     const { tx } = mockTransactions({ queuedMatch: manualQueue });
 

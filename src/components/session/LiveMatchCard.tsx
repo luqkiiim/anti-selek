@@ -12,6 +12,7 @@ import { ScoreEntryControls } from "./ScoreEntryControls";
 
 interface LiveMatchCardProps {
   match: Match;
+  currentAccountId?: string;
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
@@ -225,6 +226,7 @@ function ScoreSlot({
 
 export function LiveMatchCard({
   match,
+  currentAccountId = "",
   currentUserId,
   isAdmin,
   isClaimedUser,
@@ -283,10 +285,12 @@ export function LiveMatchCard({
             team2User1Id: match.team2User1.id,
             team2User2Id: match.team2User2.id,
           },
-          approverUserId: currentUserId,
+          approverUserId: currentAccountId,
+          approverPlayerId: currentUserId,
           approverIsAdmin: isAdmin,
           approverIsClaimed: isClaimedUser,
           scoreSubmittedByUserId: match.scoreSubmittedByUserId,
+          scoreSubmittedByPlayerId: match.scoreSubmittedByPlayerId,
         })
       : isAdmin || isParticipant);
   const scores = matchScores[match.id] || { team1: "", team2: "" };

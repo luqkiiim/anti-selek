@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
@@ -27,13 +28,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
-async function getAvatarTargetUser(userId: string) {
-  return prisma.user.findUnique({
-    where: { id: userId },
+async function getAvatarTargetUser(playerId: string) {
+  return prisma.player.findUnique({
+    where: { id: playerId },
     select: {
       id: true,
       avatarKey: true,
-      isClaimed: true,
+      ownerUserId: true,
       name: true,
     },
   });
@@ -45,14 +46,14 @@ async function canManageAvatar({
   requesterIsAdmin,
   requesterIsQuickAccess,
   targetUserId,
-  targetIsClaimed,
+  targetOwnerUserId,
 }: {
   clubId: string | null;
   requesterId: string;
   requesterIsAdmin: boolean;
   requesterIsQuickAccess: boolean;
   targetUserId: string;
-  targetIsClaimed: boolean;
+  targetOwnerUserId: string | null;
 }) {
   if (requesterIsAdmin) {
     return true;
@@ -62,7 +63,7 @@ async function canManageAvatar({
     return false;
   }
 
-  if (requesterId === targetUserId && targetIsClaimed) {
+  if (requesterId === targetOwnerUserId) {
     return true;
   }
 
@@ -71,27 +72,27 @@ async function canManageAvatar({
   }
 
   const [requesterMembership, targetMembership] = await Promise.all([
-    prisma.clubMember.findUnique({
+    prisma.clubAccess.findUnique({
       where: {
         clubId_userId: {
           clubId,
           userId: requesterId,
         },
       },
-      select: { role: true },
+      select: { role: true, status: true },
     }),
     prisma.clubMember.findUnique({
       where: {
-        clubId_userId: {
+        clubId_playerId: {
           clubId,
-          userId: targetUserId,
+          playerId: targetUserId,
         },
       },
-      select: { role: true },
+      select: { id: true },
     }),
   ]);
 
-  return requesterMembership?.role === "ADMIN" && !!targetMembership;
+  return requesterMembership?.status === "ACTIVE" && requesterMembership.role === "ADMIN" && !!targetMembership;
 }
 
 export async function POST(
@@ -110,12 +111,12 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
     if (typeof id !== "string" || id.length === 0) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid request parameters" },
         { status: 400 }
       );
@@ -151,14 +152,14 @@ export async function POST(
       requesterIsAdmin: !!session.user.isAdmin,
       requesterIsQuickAccess,
       targetUserId: targetUser.id,
-      targetIsClaimed: targetUser.isClaimed,
+      targetOwnerUserId: targetUser.ownerUserId,
     });
     if (!allowed) {
       return invalidTargetResponse(request, "api:users:id:avatar");
     }
 
     if (!isAvatarStorageConfigured()) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Avatar storage is not configured" },
         { status: 503 }
       );
@@ -167,7 +168,7 @@ export async function POST(
     const formData = await request.formData();
     const avatarFile = formData.get("avatar");
     if (!(avatarFile instanceof File)) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Choose an image file to upload" },
         { status: 400 }
       );
@@ -178,7 +179,7 @@ export async function POST(
       size: avatarFile.size,
     });
     if (validationError) {
-      return NextResponse.json({ error: validationError }, { status: 400 });
+      return sportingJson({ error: validationError }, { status: 400 });
     }
 
     const signatureValidationError = getAvatarFileSignatureValidationError({
@@ -186,7 +187,7 @@ export async function POST(
       mimeType: avatarFile.type,
     });
     if (signatureValidationError) {
-      return NextResponse.json(
+      return sportingJson(
         { error: signatureValidationError },
         { status: 400 }
       );
@@ -203,7 +204,7 @@ export async function POST(
       contentType: avatarFile.type,
     });
 
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prisma.player.update({
       where: { id: targetUser.id },
       data: { avatarKey: uploadedAvatarUrl },
       select: { avatarKey: true },
@@ -214,12 +215,12 @@ export async function POST(
       nextAvatarKey: updatedUser.avatarKey,
     });
 
-    return NextResponse.json({
+    return sportingJson({
       avatarUrl: resolveAvatarUrl(updatedUser.avatarKey),
     });
   } catch (error) {
     if (error instanceof ClubContractAliasConflictError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return sportingJson({ error: error.message }, { status: 400 });
     }
     await rollbackUploadedAvatar({
       uploadedAvatarKey: uploadedAvatarUrl,
@@ -243,12 +244,12 @@ export async function DELETE(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
     if (typeof id !== "string" || id.length === 0) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid request parameters" },
         { status: 400 }
       );
@@ -283,13 +284,13 @@ export async function DELETE(
       requesterIsAdmin: !!session.user.isAdmin,
       requesterIsQuickAccess: isQuickAccessSession(session),
       targetUserId: targetUser.id,
-      targetIsClaimed: targetUser.isClaimed,
+      targetOwnerUserId: targetUser.ownerUserId,
     });
     if (!allowed) {
       return invalidTargetResponse(request, "api:users:id:avatar");
     }
 
-    await prisma.user.update({
+    await prisma.player.update({
       where: { id: targetUser.id },
       data: { avatarKey: null },
     });
@@ -299,10 +300,10 @@ export async function DELETE(
       nextAvatarKey: null,
     });
 
-    return NextResponse.json({ avatarUrl: null });
+    return sportingJson({ avatarUrl: null });
   } catch (error) {
     if (error instanceof ClubContractAliasConflictError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return sportingJson({ error: error.message }, { status: 400 });
     }
     logError("Delete avatar error", error);
     return safeErrorResponse();

@@ -18,6 +18,7 @@ function createMatch(overrides: Partial<Match> = {}): Match {
 
 function renderCard({
   match = createMatch(),
+  currentAccountId = "",
   currentUserId = "quick-1",
   canSubmitScores,
   isAdmin = false,
@@ -25,6 +26,7 @@ function renderCard({
   matchScores = {},
 }: {
   match?: Match;
+  currentAccountId?: string;
   currentUserId?: string;
   canSubmitScores: boolean;
   isAdmin?: boolean;
@@ -34,6 +36,7 @@ function renderCard({
   return renderToStaticMarkup(
     <LiveMatchCard
       match={match}
+      currentAccountId={currentAccountId}
       currentUserId={currentUserId}
       isAdmin={isAdmin}
       isClaimedUser={isClaimedUser}
@@ -97,5 +100,29 @@ describe("LiveMatchCard", () => {
 
     expect(markup).toContain("Waiting for opponent or admin approval");
     expect(markup).not.toContain("Approve score");
+  });
+
+  it("uses Account and Player identities separately for score approval", () => {
+    const match = createMatch({
+      status: MatchStatus.PENDING_APPROVAL,
+      scoreSubmittedByUserId: "account-submitter",
+      scoreSubmittedByPlayerId: "player-submitter",
+      team1User1: { id: "player-submitter", name: "Submitting player" },
+      team1User2: { id: "player-one", name: "Player One" },
+      team2User1: { id: "player-viewer", name: "Reviewing player" },
+      team2User2: { id: "player-two", name: "Player Two" },
+      team1Score: 21,
+      team2Score: 18,
+    });
+
+    const markup = renderCard({
+      match,
+      currentAccountId: "account-viewer",
+      currentUserId: "player-viewer",
+      canSubmitScores: true,
+      isClaimedUser: true,
+    });
+
+    expect(markup).toContain("Approve score");
   });
 });

@@ -5,6 +5,7 @@ import {
   isClubOperatorRole,
 } from "@/lib/clubRoles";
 import { getLinkedClubUserResolver } from "@/lib/offlineIdentities";
+import { getAccountClubContext } from "@/lib/playerIdentity";
 import {
   SessionClubRole,
   SessionClubStatus,
@@ -171,162 +172,18 @@ export async function getSessionClubIdsForAccess(
   return Array.from(new Set(ids));
 }
 
-function getClubMemberDelegate(tx: DbClient) {
-  return (
-    tx as unknown as {
-      clubMember?: {
-        findFirst?: (args: {
-          where: {
-            clubId: { in: string[] };
-            userId: string;
-            role?: string | { in: string[] };
-          };
-          select: {
-            clubId: true;
-            role: true;
-            elo?: true;
-            preferredPool?: true;
-          };
-        }) => Promise<{
-          clubId?: string;
-          role: string;
-          elo?: number;
-          preferredPool?: string;
-        } | null>;
-        findUnique?: (args: {
-          where: {
-            clubId_userId: {
-              clubId: string;
-              userId: string;
-            };
-          };
-          select: {
-            clubId: true;
-            role: true;
-            elo?: true;
-            preferredPool?: true;
-          };
-        }) => Promise<{
-          clubId?: string;
-          role: string;
-          elo?: number;
-          preferredPool?: string;
-        } | null>;
-      };
-    }
-  ).clubMember;
+/** Account roles are independent of sporting profile ownership. */
+export async function getSessionAdminMembership(tx: DbClient, args: { session: SessionIdentity; userId: string; acceptedOnly?: boolean }) {
+  return getSessionRoleMembership(tx, { ...args, roles: [ClubRole.OWNER, ClubRole.ADMIN] });
 }
-
-export async function getSessionAdminMembership(
-  tx: DbClient,
-  {
-    session,
-    userId,
-    acceptedOnly = false,
-  }: {
-    session: SessionIdentity;
-    userId: string;
-    acceptedOnly?: boolean;
-  }
-) {
-  return getSessionRoleMembership(tx, {
-    session,
-    userId,
-    acceptedOnly,
-    roles: [ClubRole.ADMIN],
-  });
+export async function getSessionOperatorMembership(tx: DbClient, args: { session: SessionIdentity; userId: string; acceptedOnly?: boolean }) {
+  return getSessionRoleMembership(tx, { ...args, roles: [...COMMUNITY_OPERATOR_ROLES] });
 }
-
-export async function getSessionOperatorMembership(
-  tx: DbClient,
-  {
-    session,
-    userId,
-    acceptedOnly = false,
-  }: {
-    session: SessionIdentity;
-    userId: string;
-    acceptedOnly?: boolean;
-  }
-) {
-  return getSessionRoleMembership(tx, {
-    session,
-    userId,
-    acceptedOnly,
-    roles: [...COMMUNITY_OPERATOR_ROLES],
-  });
+async function getSessionRoleMembership(tx: DbClient, { session, userId, acceptedOnly = false, roles }: { session: SessionIdentity; userId: string; acceptedOnly?: boolean; roles: ClubRole[] }) {
+  const clubIds = acceptedOnly ? await getAcceptedSessionClubIds(tx, session) : await getSessionClubIdsForAccess(tx, session);
+  if (!clubIds.length) return null;
+  return tx.clubAccess.findFirst({ where: { clubId: { in: clubIds }, userId, status: "ACTIVE", role: { in: roles } }, select: { clubId: true, role: true } });
 }
-
-async function getSessionRoleMembership(
-  tx: DbClient,
-  {
-    session,
-    userId,
-    acceptedOnly = false,
-    roles,
-  }: {
-    session: SessionIdentity;
-    userId: string;
-    acceptedOnly?: boolean;
-    roles: ClubRole[];
-  }
-) {
-  const clubIds = acceptedOnly
-    ? await getAcceptedSessionClubIds(tx, session)
-    : await getSessionClubIdsForAccess(tx, session);
-
-  if (clubIds.length === 0) {
-    return null;
-  }
-
-  const clubMemberDelegate = getClubMemberDelegate(tx);
-  if (clubMemberDelegate?.findFirst) {
-    return clubMemberDelegate.findFirst({
-      where: {
-        clubId: { in: clubIds },
-        userId,
-        role: roles.length === 1 ? roles[0] : { in: roles },
-      },
-      select: {
-        clubId: true,
-        role: true,
-      },
-    });
-  }
-
-  if (!clubMemberDelegate?.findUnique) {
-    return null;
-  }
-
-  for (const clubId of clubIds) {
-    const membership = await clubMemberDelegate.findUnique({
-      where: {
-        clubId_userId: {
-          clubId,
-          userId,
-        },
-      },
-      select: {
-        clubId: true,
-        role: true,
-      },
-    });
-
-    const hasRole =
-      roles.length === 1 && roles[0] === ClubRole.ADMIN
-        ? isClubAdminRole(membership?.role)
-        : isClubOperatorRole(membership?.role);
-    if (membership && hasRole) {
-      return {
-        ...membership,
-        clubId: membership.clubId ?? clubId,
-      };
-    }
-  }
-
-  return null;
-}
-
 export async function getSessionMembership(
   tx: DbClient,
   {
@@ -343,51 +200,25 @@ export async function getSessionMembership(
     ? await getAcceptedSessionClubIds(tx, session)
     : await getSessionClubIdsForAccess(tx, session);
 
-  if (clubIds.length === 0) {
-    return null;
-  }
-
-  const clubMemberDelegate = getClubMemberDelegate(tx);
-  if (clubMemberDelegate?.findUnique) {
-    for (const clubId of clubIds) {
-      const membership = await clubMemberDelegate.findUnique({
-        where: {
-          clubId_userId: {
-            clubId,
-            userId,
-          },
-        },
-        select: {
-          clubId: true,
-          role: true,
-          elo: true,
-          preferredPool: true,
-        },
-      });
-
-      if (membership) {
-        return {
-          ...membership,
-          clubId: membership.clubId ?? clubId,
-        };
-      }
+  for (const clubId of clubIds) {
+    const context = await getAccountClubContext(tx, { userId, clubId });
+    if (context.canAccess) {
+      return { clubId, role: context.role };
     }
   }
+  return null;
+}
 
-  return (
-    (await clubMemberDelegate?.findFirst?.({
-      where: {
-        clubId: { in: clubIds },
-        userId,
-      },
-      select: {
-        clubId: true,
-        role: true,
-        elo: true,
-        preferredPool: true,
-      },
-    })) ?? null
-  );
+export async function isAccountSessionPlayer(
+  tx: DbClient,
+  sessionId: string,
+  accountUserId: string
+) {
+  const participant = await tx.sessionPlayer.findFirst({
+    where: { sessionId, player: { ownerUserId: accountUserId } },
+    select: { id: true },
+  });
+  return !!participant;
 }
 
 export async function getPlayerClubBadges(
@@ -407,7 +238,7 @@ export async function getPlayerClubBadges(
   });
   const candidateUserIds = Array.from(
     new Set(
-      uniqueUserIds.flatMap((userId) => linkedUserResolver.getLinkedUserIds(userId))
+      uniqueUserIds.flatMap((playerId) => linkedUserResolver.getLinkedUserIds(playerId))
     )
   );
 
@@ -417,10 +248,10 @@ export async function getPlayerClubBadges(
         findMany?: (args: {
           where: {
             clubId: { in: string[] };
-            userId: { in: string[] };
+            playerId: { in: string[] };
           };
           select: {
-            userId: true;
+            playerId: true;
             elo: true;
             club: {
               select: {
@@ -431,7 +262,7 @@ export async function getPlayerClubBadges(
           };
         }) => Promise<
           Array<{
-            userId: string;
+            playerId: string;
             elo: number;
             club: {
               id: string;
@@ -450,10 +281,10 @@ export async function getPlayerClubBadges(
   const rows = await clubMemberDelegate.findMany({
     where: {
       clubId: { in: uniqueClubIds },
-      userId: { in: candidateUserIds },
+      playerId: { in: candidateUserIds },
     },
     select: {
-      userId: true,
+      playerId: true,
       elo: true,
       club: {
         select: {
@@ -465,7 +296,7 @@ export async function getPlayerClubBadges(
   });
 
   const rowByClubAndUser = new Map(
-    rows.map((row) => [`${row.club.id}:${row.userId}`, row])
+    rows.map((row) => [`${row.club.id}:${row.playerId}`, row])
   );
   const badgesByUserId = new Map<
     string,
@@ -504,14 +335,14 @@ export async function getPlayerClubBadges(
 }
 
 export function withPlayerClubBadges<
-  T extends { userId: string; user: { elo: number } },
+  T extends { playerId: string; player: { elo: number } },
 >(
   players: T[],
   badgesByUserId: Map<string, Array<{ id: string; name: string; elo: number }>>,
   preferredClubId?: string | null
 ) {
   return players.map((player) => {
-    const clubBadges = badgesByUserId.get(player.userId) ?? [];
+    const clubBadges = badgesByUserId.get(player.playerId) ?? [];
     const preferredBadge = preferredClubId
       ? clubBadges.find((badge) => badge.id === preferredClubId)
       : clubBadges[0];
@@ -519,9 +350,9 @@ export function withPlayerClubBadges<
     return {
       ...player,
       communityBadges: clubBadges,
-      user: {
-        ...player.user,
-        elo: preferredBadge?.elo ?? player.user.elo,
+      player: {
+        ...player.player,
+        elo: preferredBadge?.elo ?? player.player.elo,
       },
     };
   });

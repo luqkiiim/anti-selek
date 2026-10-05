@@ -3,14 +3,14 @@ import { SessionClubStatus } from "@/types/enums";
 import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
 
 const mocks = vi.hoisted(() => ({
-  clubMemberFindUnique: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
   sessionFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
+    clubAccess: {
+      findUnique: mocks.clubAccessFindUnique,
     },
     session: {
       findMany: mocks.sessionFindMany,
@@ -27,11 +27,11 @@ describe("listSessionsForClub", () => {
   });
 
   it("does not expose incoming pending collab sessions to staff", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "STAFF", status: "ACTIVE" });
 
     await listSessionsForClub({
       clubId: "community-1",
-      viewerId: "staff-1",
+      viewerId: "staff-account-1",
       viewerIsAdmin: false,
     });
 
@@ -54,11 +54,11 @@ describe("listSessionsForClub", () => {
   });
 
   it("keeps incoming pending collab sessions visible to admins", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
 
     await listSessionsForClub({
       clubId: "community-1",
-      viewerId: "admin-1",
+      viewerId: "admin-account-1",
       viewerIsAdmin: false,
     });
 
@@ -86,7 +86,7 @@ describe("listSessionsForClub", () => {
   });
 
   it("returns canonical session club fields with legacy aliases", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
     mocks.sessionFindMany.mockResolvedValue([
       {
         id: "session-1",
@@ -116,7 +116,7 @@ describe("listSessionsForClub", () => {
 
     const sessions = await listSessionsForClub({
       clubId: "community-1",
-      viewerId: "admin-1",
+      viewerId: "admin-account-1",
       viewerIsAdmin: false,
     });
 

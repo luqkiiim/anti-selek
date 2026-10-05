@@ -44,7 +44,8 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-easy-crop": "^5.5.3",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "zod": "4.1.11"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.1",

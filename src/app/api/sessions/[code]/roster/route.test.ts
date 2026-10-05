@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ClubPlayerStatus,
-  ClubRole,
   PartnerPreference,
   PlayerGender,
   SessionClubRole,
@@ -16,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(),
   checkInvalidTargetRateLimit: vi.fn(),
   sessionFindUnique: vi.fn(),
+  clubAccessFindMany: vi.fn(),
   clubMemberFindMany: vi.fn(),
 }));
 
@@ -25,6 +25,9 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    clubAccess: {
+      findMany: mocks.clubAccessFindMany,
+    },
     session: {
       findUnique: mocks.sessionFindUnique,
     },
@@ -80,32 +83,30 @@ function makeSession(overrides: Record<string, unknown> = {}) {
 function makeMembership({
   clubId,
   clubName,
-  userId,
+  playerId,
   name,
 }: {
   clubId: string;
   clubName: string;
-  userId: string;
+  playerId: string;
   name: string;
 }) {
   return {
     clubId,
     club: { id: clubId, name: clubName },
-    userId,
+    playerId,
     elo: 1100,
     status: ClubPlayerStatus.CORE,
-    role: ClubRole.MEMBER,
     createdAt: new Date("2026-06-02T00:00:00.000Z"),
-    user: {
-      id: userId,
+    player: {
+      id: playerId,
       name,
-      email: null,
       avatarKey: null,
       gender: PlayerGender.MALE,
       partnerPreference: PartnerPreference.OPEN,
       mixedSideOverride: null,
       isActive: true,
-      isClaimed: true,
+      ownerUserId: `${playerId}-owner-account`,
       createdAt: new Date("2026-06-02T00:00:00.000Z"),
     },
   };
@@ -115,7 +116,7 @@ describe("session roster route", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.auth.mockResolvedValue({
-      user: { id: "club-b-admin", isAdmin: false },
+      user: { id: "club-b-admin-account", isAdmin: false },
     });
     mocks.isQuickAccessSession.mockReturnValue(false);
     mocks.invalidTargetResponse.mockImplementation(() =>
@@ -124,20 +125,15 @@ describe("session roster route", () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
     mocks.sessionFindUnique.mockResolvedValue(makeSession());
-    mocks.clubMemberFindMany.mockImplementation(async (args) => {
-      if (args.where.userId) {
-        return [{ clubId: "club-b" }];
-      }
-
-      return [
-        makeMembership({
-          clubId: "club-b",
-          clubName: "Anti-SeleK",
-          userId: "b-player",
-          name: "B Player",
-        }),
-      ];
-    });
+    mocks.clubAccessFindMany.mockResolvedValue([{ clubId: "club-b" }]);
+    mocks.clubMemberFindMany.mockResolvedValue([
+      makeMembership({
+        clubId: "club-b",
+        clubName: "Anti-SeleK",
+        playerId: "b-player",
+        name: "B Player",
+      }),
+    ]);
   });
 
   it("returns Club B players for a Club B operator", async () => {
@@ -184,22 +180,17 @@ describe("session roster route", () => {
 
   it("returns Club A players for a Club A operator", async () => {
     mocks.auth.mockResolvedValue({
-      user: { id: "club-a-admin", isAdmin: false },
+      user: { id: "club-a-admin-account", isAdmin: false },
     });
-    mocks.clubMemberFindMany.mockImplementation(async (args) => {
-      if (args.where.userId) {
-        return [{ clubId: "club-a" }];
-      }
-
-      return [
-        makeMembership({
-          clubId: "club-a",
-          clubName: "Northside",
-          userId: "a-player",
-          name: "A Player",
-        }),
-      ];
-    });
+    mocks.clubAccessFindMany.mockResolvedValue([{ clubId: "club-a" }]);
+    mocks.clubMemberFindMany.mockResolvedValue([
+      makeMembership({
+        clubId: "club-a",
+        clubName: "Northside",
+        playerId: "a-player",
+        name: "A Player",
+      }),
+    ]);
 
     const response = await getRoster();
     const body = await response.json();
@@ -222,13 +213,13 @@ describe("session roster route", () => {
       makeMembership({
         clubId: "club-b",
         clubName: "Anti-SeleK",
-        userId: "b-player",
+        playerId: "b-player",
         name: "B Player",
       }),
       makeMembership({
         clubId: "club-a",
         clubName: "Northside",
-        userId: "a-player",
+        playerId: "a-player",
         name: "A Player",
       }),
     ]);
@@ -260,13 +251,13 @@ describe("session roster route", () => {
       makeMembership({
         clubId: "club-b",
         clubName: "Anti-SeleK",
-        userId: "b-player",
+        playerId: "b-player",
         name: "B Player",
       }),
       makeMembership({
         clubId: "club-a",
         clubName: "Northside",
-        userId: "a-player",
+        playerId: "a-player",
         name: "A Player",
       }),
     ]);
@@ -345,7 +336,7 @@ describe("session roster route", () => {
   });
 
   it("rejects non-operators", async () => {
-    mocks.clubMemberFindMany.mockResolvedValueOnce([]);
+    mocks.clubAccessFindMany.mockResolvedValueOnce([]);
 
     const response = await getRoster();
 

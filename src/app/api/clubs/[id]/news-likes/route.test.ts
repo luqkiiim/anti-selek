@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  clubMemberFindUnique: vi.fn(),
   clubMemberFindMany: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
   clubFindUnique: vi.fn(),
+  playerFindMany: vi.fn(),
   matchFindMany: vi.fn(),
   transaction: vi.fn(),
   clubNewsLikeUpsert: vi.fn(),
@@ -23,11 +24,16 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
       findMany: mocks.clubMemberFindMany,
+    },
+    clubAccess: {
+      findUnique: mocks.clubAccessFindUnique,
     },
     club: {
       findUnique: mocks.clubFindUnique,
+    },
+    player: {
+      findMany: mocks.playerFindMany,
     },
     match: {
       findMany: mocks.matchFindMany,
@@ -70,7 +76,7 @@ vi.mock("@/lib/rateLimit", () => ({
 import { POST } from "./route";
 
 const newsItem = {
-  id: "session-1:rating_jump:player-1",
+  id: "session-1:rating_jump:player-featured",
   type: "RATING_JUMP",
   session: {
     id: "session-1",
@@ -81,8 +87,8 @@ const newsItem = {
   title: "Player One",
   detail: "Biggest rating jump",
   value: "+24 rating",
-  players: [{ id: "player-1", name: "Player One", avatarUrl: null }],
-  featuredPlayers: [{ id: "player-1", name: "Player One", avatarUrl: null }],
+  players: [{ id: "player-featured", name: "Player One", avatarUrl: null }],
+  featuredPlayers: [{ id: "player-featured", name: "Player One", avatarUrl: null }],
   likeCount: 0,
   likedByMe: false,
 };
@@ -103,27 +109,32 @@ describe("club news likes route", () => {
       Promise.all(operations)
     );
     mocks.auth.mockResolvedValue({
-      user: { id: "viewer-1", isAdmin: false },
+      user: { id: "account-viewer", isAdmin: false },
     });
-    mocks.clubMemberFindUnique.mockResolvedValue({
+    mocks.clubAccessFindUnique.mockResolvedValue({
       role: "MEMBER",
+      status: "ACTIVE",
     });
     mocks.clubFindUnique.mockResolvedValue({
       id: "club-1",
-      createdById: "owner-1",
+      createdById: "account-owner",
       isTutorial: false,
       tutorialOwnerId: null,
     });
     mocks.clubMemberFindMany.mockResolvedValue([
       {
+        id: "membership-featured",
+        playerId: "player-featured",
         elo: 1000,
-        user: {
-          id: "player-1",
+        player: {
+          id: "player-featured",
+          ownerUserId: "account-featured",
           name: "Player One",
           avatarKey: null,
         },
       },
     ]);
+    mocks.playerFindMany.mockResolvedValue([]);
     mocks.matchFindMany.mockResolvedValue([]);
     mocks.listSessionsForClub.mockResolvedValue([]);
     mocks.buildClubPulse.mockReturnValue({
@@ -163,7 +174,7 @@ describe("club news likes route", () => {
       where: {
         newsItemId_userId: {
           newsItemId: newsItem.id,
-          userId: "viewer-1",
+          userId: "account-viewer",
         },
       },
       update: {},
@@ -171,16 +182,16 @@ describe("club news likes route", () => {
         clubId: "club-1",
         sessionId: "session-1",
         newsItemId: newsItem.id,
-        userId: "viewer-1",
+        userId: "account-viewer",
       },
     });
     expect(mocks.clubNotificationUpsert).toHaveBeenCalledWith({
       where: {
-        type_newsItemId_actorUserId_recipientUserId: {
+        type_newsItemId_actorUserId_recipientPlayerId: {
           type: "NEWS_LIKE",
           newsItemId: newsItem.id,
-          actorUserId: "viewer-1",
-          recipientUserId: "player-1",
+          actorUserId: "account-viewer",
+          recipientPlayerId: "player-featured",
         },
       },
       update: {
@@ -189,12 +200,12 @@ describe("club news likes route", () => {
         value: "+24 rating",
       },
       create: {
-        actorUserId: "viewer-1",
+        actorUserId: "account-viewer",
         clubId: "club-1",
         detail: "Biggest rating jump",
         newsItemId: newsItem.id,
         newsType: "RATING_JUMP",
-        recipientUserId: "player-1",
+        recipientPlayerId: "player-featured",
         sessionId: "session-1",
         title: "Player One",
         type: "NEWS_LIKE",
@@ -205,6 +216,10 @@ describe("club news likes route", () => {
       newsItemId: newsItem.id,
       likedByMe: true,
       likeCount: 3,
+    });
+    expect(mocks.playerFindMany).toHaveBeenCalledWith({
+      where: { ownerUserId: "account-viewer" },
+      select: { id: true },
     });
   });
 
@@ -223,12 +238,12 @@ describe("club news likes route", () => {
     expect(mocks.clubNewsLikeDeleteMany).toHaveBeenCalledWith({
       where: {
         newsItemId: newsItem.id,
-        userId: "viewer-1",
+        userId: "account-viewer",
       },
     });
     expect(mocks.clubNotificationDeleteMany).toHaveBeenCalledWith({
       where: {
-        actorUserId: "viewer-1",
+        actorUserId: "account-viewer",
         newsItemId: newsItem.id,
         type: "NEWS_LIKE",
       },
@@ -242,11 +257,13 @@ describe("club news likes route", () => {
 
   it("does not notify the liker when they are the featured player", async () => {
     mocks.auth.mockResolvedValueOnce({
-      user: { id: "player-1", isAdmin: false },
+      user: { id: "account-viewer", isAdmin: false },
     });
-    mocks.clubMemberFindUnique.mockResolvedValueOnce({
+    mocks.clubAccessFindUnique.mockResolvedValueOnce({
       role: "MEMBER",
+      status: "ACTIVE",
     });
+    mocks.playerFindMany.mockResolvedValueOnce([{ id: "player-featured" }]);
     mocks.clubNewsLikeCount.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
 
     const response = await POST(
@@ -263,7 +280,7 @@ describe("club news likes route", () => {
 
   it("rejects stale or unknown news item ids", async () => {
     const response = await POST(
-      createRequest({ newsItemId: "session-1:old:player-1", liked: true }),
+      createRequest({ newsItemId: "session-1:old:player-featured", liked: true }),
       {
         params: Promise.resolve({ id: "club-1" }),
       }
@@ -276,7 +293,7 @@ describe("club news likes route", () => {
   });
 
   it("rejects users who are not club members, owners, or admins", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValueOnce(null);
+    mocks.clubAccessFindUnique.mockResolvedValueOnce(null);
 
     const response = await POST(
       createRequest({ newsItemId: newsItem.id, liked: true }),

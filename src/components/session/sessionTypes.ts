@@ -44,6 +44,7 @@ export interface Match {
   createdAt?: string;
   status: string;
   scoreSubmittedByUserId?: string | null;
+  scoreSubmittedByPlayerId?: string | null;
   team1ClubId?: string | null;
   team2ClubId?: string | null;
   team1User1: { id: string; name: string; avatarUrl?: string | null };
@@ -116,6 +117,8 @@ export interface ClubUser {
 export interface SessionData {
   id: string;
   code: string;
+  viewerUserId?: string | null;
+  viewerPlayerId?: string | null;
   clubId?: string | null;
   name: string;
   type: string;
@@ -162,6 +165,7 @@ export interface SessionData {
 
 export interface CurrentUser {
   id: string;
+  playerId?: string | null;
   isAdmin?: boolean;
   isClaimed?: boolean;
   isQuickAccess?: boolean;

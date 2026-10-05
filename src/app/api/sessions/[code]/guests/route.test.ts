@@ -16,8 +16,10 @@ const mocks = vi.hoisted(() => ({
   sessionPlayerFindMany: vi.fn(),
   sessionPlayerFindUnique: vi.fn(),
   transaction: vi.fn(),
-  userCreate: vi.fn(),
+  playerCreate: vi.fn(),
   sessionPlayerCreate: vi.fn(),
+  getSessionOperatorMembership: vi.fn(),
+  isAccountSessionPlayer: vi.fn(),
   tryRebuildAutomaticQueuedMatchForSessionId: vi.fn(),
 }));
 
@@ -34,6 +36,9 @@ vi.mock("@/lib/prisma", () => ({
       findMany: mocks.sessionPlayerFindMany,
       findUnique: mocks.sessionPlayerFindUnique,
     },
+    player: {
+      create: mocks.playerCreate,
+    },
     $transaction: mocks.transaction,
   },
 }));
@@ -42,6 +47,11 @@ vi.mock("@/lib/rateLimit", () => ({
   checkInvalidTargetRateLimit: mocks.checkInvalidTargetRateLimit,
   invalidTargetResponse: mocks.invalidTargetResponse,
   rateLimit: mocks.rateLimit,
+}));
+
+vi.mock("@/lib/sessionCollab", () => ({
+  getSessionOperatorMembership: mocks.getSessionOperatorMembership,
+  isAccountSessionPlayer: mocks.isAccountSessionPlayer,
 }));
 
 vi.mock("../queue-match/shared", () => ({
@@ -65,7 +75,7 @@ function postGuest(body: unknown = { name: "Late Guest" }) {
 }
 
 function mockGuestTransaction() {
-  mocks.userCreate.mockResolvedValue({
+  mocks.playerCreate.mockResolvedValue({
     id: "guest-1",
     name: "Late Guest",
     elo: 1000,
@@ -76,7 +86,7 @@ function mockGuestTransaction() {
   mocks.sessionPlayerCreate.mockResolvedValue({});
   mocks.transaction.mockImplementation((callback) =>
     callback({
-      user: { create: mocks.userCreate },
+      player: { create: mocks.playerCreate },
       sessionPlayer: { create: mocks.sessionPlayerCreate },
     })
   );
@@ -93,6 +103,8 @@ describe("guest route", () => {
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
+    mocks.getSessionOperatorMembership.mockResolvedValue(null);
+    mocks.isAccountSessionPlayer.mockResolvedValue(true);
     mocks.tryRebuildAutomaticQueuedMatchForSessionId.mockResolvedValue(null);
     mockGuestTransaction();
   });
@@ -214,5 +226,58 @@ describe("guest route", () => {
       data: expect.objectContaining({ pool: SessionPool.B }),
     });
     expect(body.pool).toBe(SessionPool.B);
+  });
+
+  it("requires operator access when a null-host session has an accepted linked club", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "account-player", isAdmin: false },
+    });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      clubId: null,
+      sessionClubs: [
+        { clubId: "linked-club", role: "HOST", status: "ACCEPTED" },
+      ],
+      status: SessionStatus.ACTIVE,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: false,
+    });
+
+    const response = await postGuest();
+
+    expect(response.status).toBe(403);
+    expect(mocks.getSessionOperatorMembership).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "account-player",
+        acceptedOnly: true,
+      })
+    );
+    expect(mocks.isAccountSessionPlayer).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps the participant fallback for a truly clubless session", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "account-player", isAdmin: false },
+    });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      clubId: null,
+      sessionClubs: [],
+      status: SessionStatus.WAITING,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: false,
+    });
+
+    const response = await postGuest();
+
+    expect(response.status).toBe(200);
+    expect(mocks.isAccountSessionPlayer).toHaveBeenCalledWith(
+      expect.anything(),
+      "session-1",
+      "account-player"
+    );
+    expect(mocks.transaction).toHaveBeenCalled();
   });
 });

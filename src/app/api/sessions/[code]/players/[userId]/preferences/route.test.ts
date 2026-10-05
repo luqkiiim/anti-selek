@@ -102,9 +102,9 @@ describe("session player preference route", () => {
       isGuest: false,
     });
     mocks.sessionPlayerUpdate.mockImplementation(async (args) => ({
-      userId: "player-1",
+      playerId: "player-1",
       ...args.data,
-      user: { id: "player-1", name: "Player One" },
+      player: { id: "player-1", name: "Player One" },
     }));
     mocks.queuedMatchDeleteMany.mockResolvedValue({ count: 1 });
     mocks.prismaTransaction.mockImplementation(async (callback) =>
@@ -131,10 +131,10 @@ describe("session player preference route", () => {
       courts: [
         {
           currentMatch: {
-            team1User1Id: "player-1",
-            team1User2Id: "player-2",
-            team2User1Id: "player-3",
-            team2User2Id: "player-4",
+            team1Player1Id: "player-1",
+            team1Player2Id: "player-2",
+            team2Player1Id: "player-3",
+            team2Player2Id: "player-4",
           },
         },
       ],
@@ -157,10 +157,10 @@ describe("session player preference route", () => {
       courts: [
         {
           currentMatch: {
-            team1User1Id: "player-1",
-            team1User2Id: "player-2",
-            team2User1Id: "player-3",
-            team2User2Id: "player-4",
+            team1Player1Id: "player-1",
+            team1Player2Id: "player-2",
+            team2Player1Id: "player-3",
+            team2Player2Id: "player-4",
           },
         },
       ],
@@ -192,10 +192,10 @@ describe("session player preference route", () => {
         id: "queue-1",
         createdAt: new Date("2026-08-23T00:00:00.000Z"),
         isAutomatic: false,
-        team1User1Id: "player-1",
-        team1User2Id: "player-2",
-        team2User1Id: "player-3",
-        team2User2Id: "player-4",
+        team1Player1Id: "player-1",
+        team1Player2Id: "player-2",
+        team2Player1Id: "player-3",
+        team2Player2Id: "player-4",
       },
       courts: [],
     });
@@ -219,10 +219,10 @@ describe("session player preference route", () => {
     const concurrentManualQueue = {
       id: "queue-1",
       isAutomatic: false,
-      team1User1Id: "player-1",
-      team1User2Id: "player-2",
-      team2User1Id: "player-3",
-      team2User2Id: "player-4",
+      team1Player1Id: "player-1",
+      team1Player2Id: "player-2",
+      team2Player1Id: "player-3",
+      team2Player2Id: "player-4",
     };
     mocks.sessionFindUnique
       .mockResolvedValueOnce(initialSession)
@@ -246,10 +246,10 @@ describe("session player preference route", () => {
       id: "queue-1",
       createdAt: new Date("2026-08-23T00:00:00.000Z"),
       isAutomatic: true,
-      team1User1Id: "player-2",
-      team1User2Id: "player-3",
-      team2User1Id: "player-4",
-      team2User2Id: "player-5",
+      team1Player1Id: "player-2",
+      team1Player2Id: "player-3",
+      team2Player1Id: "player-4",
+      team2Player2Id: "player-5",
     };
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",

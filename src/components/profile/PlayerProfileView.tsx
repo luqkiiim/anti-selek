@@ -43,7 +43,7 @@ import type {
   PlayerProfileStatsSummary,
   PlayerProfileTrendSummary,
 } from "@/lib/profileStats";
-import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
+import { deletePlayerAvatar, uploadPlayerAvatar } from "@/lib/avatarClient";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { EmptyState, FlashMessage } from "@/components/ui/chrome";
 
@@ -86,6 +86,8 @@ interface UserProfileResponse {
 
 interface CurrentProfileViewer {
   id: string;
+  playerId?: string;
+  playerIds?: string[];
   isAdmin?: boolean;
   isClaimed?: boolean;
   isQuickAccess?: boolean;
@@ -134,7 +136,7 @@ interface RelationshipDialogState {
 }
 
 export interface PlayerProfileViewProps {
-  userId: string;
+  playerId: string;
   clubId?: string;
   mode?: "standalone" | "embedded";
   onBack?: () => void;
@@ -204,10 +206,10 @@ function formatConnectionRecord(summary: PlayerProfileConnectionSummary) {
   return `${summary.wins}W/${summary.losses}L`;
 }
 
-function getPlayerProfileHref(userId: string, clubId: string) {
+function getPlayerProfileHref(playerId: string, clubId: string) {
   return clubId
-    ? `/profile/${userId}?clubId=${encodeURIComponent(clubId)}`
-    : `/profile/${userId}`;
+    ? `/profile/${playerId}?clubId=${encodeURIComponent(clubId)}`
+    : `/profile/${playerId}`;
 }
 
 function getSessionHistoryHref(sessionCode: string) {
@@ -1727,7 +1729,7 @@ function AchievementsTab({
 }
 
 export function PlayerProfileView({
-  userId,
+  playerId,
   clubId = "",
   mode = "standalone",
   onBack,
@@ -1754,7 +1756,7 @@ export function PlayerProfileView({
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!userId) return;
+      if (!playerId) return;
 
       try {
         setLoading(true);
@@ -1763,7 +1765,7 @@ export function PlayerProfileView({
           ? `?clubId=${encodeURIComponent(clubId)}`
           : "";
         const [res, meRes] = await Promise.all([
-          fetch(`/api/users/${userId}/stats${query}`),
+          fetch(`/api/users/${encodeURIComponent(playerId)}/stats${query}`),
           fetch("/api/user/me"),
         ]);
         if (!res.ok) {
@@ -1775,10 +1777,17 @@ export function PlayerProfileView({
           meRes.ok ? meRes.json() : Promise.resolve({}),
         ])) as [
           UserProfileResponse,
-          { user?: CurrentProfileViewer }
+          { user?: CurrentProfileViewer; players?: Array<{ id: string }> }
         ];
         setData(json);
-        setCurrentUser(meJson.user ?? null);
+        setCurrentUser(
+          meJson.user
+            ? {
+                ...meJson.user,
+                playerIds: meJson.players?.map((player) => player.id) ?? [],
+              }
+            : null
+        );
       } catch (err) {
         console.error(err);
         setError("Failed to load profile");
@@ -1790,13 +1799,13 @@ export function PlayerProfileView({
     if (session?.user) {
       void fetchData();
     }
-  }, [userId, session, clubId, ratingRevision]);
+  }, [playerId, session, clubId, ratingRevision]);
 
   const handleUploadAvatar = async (file: File) => {
     const canUseClubAdminRoute =
       clubId.length > 0 && data?.context?.viewerCanManageClub;
-    const response = await uploadUserAvatar(
-      userId,
+    const response = await uploadPlayerAvatar(
+      playerId,
       file,
       canUseClubAdminRoute ? clubId : undefined
     );
@@ -1812,14 +1821,6 @@ export function PlayerProfileView({
           }
         : current
     );
-    setCurrentUser((current) =>
-      current && current.id === userId
-        ? {
-            ...current,
-            avatarUrl: response.avatarUrl,
-          }
-        : current
-    );
     setPreviewAvatarUrl((current) =>
       current ? response.avatarUrl ?? current : current
     );
@@ -1828,8 +1829,8 @@ export function PlayerProfileView({
   const handleRemoveAvatar = async () => {
     const canUseClubAdminRoute =
       clubId.length > 0 && data?.context?.viewerCanManageClub;
-    await deleteUserAvatar(
-      userId,
+    await deletePlayerAvatar(
+      playerId,
       canUseClubAdminRoute ? clubId : undefined
     );
 
@@ -1841,14 +1842,6 @@ export function PlayerProfileView({
               ...current.user,
               avatarUrl: null,
             },
-          }
-        : current
-    );
-    setCurrentUser((current) =>
-      current && current.id === userId
-        ? {
-            ...current,
-            avatarUrl: null,
           }
         : current
     );
@@ -1944,7 +1937,7 @@ export function PlayerProfileView({
   const canManageAvatar =
     !!currentUser &&
     (currentUser.isAdmin === true ||
-      (currentUser.id === userId &&
+      (currentUser.playerIds?.includes(playerId) === true &&
         currentUser.isClaimed === true &&
         currentUser.isQuickAccess !== true) ||
       (!!data.context?.viewerCanManageClub && clubId.length > 0));
@@ -1971,10 +1964,10 @@ export function PlayerProfileView({
       />
 
       {data.context?.viewerCanManageClub && !data.context.canAddGuestToClub ? (
-        <div className="px-4 sm:px-0"><AdjustClubRating key={`${clubId}:${userId}`} clubId={clubId} userId={userId} name={data.user.name} onChanged={() => setRatingRevision(value => value + 1)} /></div>
+        <div className="px-4 sm:px-0"><AdjustClubRating key={`${clubId}:${playerId}`} clubId={clubId} userId={playerId} name={data.user.name} onChanged={() => setRatingRevision(value => value + 1)} /></div>
       ) : null}
       {data.context?.canAddGuestToClub ? (
-        <AddGuestToClub key={`${clubId}:${userId}`} clubId={clubId} userId={userId} name={data.user.name} />
+        <AddGuestToClub key={`${clubId}:${playerId}`} clubId={clubId} userId={playerId} name={data.user.name} />
       ) : null}
 
       <AvatarPreviewModal

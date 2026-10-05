@@ -25,21 +25,21 @@ import {
 export type QueueSessionRecord = NonNullable<
   Awaited<ReturnType<typeof loadSessionRecordById>>
 >;
-type QueueRecord = NonNullable<QueueSessionRecord["queuedMatch"]>;
+type QueueRecord = Prisma.QueuedMatchGetPayload<Record<string, never>>;
 
 export function buildQueuedMatchResponse(
   sessionData: QueueSessionRecord,
   queuedMatch: QueueRecord
 ) {
   const playerById = new Map(
-    sessionData.players.map((player) => [player.userId, player.user])
+    sessionData.players.map((player) => [player.playerId, player.player])
   );
-  const team1User1 = playerById.get(queuedMatch.team1User1Id);
-  const team1User2 = playerById.get(queuedMatch.team1User2Id);
-  const team2User1 = playerById.get(queuedMatch.team2User1Id);
-  const team2User2 = playerById.get(queuedMatch.team2User2Id);
+  const team1Player1 = playerById.get(queuedMatch.team1Player1Id);
+  const team1Player2 = playerById.get(queuedMatch.team1Player2Id);
+  const team2Player1 = playerById.get(queuedMatch.team2Player1Id);
+  const team2Player2 = playerById.get(queuedMatch.team2Player2Id);
 
-  if (!team1User1 || !team1User2 || !team2User1 || !team2User2) {
+  if (!team1Player1 || !team1Player2 || !team2Player1 || !team2Player2) {
     throw new Error(
       "Queued match references players missing from the tournament."
     );
@@ -58,10 +58,10 @@ export function buildQueuedMatchResponse(
     matchmakingReason: parseMatchmakingReasonJson(
       queuedMatch.matchmakingReasonJson
     ),
-    team1User1,
-    team1User2,
-    team2User1,
-    team2User2,
+    team1Player1,
+    team1Player2,
+    team2Player1,
+    team2Player2,
   };
 }
 
@@ -162,12 +162,12 @@ async function resolveQueuedGroupSnapshot(
     partition.team2[1],
   ];
   const selectedPlayers = await tx.sessionPlayer.findMany({
-    where: { sessionId, userId: { in: selectedUserIds } },
-    select: { userId: true, pool: true },
+    where: { sessionId, playerId: { in: selectedUserIds } },
+    select: { playerId: true, pool: true },
   });
   if (
     selectedPlayers.length !== selectedUserIds.length ||
-    new Set(selectedPlayers.map((player) => player.userId)).size !==
+    new Set(selectedPlayers.map((player) => player.playerId)).size !==
       selectedUserIds.length
   ) {
     throw new GenerateMatchError(
@@ -181,7 +181,7 @@ async function resolveQueuedGroupSnapshot(
     partition.team2,
     buildSessionPoolMap(
       selectedPlayers,
-      (player) => player.userId,
+      (player) => player.playerId,
       (player) => player.pool
     )
   );
@@ -232,11 +232,11 @@ async function createQueuedMatchRecord({
       const queuedMatch = await tx.queuedMatch.create({
         data: {
           sessionId,
-          team1User1Id: partition.team1[0],
-          team1User2Id: partition.team1[1],
+          team1Player1Id: partition.team1[0],
+          team1Player2Id: partition.team1[1],
           team1ClubId: teamClubIds?.team1ClubId ?? null,
-          team2User1Id: partition.team2[0],
-          team2User2Id: partition.team2[1],
+          team2Player1Id: partition.team2[0],
+          team2Player2Id: partition.team2[1],
           team2ClubId: teamClubIds?.team2ClubId ?? null,
           targetPool: targetPool ?? null,
           courtGroupType: groupSnapshot?.courtGroupType ?? null,
@@ -355,11 +355,11 @@ async function updateQueuedMatchRecord({
     const queuedMatch = await tx.queuedMatch.update({
       where: { id: queuedMatchId },
       data: {
-        team1User1Id: partition.team1[0],
-        team1User2Id: partition.team1[1],
+        team1Player1Id: partition.team1[0],
+        team1Player2Id: partition.team1[1],
         team1ClubId: team1ClubId ?? null,
-        team2User1Id: partition.team2[0],
-        team2User2Id: partition.team2[1],
+        team2Player1Id: partition.team2[0],
+        team2Player2Id: partition.team2[1],
         team2ClubId: team2ClubId ?? null,
         targetPool: targetPool ?? null,
         courtGroupType: groupSnapshot?.courtGroupType ?? null,
@@ -391,19 +391,19 @@ function getQueuedReshuffleSource(sessionData: QueueSessionRecord): ReshuffleSou
 
   return {
     ids: [
-      sessionData.queuedMatch.team1User1Id,
-      sessionData.queuedMatch.team1User2Id,
-      sessionData.queuedMatch.team2User1Id,
-      sessionData.queuedMatch.team2User2Id,
+      sessionData.queuedMatch.team1Player1Id,
+      sessionData.queuedMatch.team1Player2Id,
+      sessionData.queuedMatch.team2Player1Id,
+      sessionData.queuedMatch.team2Player2Id,
     ],
     partition: {
       team1: [
-        sessionData.queuedMatch.team1User1Id,
-        sessionData.queuedMatch.team1User2Id,
+        sessionData.queuedMatch.team1Player1Id,
+        sessionData.queuedMatch.team1Player2Id,
       ],
       team2: [
-        sessionData.queuedMatch.team2User1Id,
-        sessionData.queuedMatch.team2User2Id,
+        sessionData.queuedMatch.team2Player1Id,
+        sessionData.queuedMatch.team2Player2Id,
       ],
     },
   };
@@ -446,10 +446,10 @@ export async function reshuffleQueuedMatchForSession(
 
   const excludedUserId = options?.excludedUserId;
   const reshuffleUserIds = [
-    sessionData.queuedMatch.team1User1Id,
-    sessionData.queuedMatch.team1User2Id,
-    sessionData.queuedMatch.team2User1Id,
-    sessionData.queuedMatch.team2User2Id,
+    sessionData.queuedMatch.team1Player1Id,
+    sessionData.queuedMatch.team1Player2Id,
+    sessionData.queuedMatch.team2Player1Id,
+    sessionData.queuedMatch.team2Player2Id,
   ];
 
   if (excludedUserId && !reshuffleUserIds.includes(excludedUserId)) {
@@ -511,13 +511,13 @@ export async function reshuffleQueuedMatchForSession(
     releasePendingUserIds: sessionData.queuedMatch.isAutomatic
       ? []
       : reshuffleUserIds.filter(
-          (userId) =>
+          (playerId) =>
             ![
               selection.partition.team1[0],
               selection.partition.team1[1],
               selection.partition.team2[0],
               selection.partition.team2[1],
-            ].includes(userId)
+            ].includes(playerId)
         ),
   });
 
@@ -537,10 +537,10 @@ export async function replaceQueuedMatchPlayerForSession(
   }
 
   const currentQueuedUserIds = [
-    sessionData.queuedMatch.team1User1Id,
-    sessionData.queuedMatch.team1User2Id,
-    sessionData.queuedMatch.team2User1Id,
-    sessionData.queuedMatch.team2User2Id,
+    sessionData.queuedMatch.team1Player1Id,
+    sessionData.queuedMatch.team1Player2Id,
+    sessionData.queuedMatch.team2Player1Id,
+    sessionData.queuedMatch.team2Player2Id,
   ];
 
   if (!currentQueuedUserIds.includes(replaceUserId)) {
@@ -551,7 +551,7 @@ export async function replaceQueuedMatchPlayerForSession(
   }
 
   const retainedUserIds = currentQueuedUserIds.filter(
-    (userId) => userId !== replaceUserId
+    (playerId) => playerId !== replaceUserId
   );
 
   if (retainedUserIds.length !== 3) {
@@ -633,7 +633,7 @@ export async function createManualQueuedMatchForSession(
         partition.team2,
         buildSessionPoolMap(
           sessionData.players,
-          (player) => player.userId,
+          (player) => player.playerId,
           (player) => player.pool
         )
       )

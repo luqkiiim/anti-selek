@@ -1,8 +1,10 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { prisma } from "@/lib/prisma";
+import { getAccountClubContext } from "@/lib/playerIdentity";
 import {
   checkInvalidTargetRateLimit,
   invalidTargetResponse,
@@ -30,7 +32,7 @@ export async function PATCH(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
     if (isQuickAccessSession(session)) {
       return invalidTargetResponse(request, "api:sessions:code:collab");
@@ -38,7 +40,7 @@ export async function PATCH(
 
     const { code } = await params;
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid request parameters" },
         { status: 400 }
       );
@@ -52,7 +54,7 @@ export async function PATCH(
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return sportingJson({ error: "Invalid request body" }, { status: 400 });
     }
 
     const { status } = body as { status?: unknown };
@@ -60,7 +62,7 @@ export async function PATCH(
       status !== SessionClubStatus.ACCEPTED &&
       status !== SessionClubStatus.REJECTED
     ) {
-      return NextResponse.json({ error: "Invalid collab status" }, { status: 400 });
+      return sportingJson({ error: "Invalid collab status" }, { status: 400 });
     }
 
     const sessionData = await prisma.session.findUnique({
@@ -89,17 +91,12 @@ export async function PATCH(
     }
 
     const partnerLink = sessionData.sessionClubs[0];
-    const membership = await prisma.clubMember.findUnique({
-      where: {
-        clubId_userId: {
-          clubId: partnerLink.clubId,
-          userId: session.user.id,
-        },
-      },
-      select: { role: true },
+    const partnerClubContext = await getAccountClubContext(prisma, {
+      userId: session.user.id,
+      clubId: partnerLink.clubId,
+      isGlobalAdmin: !!session.user.isAdmin,
     });
-
-    if (!session.user.isAdmin && membership?.role !== "ADMIN") {
+    if (!partnerClubContext.canAdmin) {
       return invalidTargetResponse(request, "api:sessions:code:collab");
     }
 
@@ -115,7 +112,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(withLegacyClubAliases({
+    return sportingJson(withLegacyClubAliases({
       id: updated.id,
       clubId: updated.clubId,
       clubName: updated.club.name,

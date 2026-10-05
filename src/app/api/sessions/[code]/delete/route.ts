@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +10,8 @@ import {
   deleteEphemeralGuestUsers,
   reverseSessionEloChanges,
 } from "@/lib/sessionLifecycle";
-import { ClubRole, SessionStatus } from "@/types/enums";
+import { SessionStatus } from "@/types/enums";
+import { getAccountClubContext } from "@/lib/playerIdentity";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +25,13 @@ export async function DELETE(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:delete");
@@ -50,29 +52,22 @@ export async function DELETE(
       return invalidTargetResponse(request, "api:sessions:code:delete");
     }
 
-    let isHostOperator = false;
-    if (targetSession.clubId) {
-      const membership = await prisma.clubMember.findUnique({
-        where: {
-          clubId_userId: {
-            clubId: targetSession.clubId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isHostOperator = membership?.role === ClubRole.ADMIN || membership?.role === ClubRole.STAFF;
-    }
-
-    if (!session.user.isAdmin && !isHostOperator) {
-      return NextResponse.json({ error: "Host only" }, { status: 403 });
+    const hostClubContext = targetSession.clubId
+      ? await getAccountClubContext(prisma, {
+          userId: session.user.id,
+          clubId: targetSession.clubId,
+          isGlobalAdmin: !!session.user.isAdmin,
+        })
+      : null;
+    if (!hostClubContext?.canOperate) {
+      return sportingJson({ error: "Host only" }, { status: 403 });
     }
 
     if (
       !targetSession.isTest &&
       targetSession.status === SessionStatus.COMPLETED
     ) {
-      return NextResponse.json(
+      return sportingJson(
         {
           error: "Completed tournaments must be rolled back from club history",
         },
@@ -83,7 +78,7 @@ export async function DELETE(
     await prisma.$transaction(async (tx) => {
       const sessionPlayers = await tx.sessionPlayer.findMany({
         where: { sessionId: targetSession.id },
-        select: { userId: true, isGuest: true },
+        select: { playerId: true, isGuest: true },
       });
       const guestUserIds = collectGuestUserIds(sessionPlayers);
 
@@ -130,7 +125,7 @@ export async function DELETE(
       },
     });
 
-    return NextResponse.json({
+    return sportingJson({
       success: true,
       code: targetSession.code,
       clubId: targetSession.clubId,

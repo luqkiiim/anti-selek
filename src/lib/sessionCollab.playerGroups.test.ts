@@ -1,64 +1,49 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  SessionClubRole,
-  SessionClubStatus,
-  SessionPool,
-} from "@/types/enums";
-import { getSessionMembership } from "./sessionCollab";
+import { getSessionAdminMembership, getSessionMembership } from "./sessionCollab";
+function fixture(role: string | null = "MEMBER", status = "ACTIVE") {
+  return {
+    sessionClub: { findMany: vi.fn().mockResolvedValue([
+      { id: "partner", sessionId: "session", clubId: "partner-club", role: "PARTNER", status: "ACCEPTED", createdAt: new Date("2026-01-02") },
+      { id: "host", sessionId: "session", clubId: "host-club", role: "HOST", status: "ACCEPTED", createdAt: new Date("2026-01-01") },
+    ]) },
+    club: { findUnique: vi.fn().mockResolvedValue({ id: "host-club", createdById: "other-account", isTutorial: false }) },
+    clubAccess: {
+      findUnique: vi.fn().mockResolvedValue(role ? { role, status } : null),
+      findFirst: vi.fn(async () => null as { clubId: string; role: string } | null),
+    },
+    clubMember: { findMany: vi.fn().mockResolvedValue([{ id: "member", playerId: "historical-player", role: "ADMIN", preferredPool: "A", player: { id: "historical-player", ownerUserId: "account-new" } }]) },
+  };
+}
+const input = { session: { id: "session", clubId: "host-club" }, userId: "account-new", acceptedOnly: true };
+describe("session club authorization is independent of player groups", () => {
+  it("prefers the host club's Account access when belonging to both clubs", async () => {
+    const db = fixture(); const membership = await getSessionMembership(db as never, input);
+    expect(membership).toEqual({ clubId: "host-club", role: "MEMBER" });
+    expect(db.clubAccess.findUnique).toHaveBeenCalledTimes(1);
+    expect(db.clubAccess.findUnique).toHaveBeenCalledWith({ where: { clubId_userId: { clubId: "host-club", userId: "account-new" } } });
+  });
+  it("does not turn a historical ADMIN roster role into session access", async () => {
+    expect(await getSessionMembership(fixture(null) as never, input)).toBeNull();
+  });
+  it("does not authorize a revoked Account grant", async () => {
+    expect(await getSessionMembership(fixture("ADMIN", "REVOKED") as never, input)).toBeNull();
+  });
+  it("recognizes an active OWNER grant as session admin access", async () => {
+    const db = fixture();
+    db.clubAccess.findFirst.mockResolvedValue({ clubId: "host-club", role: "OWNER" });
 
-describe("session membership player-group precedence", () => {
-  it("uses the host-club preference for a member who belongs to both clubs", async () => {
-    const findUnique = vi.fn(async ({ where }) => {
-      const clubId = where.clubId_userId.clubId;
-      return {
-        clubId,
-        role: "MEMBER",
-        elo: 1000,
-        preferredPool:
-          clubId === "host-club" ? SessionPool.A : SessionPool.B,
-      };
+    await expect(getSessionAdminMembership(db as never, input)).resolves.toEqual({
+      clubId: "host-club",
+      role: "OWNER",
     });
-    const tx = {
-      sessionClub: {
-        findMany: vi.fn().mockResolvedValue([
-          {
-            id: "partner-link",
-            sessionId: "session-1",
-            clubId: "partner-club",
-            role: SessionClubRole.PARTNER,
-            status: SessionClubStatus.ACCEPTED,
-            createdAt: new Date("2026-08-23T00:00:01Z"),
-          },
-          {
-            id: "host-link",
-            sessionId: "session-1",
-            clubId: "host-club",
-            role: SessionClubRole.HOST,
-            status: SessionClubStatus.ACCEPTED,
-            createdAt: new Date("2026-08-23T00:00:00Z"),
-          },
-        ]),
+    expect(db.clubAccess.findFirst).toHaveBeenCalledWith({
+      where: {
+        clubId: { in: ["host-club", "partner-club"] },
+        userId: "account-new",
+        status: "ACTIVE",
+        role: { in: ["OWNER", "ADMIN"] },
       },
-      clubMember: { findUnique },
-    };
-
-    const membership = await getSessionMembership(tx as never, {
-      session: { id: "session-1", clubId: "host-club" },
-      userId: "player-1",
-      acceptedOnly: true,
+      select: { clubId: true, role: true },
     });
-
-    expect(membership?.preferredPool).toBe(SessionPool.A);
-    expect(findUnique).toHaveBeenCalledTimes(1);
-    expect(findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          clubId_userId: {
-            clubId: "host-club",
-            userId: "player-1",
-          },
-        },
-      })
-    );
   });
 });

@@ -23,7 +23,7 @@ import {
 interface ClubPlayerEditorModalProps {
   player: ClubAdminPlayer | null;
   clubId: string;
-  currentUserId?: string | null;
+  currentPlayerId?: string | null;
   editorName: string;
   editorRating: string;
   savingName: boolean;
@@ -64,7 +64,7 @@ interface ClubPlayerEditorModalProps {
 export function ClubPlayerEditorModal({
   player,
   clubId,
-  currentUserId,
+  currentPlayerId,
   editorName,
   savingName,
   savingRole,
@@ -92,11 +92,11 @@ export function ClubPlayerEditorModal({
   const playerLevelOptionLabel =
     player.gender === PlayerGender.FEMALE ? "High level" : "Low level";
   const canEditName = !player.isClaimed;
-  const isCurrentUser = player.id === currentUserId;
+  const isCurrentPlayer = player.id === currentPlayerId;
   const canRemovePlayer =
-    !player.isOwner && (player.role !== "ADMIN" || isCurrentUser);
-  const removeButtonLabel = isCurrentUser ? "Leave club" : "Remove player";
-  const removingButtonLabel = isCurrentUser ? "Leaving..." : "Removing...";
+    !player.isOwner && (player.role !== "ADMIN" || isCurrentPlayer);
+  const removeButtonLabel = isCurrentPlayer ? "Leave club" : "Remove player";
+  const removingButtonLabel = isCurrentPlayer ? "Leaving..." : "Removing...";
 
   return (
     <ModalFrame

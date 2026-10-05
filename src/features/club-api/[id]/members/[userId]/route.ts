@@ -1,622 +1,106 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { serializeAvatarEntity } from "@/lib/avatar";
-import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
-import { isValidClubRole } from "@/lib/clubRoles";
 import { prisma } from "@/lib/prisma";
-import {
-  isValidMixedSide,
-  isValidPartnerPreference,
-  isValidPlayerGender,
-  resolveMixedSideState,
-} from "@/lib/mixedSide";
-import {
-  ClubPlayerStatus,
-  ClubRole,
-  PlayerGender,
-  SessionPool,
-} from "@/types/enums";
-import { logError, safeErrorResponse } from "@/lib/errors";
-import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
-import {
-  getQuickAccessDeniedMessage,
-  isQuickAccessSession,
-  normalizeNameLookupKey,
-} from "@/lib/quickAccess";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
+import { getClubRoster } from "@/lib/clubRoster";
+import { isValidClubRole } from "@/lib/clubRoles";
+import { isQuickAccessSession, normalizeNameLookupKey } from "@/lib/quickAccess";
+import { isValidMixedSide, isValidPartnerPreference, isValidPlayerGender, resolveMixedSideState } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { propagatePreferredPoolToClubSessions } from "@/lib/playerGroupPreferences";
 import { tryRebuildAutomaticQueuedMatchForSessionId } from "@/app/api/sessions/[code]/queue-match/shared";
+import { rateLimit } from "@/lib/rateLimit";
+import { ClubAdmissionError } from "@/lib/clubAdmissions";
+import { logError, safeErrorResponse } from "@/lib/errors";
 
-function isValidClubPlayerStatus(
-  value: unknown
-): value is ClubPlayerStatus {
-  return (
-    value === ClubPlayerStatus.CORE ||
-    value === ClubPlayerStatus.OCCASIONAL
-  );
-}
+type Context = { params: Promise<{ id: string; userId: string }> };
 
-async function findDuplicateUnclaimedMemberName({
-  clubId,
-  name,
-  excludeUserId,
-}: {
-  clubId: string;
-  name: string;
-  excludeUserId?: string;
-}) {
-  const lookupName = normalizeNameLookupKey(name);
-  if (!lookupName) return null;
-
-  const members = await prisma.clubMember.findMany({
-    where: { clubId },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          isClaimed: true,
-        },
-      },
-    },
-  });
-
-  return (
-    members.find(
-      (member) =>
-        member.user.id !== excludeUserId &&
-        !member.user.isClaimed &&
-        member.user.email === null &&
-        normalizeNameLookupKey(member.user.name) === lookupName
-    ) ?? null
-  );
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string; userId: string }> }
-) {
+export async function PATCH(request: Request, { params }: Context) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:communities:id:members:userId:patch", { limit: 15, windowMs: 60_000 });
-    if (rateLimitResponse) return rateLimitResponse;
-
+    const limited = await rateLimit(request, "api:communities:id:members:userId:patch", { limit: 15, windowMs: 60_000 });
+    if (limited) return limited;
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
-    if (isQuickAccessSession(session)) {
-      return NextResponse.json(
-        { error: getQuickAccessDeniedMessage() },
-        { status: 403 }
-      );
-    }
-
-    const { id: clubId, userId } = await params;
-
-    if (typeof clubId !== "string" || clubId.length === 0 || typeof userId !== "string" || userId.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
-    }
-
-    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId");
-
-    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const adminAccess = await getClubAdminAccess(prisma, {
-      clubId,
-      userId: session.user.id,
-      isGlobalAdmin: !!session.user.isAdmin,
-    });
-    if (!adminAccess) {
-      return invalidTargetResponse(request, "api:communities:id:members:userId");
-    }
-
-    const membership = await prisma.clubMember.findUnique({
-      where: {
-        clubId_userId: {
-          clubId,
-          userId,
-        },
-      },
-    });
-    if (!membership) {
-      return invalidTargetResponse(request, "api:communities:id:members:userId");
-    }
-
+    if (!session?.user?.id) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    if (isQuickAccessSession(session)) return NextResponse.json({ error: "Sign in with an account." }, { status: 403 });
+    const { id: clubId, userId: playerId } = await params; // Compatibility URL parameter is a Player ID.
+    const [access, member] = await Promise.all([
+      getClubAdminAccess(prisma, { clubId, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin }),
+      prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId } }, include: { player: true } }),
+    ]);
+    if (!member || member.archivedAt) return NextResponse.json({ error: "Player not found" }, { status: 404 });
+    if (!access?.isGlobalAdmin && !access?.membershipRole) return NextResponse.json({ error: "Active club access required" }, { status: 403 });
+    const self = member.player.ownerUserId === session.user.id;
     const body = await request.json().catch(() => null);
-    if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    const staffGroupOnly = access?.membershipRole === "STAFF" && Object.keys(body).length === 1 && body.preferredPool !== undefined;
+    if (!access?.canAdmin && !self && !staffGroupOnly) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    if (body.email !== undefined || body.password !== undefined || body.ownerUserId !== undefined || body.elo !== undefined) return NextResponse.json({ error: "Account ownership and rating changes use their dedicated flows." }, { status: 400 });
+    if (!access?.canAdmin && !staffGroupOnly && ["role", "status", "preferredPool", "isActive"].some(field => body[field] !== undefined)) return NextResponse.json({ error: "Club admin access required" }, { status: 403 });
+    if (body.name !== undefined && (typeof body.name !== "string" || body.name.trim().length < 2 || body.name.trim().length > 100 || !normalizeNameLookupKey(body.name))) return NextResponse.json({ error: "Invalid player name" }, { status: 400 });
+    if (body.name !== undefined && member.player.ownerUserId && !self) return NextResponse.json({ error: "The Player owner manages their name." }, { status: 403 });
+    if (body.gender !== undefined && !isValidPlayerGender(body.gender)) return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
+    if (body.partnerPreference !== undefined && !isValidPartnerPreference(body.partnerPreference)) return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
+    if (body.mixedSideOverride !== undefined && body.mixedSideOverride !== null && !isValidMixedSide(body.mixedSideOverride)) return NextResponse.json({ error: "Invalid player level" }, { status: 400 });
+    if (body.status !== undefined && !["CORE", "OCCASIONAL"].includes(body.status)) return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
+    if (body.preferredPool !== undefined && !isValidSessionPool(body.preferredPool)) return NextResponse.json({ error: "Invalid preferred game group" }, { status: 400 });
+    // Legacy rest toggles stay ignored; this identity refactor does not change queue behavior.
+    if (body.isActive !== undefined && typeof body.isActive !== "boolean") return NextResponse.json({ error: "Invalid player status" }, { status: 400 });
+    if (member.player.ownerUserId && body.isActive !== undefined && body.isActive !== member.player.isActive) return NextResponse.json({ error: "Use club membership archiving to remove a registered Player from this roster." }, { status: 403 });
+    if (body.role !== undefined && (!isValidClubRole(body.role) || body.role === "OWNER")) return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
+    const mixedChanged = ["gender", "partnerPreference", "mixedSideOverride"].some(field => body[field] !== undefined);
+    const mixed = resolveMixedSideState({ gender: body.gender ?? member.player.gender, partnerPreference: body.partnerPreference ?? (body.mixedSideOverride !== undefined ? undefined : member.player.partnerPreference), mixedSideOverride: body.mixedSideOverride !== undefined ? body.mixedSideOverride : member.player.mixedSideOverride });
+    if (body.role !== undefined) {
+      if (!member.player.ownerUserId) return NextResponse.json({ error: "Only a registered account can receive club permissions." }, { status: 400 });
+      if (member.player.ownerUserId === session.user.id || member.player.ownerUserId === access?.createdById) return NextResponse.json({ error: "Cannot change your own or the club owner's role." }, { status: 400 });
     }
-
-    const {
-      name,
-      email,
-      elo,
-      isActive,
-      gender,
-      partnerPreference,
-      mixedSideOverride,
-      status,
-      preferredPool,
-      role,
-    } = body as {
-      name?: unknown;
-      email?: unknown;
-      elo?: unknown;
-      isActive?: unknown;
-      gender?: unknown;
-      partnerPreference?: unknown;
-      mixedSideOverride?: unknown;
-      status?: unknown;
-      preferredPool?: unknown;
-      role?: unknown;
-    };
-
-    const requestKeys = Object.keys(body as Record<string, unknown>);
-    const isStaffPreferenceOnly =
-      adminAccess.membershipRole === ClubRole.STAFF &&
-      requestKeys.length === 1 &&
-      requestKeys[0] === "preferredPool";
-    if (!adminAccess.canAdmin && !isStaffPreferenceOnly) {
-      return invalidTargetResponse(request, "api:communities:id:members:userId");
-    }
-
-    if (name !== undefined && (typeof name !== "string" || name.trim().length === 0)) {
-      return NextResponse.json({ error: "Invalid name" }, { status: 400 });
-    }
-    if (
-      email !== undefined &&
-      email !== null &&
-      (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
-    ) {
-      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
-    }
-    if (
-      elo !== undefined &&
-      (typeof elo !== "number" || !Number.isInteger(elo) || elo < 0 || elo > 5000)
-    ) {
-      return NextResponse.json({ error: "Invalid rating" }, { status: 400 });
-    }
-    if (isActive !== undefined && typeof isActive !== "boolean") {
-      return NextResponse.json({ error: "Invalid isActive value" }, { status: 400 });
-    }
-    if (gender !== undefined && !isValidPlayerGender(gender)) {
-      return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
-    }
-    if (
-      partnerPreference !== undefined &&
-      !isValidPartnerPreference(partnerPreference)
-    ) {
-      return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
-    }
-    if (
-      mixedSideOverride !== undefined &&
-      mixedSideOverride !== null &&
-      !isValidMixedSide(mixedSideOverride)
-    ) {
-      return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
-    }
-    if (status !== undefined && !isValidClubPlayerStatus(status)) {
-      return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
-    }
-    if (preferredPool !== undefined && !isValidSessionPool(preferredPool)) {
-      return NextResponse.json(
-        { error: "Invalid preferred game group" },
-        { status: 400 }
-      );
-    }
-    if (role !== undefined && !isValidClubRole(role)) {
-      return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
-    }
-
-    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : email;
-    const requestedRole = isValidClubRole(role) ? role : undefined;
-    const nextRole =
-      requestedRole && requestedRole !== membership.role ? requestedRole : undefined;
-    const shouldPromoteToAdmin = nextRole === ClubRole.ADMIN;
-    const shouldGrantStaff = nextRole === ClubRole.STAFF;
-    const shouldRevokeStaff = nextRole === ClubRole.MEMBER;
-    const targetIsOwner = adminAccess.createdById === userId;
-    const requesterCanDemoteAdmin =
-      adminAccess.isOwner || adminAccess.isGlobalAdmin;
-
-    if (targetIsOwner && nextRole) {
-      return NextResponse.json(
-        { error: "The club owner role cannot be changed" },
-        { status: 400 }
-      );
-    }
-    if (userId === session.user.id && nextRole) {
-      return NextResponse.json(
-        { error: "Cannot change your own club role" },
-        { status: 400 }
-      );
-    }
-    if (
-      membership.role === ClubRole.ADMIN &&
-      (shouldGrantStaff || shouldRevokeStaff) &&
-      !requesterCanDemoteAdmin
-    ) {
-      return NextResponse.json(
-        { error: "Only the club owner can demote admins" },
-        { status: 403 }
-      );
-    }
-    if (shouldRevokeStaff && membership.role !== ClubRole.STAFF) {
-      if (membership.role !== ClubRole.ADMIN) {
-        return NextResponse.json(
-          { error: "Only staff members can be changed back to member here" },
-          { status: 400 }
-        );
+    await prisma.$transaction(async tx => {
+      if (body.role !== undefined && member.player.ownerUserId) {
+        const grant = await tx.clubAccess.findUnique({ where: { clubId_userId: { clubId, userId: member.player.ownerUserId } } });
+        if (!grant || grant.status !== "ACTIVE") throw new ClubAdmissionError("Approve account admission before changing club permissions.");
+        if (["ADMIN", "OWNER"].includes(grant.role) && !access?.isOwner && !access?.isGlobalAdmin) throw new ClubAdmissionError("Only the club owner can demote admins.", 403);
+        await tx.clubAccess.update({ where: { id: grant.id }, data: { role: body.role } });
       }
-    }
-
-    if (
-      shouldPromoteToAdmin ||
-      (shouldGrantStaff && membership.role !== ClubRole.ADMIN)
-    ) {
-      const targetUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { isClaimed: true },
-      });
-      if (!targetUser?.isClaimed) {
-        return NextResponse.json(
-          {
-            error: shouldPromoteToAdmin
-              ? "Only claimed members can be promoted to admin"
-              : "Only claimed members can be made staff",
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (typeof normalizedEmail === "string" && normalizedEmail.length > 0) {
-      const existing = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        select: { id: true },
-      });
-      if (existing && existing.id !== userId) {
-        return NextResponse.json({ error: "Email already registered" }, { status: 400 });
-      }
-    }
-
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        name: true,
-        email: true,
-        avatarKey: true,
-        isClaimed: true,
-        isActive: true,
-        gender: true,
-        partnerPreference: true,
-        mixedSideOverride: true,
-      },
+      if (body.name !== undefined || mixedChanged || body.isActive !== undefined) await tx.player.update({ where: { id: playerId }, data: { ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.gender !== undefined ? { gender: body.gender } : {}), ...(mixedChanged ? mixed : {}), ...(typeof body.isActive === "boolean" ? { isActive: body.isActive } : {}) } });
+      if (body.status !== undefined || body.preferredPool !== undefined) await tx.clubMember.update({ where: { id: member.id }, data: { ...(body.status !== undefined ? { status: body.status } : {}), ...(body.preferredPool !== undefined ? { preferredPool: body.preferredPool } : {}) } });
     });
-    if (!currentUser) {
-      return invalidTargetResponse(request, "api:communities:id:members:userId");
+    let preferencePropagation = { immediateSessionCount: 0, deferredSessionCount: 0 };
+    if (isValidSessionPool(body.preferredPool)) {
+      const result = await propagatePreferredPoolToClubSessions(prisma, { clubId, playerId, preferredPool: body.preferredPool });
+      preferencePropagation = result;
+      await Promise.all(result.automaticQueueSessionIds.map(id => tryRebuildAutomaticQueuedMatchForSessionId(id)));
     }
-
-    const nextName = typeof name === "string" ? name.trim() : currentUser.name;
-    const nextEmail =
-      email !== undefined
-        ? typeof normalizedEmail === "string" && normalizedEmail.length > 0
-          ? normalizedEmail
-          : null
-        : currentUser.email;
-    if (!normalizeNameLookupKey(nextName)) {
-      return NextResponse.json(
-        { error: "Player name must include letters or numbers" },
-        { status: 400 }
-      );
-    }
-    if (
-      typeof name === "string" &&
-      currentUser.isClaimed &&
-      nextName !== currentUser.name
-    ) {
-      return NextResponse.json(
-        { error: "Claimed members manage their own account name" },
-        { status: 403 }
-      );
-    }
-    if (
-      currentUser.isClaimed &&
-      email !== undefined &&
-      nextEmail !== currentUser.email
-    ) {
-      return NextResponse.json(
-        { error: "Claimed members manage their own account email" },
-        { status: 403 }
-      );
-    }
-    if (
-      currentUser.isClaimed &&
-      typeof isActive === "boolean" &&
-      isActive !== currentUser.isActive
-    ) {
-      return NextResponse.json(
-        { error: "Claimed members manage their own account status" },
-        { status: 403 }
-      );
-    }
-
-    if (!currentUser.isClaimed && nextEmail === null) {
-      const duplicate = await findDuplicateUnclaimedMemberName({
-        clubId,
-        name: nextName,
-        excludeUserId: userId,
-      });
-      if (duplicate) {
-        return NextResponse.json(
-          { error: "An unclaimed player with this name already exists in this club" },
-          { status: 409 }
-        );
-      }
-    }
-
-    const nextGender =
-      typeof gender === "string"
-        ? (gender as PlayerGender)
-        : (currentUser.gender as PlayerGender | undefined) ?? PlayerGender.UNSPECIFIED;
-    const hasMixedSideOverrideInput =
-      isValidMixedSide(mixedSideOverride) || mixedSideOverride === null;
-    const hasPartnerPreferenceInput = isValidPartnerPreference(partnerPreference);
-    const resolvedMixedState = resolveMixedSideState({
-      gender: nextGender,
-      mixedSideOverride:
-        hasMixedSideOverrideInput
-          ? mixedSideOverride
-          : hasPartnerPreferenceInput || typeof gender === "string"
-            ? null
-            : currentUser.mixedSideOverride,
-      partnerPreference: hasMixedSideOverrideInput
-        ? undefined
-        : hasPartnerPreferenceInput
-          ? partnerPreference
-          : typeof gender === "string"
-            ? undefined
-            : currentUser.partnerPreference,
-    });
-
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        name: typeof name === "string" ? name.trim() : undefined,
-        email:
-          email !== undefined
-            ? typeof normalizedEmail === "string" && normalizedEmail.length > 0
-              ? normalizedEmail
-              : null
-            : undefined,
-        gender: typeof gender === "string" ? gender : undefined,
-        partnerPreference: resolvedMixedState.partnerPreference,
-        mixedSideOverride: resolvedMixedState.mixedSideOverride,
-        isActive: typeof isActive === "boolean" ? isActive : undefined,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        avatarKey: true,
-        gender: true,
-        partnerPreference: true,
-        mixedSideOverride: true,
-        isActive: true,
-        isClaimed: true,
-        createdAt: true,
-      },
-    });
-
-    const updatedMembership =
-      typeof elo === "number" ||
-      shouldPromoteToAdmin ||
-      shouldGrantStaff ||
-      shouldRevokeStaff ||
-      isValidClubPlayerStatus(status) ||
-      isValidSessionPool(preferredPool)
-        ? await prisma.clubMember.update({
-            where: {
-              clubId_userId: {
-                clubId,
-                userId,
-              },
-            },
-            data: {
-              ...(typeof elo === "number" ? { elo } : {}),
-              ...(isValidClubPlayerStatus(status) ? { status } : {}),
-              ...(isValidSessionPool(preferredPool) ? { preferredPool } : {}),
-              ...(nextRole ? { role: nextRole } : {}),
-            },
-            select: {
-              role: true,
-              elo: true,
-              status: true,
-              preferredPool: true,
-            },
-          })
-        : await prisma.clubMember.findUnique({
-            where: {
-              clubId_userId: {
-                clubId,
-                userId,
-              },
-            },
-            select: {
-              role: true,
-              elo: true,
-              status: true,
-              preferredPool: true,
-            },
-          });
-
-    let preferencePropagation = {
-      immediateSessionCount: 0,
-      deferredSessionCount: 0,
-    };
-    if (isValidSessionPool(preferredPool)) {
-      const propagation = await propagatePreferredPoolToClubSessions(prisma, {
-        clubId,
-        userId,
-        preferredPool,
-      });
-      preferencePropagation = {
-        immediateSessionCount: propagation.immediateSessionCount,
-        deferredSessionCount: propagation.deferredSessionCount,
-      };
-      await Promise.all(
-        propagation.automaticQueueSessionIds.map((sessionId) =>
-          tryRebuildAutomaticQueuedMatchForSessionId(sessionId)
-        )
-      );
-    }
-
-    return NextResponse.json({
-      id: updatedUser.id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      gender: updatedUser.gender,
-      partnerPreference: updatedUser.partnerPreference,
-      mixedSideOverride: updatedUser.mixedSideOverride,
-      isActive: updatedUser.isActive,
-      isClaimed: updatedUser.isClaimed,
-      createdAt: updatedUser.createdAt,
-      avatarUrl: serializeAvatarEntity(updatedUser).avatarUrl,
-      role: updatedMembership?.role ?? membership.role,
-      isOwner: targetIsOwner,
-      elo: updatedMembership?.elo ?? membership.elo,
-      preferredPool: isValidSessionPool(updatedMembership?.preferredPool)
-        ? updatedMembership.preferredPool
-        : isValidSessionPool(membership.preferredPool)
-          ? membership.preferredPool
-          : SessionPool.B,
-      preferencePropagation,
-      status:
-        updatedMembership?.status === ClubPlayerStatus.OCCASIONAL
-          ? ClubPlayerStatus.OCCASIONAL
-          : ClubPlayerStatus.CORE,
-    });
-  } catch (error) {
-    logError("Club admin update player error", error);
-    return safeErrorResponse();
-  }
+    return NextResponse.json({ ...(await getClubRoster(prisma, clubId)).find(player => player.id === playerId), preferencePropagation });
+  } catch (error) { if (error instanceof ClubAdmissionError) return NextResponse.json({ error: error.message }, { status: error.statusCode }); logError("Update club Player", error); return safeErrorResponse(); }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string; userId: string }> }
-) {
+export async function DELETE(request: Request, { params }: Context) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:communities:id:members:userId:delete", { limit: 15, windowMs: 60_000 });
-    if (rateLimitResponse) return rateLimitResponse;
-
+    const limited = await rateLimit(request, "api:communities:id:members:userId:delete", { limit: 15, windowMs: 60_000 });
+    if (limited) return limited;
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
-    if (isQuickAccessSession(session)) {
-      return NextResponse.json(
-        { error: getQuickAccessDeniedMessage() },
-        { status: 403 }
-      );
-    }
-
-    const { id: clubId, userId } = await params;
-
-    if (typeof clubId !== "string" || clubId.length === 0 || typeof userId !== "string" || userId.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
-    }
-
-    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId");
-
-    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const adminAccess = await getClubAdminAccess(prisma, {
-      clubId,
-      userId: session.user.id,
-      isGlobalAdmin: !!session.user.isAdmin,
-    });
-    if (!adminAccess?.canAdmin) {
-      return invalidTargetResponse(request, "api:communities:id:members:userId");
-    }
-
-    const membership = await prisma.clubMember.findUnique({
-      where: {
-        clubId_userId: {
-          clubId,
-          userId,
-        },
-      },
-      select: { id: true, role: true },
-    });
-    if (!membership) {
-      return invalidTargetResponse(request, "api:communities:id:members:userId");
-    }
-    if (adminAccess.createdById === userId) {
-      return NextResponse.json(
-        { error: "The club owner cannot be removed" },
-        { status: 400 }
-      );
-    }
-    const isSelfRemoval = userId === session.user.id;
-    if (isSelfRemoval) {
-      if (membership.role !== ClubRole.ADMIN) {
-        return NextResponse.json(
-          { error: "Cannot remove yourself from the club" },
-          { status: 400 }
-        );
+    if (!session?.user?.id || isQuickAccessSession(session)) return NextResponse.json({ error: "Sign in with an account." }, { status: 401 });
+    const { id: clubId, userId: playerId } = await params;
+    const [access, member] = await Promise.all([
+      getClubAdminAccess(prisma, { clubId, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin }),
+      prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId } }, include: { player: true } }),
+    ]);
+    if (!member) return NextResponse.json({ error: "Player not found" }, { status: 404 });
+    if (!access?.isGlobalAdmin && !access?.membershipRole) return NextResponse.json({ error: "Active club access required" }, { status: 403 });
+    const self = member.player.ownerUserId === session.user.id;
+    if (!access?.canAdmin && !self) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    if (member.player.ownerUserId === access?.createdById) return NextResponse.json({ error: "The club owner cannot be removed." }, { status: 400 });
+    await prisma.$transaction(async tx => {
+      const grant = member.player.ownerUserId ? await tx.clubAccess.findUnique({ where: { clubId_userId: { clubId, userId: member.player.ownerUserId } } }) : null;
+      if (grant?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(grant.role)) {
+        if (!self) throw new ClubAdmissionError("Demote admins before removing them");
+        const anotherAdmin = await tx.clubAccess.findFirst({ where: { clubId, status: "ACTIVE", role: { in: ["ADMIN", "OWNER"] }, userId: { not: session.user.id } }, select: { id: true } });
+        if (!anotherAdmin) throw new ClubAdmissionError("Make another member an admin before leaving this club");
       }
-
-      const otherAdmins = await prisma.clubMember.findMany({
-        where: {
-          clubId,
-          role: ClubRole.ADMIN,
-          userId: { not: userId },
-        },
-        select: { id: true },
-        take: 1,
-      });
-      if (otherAdmins.length === 0) {
-        return NextResponse.json(
-          { error: "Make another member an admin before leaving this club" },
-          { status: 400 }
-        );
-      }
-    } else if (membership.role === ClubRole.ADMIN) {
-      return NextResponse.json(
-        { error: "Demote admins before removing them" },
-        { status: 400 }
-      );
-    }
-
-    const sessionRows = await prisma.session.findMany({
-      where: { clubId },
-      select: { id: true },
+      const activeParticipation = await tx.sessionPlayer.findFirst({ where: { playerId, session: { status: { in: ["WAITING", "ACTIVE"] }, OR: [{ clubId }, { sessionClubs: { some: { clubId, status: "ACCEPTED" } } }] } }, select: { id: true } });
+      if (activeParticipation) throw new ClubAdmissionError("Remove the Player from unfinished sessions before archiving club membership", 409);
+      await tx.clubMember.updateMany({ where: { id: member.id, archivedAt: null }, data: { archivedAt: new Date() } });
+      if (member.player.ownerUserId) await tx.clubAccess.updateMany({ where: { clubId, userId: member.player.ownerUserId }, data: { status: "REVOKED" } });
     });
-    const sessionIds = sessionRows.map((s) => s.id);
-
-    await prisma.$transaction(async (tx) => {
-      if (sessionIds.length > 0) {
-        await tx.sessionPlayer.deleteMany({
-          where: {
-            sessionId: { in: sessionIds },
-            userId,
-          },
-        });
-      }
-
-      await tx.clubMember.delete({
-        where: {
-          clubId_userId: {
-            clubId,
-            userId,
-          },
-        },
-      });
-    });
-
     return NextResponse.json({ success: true });
-  } catch (error) {
-    logError("Club admin remove player error", error);
-    return safeErrorResponse();
-  }
+  } catch (error) { if (error instanceof ClubAdmissionError) return NextResponse.json({ error: error.message }, { status: error.statusCode }); logError("Archive club Player", error); return safeErrorResponse(); }
 }

@@ -84,7 +84,7 @@ describe("reset password route", () => {
         id: "user-1",
         email: "player@example.com",
         name: "Player One",
-        isClaimed: true,
+        isActive: true,
       },
     });
 
@@ -109,7 +109,7 @@ describe("reset password route", () => {
         id: "user-1",
         email: "player@example.com",
         name: "Player One",
-        isClaimed: true,
+        isActive: true,
       },
     });
 
@@ -133,7 +133,7 @@ describe("reset password route", () => {
         id: "user-1",
         email: "player@example.com",
         name: "Player One",
-        isClaimed: true,
+        isActive: true,
       },
     });
 
@@ -147,7 +147,7 @@ describe("reset password route", () => {
     expect(body).toEqual({ success: true });
     expect(mocks.txUserUpdate).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      data: { passwordHash: "new-password-hash" },
+      data: { passwordHash: "new-password-hash", sessionVersion: { increment: 1 } },
     });
     expect(mocks.txPasswordResetTokenUpdateMany).toHaveBeenNthCalledWith(1, {
       where: {
@@ -185,7 +185,7 @@ describe("reset password route", () => {
         id: "user-1",
         email: "player@example.com",
         name: "Player One",
-        isClaimed: true,
+        isActive: true,
       },
     });
     mocks.txPasswordResetTokenUpdateMany.mockReset();

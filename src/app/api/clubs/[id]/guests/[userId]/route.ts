@@ -23,19 +23,19 @@ export async function POST(request: Request, { params }: {
     const membership = await prisma.$transaction(async (tx) => {
       const guest = await tx.sessionPlayer.findFirst({
         where: clubGuestWhere(clubId, userId),
-        select: { user: { select: { elo: true } } },
+        select: { player: { select: { elo: true } } },
       });
       if (!guest) return null;
-      const elo = await getGuestRating(tx, userId, guest.user.elo);
+      const elo = await getGuestRating(tx, userId, guest.player.elo);
       return tx.clubMember.upsert({
-        where: { clubId_userId: { clubId, userId } },
+        where: { clubId_playerId: { clubId, playerId: userId } },
         update: {},
-        create: { clubId, userId, role: "MEMBER", status: "OCCASIONAL", elo },
-        select: { userId: true },
+        create: { clubId, playerId: userId, status: "OCCASIONAL", elo },
+        select: { playerId: true },
       });
     });
     if (!membership) return NextResponse.json({ error: "Guest must belong to a completed club tournament" }, { status: 404 });
-    return NextResponse.json({ userId: membership.userId });
+    return NextResponse.json({ userId: membership.playerId });
   } catch (error) {
     logError("Add guest to club error", error);
     return safeErrorResponse();

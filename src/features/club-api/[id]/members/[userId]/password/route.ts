@@ -60,28 +60,27 @@ export async function POST(
 
     const membership = await prisma.clubMember.findUnique({
       where: {
-        clubId_userId: {
+        clubId_playerId: {
           clubId,
-          userId,
+          playerId: userId,
         },
       },
       select: {
-        user: {
+        player: {
           select: {
             id: true,
             name: true,
-            email: true,
-            isClaimed: true,
+            ownerUser: { select: { id: true, name: true, email: true } },
           },
         },
       },
     });
 
-    if (!membership?.user) {
+    if (!membership?.player) {
       return invalidTargetResponse(request, "api:communities:id:members:userId:password");
     }
 
-    if (!membership.user.email || !membership.user.isClaimed) {
+    if (!membership.player.ownerUser) {
       return NextResponse.json(
         { error: "Only claimed members with an email can have passwords reset" },
         { status: 400 }
@@ -91,8 +90,8 @@ export async function POST(
     const passwordHash = await bcrypt.hash(trimmedPassword, 10);
 
     await prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash },
+      where: { id: membership.player.ownerUser.id },
+      data: { passwordHash, sessionVersion: { increment: 1 } },
     });
 
     logAuditEvent({
@@ -109,17 +108,18 @@ export async function POST(
         route: "/api/clubs/[id]/members/[userId]/password",
       },
       target: {
-        id: membership.user.id,
-        name: membership.user.name,
+        id: membership.player.ownerUser.id,
+        name: membership.player.ownerUser.name,
         type: "user",
       },
     });
 
     return NextResponse.json({
       success: true,
-      userId,
-      name: membership.user.name,
-      email: membership.user.email,
+      userId: membership.player.ownerUser.id,
+      playerId: userId,
+      name: membership.player.name,
+      email: membership.player.ownerUser.email,
     });
   } catch (error) {
     logError("Club admin reset player password error", error);

@@ -1,27 +1,27 @@
 import type { Prisma } from "@prisma/client";
 
 export interface CompletedMatchEloChange {
-  team1User1Id: string;
-  team1User2Id: string;
-  team2User1Id: string;
-  team2User2Id: string;
+  team1Player1Id: string;
+  team1Player2Id: string;
+  team2Player1Id: string;
+  team2Player2Id: string;
   team1EloChange: number | null;
   team2EloChange: number | null;
 }
 
 export interface SessionGuestPlayerRow {
-  userId: string;
+  playerId: string;
   isGuest: boolean;
 }
 
-function applyDelta(map: Map<string, number>, userId: string, delta: number) {
+function applyDelta(map: Map<string, number>, playerId: string, delta: number) {
   if (delta === 0) return;
-  const next = (map.get(userId) ?? 0) + delta;
+  const next = (map.get(playerId) ?? 0) + delta;
   if (next === 0) {
-    map.delete(userId);
+    map.delete(playerId);
     return;
   }
-  map.set(userId, next);
+  map.set(playerId, next);
 }
 
 export function computeRollbackEloDeltas(
@@ -34,17 +34,17 @@ export function computeRollbackEloDeltas(
     const team1ReverseDelta = -(match.team1EloChange ?? 0);
     const team2ReverseDelta = -(match.team2EloChange ?? 0);
 
-    if (isGuestByUserId.get(match.team1User1Id) !== true) {
-      applyDelta(deltas, match.team1User1Id, team1ReverseDelta);
+    if (isGuestByUserId.get(match.team1Player1Id) !== true) {
+      applyDelta(deltas, match.team1Player1Id, team1ReverseDelta);
     }
-    if (isGuestByUserId.get(match.team1User2Id) !== true) {
-      applyDelta(deltas, match.team1User2Id, team1ReverseDelta);
+    if (isGuestByUserId.get(match.team1Player2Id) !== true) {
+      applyDelta(deltas, match.team1Player2Id, team1ReverseDelta);
     }
-    if (isGuestByUserId.get(match.team2User1Id) !== true) {
-      applyDelta(deltas, match.team2User1Id, team2ReverseDelta);
+    if (isGuestByUserId.get(match.team2Player1Id) !== true) {
+      applyDelta(deltas, match.team2Player1Id, team2ReverseDelta);
     }
-    if (isGuestByUserId.get(match.team2User2Id) !== true) {
-      applyDelta(deltas, match.team2User2Id, team2ReverseDelta);
+    if (isGuestByUserId.get(match.team2Player2Id) !== true) {
+      applyDelta(deltas, match.team2Player2Id, team2ReverseDelta);
     }
   }
 
@@ -56,7 +56,7 @@ export function collectGuestUserIds(sessionPlayers: SessionGuestPlayerRow[]): st
     new Set(
       sessionPlayers
         .filter((player) => player.isGuest)
-        .map((player) => player.userId)
+        .map((player) => player.playerId)
     )
   );
 }
@@ -65,26 +65,11 @@ export async function deleteDisposableUnclaimedUsers(
   tx: Prisma.TransactionClient,
   userIds: string[]
 ): Promise<number> {
-  const uniqueUserIds = Array.from(new Set(userIds));
-  if (uniqueUserIds.length === 0) {
-    return 0;
-  }
-
-  const result = await tx.user.deleteMany({
-    where: {
-      id: { in: uniqueUserIds },
-      isClaimed: false,
-      email: null,
-      clubMemberships: { none: {} },
-      sessionPlayers: { none: {} },
-      matchesAsTeam1Player1: { none: {} },
-      matchesAsTeam1Player2: { none: {} },
-      matchesAsTeam2Player1: { none: {} },
-      matchesAsTeam2Player2: { none: {} },
-    },
-  });
-
-  return result.count;
+  // Player identities are durable, including unattached legacy/guest records.
+  // Phase 1 intentionally disables the old disposable-account cleanup path.
+  void tx;
+  void userIds;
+  return 0;
 }
 
 export async function deleteEphemeralGuestUsers(
@@ -106,39 +91,39 @@ export async function reverseSessionEloChanges(
 ): Promise<number> {
   const sessionPlayers = await tx.sessionPlayer.findMany({
     where: { sessionId },
-    select: { userId: true, isGuest: true },
+    select: { playerId: true, isGuest: true },
   });
   const isGuestByUserId = new Map(
-    sessionPlayers.map((player) => [player.userId, player.isGuest])
+    sessionPlayers.map((player) => [player.playerId, player.isGuest])
   );
   const completedMatches = await tx.match.findMany({
     where: { sessionId, status: "COMPLETED" },
     select: {
       id: true,
-      team1User1Id: true,
-      team1User2Id: true,
-      team2User1Id: true,
-      team2User2Id: true,
+      team1Player1Id: true,
+      team1Player2Id: true,
+      team2Player1Id: true,
+      team2Player2Id: true,
       team1EloChange: true,
       team2EloChange: true,
     },
   });
   const ledgerAdjustments = await tx.matchEloAdjustment.findMany({
     where: { matchId: { in: completedMatches.map((match) => match.id) } },
-    select: { clubId: true, userId: true, delta: true },
+    select: { clubId: true, playerId: true, delta: true },
   });
   const reversedPlayerKeys = new Set<string>();
 
   if (ledgerAdjustments.length > 0) {
     const reverseDeltaByClubAndUserId = new Map<
       string,
-      { clubId: string; userId: string; delta: number }
+      { clubId: string; playerId: string; delta: number }
     >();
     for (const adjustment of ledgerAdjustments) {
-      const key = `${adjustment.clubId}:${adjustment.userId}`;
+      const key = `${adjustment.clubId}:${adjustment.playerId}`;
       const current = reverseDeltaByClubAndUserId.get(key) ?? {
         clubId: adjustment.clubId,
-        userId: adjustment.userId,
+        playerId: adjustment.playerId,
         delta: 0,
       };
       current.delta -= adjustment.delta;
@@ -148,10 +133,10 @@ export async function reverseSessionEloChanges(
     for (const item of reverseDeltaByClubAndUserId.values()) {
       if (item.delta === 0) continue;
       await tx.clubMember.updateMany({
-        where: { clubId: item.clubId, userId: item.userId },
+        where: { clubId: item.clubId, playerId: item.playerId },
         data: { elo: { increment: item.delta } },
       });
-      reversedPlayerKeys.add(`${item.clubId}:${item.userId}`);
+      reversedPlayerKeys.add(`${item.clubId}:${item.playerId}`);
     }
   } else {
     const eloReverseDeltaByUserId = computeRollbackEloDeltas(
@@ -159,20 +144,20 @@ export async function reverseSessionEloChanges(
       isGuestByUserId
     );
 
-    for (const [userId, delta] of eloReverseDeltaByUserId.entries()) {
+    for (const [playerId, delta] of eloReverseDeltaByUserId.entries()) {
       if (delta === 0) continue;
       if (clubId) {
         await tx.clubMember.updateMany({
-          where: { clubId, userId },
+          where: { clubId, playerId },
           data: { elo: { increment: delta } },
         });
-        reversedPlayerKeys.add(`${clubId}:${userId}`);
+        reversedPlayerKeys.add(`${clubId}:${playerId}`);
       } else {
-        await tx.user.updateMany({
-          where: { id: userId },
+        await tx.player.updateMany({
+          where: { id: playerId },
           data: { elo: { increment: delta } },
         });
-        reversedPlayerKeys.add(userId);
+        reversedPlayerKeys.add(playerId);
       }
     }
   }

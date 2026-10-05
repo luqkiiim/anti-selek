@@ -4,7 +4,7 @@ import { Camera } from "@phosphor-icons/react";
 import Cropper, { type Area } from "react-easy-crop";
 import { createCroppedAvatarFile } from "@/lib/avatarCrop";
 import { getAvatarSourceValidationError } from "@/lib/avatar";
-import { uploadUserAvatar } from "@/lib/avatarClient";
+import { uploadPlayerAvatar } from "@/lib/avatarClient";
 import type { ClubPageMember } from "@/components/club/clubTypes";
 import { Avatar, ErrorText } from "./Primitives";
 import { useAction } from "./api";
@@ -28,7 +28,7 @@ export function MemberPhotoEditor({ member, clubId, onSaved }: {
       <div className="account-actions"><button type="button" className="secondary" disabled={action.busy} onClick={() => setSource(null)}>Cancel</button><button type="button" className="primary" disabled={!area || action.busy} onClick={() => void action.run(async () => {
         if (!area) return;
         const file = await createCroppedAvatarFile({ src: source.url, crop: area, fileName: source.name });
-        const result = await uploadUserAvatar(member.id, file, clubId);
+        const result = await uploadPlayerAvatar(member.id, file, clubId);
         setSource(null);
         await onSaved(result.avatarUrl);
       })}>{action.busy ? "Saving…" : "Save photo"}</button></div>

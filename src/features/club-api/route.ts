@@ -35,35 +35,20 @@ export async function GET(request: Request) {
       return NextResponse.json([]);
     }
 
-    const memberships = await prisma.clubMember.findMany({
-      where: {
-        userId: session.user.id,
-        ...(isQuickAccess
-          ? { clubId: session.user.quickAccessClubId ?? "" }
-          : {}),
-        club: { isTutorial: false },
-      },
-      include: {
-        club: {
-          select: {
-            id: true,
-            name: true,
-            avatarKey: true,
-            createdById: true,
-            isTutorial: true,
-            isPasswordProtected: true,
-            createdAt: true,
-            _count: {
-              select: {
-                members: true,
-                sessions: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: "asc" },
-    });
+    const clubSelect = {
+      id: true, name: true, avatarKey: true, createdById: true,
+      isTutorial: true, isPasswordProtected: true, createdAt: true,
+      _count: { select: { members: { where: { archivedAt: null } }, sessions: true } },
+    } as const;
+    const memberships = isQuickAccess
+      ? (await prisma.clubMember.findMany({
+          where: { playerId: session.user.guestPlayerId ?? "", clubId: session.user.quickAccessClubId ?? "", archivedAt: null, club: { isTutorial: false } },
+          include: { club: { select: clubSelect } }, orderBy: { createdAt: "asc" },
+        })).map(member => ({ ...member, role: "MEMBER" }))
+      : await prisma.clubAccess.findMany({
+          where: { userId: session.user.id, status: "ACTIVE", club: { isTutorial: false } },
+          include: { club: { select: clubSelect } }, orderBy: { createdAt: "asc" },
+        });
 
     const clubIds = memberships.map((membership) => membership.club.id);
     const activeSessionsByClub = new Set<string>();
@@ -88,7 +73,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       memberships.map((m) => {
-        const viewerIsOwner = m.club.createdById === session.user.id;
+        const viewerIsOwner = !isQuickAccess && m.club.createdById === session.user.id && ["ADMIN", "OWNER"].includes(m.role);
         const sessionStatus = activeSessionsByClub.has(m.club.id)
           ? "ACTIVE"
           : standbySessionsByClub.has(m.club.id)
@@ -238,12 +223,7 @@ export async function POST(request: Request) {
         passwordHash,
         allowJoinRequests: allowJoinRequests === true,
         createdById: session.user.id,
-        members: {
-          create: {
-            userId: session.user.id,
-            role: "ADMIN",
-          },
-        },
+        accountAccess: { create: { userId: session.user.id, role: "OWNER" } },
       },
       select: {
         id: true,

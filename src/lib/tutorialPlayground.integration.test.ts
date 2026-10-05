@@ -59,17 +59,24 @@ async function removeDatabaseFiles() {
 }
 
 async function createOwner(id = "owner-1") {
-  return prisma.user.create({
+  const account = await prisma.user.create({
     data: {
       id,
       email: `${id}@example.com`,
       passwordHash: "test-password-hash",
       name: "Owner",
-      isClaimed: true,
+    },
+  });
+  const player = await prisma.player.create({
+    data: {
+      id: `${id}-player`,
+      ownerUserId: account.id,
+      name: account.name,
       gender: PlayerGender.MALE,
       partnerPreference: PartnerPreference.OPEN,
     },
   });
+  return { ...account, playerId: player.id };
 }
 
 async function clearDatabase() {
@@ -86,6 +93,7 @@ async function clearDatabase() {
   await prisma.offlineIdentity.deleteMany();
   await prisma.clubMember.deleteMany();
   await prisma.club.deleteMany();
+  await prisma.player.deleteMany();
   await prisma.user.deleteMany();
 }
 
@@ -99,13 +107,13 @@ function expectSeededNames(expectFn: typeof expect, names: string[]) {
 async function buildSeededClubPulse(clubId: string) {
   const [members, sessions, completedMatches] = await Promise.all([
     prisma.clubMember.findMany({
-      where: { clubId },
-      include: { user: { select: { id: true, name: true } } },
+      where: { clubId, archivedAt: null },
+      include: { player: { select: { id: true, name: true } } },
     }),
     prisma.session.findMany({
       where: { clubId },
       include: {
-        players: { include: { user: { select: { id: true, name: true } } } },
+        players: { include: { player: { select: { id: true, name: true } } } },
       },
     }),
     prisma.match.findMany({
@@ -114,10 +122,10 @@ async function buildSeededClubPulse(clubId: string) {
         session: { clubId, isTest: false },
       },
       include: {
-        team1User1: { select: { id: true, name: true } },
-        team1User2: { select: { id: true, name: true } },
-        team2User1: { select: { id: true, name: true } },
-        team2User2: { select: { id: true, name: true } },
+        team1Player1: { select: { id: true, name: true } },
+        team1Player2: { select: { id: true, name: true } },
+        team2Player1: { select: { id: true, name: true } },
+        team2Player2: { select: { id: true, name: true } },
         session: {
           select: {
             id: true,
@@ -134,8 +142,8 @@ async function buildSeededClubPulse(clubId: string) {
 
   return buildClubPulse({
     members: members.map((member) => ({
-      id: member.user.id,
-      name: member.user.name,
+      id: member.player.id,
+      name: member.player.name,
       elo: member.elo,
     })),
     sessions: sessions.map((session) => ({
@@ -149,8 +157,8 @@ async function buildSeededClubPulse(clubId: string) {
       endedAt: session.endedAt,
       players: session.players.map((player) => ({
         user: {
-          id: player.user.id,
-          name: player.user.name,
+          id: player.player.id,
+          name: player.player.name,
         },
       })),
     })),
@@ -159,14 +167,14 @@ async function buildSeededClubPulse(clubId: string) {
       completedAt: match.completedAt,
       session: match.session,
       winnerTeam: match.winnerTeam,
-      team1User1Id: match.team1User1Id,
-      team1User2Id: match.team1User2Id,
-      team2User1Id: match.team2User1Id,
-      team2User2Id: match.team2User2Id,
-      team1User1: match.team1User1,
-      team1User2: match.team1User2,
-      team2User1: match.team2User1,
-      team2User2: match.team2User2,
+      team1User1Id: match.team1Player1Id,
+      team1User2Id: match.team1Player2Id,
+      team2User1Id: match.team2Player1Id,
+      team2User2Id: match.team2Player2Id,
+      team1User1: match.team1Player1,
+      team1User2: match.team1Player2,
+      team2User1: match.team2Player1,
+      team2User2: match.team2Player2,
       team1Score: match.team1Score,
       team2Score: match.team2Score,
       team1EloChange: match.team1EloChange,
@@ -186,13 +194,13 @@ beforeAll(async () => {
 
   const prismaBinary = getPrismaBinary();
   if (process.platform === "win32") {
-    execFileSync("cmd.exe", ["/c", prismaBinary, "db", "push", "--skip-generate"], {
+    execFileSync("cmd.exe", ["/c", prismaBinary, "migrate", "deploy"], {
       cwd: process.cwd(),
       env: process.env as NodeJS.ProcessEnv,
       stdio: "inherit",
     });
   } else {
-    execFileSync(prismaBinary, ["db", "push", "--skip-generate"], {
+    execFileSync(prismaBinary, ["migrate", "deploy"], {
       cwd: process.cwd(),
       env: process.env as NodeJS.ProcessEnv,
       stdio: "inherit",
@@ -239,13 +247,13 @@ describe("tutorial playground service", () => {
       where: { id: summary.clubId },
       include: {
         members: {
-          include: { user: true },
+          include: { player: true },
           orderBy: { createdAt: "asc" },
         },
         sessions: {
           include: {
             courts: true,
-            players: { include: { user: true } },
+            players: { include: { player: true } },
             matches: true,
           },
         },
@@ -256,22 +264,26 @@ describe("tutorial playground service", () => {
     expect(club?.tutorialOwnerId).toBe(owner.id);
     expect(club?.name).not.toBe(summary.clubName);
     expect(club?.name).toContain(summary.clubName);
-    expect(
-      club?.members.find((member) => member.userId === owner.id)?.role
-    ).toBe("ADMIN");
+    const ownerAccess = await prisma.clubAccess.findUnique({
+      where: { clubId_userId: { clubId: summary.clubId, userId: owner.id } },
+    });
+    expect(ownerAccess).toMatchObject({ role: "OWNER", status: "ACTIVE" });
 
     const fakeMembers =
-      club?.members.filter((member) => member.userId !== owner.id) ?? [];
+      club?.members.filter((member) => member.playerId !== owner.playerId) ?? [];
     expect(fakeMembers).toHaveLength(13);
     expectSeededNames(
       expect,
-      fakeMembers.map((member) => member.user.name).sort()
+      fakeMembers.map((member) => member.player.name).sort()
     );
     expect(
-      fakeMembers.every(
-        (member) => member.user.email === null && !member.user.isClaimed
-      )
+      fakeMembers.every((member) => member.player.ownerUserId === null)
     ).toBe(true);
+    expect(
+      await prisma.user.count({
+        where: { id: { in: fakeMembers.map((member) => member.playerId) } },
+      })
+    ).toBe(0);
 
     const practiceSession = club?.sessions.find(
       (session) => session.isTest
@@ -311,11 +323,11 @@ describe("tutorial playground service", () => {
 
     const rankedNames =
       club?.members
-        .filter((member) => member.userId !== owner.id)
+        .filter((member) => member.playerId !== owner.playerId)
         .slice()
         .sort((left, right) => right.elo - left.elo)
         .slice(0, 5)
-        .map((member) => member.user.name) ?? [];
+        .map((member) => member.player.name) ?? [];
     expect(rankedNames).toEqual([
       "Danish",
       "Farah",
@@ -352,11 +364,11 @@ describe("tutorial playground service", () => {
       await prisma.clubMember.findMany({
         where: {
           clubId: firstSummary.clubId,
-          userId: { not: owner.id },
+          playerId: { not: owner.playerId },
         },
-        select: { userId: true },
+        select: { playerId: true },
       })
-    ).map((member) => member.userId);
+    ).map((member) => member.playerId);
 
     await prisma.tutorialProgress.create({
       data: {
@@ -386,7 +398,7 @@ describe("tutorial playground service", () => {
       })
     ).toBeNull();
     expect(
-      await prisma.user.findMany({
+      await prisma.player.findMany({
         where: { id: { in: originalFakeUserIds } },
       })
     ).toHaveLength(0);
@@ -395,12 +407,12 @@ describe("tutorial playground service", () => {
       await prisma.clubMember.findMany({
         where: {
           clubId: resetSummary.clubId,
-          userId: { not: owner.id },
+          playerId: { not: owner.playerId },
         },
-        include: { user: true },
+        include: { player: true },
       })
     )
-      .map((member) => member.user.name)
+      .map((member) => member.player.name)
       .sort();
     expectSeededNames(expect, fakeNames);
     expect(

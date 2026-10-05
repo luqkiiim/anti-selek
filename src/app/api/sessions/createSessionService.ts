@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import { isClubOperatorRole } from "@/lib/clubRoles";
+import { getOwnedClubPlayer } from "@/lib/playerIdentity";
 import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import {
   getPlayerClubBadges,
@@ -51,9 +52,9 @@ function buildMemberSessionConfigs({
   const selectedUserById = new Map(selectedUsers.map((user) => [user.id, user]));
   const interclubClubIdSet = new Set(interclubClubIds);
 
-  return uniquePlayerIds.map((userId) => {
-    const selectedUser = selectedUserById.get(userId);
-    const override = playerConfigMap.get(userId);
+  return uniquePlayerIds.map((playerId) => {
+    const selectedUser = selectedUserById.get(playerId);
+    const override = playerConfigMap.get(playerId);
     const rawGender =
       override?.gender ?? (selectedUser?.gender as PlayerGender | undefined);
     const sessionGender =
@@ -82,7 +83,7 @@ function buildMemberSessionConfigs({
           ? undefined
           : selectedUser?.partnerPreference),
     });
-    const availableRepresentingClubIds = (clubBadgesByUserId.get(userId) ?? [])
+    const availableRepresentingClubIds = (clubBadgesByUserId.get(playerId) ?? [])
       .map((badge) => badge.id)
       .filter((clubId) => interclubClubIdSet.has(clubId));
     let representingClubId: string | null = null;
@@ -103,7 +104,7 @@ function buildMemberSessionConfigs({
     }
 
     return {
-      userId,
+      playerId,
       representingClubId,
       isGuest: false,
       gender: sessionGender,
@@ -145,7 +146,7 @@ export async function createSessionForUser({
   requesterIsAdmin: boolean;
   input: ParsedCreateSessionRequest;
 }) {
-  const requesterMembership = await prisma.clubMember.findUnique({
+  const requesterMembership = await prisma.clubAccess.findUnique({
     where: {
       clubId_userId: {
         clubId: input.clubId,
@@ -159,7 +160,7 @@ export async function createSessionForUser({
     },
   });
 
-  if (!requesterMembership && !requesterIsAdmin) {
+  if (requesterMembership?.status !== "ACTIVE" && !requesterIsAdmin) {
     throw new SessionRouteError("Not a club member", 403);
   }
   if (
@@ -215,19 +216,23 @@ export async function createSessionForUser({
     where: { clubId: { in: involvedClubIds } },
     select: {
       clubId: true,
-      userId: true,
+      playerId: true,
       preferredPool: true,
     },
   });
-  const memberSet = new Set(memberRows.map((member) => member.userId));
+  const requesterClubPlayer = await getOwnedClubPlayer(prisma, {
+    userId: requesterId,
+    clubId: input.clubId,
+  });
+  const memberSet = new Set(memberRows.map((member) => member.playerId));
   const preferredPoolByUserId = new Map<string, SessionPool>();
   for (const member of memberRows) {
     if (
       member.clubId === input.clubId ||
-      !preferredPoolByUserId.has(member.userId)
+      !preferredPoolByUserId.has(member.playerId)
     ) {
       preferredPoolByUserId.set(
-        member.userId,
+        member.playerId,
         member.preferredPool === SessionPool.A
           ? SessionPool.A
           : SessionPool.B
@@ -242,7 +247,7 @@ export async function createSessionForUser({
     uniquePlayerIds
   );
   const selectedOfflineIdentityIds = uniquePlayerIds
-    .map((userId) => offlineIdentityInfoByUserId.get(userId)?.offlineIdentityId)
+    .map((playerId) => offlineIdentityInfoByUserId.get(playerId)?.offlineIdentityId)
     .filter((id): id is string => typeof id === "string");
   if (new Set(selectedOfflineIdentityIds).size !== selectedOfflineIdentityIds.length) {
     throw new SessionRouteError(
@@ -258,7 +263,7 @@ export async function createSessionForUser({
     );
   }
 
-  const selectedUsers = await prisma.user.findMany({
+  const selectedUsers = await prisma.player.findMany({
     where: { id: { in: uniquePlayerIds } },
     select: {
       id: true,
@@ -315,7 +320,7 @@ export async function createSessionForUser({
     );
     if (invalidMember) {
       const playerName =
-        selectedUsers.find((user) => user.id === invalidMember.userId)?.name ??
+        selectedUsers.find((user) => user.id === invalidMember.playerId)?.name ??
         "a selected player";
       throw new SessionRouteError(
         `${mixedModeLabel} requires player gender for ${playerName}`,
@@ -372,6 +377,7 @@ export async function createSessionForUser({
               status: SessionClubStatus.ACCEPTED,
               requestedById: requesterId,
               reviewedById: requesterId,
+              creditedHostPlayerId: requesterClubPlayer?.playerId ?? null,
               reviewedAt: new Date(),
             },
             ...(input.partnerClubId
@@ -395,12 +401,10 @@ export async function createSessionForUser({
     if (input.normalizedGuests.length > 0) {
       const createdGuests = await Promise.all(
         input.normalizedGuests.map((guest) =>
-          tx.user.create({
+          tx.player.create({
             data: {
               name: guest.name,
-              email: null,
-              passwordHash: null,
-              isClaimed: false,
+              ownerUserId: null,
               elo: guest.initialElo,
               gender: guest.gender,
               partnerPreference: guest.partnerPreference,
@@ -419,7 +423,7 @@ export async function createSessionForUser({
       await tx.sessionPlayer.createMany({
         data: createdGuests.map((guest, index) => ({
           sessionId: createdSession.id,
-          userId: guest.id,
+          playerId: guest.id,
           representingClubId:
             input.collabFormat === SessionCollabFormat.INTERCLUB
               ? getGuestRepresentingClubId(
@@ -456,11 +460,10 @@ export async function createSessionForUser({
         courts: true,
         players: {
           include: {
-            user: {
+            player: {
               select: {
                 id: true,
                 name: true,
-                email: true,
                 elo: true,
                 gender: true,
                 partnerPreference: true,
@@ -477,7 +480,7 @@ export async function createSessionForUser({
     throw new SessionRouteError("Failed to load created tournament", 500);
   }
 
-  const playerIds = newSession.players.map((player) => player.userId);
+  const playerIds = newSession.players.map((player) => player.playerId);
   const players =
     input.partnerClubId && newSession.players.length > 0
       ? withPlayerClubBadges(

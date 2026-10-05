@@ -1,12 +1,13 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { finalizeMatchResult } from "@/lib/matchCompletion";
-import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
+import { canApprovePendingSubmission, getOwnedMatchParticipant } from "@/lib/matchApprovalRules";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
-import { getSessionOperatorMembership } from "@/lib/sessionCollab";
-import { MatchStatus } from "@/types/enums";
+import { getSessionMembership, getSessionOperatorMembership } from "@/lib/sessionCollab";
+import { MatchStatus, SessionClubStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -23,13 +24,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
 
     if (typeof id !== "string" || id.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:matches:id:approve");
@@ -40,12 +41,21 @@ export async function POST(
       where: { id },
       include: {
         session: {
-          select: { clubId: true, type: true, balanceMetric: true, isTest: true },
+          select: {
+            clubId: true,
+            sessionClubs: {
+              where: { status: SessionClubStatus.ACCEPTED },
+              select: { clubId: true },
+            },
+            type: true,
+            balanceMetric: true,
+            isTest: true,
+          },
         },
-        team1User1: { select: { id: true, name: true, elo: true } },
-        team1User2: { select: { id: true, name: true, elo: true } },
-        team2User1: { select: { id: true, name: true, elo: true } },
-        team2User2: { select: { id: true, name: true, elo: true } },
+        team1Player1: { select: { id: true, name: true, elo: true, ownerUserId: true } },
+        team1Player2: { select: { id: true, name: true, elo: true, ownerUserId: true } },
+        team2Player1: { select: { id: true, name: true, elo: true, ownerUserId: true } },
+        team2Player2: { select: { id: true, name: true, elo: true, ownerUserId: true } },
       },
     });
 
@@ -60,7 +70,7 @@ export async function POST(
     }
 
     if (match.status !== MatchStatus.PENDING_APPROVAL) {
-      return NextResponse.json({ error: "Match not pending approval" }, { status: 400 });
+      return sportingJson({ error: "Match not pending approval" }, { status: 400 });
     }
 
     // Check if admin or one of the players
@@ -72,25 +82,53 @@ export async function POST(
     const isOperator =
       !isQuickAccessSession(session) &&
       (!!session.user.isAdmin || !!operatorMembership);
-    const isPlayer = [
-      match.team1User1Id,
-      match.team1User2Id,
-      match.team2User1Id,
-      match.team2User2Id,
-    ].includes(session.user.id);
+    const participant = getOwnedMatchParticipant([
+      match.team1Player1, match.team1Player2, match.team2Player1, match.team2Player2,
+    ], session.user.id);
+    let isPlayer = false;
+    if (participant) {
+      const sessionClubIds = new Set([
+        ...(match.session.clubId ? [match.session.clubId] : []),
+        ...(match.session.sessionClubs ?? []).map((link) => link.clubId),
+      ]);
+      if (match.team1ClubId || match.team2ClubId) {
+        const isTeam1Participant = [
+          match.team1Player1Id,
+          match.team1Player2Id,
+        ].includes(participant.id);
+        const participantClubId = isTeam1Participant
+          ? match.team1ClubId
+          : match.team2ClubId;
+        if (participantClubId && sessionClubIds.has(participantClubId)) {
+          const participantClubAccess = await prisma.clubAccess.findUnique({
+            where: {
+              clubId_userId: {
+                clubId: participantClubId,
+                userId: session.user.id,
+              },
+            },
+            select: { status: true },
+          });
+          isPlayer = participantClubAccess?.status === "ACTIVE";
+        }
+      } else if (sessionClubIds.size === 0) {
+        // Legacy clubless sessions have no ClubAccess rows to check.
+        isPlayer = true;
+      } else {
+        const participantMembership = await getSessionMembership(prisma, {
+          session: { id: match.sessionId, clubId: match.session.clubId },
+          userId: session.user.id,
+          acceptedOnly: true,
+        });
+        isPlayer = !!participantMembership;
+      }
+    }
 
     if (!isOperator && !isPlayer) {
       return invalidTargetResponse(request, "api:matches:id:approve");
     }
 
-    let approverIsClaimed = false;
-    if (!isOperator) {
-      const approver = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { isClaimed: true },
-      });
-      approverIsClaimed = approver?.isClaimed === true;
-    }
+    const approverIsClaimed = !!participant;
 
     const isLegacyPendingMatch = !match.scoreSubmittedByUserId;
     const canApprove = isLegacyPendingMatch
@@ -98,13 +136,15 @@ export async function POST(
       : canApprovePendingSubmission({
           match,
           approverUserId: session.user.id,
+          approverPlayerId: participant?.id ?? null,
           approverIsAdmin: isOperator,
           approverIsClaimed,
           scoreSubmittedByUserId: match.scoreSubmittedByUserId,
+          scoreSubmittedByPlayerId: match.scoreSubmittedByPlayerId,
         });
 
     if (!canApprove) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only a claimed opponent or admin can confirm this result" },
         { status: 403 }
       );
@@ -125,10 +165,10 @@ export async function POST(
     }
 
     if (typeof finalTeam1Score !== "number" || typeof finalTeam2Score !== "number") {
-      return NextResponse.json({ error: "Missing match scores" }, { status: 400 });
+      return sportingJson({ error: "Missing match scores" }, { status: 400 });
     }
     if (!isValidMatchScore(finalTeam1Score, finalTeam2Score)) {
-      return NextResponse.json(
+      return sportingJson(
         { error: MATCH_SCORE_ERROR_MESSAGE },
         { status: 400 }
       );
@@ -153,7 +193,7 @@ export async function POST(
             })
           : reconcileSessionQueueAfterCourtChange(match.sessionId));
 
-      return NextResponse.json({
+      return sportingJson({
         ...result,
         autoAssignedMatch,
         queuedMatchCleared,
@@ -162,7 +202,7 @@ export async function POST(
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "";
       if (message === "ALREADY_PROCESSED") {
-        return NextResponse.json({ error: "Match already approved or modified." }, { status: 409 });
+        return sportingJson({ error: "Match already approved or modified." }, { status: 409 });
       }
       throw error;
     }

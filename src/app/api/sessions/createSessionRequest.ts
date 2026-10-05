@@ -82,14 +82,14 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
     if (typeof config !== "object" || config === null) continue;
 
     const candidate = config as {
-      userId?: unknown;
+      playerId?: unknown;
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       pool?: unknown;
       representingClubId?: unknown;
     };
-    if (typeof candidate.userId !== "string") continue;
+    if (typeof candidate.playerId !== "string") continue;
 
     const normalized: PlayerConfigOverride = {};
     if (isValidPlayerGender(candidate.gender)) {
@@ -119,7 +119,7 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
       normalized.representingClubId = candidate.representingClubId;
     }
 
-    playerConfigMap.set(candidate.userId, normalized);
+    playerConfigMap.set(candidate.playerId, normalized);
   }
 
   return playerConfigMap;

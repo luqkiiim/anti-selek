@@ -24,7 +24,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.clubFindUnique,
       update: mocks.clubUpdate,
     },
-    clubMember: {
+    clubAccess: {
       findUnique: mocks.clubMemberFindUnique,
     },
   },
@@ -81,7 +81,7 @@ describe("club settings rules", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue(session);
-    mocks.clubMemberFindUnique.mockResolvedValue(null);
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "OWNER", status: "ACTIVE" });
     mocks.clubFindUnique.mockResolvedValue(existingClub());
     mocks.clubFindMany.mockResolvedValue([]);
     mocks.rateLimit.mockResolvedValue(null);

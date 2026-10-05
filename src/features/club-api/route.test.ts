@@ -21,7 +21,7 @@ vi.mock("@/lib/prisma", () => ({
       create: mocks.clubCreate,
       findMany: mocks.clubFindMany,
     },
-    clubMember: {
+    clubAccess: {
       findMany: mocks.clubMemberFindMany,
     },
     session: {

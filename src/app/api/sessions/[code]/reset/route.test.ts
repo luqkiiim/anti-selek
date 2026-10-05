@@ -9,7 +9,6 @@ vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
-    clubMember: { findUnique: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -39,7 +38,7 @@ import { POST } from "./route";
 describe("reset session route", () => {
   it("clears gameplay state while preserving settings and player groups", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "staff-1", isAdmin: false },
+      user: { id: "staff-account-1", isAdmin: false },
     } as never);
     vi.mocked(getSessionOperatorMembership).mockResolvedValue({ role: "STAFF" } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
@@ -59,9 +58,9 @@ describe("reset session route", () => {
       courts: [],
       players: [
         {
-          userId: "player-1",
+          playerId: "player-1",
           pool: SessionPool.B,
-          user: {
+          player: {
             id: "player-1",
             name: "Player One",
             avatarKey: null,
@@ -114,7 +113,7 @@ describe("reset session route", () => {
     );
     expect(getSessionOperatorMembership).toHaveBeenCalledWith(prisma, {
       session: expect.objectContaining({ id: "session-1", clubId: "club-1" }),
-      userId: "staff-1",
+      userId: "staff-account-1",
       acceptedOnly: true,
     });
   });

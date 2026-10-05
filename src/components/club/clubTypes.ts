@@ -11,11 +11,15 @@ import {
 } from "@/types/enums";
 
 export interface ClubPageUser {
+  /** Authentication account ID. Use playerId for roster, match, stats, and avatar routes. */
   id: string;
+  userId?: string | null;
+  playerId?: string | null;
   name: string;
   email: string | null;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  isQuickAccess?: boolean;
   elo: number;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;

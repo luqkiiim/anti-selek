@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import { getClubAchievementCollection, saveAchievementPreferences } from "@/lib/clubAchievementService";
+import { getAccountClubContext } from "@/lib/playerIdentity";
+import { getQuickAccessPlayerId } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
 import { z } from "zod";
@@ -41,26 +43,27 @@ async function handle(request:Request,context:{params:Promise<{id:string}>},writ
     const hasTargetUserId = searchParams.has("userId");
     const targetUserId = searchParams.get("userId") ?? "";
     if(!canQuickAccessClub(session,clubId))return NextResponse.json({error:"Club unavailable"},{status:404});
-    const member=await prisma.clubMember.findUnique({where:{clubId_userId:{clubId,userId:session.user.id}},select:{id:true}});
-    if(!member)return NextResponse.json({error:"Club unavailable"},{status:404});
-    if(write && hasTargetUserId && targetUserId !== session.user.id) return NextResponse.json({error:"Achievement preferences are self-only"},{status:403});
-    if(hasTargetUserId && targetUserId !== session.user.id) {
-      const target=await prisma.clubMember.findUnique({where:{clubId_userId:{clubId,userId:targetUserId}},select:{id:true}});
-      if(!target)return NextResponse.json({error:"Club unavailable"},{status:404});
-      if(write)return NextResponse.json({error:"Achievement preferences are self-only"},{status:403});
-      return NextResponse.json(toPublicAchievementCollection(await getClubAchievementCollection(clubId,targetUserId)));
-    }
+    const quick = isQuickAccessSession(session);
+    const identity = quick ? null : await getAccountClubContext(prisma, { clubId, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+    const ownPlayerId = quick ? getQuickAccessPlayerId(session) : identity?.player?.id ?? null;
+    if (!quick && !identity?.canAccess) return NextResponse.json({error:"Club unavailable"},{status:404});
+    const playerId = hasTargetUserId ? targetUserId : ownPlayerId;
+    if (!playerId) return NextResponse.json({error:"Connect your Player profile to view your collection"},{status:409});
+    const member = await prisma.clubMember.findUnique({where:{clubId_playerId:{clubId,playerId}},select:{id:true}});
+    if (!member) return NextResponse.json({error:"Club unavailable"},{status:404});
+    if (write && playerId !== ownPlayerId) return NextResponse.json({error:"Achievement preferences are self-only"},{status:403});
+    if (playerId !== ownPlayerId) return NextResponse.json(toPublicAchievementCollection(await getClubAchievementCollection(clubId,playerId)));
     if(write) {
       if(isQuickAccessSession(session))return NextResponse.json({error:"Sign in to save your collection"},{status:403});
       const parsed=preferences.safeParse(await request.json().catch(()=>null));
       if(!parsed.success)return NextResponse.json({error:"Invalid achievement preferences"},{status:400});
-      if(parsed.data.userId !== undefined && parsed.data.userId !== session.user.id) return NextResponse.json({error:"Achievement preferences are self-only"},{status:403});
+      if(parsed.data.userId !== undefined && parsed.data.userId !== playerId) return NextResponse.json({error:"Achievement preferences are self-only"},{status:403});
       const input: {showcase?:AchievementId[];seen?:{id:AchievementId;tier:number}[]} = {};
       if(parsed.data.showcase !== undefined) input.showcase=parsed.data.showcase as AchievementId[];
       if(parsed.data.seen !== undefined) input.seen=parsed.data.seen as {id:AchievementId;tier:number}[];
-      if(!await saveAchievementPreferences(clubId,session.user.id,input))return NextResponse.json({error:"Only earned badges can be selected"},{status:400});
+      if(!await saveAchievementPreferences(clubId,playerId,input))return NextResponse.json({error:"Only earned badges can be selected"},{status:400});
     }
-    return NextResponse.json(await getClubAchievementCollection(clubId,session.user.id));
+    return NextResponse.json(await getClubAchievementCollection(clubId,playerId));
   }catch(error){logError("Club achievements error",error);return safeErrorResponse();}
 }
 export const GET=(request:Request,context:{params:Promise<{id:string}>})=>handle(request,context,false);

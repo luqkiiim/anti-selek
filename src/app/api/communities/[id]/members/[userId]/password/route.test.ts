@@ -47,14 +47,14 @@ import { POST } from "./route";
 
 function postPasswordReset(body: unknown) {
   return POST(
-    new Request("http://localhost/api/clubs/community-1/members/user-1/password", {
+    new Request("http://localhost/api/clubs/community-1/members/player-target/password", {
       method: "POST",
       headers: {
         "content-type": "application/json",
       },
       body: JSON.stringify(body),
     }),
-    { params: Promise.resolve({ id: "community-1", userId: "user-1" }) }
+    { params: Promise.resolve({ id: "community-1", userId: "player-target" }) }
   );
 }
 
@@ -70,11 +70,14 @@ describe("club emergency password reset route", () => {
     mocks.bcryptHash.mockResolvedValue("emergency-password-hash");
     mocks.userUpdate.mockResolvedValue({});
     mocks.clubMemberFindUnique.mockResolvedValue({
-      user: {
-        id: "user-1",
+      player: {
+        id: "player-target",
         name: "Player One",
-        email: "player@example.com",
-        isClaimed: true,
+        ownerUser: {
+          id: "account-target",
+          name: "Account One",
+          email: "player@example.com",
+        },
       },
     });
   });
@@ -103,13 +106,31 @@ describe("club emergency password reset route", () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({
       success: true,
-      userId: "user-1",
+      userId: "account-target",
+      playerId: "player-target",
       name: "Player One",
       email: "player@example.com",
     });
     expect(mocks.userUpdate).toHaveBeenCalledWith({
-      where: { id: "user-1" },
-      data: { passwordHash: "emergency-password-hash" },
+      where: { id: "account-target" },
+      data: {
+        passwordHash: "emergency-password-hash",
+        sessionVersion: { increment: 1 },
+      },
     });
+  });
+
+  it("refuses password resets for an unclaimed player profile", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "global-admin-1", isAdmin: true, email: "admin@example.com" },
+    });
+    mocks.clubMemberFindUnique.mockResolvedValue({
+      player: { id: "player-target", name: "Player One", ownerUser: null },
+    });
+
+    const response = await postPasswordReset({ password: "password123" });
+
+    expect(response.status).toBe(400);
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
   });
 });

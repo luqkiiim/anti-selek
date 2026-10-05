@@ -116,7 +116,6 @@ describe("signup route", () => {
         gender: "FEMALE",
         passwordHash: "password-hash",
         name: "Player",
-        isClaimed: true,
       },
     });
     expect(body.email).toBe("player@example.com");

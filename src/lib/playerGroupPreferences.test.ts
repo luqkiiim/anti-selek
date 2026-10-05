@@ -18,10 +18,10 @@ function queuedMatch({
     id,
     createdAt: new Date("2026-08-23T00:00:00.000Z"),
     isAutomatic,
-    team1User1Id: includesUser ? "player-1" : "other-1",
-    team1User2Id: "other-2",
-    team2User1Id: "other-3",
-    team2User2Id: "other-4",
+    team1Player1Id: includesUser ? "player-1" : "other-1",
+    team1Player2Id: "other-2",
+    team2Player1Id: "other-3",
+    team2Player2Id: "other-4",
   };
 }
 
@@ -50,10 +50,10 @@ describe("player group preference propagation", () => {
               courts: [
                 {
                   currentMatch: {
-                    team1User1Id: "player-1",
-                    team1User2Id: "live-2",
-                    team2User1Id: "live-3",
-                    team2User2Id: "live-4",
+                    team1Player1Id: "player-1",
+                    team1Player2Id: "live-2",
+                    team2Player1Id: "live-3",
+                    team2Player2Id: "live-4",
                   },
                 },
               ],
@@ -88,7 +88,7 @@ describe("player group preference propagation", () => {
 
     const result = await propagatePreferredPoolToClubSessions(db as never, {
       clubId: "club-1",
-      userId: "player-1",
+      playerId: "player-1",
       preferredPool: SessionPool.A,
     });
 
@@ -105,7 +105,7 @@ describe("player group preference propagation", () => {
               { clubId: "club-1" },
               {
                 sessionClubs: { some: { clubId: "club-1" } },
-                club: { members: { none: { userId: "player-1" } } },
+                club: { members: { none: { playerId: "player-1" } } },
               },
             ],
           }),
@@ -115,9 +115,9 @@ describe("player group preference propagation", () => {
     expect(sessionPlayerUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          sessionId_userId: {
+          sessionId_playerId: {
             sessionId: "idle-auto",
-            userId: "player-1",
+            playerId: "player-1",
           },
         },
         data: { pool: SessionPool.A, pendingPool: null },
@@ -126,9 +126,9 @@ describe("player group preference propagation", () => {
     expect(sessionPlayerUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          sessionId_userId: {
+          sessionId_playerId: {
             sessionId: "live",
-            userId: "player-1",
+            playerId: "player-1",
           },
         },
         data: { pendingPool: SessionPool.A },
@@ -168,7 +168,7 @@ describe("player group preference propagation", () => {
 
     const result = await propagatePreferredPoolToClubSessions(db as never, {
       clubId: "club-1",
-      userId: "player-1",
+      playerId: "player-1",
       preferredPool: SessionPool.A,
     });
 
@@ -190,18 +190,18 @@ describe("player group preference propagation", () => {
     const tx = {
       sessionPlayer: {
         findMany: vi.fn().mockResolvedValue([
-          { userId: "player-1", pendingPool: SessionPool.A },
-          { userId: "player-2", pendingPool: SessionPool.B },
+          { playerId: "player-1", pendingPool: SessionPool.A },
+          { playerId: "player-2", pendingPool: SessionPool.B },
         ]),
         updateMany: sessionPlayerUpdateMany,
       },
       queuedMatch: {
         findUnique: vi.fn().mockResolvedValue({
           isAutomatic: false,
-          team1User1Id: "player-2",
-          team1User2Id: "other-2",
-          team2User1Id: "other-3",
-          team2User2Id: "other-4",
+          team1Player1Id: "player-2",
+          team1Player2Id: "other-2",
+          team2Player1Id: "other-3",
+          team2Player2Id: "other-4",
         }),
       },
     };
@@ -219,7 +219,7 @@ describe("player group preference propagation", () => {
     expect(sessionPlayerUpdateMany).toHaveBeenCalledWith({
       where: {
         sessionId: "session-1",
-        userId: { in: ["player-1"] },
+        playerId: { in: ["player-1"] },
       },
       data: { pool: SessionPool.A, pendingPool: null },
     });
@@ -230,7 +230,7 @@ describe("player group preference propagation", () => {
     const tx = {
       sessionPlayer: {
         findMany: vi.fn().mockResolvedValue([
-          { userId: "player-1", pendingPool: SessionPool.A },
+          { playerId: "player-1", pendingPool: SessionPool.A },
         ]),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
@@ -238,10 +238,10 @@ describe("player group preference propagation", () => {
         findUnique: vi.fn().mockResolvedValue({
           id: "queue-1",
           isAutomatic: true,
-          team1User1Id: "other-1",
-          team1User2Id: "other-2",
-          team2User1Id: "other-3",
-          team2User2Id: "other-4",
+          team1Player1Id: "other-1",
+          team1Player2Id: "other-2",
+          team2Player1Id: "other-3",
+          team2Player2Id: "other-4",
         }),
         deleteMany: queuedMatchDeleteMany,
       },

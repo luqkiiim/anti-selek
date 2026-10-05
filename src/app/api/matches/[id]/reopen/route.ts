@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
@@ -18,13 +18,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
 
     if (typeof id !== "string" || id.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:matches:id:reopen");
@@ -50,7 +50,7 @@ export async function POST(
     }
 
     if (match.status !== MatchStatus.PENDING_APPROVAL) {
-      return NextResponse.json({ error: "Match is not pending approval" }, { status: 400 });
+      return sportingJson({ error: "Match is not pending approval" }, { status: 400 });
     }
 
     const operatorMembership = await getSessionOperatorMembership(prisma, {
@@ -61,7 +61,7 @@ export async function POST(
 
     const canOperate = !!session.user.isAdmin || !!operatorMembership;
     if (!canOperate) {
-      return NextResponse.json({ error: "Only admins or staff can reopen score entry" }, { status: 403 });
+      return sportingJson({ error: "Only admins or staff can reopen score entry" }, { status: 403 });
     }
 
     const updatedResult = await prisma.match.updateMany({
@@ -75,11 +75,12 @@ export async function POST(
         team2EloChange: null,
         completedAt: null,
         scoreSubmittedByUserId: null,
+        scoreSubmittedByPlayerId: null,
       },
     });
 
     if (updatedResult.count === 0) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Match was already updated by someone else." },
         { status: 409 }
       );
@@ -88,14 +89,14 @@ export async function POST(
     const updatedMatch = await prisma.match.findUnique({
       where: { id },
       include: {
-        team1User1: { select: { id: true, name: true } },
-        team1User2: { select: { id: true, name: true } },
-        team2User1: { select: { id: true, name: true } },
-        team2User2: { select: { id: true, name: true } },
+        team1Player1: { select: { id: true, name: true } },
+        team1Player2: { select: { id: true, name: true } },
+        team2Player1: { select: { id: true, name: true } },
+        team2Player2: { select: { id: true, name: true } },
       },
     });
 
-    return NextResponse.json(updatedMatch);
+    return sportingJson(updatedMatch);
   } catch (error) {
     logError("Reopen score error", error);
     return safeErrorResponse();

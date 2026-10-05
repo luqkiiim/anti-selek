@@ -50,10 +50,10 @@ function createTransactionMock() {
     },
     sessionPlayer: {
       findMany: vi.fn(async ({ where }) =>
-        where.userId.in.map((userId: string) => ({
-          userId,
+        where.playerId.in.map((playerId: string) => ({
+          playerId,
           pool:
-            userId.startsWith("a") || userId.startsWith("competitive")
+            playerId.startsWith("a") || playerId.startsWith("competitive")
               ? "A"
               : "B",
         }))
@@ -154,10 +154,10 @@ describe("player-group assignment lifecycle", () => {
       mode: SessionMode.MIXICANO,
     });
     tx.sessionPlayer.findMany.mockImplementation(async ({ where }) =>
-      where.userId.in.map((userId: string) => ({
-        userId,
-        gender: userId.startsWith("competitive") ? PlayerGender.MALE : PlayerGender.FEMALE,
-        partnerPreference: userId.startsWith("competitive") ? "OPEN" : "FEMALE_FLEX",
+      where.playerId.in.map((playerId: string) => ({
+        playerId,
+        gender: playerId.startsWith("competitive") ? PlayerGender.MALE : PlayerGender.FEMALE,
+        partnerPreference: playerId.startsWith("competitive") ? "OPEN" : "FEMALE_FLEX",
       }))
     );
     mocks.transaction.mockImplementation(async (callback) => callback(tx));
@@ -177,8 +177,9 @@ describe("player-group assignment lifecycle", () => {
   it("keeps a manual Social queue snapshot and manual arrival semantics on assignment", async () => {
     const tx = createTransactionMock();
     tx.session.findUnique.mockResolvedValue({ poolsEnabled: false });
-    const players = [...partition.team1, ...partition.team2].map((userId) => ({
-      userId,
+    // The matcher DTO's userId contains a sporting Player ID.
+    const players = [...partition.team1, ...partition.team2].map((playerId) => ({
+      userId: playerId,
       gender: PlayerGender.MALE,
     }));
     const json = withSocialVarietySnapshot(null, partition, players);
@@ -215,7 +216,7 @@ describe("player-group assignment lifecycle", () => {
     expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
       where: {
         sessionId: "session-1",
-        userId: {
+        playerId: {
           in: [
             "competitive-1",
             "social-1",
@@ -231,10 +232,10 @@ describe("player-group assignment lifecycle", () => {
   it("aborts when player groups changed after automatic selection", async () => {
     const tx = createTransactionMock();
     tx.sessionPlayer.findMany.mockResolvedValue([
-      { userId: "competitive-1", pool: "A" },
-      { userId: "social-1", pool: "A" },
-      { userId: "competitive-2", pool: "A" },
-      { userId: "social-2", pool: "B" },
+      { playerId: "competitive-1", pool: "A" },
+      { playerId: "social-1", pool: "A" },
+      { playerId: "competitive-2", pool: "A" },
+      { playerId: "social-2", pool: "B" },
     ]);
     mocks.transaction.mockImplementation(async (callback) => callback(tx));
 

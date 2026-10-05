@@ -6,21 +6,21 @@ vi.mock("@/lib/quickAccess", () => ({ isQuickAccessSession: mocks.quick }));
 vi.mock("@/lib/rateLimit", () => ({ rateLimit: vi.fn(async () => null) }));
 vi.mock("@/lib/prisma", () => ({ prisma: { $transaction: async (fn: (tx: unknown) => unknown) => fn({ match: { findMany: mocks.matches }, sessionPlayer: { findFirst: mocks.findFirst }, clubMember: { upsert: mocks.upsert } }) } }));
 import { POST } from "./route";
-const call = () => POST(new Request("http://localhost/api/clubs/club/guests/guest-one", { method: "POST" }), { params: Promise.resolve({ id: "club", userId: "guest-one" }) });
+const call = () => POST(new Request("http://localhost/api/clubs/club/guests/player-guest", { method: "POST" }), { params: Promise.resolve({ id: "club", userId: "player-guest" }) });
 describe("add a guest to the club", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.auth.mockResolvedValue({ user: { id: "admin" } });
+    mocks.auth.mockResolvedValue({ user: { id: "account-admin" } });
     mocks.quick.mockReturnValue(false);
     mocks.matches.mockResolvedValue([]);
     mocks.access.mockResolvedValue({ canAdmin: true });
-    mocks.findFirst.mockResolvedValue({ user: { elo: 1150 } });
-    mocks.upsert.mockResolvedValue({ userId: "guest-one" });
+    mocks.findFirst.mockResolvedValue({ player: { elo: 1150 } });
+    mocks.upsert.mockResolvedValue({ playerId: "player-guest" });
   });
   it("adds only the selected identity, preserving its starting rating and past records", async () => {
     expect((await call()).status).toBe(200);
-    expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: "guest-one", isGuest: true, session: { isTest: false, status: "COMPLETED" } }) }));
-    expect(mocks.upsert).toHaveBeenCalledWith({ where: { clubId_userId: { clubId: "club", userId: "guest-one" } }, update: {}, create: { clubId: "club", userId: "guest-one", role: "MEMBER", status: "OCCASIONAL", elo: 1150 }, select: { userId: true } });
+    expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ playerId: "player-guest", isGuest: true, session: expect.objectContaining({ isTest: false, status: "COMPLETED" }) }), select: { player: { select: { elo: true } } } }));
+    expect(mocks.upsert).toHaveBeenCalledWith({ where: { clubId_playerId: { clubId: "club", playerId: "player-guest" } }, update: {}, create: { clubId: "club", playerId: "player-guest", status: "OCCASIONAL", elo: 1150 }, select: { playerId: true } });
   });
   it("is safe to repeat without resetting existing membership or rating", async () => {
     await call(); await call();
@@ -47,8 +47,8 @@ describe("add a guest to the club", () => {
   });
 
   it('carries the earned guest rating into the new membership', async () => {
-    mocks.matches.mockResolvedValue([{ team1User1Id: 'guest-one', team1User2Id: 'a', team2User1Id: 'b', team2User2Id: 'c', team1EloChange: 17, team2EloChange: -17 }]);
+    mocks.matches.mockResolvedValue([{ team1Player1Id: 'player-guest', team1Player2Id: 'player-a', team2Player1Id: 'player-b', team2Player2Id: 'player-c', team1EloChange: 17, team2EloChange: -17 }]);
     expect((await call()).status).toBe(200);
-    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ userId: 'guest-one', elo: 1167 }), update: {} }));
+    expect(mocks.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ playerId: 'player-guest', elo: 1167 }), update: {} }));
   });
 });

@@ -89,6 +89,7 @@ export enum ClubPlayerStatus {
 }
 
 export enum ClubRole {
+  OWNER = "OWNER",
   MEMBER = "MEMBER",
   STAFF = "STAFF",
   ADMIN = "ADMIN",

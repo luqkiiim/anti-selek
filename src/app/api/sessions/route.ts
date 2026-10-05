@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseCreateSessionRequest } from "./createSessionRequest";
@@ -26,10 +27,10 @@ export async function POST(request: Request) {
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
     if (isQuickAccessSession(session)) {
-      return NextResponse.json(
+      return sportingJson(
         { error: getQuickAccessDeniedMessage() },
         { status: 403 }
       );
@@ -47,10 +48,10 @@ export async function POST(request: Request) {
       input,
     });
 
-    return NextResponse.json(withLegacyClubAliases(createdSession));
+    return sportingJson(withLegacyClubAliases(createdSession));
   } catch (error) {
     if (error instanceof SessionRouteError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return sportingJson({ error: error.message }, { status: error.status });
     }
 
     logError("Session creation error details", error);
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const url = new URL(request.url);
@@ -81,10 +82,10 @@ export async function GET(request: Request) {
       }
     );
     if (!clubId) {
-      return NextResponse.json([]);
+      return sportingJson([]);
     }
     if (!canQuickAccessClub(session, clubId)) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return sportingJson({ error: "Not authorized" }, { status: 403 });
     }
 
     const sessions = await listSessionsForClub({
@@ -93,13 +94,13 @@ export async function GET(request: Request) {
       viewerIsAdmin: !isQuickAccessSession(session) && !!session.user.isAdmin,
     });
 
-    return NextResponse.json(sessions);
+    return sportingJson(sessions);
   } catch (error) {
     if (error instanceof ClubContractAliasConflictError) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return sportingJson({ error: error.message }, { status: 400 });
     }
     if (error instanceof SessionRouteError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return sportingJson({ error: error.message }, { status: error.status });
     }
 
     logError("Session list error", error);

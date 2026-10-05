@@ -29,7 +29,7 @@ export async function POST(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.player.findUnique({
       where: { id },
     });
 
@@ -37,21 +37,21 @@ export async function POST(
       return invalidTargetResponse(request, "api:admin:players:id:reset-elo");
     }
 
-    const updated = await prisma.user.update({
+    const updated = await prisma.player.update({
       where: { id },
       data: { elo: 1000 },
       select: {
         id: true,
         name: true,
-        email: true,
+        ownerUserId: true,
         elo: true,
         isActive: true,
-        isClaimed: true,
+
         createdAt: true,
       },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ ...updated, email: null, isClaimed: !!updated.ownerUserId });
   } catch (error: unknown) {
     logError("Reset ELO error", error);
     return safeErrorResponse();

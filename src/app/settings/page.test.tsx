@@ -5,14 +5,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  deleteUserAvatar: vi.fn(),
+  deleteAccountAvatar: vi.fn(),
   fetch: vi.fn(),
   router: {
     push: vi.fn(),
     refresh: vi.fn(),
   },
   updateSession: vi.fn(),
-  uploadUserAvatar: vi.fn(),
+  uploadAccountAvatar: vi.fn(),
   useSession: vi.fn(),
 }));
 
@@ -40,12 +40,20 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/components/ui/AvatarUploader", () => ({
-  AvatarUploader: () => <div data-testid="avatar-uploader">Avatar uploader</div>,
+  AvatarUploader: ({ onUpload, onRemove }: {
+    onUpload: (file: File) => Promise<void>;
+    onRemove: () => Promise<void>;
+  }) => (
+    <div data-testid="avatar-uploader">
+      <button type="button" onClick={() => void onUpload(new File(["photo"], "photo.png"))}>Upload account photo</button>
+      <button type="button" onClick={() => void onRemove()}>Remove account photo</button>
+    </div>
+  ),
 }));
 
 vi.mock("@/lib/avatarClient", () => ({
-  deleteUserAvatar: mocks.deleteUserAvatar,
-  uploadUserAvatar: mocks.uploadUserAvatar,
+  deleteAccountAvatar: mocks.deleteAccountAvatar,
+  uploadAccountAvatar: mocks.uploadAccountAvatar,
 }));
 
 import SettingsPage from "./page";
@@ -137,13 +145,13 @@ describe("settings page", () => {
   it("shows an editable rename form before the one-time rename is used", async () => {
     await renderPage();
 
-    const input = container.querySelector("#player-name") as HTMLInputElement;
+    const input = container.querySelector("#account-name") as HTMLInputElement;
     const button = Array.from(container.querySelectorAll("button")).find((node) =>
-      node.textContent?.includes("Save player name")
+      node.textContent?.includes("Save account name")
     ) as HTMLButtonElement | undefined;
 
     expect(container.textContent).toContain(
-      "You can only change your player name once"
+      "You can only change your account name once"
     );
     expect(input.disabled).toBe(false);
     expect(button?.disabled).toBe(true);
@@ -155,14 +163,14 @@ describe("settings page", () => {
       selfNameChangedAt: "2026-05-22T10:15:00.000Z",
     });
 
-    const input = container.querySelector("#player-name") as HTMLInputElement;
+    const input = container.querySelector("#account-name") as HTMLInputElement;
 
     expect(container.textContent).toContain("Rename used");
     expect(container.textContent).toContain("Your one-time rename was used on");
     expect(input.disabled).toBe(true);
   });
 
-  it("lets a legacy full account complete its missing gender", async () => {
+  it("lets a full account complete its missing account gender", async () => {
     await renderPage({ gender: "UNSPECIFIED" });
     mocks.fetch.mockResolvedValueOnce(
       createJsonResponse({
@@ -186,8 +194,33 @@ describe("settings page", () => {
         body: JSON.stringify({ gender: "FEMALE" }),
       })
     );
-    expect(container.textContent).toContain(
-      "Gender for Mixed pairing updated."
+    expect(container.textContent).toContain("Account gender updated.");
+  });
+
+  it("keeps account settings separate from sporting profiles and uses account avatar APIs", async () => {
+    await renderPage();
+    mocks.uploadAccountAvatar.mockResolvedValue({ avatarUrl: "https://cdn.test/account.png" });
+    mocks.deleteAccountAvatar.mockResolvedValue({ avatarUrl: null });
+
+    expect(container.textContent).toContain("These settings do not change your sporting profiles.");
+    expect(container.textContent).toContain("Sporting profile photos are managed on each Player profile.");
+
+    const uploadButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Upload account photo"
     );
+    await act(async () => {
+      uploadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(mocks.uploadAccountAvatar).toHaveBeenCalledWith(expect.any(File));
+
+    const removeButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Remove account photo"
+    );
+    await act(async () => {
+      removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(mocks.deleteAccountAvatar).toHaveBeenCalledWith();
   });
 });
