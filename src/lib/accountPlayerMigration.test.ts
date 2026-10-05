@@ -262,7 +262,8 @@ describe("account/Player migration preservation", () => {
       const after = new DatabaseSync(filename);
       try {
         expect(verifyLegacyPreservation(before, after).foreignKeyErrors).toBe(0);
-        expect(after.prepare('SELECT "name" FROM "_turso_sql_migrations" WHERE "name">=? ORDER BY "name"').all(ACCOUNT_PLAYER_MIGRATION)).toEqual([{ name: ACCOUNT_PLAYER_MIGRATION }, { name: LEGACY_CREATOR_ACCESS_MIGRATION }]);
+        const expectedMigrations = fs.readdirSync(migrationRoot).filter(name => name >= ACCOUNT_PLAYER_MIGRATION && fs.statSync(path.join(migrationRoot, name)).isDirectory()).sort().map(name => ({ name }));
+        expect(after.prepare('SELECT "name" FROM "_turso_sql_migrations" WHERE "name">=? ORDER BY "name"').all(ACCOUNT_PLAYER_MIGRATION)).toEqual(expectedMigrations);
         expect(after.prepare('PRAGMA foreign_key_list("ClubRatingAdjustment")').all()).toContainEqual(expect.objectContaining({ table: "Account", from: "actorId", on_delete: "RESTRICT" }));
       } finally { after.close(); }
     } finally {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerInvitationPanel } from "./PlayerInvitationPanel";
 import { AdjustClubRating } from "@/components/profile/AdjustClubRating";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import { ModalFrame } from "@/components/ui/chrome";
@@ -132,6 +133,7 @@ export function ClubPlayerEditorModal({
       }
     >
       <div className="space-y-5 px-4 py-4 sm:px-5">
+        <PlayerInvitationPanel key={player.id} clubId={clubId} playerId={player.id} playerName={player.name} rating={player.elo} connected={player.isClaimed} />
         <div className="app-panel-muted space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-3">

@@ -43,6 +43,10 @@ model User {
   clubNewsLikes                 ClubNewsLike[]
   clubNotificationsActed        ClubNotification[]           @relation("ClubNotificationActor")
   clubRatingAdjustments          ClubRatingAdjustment[]       @relation("ClubRatingAdjustmentActor")
+  createdPlayerInvitations       PlayerInvitation[]           @relation("PlayerInvitationCreator")
+  redeemedPlayerInvitations      PlayerInvitation[]           @relation("PlayerInvitationRedeemer")
+  revokedPlayerInvitations       PlayerInvitation[]           @relation("PlayerInvitationRevoker")
+  playerInvitationEvents         PlayerInvitationEvent[]
 
   @@map("Account")
 }
@@ -79,6 +83,7 @@ model Player {
   requestedClubAdmissions      ClubAdmissionRequest[]       @relation("AdmissionRequestedPlayer")
   approvedClubAdmissions       ClubAdmissionRequest[]       @relation("AdmissionApprovedPlayer")
   clubNotificationsReceived    ClubNotification[]           @relation("ClubNotificationRecipient")
+  invitations                  PlayerInvitation[]
 
   // Match relations (team memberships)
   matchesAsTeam1Player1 Match[] @relation("Team1Player1")
@@ -117,6 +122,7 @@ model Club {
   offlineIdentityLinkRequestsTo   OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetClub")
   newsLikes                       ClubNewsLike[]
   notifications                   ClubNotification[]
+  playerInvitations               PlayerInvitation[]
 
   @@index([isTutorial])
   @@map("Community")
@@ -155,6 +161,7 @@ model ClubMember {
   club      Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
   player    Player @relation(fields: [playerId], references: [id], onDelete: Restrict)
   ownerUser User?  @relation("RosterOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  invitations PlayerInvitation[]
 
   @@unique([clubId, playerId])
   @@unique([clubId, ownerUserId])
@@ -585,4 +592,57 @@ model ClubAdmissionEvent {
   actor              User?                @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@unique([admissionRequestId, revision])
+}
+
+model PlayerInvitation {
+  id               String    @id @default(cuid())
+  clubId           String
+  playerId         String
+  clubMemberId     String
+  createdByUserId  String
+  tokenHash        String    @unique
+  status           String    @default("ACTIVE") // ACTIVE, EXPIRED, REVOKED, REDEEMED
+  expiresAt        DateTime
+  redeemedByUserId String?
+  redeemedAt       DateTime?
+  revokedByUserId  String?
+  revokedAt        DateTime?
+  revocationReason String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  club          Club       @relation(fields: [clubId], references: [id], onDelete: Restrict)
+  player        Player     @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  clubMember    ClubMember @relation(fields: [clubMemberId], references: [id], onDelete: Restrict)
+  createdByUser User       @relation("PlayerInvitationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  redeemedByUser User?     @relation("PlayerInvitationRedeemer", fields: [redeemedByUserId], references: [id], onDelete: Restrict)
+  revokedByUser User?      @relation("PlayerInvitationRevoker", fields: [revokedByUserId], references: [id], onDelete: Restrict)
+  events        PlayerInvitationEvent[]
+  continuations PlayerInvitationContinuation[]
+
+  @@index([clubId, playerId, status])
+  @@index([expiresAt])
+}
+
+model PlayerInvitationEvent {
+  id           String   @id @default(cuid())
+  invitationId String
+  actorUserId  String?
+  action       String
+  reason       String?
+  createdAt    DateTime @default(now())
+  invitation   PlayerInvitation @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+  actor        User?    @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  @@index([invitationId, createdAt])
+}
+
+// A hashed, short-lived browser capability, separate from the seven-day invite secret.
+model PlayerInvitationContinuation {
+  id           String   @id @default(cuid())
+  invitationId String
+  handleHash   String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  invitation   PlayerInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  @@index([invitationId, expiresAt])
 }

@@ -58,6 +58,7 @@ function createMigratedLegacyFixture() {
     const creatorMigration = fs.readFileSync(path.join(migrationRoot, LEGACY_CREATOR_ACCESS_MIGRATION, "migration.sql"), "utf8");
     db.exec(managedMigrationSql(firstMigration));
     db.exec(creatorMigration);
+    db.exec(fs.readFileSync(path.join(migrationRoot, "20261005180000_player_invitations", "migration.sql"), "utf8"));
   } finally {
     db.close();
   }
@@ -99,6 +100,17 @@ function requestDelete(clubId: string) {
 }
 
 describe("club deletion and immutable admission history", () => {
+  it("retains invitation-only club history with a clear 409", async () => {
+    mockedAuth.mockResolvedValue({ user: { id: "account-a", isAdmin: false } } as never);
+    await prisma.club.create({ data: { id: "club-invitation-only", name: "Invitation-only Club", createdById: "account-a" } });
+    await prisma.clubAccess.create({ data: { clubId: "club-invitation-only", userId: "account-a", role: "OWNER" } });
+    const member = await prisma.clubMember.create({ data: { clubId: "club-invitation-only", playerId: "historical-player-789" } });
+    await prisma.playerInvitation.create({ data: { clubId: member.clubId, playerId: member.playerId, clubMemberId: member.id, createdByUserId: "account-a", tokenHash: "a".repeat(64), expiresAt: new Date(Date.now() + 60000) } });
+    const response = await requestDelete(member.clubId);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("invitation history") });
+    expect(await prisma.playerInvitationEvent.count()).toBe(1);
+  });
   it("returns 409 and preserves migrated admission requests and audit events", async () => {
     mockedAuth.mockResolvedValue({ user: { id: "account-a", email: "owner@example.invalid", isAdmin: false } } as never);
     const beforeRequests = await prisma.clubAdmissionRequest.findMany({

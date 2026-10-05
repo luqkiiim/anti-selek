@@ -144,7 +144,7 @@ export default function Club({
     setPage(p);
   }
 
-  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); const isSelf=target?.id===viewerPlayerId; return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={isSelf} onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={isSelf ? renderAchievement() : undefined} milestone={isSelf ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
+  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); const isSelf=target?.id===viewerPlayerId; return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={isSelf} canInvite={!!canAdmin} onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={isSelf ? renderAchievement() : undefined} milestone={isSelf ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
   function openSession(code: string) {
     setSessionCode(code);
     go("session");

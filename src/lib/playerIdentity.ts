@@ -9,6 +9,12 @@ export class IdentityConflictError extends Error {
   readonly statusCode = 409;
 }
 
+/** Writes only the new ownership column: preserve every legacy value and timestamp. */
+export async function linkUnownedPlayer(db: Prisma.TransactionClient, playerId: string, userId: string) {
+  const linked = await db.$executeRaw`UPDATE "User" SET "ownerUserId" = ${userId} WHERE "id" = ${playerId} AND "ownerUserId" IS NULL`;
+  if (linked !== 1) throw new IdentityConflictError("Another account has claimed this Player. Refresh before trying again.");
+}
+
 export async function getOwnedPlayer(db: IdentityDb, { userId, playerId }: { userId: string; playerId: string }) {
   return db.player.findFirst({ where: { id: playerId, ownerUserId: userId } });
 }

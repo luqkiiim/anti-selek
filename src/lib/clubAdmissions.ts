@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
-import { getOwnedClubPlayer, IdentityConflictError } from "@/lib/playerIdentity";
+import { getOwnedClubPlayer, IdentityConflictError, linkUnownedPlayer } from "@/lib/playerIdentity";
 import { normalizeClaimName } from "@/lib/clubClaimRules";
 
 type Db = Prisma.TransactionClient;
@@ -140,8 +140,7 @@ export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
       if (target.ownerUserId === null) {
         // Prisma's @updatedAt and Date serialization would normalize a legacy timestamp.
         // This parameterized CAS writes only the new ownership column; triggers project it to rosters.
-        const linked = await db.$executeRaw`UPDATE "User" SET "ownerUserId" = ${request.requesterUserId} WHERE "id" = ${target.id} AND "ownerUserId" IS NULL`;
-        if (linked !== 1) throw new ClubAdmissionError("Another account has claimed this Player. Refresh this request", 409);
+        await linkUnownedPlayer(db, target.id, request.requesterUserId);
       }
       if (!inClub) await db.clubMember.create({ data: { clubId: input.clubId, playerId: target.id } });
       else await db.clubMember.updateMany({ where: { clubId: input.clubId, playerId: target.id, archivedAt: { not: null } }, data: { archivedAt: null } });

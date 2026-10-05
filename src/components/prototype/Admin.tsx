@@ -16,6 +16,7 @@ import { api, useAction, useResource } from "./api";
 import type { AdminAdmissionList, AdmissionCandidate, AdmissionRequest } from "./admissionTypes";
 import { MemberPhotoEditor } from "./MemberPhotoEditor";
 import { ClubSettings } from "./ClubSettings";
+import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
 import "./manage-club.css";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 export default function Admin({
@@ -241,6 +242,7 @@ export default function Admin({
           {sheet === "player" ? (
             <>
               {edit && <MemberPhotoEditor key={edit.id} member={edit} clubId={club.id} onSaved={async avatarUrl => { setEdit(current => current?.id === edit.id ? { ...current, avatarUrl } : current); await refresh(); }} />}
+              {edit && <PlayerInvitationPanel key={`invite:${edit.id}`} clubId={club.id} playerId={edit.id} playerName={edit.name} rating={edit.elo} matchesPlayed={edit.matchesPlayed} connected={edit.isClaimed} />}
               <label className="field-label">
                 Name
                 <input

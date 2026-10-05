@@ -15,6 +15,7 @@ import { getMixedSideOverrideOptionForGender, getStoredPartnerPreference, normal
 import { PlayerGender } from "@/types/enums";
 import { AccountSettings } from "./AccountSettings";
 import { MainNav } from "./MainNav";
+import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
 import "./player-profile.css";
 
 export type MemberProfileResponse = {
@@ -23,9 +24,10 @@ export type MemberProfileResponse = {
 };
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
 
-export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievements, milestone, onOpenMember, onAccountSaved }: {
+export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite = false, achievements, milestone, onOpenMember, onAccountSaved }: {
   clubId: string; clubName: string; member: ClubPageMember; isSelf: boolean;
   onAccountSaved?: () => Promise<unknown>;
+  canInvite?: boolean;
   achievements?: ReactNode; milestone?: ReactNode; onOpenMember: (id: string) => void;
 }) {
   const resource = useResource<MemberProfileResponse>(`/api/users/${encodeURIComponent(member.id)}/stats?clubId=${encodeURIComponent(clubId)}`);
@@ -38,6 +40,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievemen
   return <article className="player-profile" aria-label={`${member.name}’s club profile`}>
     <header className="player-profile-identity">{!isSelf && <span className="eyebrow">{clubName}</span>}{isSelf ? <button className="profile-account-button" aria-label="Account settings" onClick={() => setAccountOpen(true)}><Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /></button> : <Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} />}<h1>{user?.name ?? member.name}</h1>{!isSelf && <span className="player-profile-membership">{member.status === "CORE" ? "Core member" : "Occasional member"}</span>}</header>
       <div className="player-standing profile-overview-stats"><div><span>Club rating</span><strong>{user?.elo ?? member.elo}</strong></div><div><span>Club rank</span><strong>{(member as RankedMember).currentRank ? `#${(member as RankedMember).currentRank}` : "—"}</strong>{member.rankDelta != null && member.rankDelta !== 0 && member.previousRank != null && <small className={member.rankDelta > 0 ? "positive" : "negative"}>{member.rankDelta > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{Math.abs(member.rankDelta)} {Math.abs(member.rankDelta) === 1 ? "place" : "places"}</small>}</div><p className="profile-activity-totals">{data ? new Set(data.matchHistory.map(m => m.sessionId)).size : "\u2014"} sessions {"\u00b7"} {data?.matchHistory.length ?? "\u2014"} matches</p></div>
+      {canInvite && !isSelf && <PlayerInvitationPanel key={`invite:${member.id}`} clubId={clubId} playerId={member.id} playerName={member.name} rating={user?.elo ?? member.elo} matchesPlayed={data?.matchHistory.length} connected={member.isClaimed} />}
       {isSelf && <PlayerPreferences key={`${member.id}:${member.gender}:${member.mixedSideOverride}:${member.partnerPreference}`} member={member} clubId={clubId} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
     {resource.error && <div className="profile-load-error"><ErrorText error={resource.error} /><button className="secondary" onClick={() => void resource.refresh().catch(() => {})}>Try again</button></div>}
     {!data && !resource.error && <div className="profile-loading" role="status">Loading the story so far…</div>}

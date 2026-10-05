@@ -366,6 +366,9 @@ export async function DELETE(
       );
     }
 
+    const invitationHistory = await prisma.playerInvitation.findFirst({ where: { clubId: id }, select: { id: true } });
+    if (invitationHistory) return NextResponse.json({ error: "This club has Player invitation history that must be retained and cannot be deleted." }, { status: 409 });
+
     if (existing.isTutorial) {
       if (existing.tutorialOwnerId !== session.user.id) {
         return invalidTargetResponse(request, "api:communities:id");

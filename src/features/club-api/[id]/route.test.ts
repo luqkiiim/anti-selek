@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   clubFindUnique: vi.fn(),
   clubMemberFindUnique: vi.fn(),
   clubAdmissionFindFirst: vi.fn(),
+  invitationFindFirst: vi.fn(),
   clubDelete: vi.fn(),
   clubUpdate: vi.fn(),
   deleteTutorialPlayground: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@/lib/prisma", () => ({
       update: mocks.clubUpdate,
     },
     clubAdmissionRequest: { findFirst: mocks.clubAdmissionFindFirst },
+    playerInvitation: { findFirst: mocks.invitationFindFirst },
     clubAccess: {
       findUnique: mocks.clubMemberFindUnique,
     },
