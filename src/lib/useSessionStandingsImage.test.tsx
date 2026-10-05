@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { StrictMode, act } from "react";
+import { StrictMode, act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,7 +12,10 @@ describe("useSessionStandingsImage", () => {
   let current: ReturnType<typeof useSessionStandingsImage>;
 
   function Harness({ code, revision }: { code: string; revision?: string }) {
-    current = useSessionStandingsImage({ code, enabled: true, revision });
+    const value = useSessionStandingsImage({ code, enabled: true, revision });
+    useEffect(() => {
+      current = value;
+    }, [value]);
     return null;
   }
 
