@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { getClubRoster } from "@/lib/clubRoster";
 import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { listSessionsForClub } from "@/app/api/sessions/listSessionsService";
+import { SessionRouteError } from "@/app/api/sessions/sessionRouteShared";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
@@ -39,7 +40,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const [roster, storedMatches, sessions, unreadCount] = await Promise.all([
       getClubRoster(prisma, id),
       prisma.match.findMany({ where: { status: "COMPLETED", session: { isTest: false, OR: [{ clubId: id }, { sessionClubs: { some: { clubId: id, status: "ACCEPTED" } } }] } }, include: { team1Player1: true, team1Player2: true, team2Player1: true, team2Player2: true, eloAdjustments: { where: { clubId: id } }, session: true } }),
-      listSessionsForClub({ clubId: id, viewerId: actorId, viewerIsAdmin: canAdmin }),
+      listSessionsForClub({ clubId: id, viewerId: actorId, viewerIsAdmin: canAdmin, ...(quick ? { quickAccessPlayerId: session.user.guestPlayerId ?? "" } : {}) }),
       quick ? Promise.resolve(0) : prisma.clubNotification.count({ where: { clubId: id, recipientPlayer: { ownerUserId: actorId }, readAt: null } }),
     ]);
     const matches = withLegacySportingAliases(storedMatches);
@@ -68,7 +69,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       viewer: { id: actorId, userId: quick ? null : actorId, playerId: player?.id ?? null, name: player?.name ?? account?.name ?? "Guest", email: account?.email ?? null, avatarUrl: serializeAvatarEntity(player ?? account ?? { avatarKey: null }).avatarUrl, isAdmin: !quick && !!session.user.isAdmin, isQuickAccess: quick, elo: viewerMembership?.elo ?? player?.elo ?? 1000, gender: player?.gender ?? "UNSPECIFIED", partnerPreference: player?.partnerPreference ?? "OPEN", mixedSideOverride: player?.mixedSideOverride ?? null },
       club: clubPayload, community: clubPayload, clubMembers: members, communityMembers: members, sessions: withLegacySportingAliases(sessions), clubPulse: pulse, communityPulse: pulse, notifications: { unreadCount }, claimRequests: [],
     });
-  } catch (error) { logError("Get club", error); return safeErrorResponse(); }
+  } catch (error) {
+    if (error instanceof SessionRouteError) return NextResponse.json({ error: error.message }, { status: error.status });
+    logError("Get club", error); return safeErrorResponse();
+  }
 }
 
 export async function PATCH(

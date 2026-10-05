@@ -92,6 +92,9 @@ export async function GET(request: Request) {
       clubId,
       viewerId: session.user.id,
       viewerIsAdmin: !isQuickAccessSession(session) && !!session.user.isAdmin,
+      ...(isQuickAccessSession(session)
+        ? { quickAccessPlayerId: session.user.guestPlayerId ?? "" }
+        : {}),
     });
 
     return sportingJson(sessions);

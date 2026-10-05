@@ -15,12 +15,26 @@ export async function listSessionsForClub({
   clubId,
   viewerId,
   viewerIsAdmin,
+  quickAccessPlayerId,
 }: {
   clubId: string;
   viewerId: string;
   viewerIsAdmin: boolean;
+  quickAccessPlayerId?: string;
 }) {
-  const membership = await prisma.clubAccess.findUnique({
+  const quick = quickAccessPlayerId !== undefined;
+  const guestMembership = quick
+    ? await prisma.clubMember.findFirst({
+        where: {
+          clubId,
+          playerId: quickAccessPlayerId,
+          archivedAt: null,
+          player: { isActive: true, ownerUserId: null },
+        },
+        select: { id: true },
+      })
+    : null;
+  const membership = quick ? null : await prisma.clubAccess.findUnique({
     where: {
       clubId_userId: {
         clubId,
@@ -29,16 +43,17 @@ export async function listSessionsForClub({
     },
   });
 
-  if (membership?.status !== "ACTIVE" && !viewerIsAdmin) {
+  if (quick ? !guestMembership : membership?.status !== "ACTIVE" && !viewerIsAdmin) {
     throw new SessionRouteError("Not authorized for this club", 403);
   }
 
   const visibleCollabStatuses =
-    viewerIsAdmin || isClubAdminRole(membership?.role)
+    !quick && (viewerIsAdmin || isClubAdminRole(membership?.role))
       ? [SessionClubStatus.ACCEPTED, SessionClubStatus.PENDING]
       : [SessionClubStatus.ACCEPTED];
   const sessions = await prisma.session.findMany({
     where: {
+      ...(quick ? { isTest: false } : {}),
       OR: [
         { clubId },
         {
