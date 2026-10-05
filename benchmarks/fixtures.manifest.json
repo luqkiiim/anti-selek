@@ -1,0 +1,502 @@
+{
+  "schemaVersion": "benchmark-fixtures-v1",
+  "frozenFromCommit": "c0c033af23639b08b8311a583a45c4a42ae991b4",
+  "note": "One-time lossless archives of historical raw data. New raw runs are ignored; publish reviewed compact summaries instead.",
+  "fixtures": [
+    {
+      "originalPath": "benchmarks/replay-envelope-pilot/social-coverage-pilot-current.json",
+      "archivePath": "benchmarks/replay-envelope-pilot/social-coverage-pilot-current.json.gz",
+      "summaryPath": "benchmarks/replay-envelope-pilot/social-coverage-pilot-current.summary.json",
+      "rawBytes": 4107145,
+      "rawSha256": "e29d9f6ba9114a5674a8609cb0688cec2fe8ee888d068b7dd8289b58a2ce5fac",
+      "archiveBytes": 186629,
+      "archiveSha256": "e7e4156ede584e6281b253cfb50f463b3072823d6827e8c757606335044d4744",
+      "summarySha256": "9561453dbcd53b215597791155c42baa62f984fffddcab2a00060e27681d09ad",
+      "sourceRevision": "4ed8ace50de2ac3736055e722f497a3dc413505c",
+      "sourceProvenance": {
+        "commitSha": "4ed8ace50de2ac3736055e722f497a3dc413505c",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Current checkout includes the strongest-class, Balanced-envelope, frozen best-replay-plus-one policy and benchmark instrumentation; hashes identify the exact sources used.",
+        "policyLabel": "replay-envelope-best-plus-one",
+        "coreEngineTrackedDiffPaths": [
+          "src/lib/matchmaking/v3/scoring.ts",
+          "src/lib/matchmaking/v3/singleCourt.ts",
+          "src/lib/matchmaking/v3/socialBatch.ts",
+          "src/lib/matchmaking/v3/types.ts"
+        ],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "scripts/run-matchmaking-benchmark.mjs",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.test.ts",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "1276953da02db993c72cff697cd8da40ef698b3c71c7cbcb266fa6cc48583176",
+        "measurementHarnessSha256": "2a257abdeb996a8782662ec4aa66bd7e15fa90d920ab37f579275be5df6d1a93"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-21/coverage-gated/social-coverage-full21-coverage-gated.json",
+      "archivePath": "benchmarks/social-coverage-21/coverage-gated/social-coverage-full21-coverage-gated.json.gz",
+      "summaryPath": "benchmarks/social-coverage-21/coverage-gated/social-coverage-full21-coverage-gated.summary.json",
+      "rawBytes": 81607371,
+      "rawSha256": "ff0184d3280579cba4349f9e03a943b830153e5bdd03bebbc966b4c73a67833b",
+      "archiveBytes": 2949689,
+      "archiveSha256": "54bc7d29c6099ca51876b849e5ad3622148a4578ed41d572da30776e470ee1d2",
+      "summarySha256": "0f38c98a51a4128b35032c774f1b56dd851e345354b76d97f16042b4c4842e27",
+      "sourceRevision": "71927c6cbc70e13e6ec28b4a534fcdf8481a95c1",
+      "sourceProvenance": {
+        "commitSha": "71927c6cbc70e13e6ec28b4a534fcdf8481a95c1",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Current checkout includes the strongest-class, Balanced-envelope, certified first-exposure coverage gate and best-plus-one replay admission; hashes identify the exact sources used.",
+        "policyLabel": "coverage-gated-best-plus-one",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [],
+        "engineSourceSha256": "2c79a82de96d13f020d2ba06089c88757a5aafbbc9f63f4755b8be2c144ee3ce",
+        "measurementHarnessSha256": "f5ab332d4aafdd73020991612df3bf7d683daafb562a35a27546d8e0d61234fd"
+      },
+      "validationStatus": "passed",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-21/replay-envelope/social-coverage-full21-replay-envelope.json",
+      "archivePath": "benchmarks/social-coverage-21/replay-envelope/social-coverage-full21-replay-envelope.json.gz",
+      "summaryPath": "benchmarks/social-coverage-21/replay-envelope/social-coverage-full21-replay-envelope.summary.json",
+      "rawBytes": 29937445,
+      "rawSha256": "d2b9caaa1b1d38c71ef81159b11bf66202b6bdb302dffe2e418b7c00f6d5f5cc",
+      "archiveBytes": 1323698,
+      "archiveSha256": "a6f790f6e76403a6ba031f8c8877c81ddf489daa28b550dead4f64d360197e80",
+      "summarySha256": "890e7af752616aa231e2981adf37e261fca19edc933c8509b75b0802b1525661",
+      "sourceRevision": "7ab071ad0102ff8a2012a267d8cfe796a1f325a8",
+      "sourceProvenance": {
+        "commitSha": "7ab071ad0102ff8a2012a267d8cfe796a1f325a8",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Only benchmark measurement files are copied into the ungated replay-envelope worktree; production engine files remain at the recorded replay-envelope commit.",
+        "policyLabel": "replay-envelope-best-plus-one",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "scripts/run-matchmaking-benchmark.mjs",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.test.ts",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "a9dac9d1de2b379a59aa07e2f0df4dab9b0dd0d8a4a298630b85fd395a1c512c",
+        "measurementHarnessSha256": "9af0c2e857fc947f7d0adb34469df9306528b529b5809960bf495432e91540f3"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-21/social-coverage-full21-entropy-first.json",
+      "archivePath": "benchmarks/social-coverage-21/social-coverage-full21-entropy-first.json.gz",
+      "summaryPath": "benchmarks/social-coverage-21/social-coverage-full21-entropy-first.summary.json",
+      "rawBytes": 6309858,
+      "rawSha256": "3c068ef9daa8e57fa75d43d118390f5a8f23f4c141dc694408ebd9d9b7eafa9f",
+      "archiveBytes": 338634,
+      "archiveSha256": "d85b67d548862638923fc1bd9ea7ba222be95779983417b1edcd914bb2dd6cae",
+      "summarySha256": "2e21bd476e5ce4ad8461b13425ef7a8d11de4caecd501c2bce079a513b0f0b17",
+      "sourceRevision": "de0254f84adef7414b512e3d3fd936033d65bef8",
+      "sourceProvenance": {
+        "commitSha": "de0254f84adef7414b512e3d3fd936033d65bef8",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Benchmark instrumentation is copied into the original entropy-first worktree. socialBatch.ts and scoring.ts are unchanged from the baseline commit; socialVariety.ts contains only the added coverage API.",
+        "policyLabel": "entropy-first",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [
+          "src/lib/matchmaking/v3/socialVariety.ts"
+        ],
+        "measurementHarnessTrackedDiffPaths": [],
+        "engineSourceSha256": "2c84aa6ef5fad73662f9f05300fbc810eee3028ca956b200193be16496981a2c",
+        "measurementHarnessSha256": "9af0c2e857fc947f7d0adb34469df9306528b529b5809960bf495432e91540f3"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-21/social-coverage-full21-strict-cadence.json",
+      "archivePath": "benchmarks/social-coverage-21/social-coverage-full21-strict-cadence.json.gz",
+      "summaryPath": "benchmarks/social-coverage-21/social-coverage-full21-strict-cadence.summary.json",
+      "rawBytes": 6045899,
+      "rawSha256": "0151426e9eb0db4f344cb05759ff32a4e421e25f2ba0a8ffa4041a30b7f61e0b",
+      "archiveBytes": 316724,
+      "archiveSha256": "5cc6c0afe8c1387aa66c6f5a530a69c696c1767814d790979fed8e9ca5038953",
+      "summarySha256": "1321eedac42b7f6380dc7d2ac7c17690e537f4f9875c7e67b0c57d6a7f638b9c",
+      "sourceRevision": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+      "sourceProvenance": {
+        "commitSha": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Only benchmark measurement files are copied into the strict-policy worktree; production engine files remain at the recorded strict commit.",
+        "policyLabel": "strict-cadence",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "scripts/run-matchmaking-benchmark.mjs",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.test.ts",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "5dd33ca48c7a7731883081792360f0a04e439b3ddd704f135ed3a63ed1bf2f36",
+        "measurementHarnessSha256": "d0335b6349488f8e70350e3aea57cb9565b4445b32a055c36482d6395e1a857a"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-21/type-first-final/social-coverage-full21-type-entropy-first.json",
+      "archivePath": "benchmarks/social-coverage-21/type-first-final/social-coverage-full21-type-entropy-first.json.gz",
+      "summaryPath": "benchmarks/social-coverage-21/type-first-final/social-coverage-full21-type-entropy-first.summary.json",
+      "rawBytes": 6168651,
+      "rawSha256": "89ea5908bb838704060a202df0d069280685733ed1eb0e6fb35850532a0779e3",
+      "archiveBytes": 339378,
+      "archiveSha256": "29c9809e8ee57ba969806b04b1015eadfa60d406cdd560ccf600c4ae859bac6f",
+      "summarySha256": "dfd098a49de193737877ee9d5b09f7d602a6781be77e00730803c70c742d53c0",
+      "sourceRevision": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+      "sourceProvenance": {
+        "commitSha": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Only benchmark measurement files are copied into the type-first worktree; production engine files remain at the recorded type-first commit.",
+        "policyLabel": "type-entropy-first",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "scripts/run-matchmaking-benchmark.mjs",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.test.ts",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "21c2b52a97ec90d86ac60148a3c5443e7074bd44d81f2a9358b13644d92ea643",
+        "measurementHarnessSha256": "a2b55c99ba2eef1f8b7ec52b213c6240d739901a52bc7a5a92a7ee6a4ebb5be4"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-full-baseline.json",
+      "archivePath": "benchmarks/social-coverage-full-baseline.json.gz",
+      "summaryPath": "benchmarks/social-coverage-full-baseline.summary.json",
+      "rawBytes": 5019380,
+      "rawSha256": "84c1dc04fb24e64e0251e30e39a05612bde844aa3e0ba9184501d2dd36cc2a3d",
+      "archiveBytes": 244487,
+      "archiveSha256": "234478c7d0c5acddef50f356084a2f7c3b5ecf26f227df196f6fe5c03cde87c3",
+      "summarySha256": "d1747e24374c9377daed7c3ab9e4043ea1256d68b5d6a9c086db4ac5fcfb8d0a",
+      "sourceRevision": "de0254f84adef7414b512e3d3fd936033d65bef8",
+      "sourceProvenance": {
+        "commitSha": "de0254f84adef7414b512e3d3fd936033d65bef8",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Benchmark instrumentation is copied into the original entropy-first worktree. socialBatch.ts and scoring.ts are unchanged from the baseline commit; socialVariety.ts contains only the added coverage API.",
+        "policyLabel": "entropy-first",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [
+          "src/lib/matchmaking/v3/socialVariety.ts"
+        ],
+        "measurementHarnessTrackedDiffPaths": [],
+        "engineSourceSha256": "2c84aa6ef5fad73662f9f05300fbc810eee3028ca956b200193be16496981a2c",
+        "measurementHarnessSha256": "27e22fd7eb48ca8e2d96638583de3c75aa7f064e5c3e3aea136667d44a0599b0"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-full-current.json",
+      "archivePath": "benchmarks/social-coverage-full-current.json.gz",
+      "summaryPath": "benchmarks/social-coverage-full-current.summary.json",
+      "rawBytes": 28139794,
+      "rawSha256": "c176802ee316aa197279f7f9635baa4f0d2da6855c6d20765202f1170c972387",
+      "archiveBytes": 1266719,
+      "archiveSha256": "35459bb238a05ab814669d94ba7d3274d881347c563b65e1e8b65201c7f2d47d",
+      "summarySha256": "64fe0eaa51d9d5a3eb9d36789ad0b8e7f4000a631e6b0017ebbc6e04b0f4c12a",
+      "sourceRevision": "7ab071ad0102ff8a2012a267d8cfe796a1f325a8",
+      "sourceProvenance": {
+        "commitSha": "7ab071ad0102ff8a2012a267d8cfe796a1f325a8",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Current checkout includes the strongest-class, Balanced-envelope, frozen best-replay-plus-one policy and benchmark instrumentation; hashes identify the exact sources used.",
+        "policyLabel": "replay-envelope-best-plus-one",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [],
+        "engineSourceSha256": "a9dac9d1de2b379a59aa07e2f0df4dab9b0dd0d8a4a298630b85fd395a1c512c",
+        "measurementHarnessSha256": "e6bb42ad5c613e0d7346f2704d2a30d34c1c6967912ca96ed082b6889a3f32f8"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-full-strict.json",
+      "archivePath": "benchmarks/social-coverage-full-strict.json.gz",
+      "summaryPath": "benchmarks/social-coverage-full-strict.summary.json",
+      "rawBytes": 4538670,
+      "rawSha256": "bfbc22dfb6fe0bec51a82792192f9eec690e76de1b9e6470d426bab819f0376f",
+      "archiveBytes": 224711,
+      "archiveSha256": "a2f39639d4951f8b5962b4734c101fede15d5981991ce57446a3c3d17962f578",
+      "summarySha256": "923cfd21e49b11b097b491073205f483308876432e3f2e6636681b1181756328",
+      "sourceRevision": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+      "sourceProvenance": {
+        "commitSha": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Only benchmark measurement files are copied into the strict-policy worktree; production engine files remain at the recorded strict commit.",
+        "policyLabel": "strict-cadence",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "scripts/run-matchmaking-benchmark.mjs",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.test.ts",
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "5dd33ca48c7a7731883081792360f0a04e439b3ddd704f135ed3a63ed1bf2f36",
+        "measurementHarnessSha256": "27e22fd7eb48ca8e2d96638583de3c75aa7f064e5c3e3aea136667d44a0599b0"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    },
+    {
+      "originalPath": "benchmarks/social-coverage-full-type-entropy-first.json",
+      "archivePath": "benchmarks/social-coverage-full-type-entropy-first.json.gz",
+      "summaryPath": "benchmarks/social-coverage-full-type-entropy-first.summary.json",
+      "rawBytes": 8970748,
+      "rawSha256": "09e4f024221ee06787315d5d650067a21ef6a0fdd19bab5846037d028f389c29",
+      "archiveBytes": 491084,
+      "archiveSha256": "1744a2ba518fa7b69650ff607de22aff8a37e7c03a497e477716ebd28d9003b0",
+      "summarySha256": "137f45b88d39ee5a29812c47bacc1ec7ba7106ca202e098b25ffeabe63c6a9ab",
+      "sourceRevision": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+      "sourceProvenance": {
+        "commitSha": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Current checkout includes the Mixed type-entropy-first engine and benchmark instrumentation; hashes identify the exact sources used.",
+        "policyLabel": "type-entropy-first",
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [],
+        "engineSourceSha256": "21c2b52a97ec90d86ac60148a3c5443e7074bd44d81f2a9358b13644d92ea643",
+        "measurementHarnessSha256": "27e22fd7eb48ca8e2d96638583de3c75aa7f064e5c3e3aea136667d44a0599b0"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    },
+    {
+      "originalPath": "benchmarks/social-horizon-321/baseline/social-horizon-21-baseline-legacy-gate.json",
+      "archivePath": "benchmarks/social-horizon-321/baseline/social-horizon-21-baseline-legacy-gate.json.gz",
+      "summaryPath": "benchmarks/social-horizon-321/baseline/social-horizon-21-baseline-legacy-gate.summary.json",
+      "rawBytes": 4606099,
+      "rawSha256": "3163746bfa8f50eab8291a77e910fa02fcb0e07b42e49da63e4bbfe108a8cf2a",
+      "archiveBytes": 205169,
+      "archiveSha256": "e1a05002a813ec26f7b73ef6dca5ce22b658e6318a810069b6d5f52054238090",
+      "summarySha256": "bbd03b4ad096fe4357022b9cea004b93f73fa7d8f900ae926da2e0f57f36a698",
+      "sourceRevision": "de0254f84adef7414b512e3d3fd936033d65bef8",
+      "sourceProvenance": {
+        "commitSha": "de0254f84adef7414b512e3d3fd936033d65bef8",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Benchmark-only horizon instrumentation is copied into the pinned baseline worktree; matchmaking implementation files remain at the recorded policy commit.",
+        "policyLabel": "entropy-first",
+        "metric": "social-horizon-321",
+        "gateMetric": "legacy-equal",
+        "targetMatches": 21,
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [
+          "src/lib/matchmaking/v3/socialVariety.ts"
+        ],
+        "measurementHarnessTrackedDiffPaths": [],
+        "engineSourceSha256": "2c84aa6ef5fad73662f9f05300fbc810eee3028ca956b200193be16496981a2c",
+        "measurementHarnessSha256": "97a41876b2ca394c45b1718db85741e2b89fa320670f6d1ee192a68d2142a0a4"
+      },
+      "validationStatus": "passed",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-horizon-321/current/social-horizon-21-current-legacy-gate.json",
+      "archivePath": "benchmarks/social-horizon-321/current/social-horizon-21-current-legacy-gate.json.gz",
+      "summaryPath": "benchmarks/social-horizon-321/current/social-horizon-21-current-legacy-gate.summary.json",
+      "rawBytes": 6869519,
+      "rawSha256": "b36f344e753882f79bf710e2b88d9c73bd59f4b539d6594d4354dd147ef9455c",
+      "archiveBytes": 305949,
+      "archiveSha256": "cf35fdf638b83cf324c1f1c5483579d1d4867e782ca9859a3cc99fe6de70edf1",
+      "summarySha256": "1f40beac68eed15db56a7a04aa7da54d4d080eb041cbeafcdff85b047056bb43",
+      "sourceRevision": "bf5b54ad0eeead23a8d8023c6b95731972079c6d",
+      "sourceProvenance": {
+        "commitSha": "bf5b54ad0eeead23a8d8023c6b95731972079c6d",
+        "workingTreeDirty": true,
+        "workingTreeNote": "The recorded engine commit is the measured policy source; hashes identify the benchmark metric/helper and engine files used.",
+        "policyLabel": "coverage-gated-best-plus-one",
+        "metric": "social-horizon-321",
+        "gateMetric": "legacy-equal",
+        "targetMatches": 21,
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "2c79a82de96d13f020d2ba06089c88757a5aafbbc9f63f4755b8be2c144ee3ce",
+        "measurementHarnessSha256": "97a41876b2ca394c45b1718db85741e2b89fa320670f6d1ee192a68d2142a0a4"
+      },
+      "validationStatus": "passed",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-horizon-321/replay-envelope/social-horizon-21-replay-envelope-legacy-gate.json",
+      "archivePath": "benchmarks/social-horizon-321/replay-envelope/social-horizon-21-replay-envelope-legacy-gate.json.gz",
+      "summaryPath": "benchmarks/social-horizon-321/replay-envelope/social-horizon-21-replay-envelope-legacy-gate.summary.json",
+      "rawBytes": 5436833,
+      "rawSha256": "dc592f3698d08c9c4689eb20dcd450aa8f662af50c72a034b9cfd5eda678cc63",
+      "archiveBytes": 250376,
+      "archiveSha256": "e362116cc5f9479d2c39f8546d4a9f9185de3055f22401f80be8e7cf34231711",
+      "summarySha256": "552cb9186905a065c014594d795c32b262768d693d829cd25ae647b07ceeb664",
+      "sourceRevision": "7ab071ad0102ff8a2012a267d8cfe796a1f325a8",
+      "sourceProvenance": {
+        "commitSha": "7ab071ad0102ff8a2012a267d8cfe796a1f325a8",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Benchmark-only horizon instrumentation is copied into the pinned replay-envelope worktree; matchmaking implementation files remain at the recorded policy commit.",
+        "policyLabel": "replay-envelope-best-plus-one",
+        "metric": "social-horizon-321",
+        "gateMetric": "legacy-equal",
+        "targetMatches": 21,
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "a9dac9d1de2b379a59aa07e2f0df4dab9b0dd0d8a4a298630b85fd395a1c512c",
+        "measurementHarnessSha256": "97a41876b2ca394c45b1718db85741e2b89fa320670f6d1ee192a68d2142a0a4"
+      },
+      "validationStatus": "passed",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-horizon-321/strict/social-horizon-21-strict-legacy-gate.json",
+      "archivePath": "benchmarks/social-horizon-321/strict/social-horizon-21-strict-legacy-gate.json.gz",
+      "summaryPath": "benchmarks/social-horizon-321/strict/social-horizon-21-strict-legacy-gate.summary.json",
+      "rawBytes": 4945027,
+      "rawSha256": "573713a0fd3a61c7a6a02715c2e3aab9ce398228ae863e5054daf472da2674db",
+      "archiveBytes": 202274,
+      "archiveSha256": "41584173828c34b04b94a30ef06b958de9a524e0cb7e475157fbfa419274a55a",
+      "summarySha256": "80e05a39b2d52d6c55f4163d91e933de05e234d15aaae1678a56e074b4a08064",
+      "sourceRevision": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+      "sourceProvenance": {
+        "commitSha": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Benchmark-only horizon instrumentation is copied into the pinned strict worktree; matchmaking implementation files remain at the recorded policy commit.",
+        "policyLabel": "strict-cadence",
+        "metric": "social-horizon-321",
+        "gateMetric": "legacy-equal",
+        "targetMatches": 21,
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "5dd33ca48c7a7731883081792360f0a04e439b3ddd704f135ed3a63ed1bf2f36",
+        "measurementHarnessSha256": "97a41876b2ca394c45b1718db85741e2b89fa320670f6d1ee192a68d2142a0a4"
+      },
+      "validationStatus": "passed",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/social-horizon-321/type-first/social-horizon-21-type-first-legacy-gate.json",
+      "archivePath": "benchmarks/social-horizon-321/type-first/social-horizon-21-type-first-legacy-gate.json.gz",
+      "summaryPath": "benchmarks/social-horizon-321/type-first/social-horizon-21-type-first-legacy-gate.summary.json",
+      "rawBytes": 4870586,
+      "rawSha256": "5878ccffb52b3e5563e921dfc1ce92ac604f9eed54c7ce2c95ae68f315457376",
+      "archiveBytes": 208280,
+      "archiveSha256": "79e2c15ce70595e7011ef4ff7c32242b3d2294470bf8562e4b29a931bf1d97bf",
+      "summarySha256": "853922c2e5e8bdd46255a80ddfbf393d4c1c6cc2ae2a525ad643921d1b301fc2",
+      "sourceRevision": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+      "sourceProvenance": {
+        "commitSha": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Benchmark-only horizon instrumentation is copied into the pinned type-first worktree; matchmaking implementation files remain at the recorded policy commit.",
+        "policyLabel": "type-entropy-first",
+        "metric": "social-horizon-321",
+        "gateMetric": "legacy-equal",
+        "targetMatches": 21,
+        "coreEngineTrackedDiffPaths": [],
+        "sharedVarietyTrackedDiffPaths": [],
+        "measurementHarnessTrackedDiffPaths": [
+          "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+        ],
+        "engineSourceSha256": "21c2b52a97ec90d86ac60148a3c5443e7074bd44d81f2a9358b13644d92ea643",
+        "measurementHarnessSha256": "97a41876b2ca394c45b1718db85741e2b89fa320670f6d1ee192a68d2142a0a4"
+      },
+      "validationStatus": "passed",
+      "retentionReason": "Canonical policy comparison, independent completed-history rescoring, and saved-prefix audits."
+    },
+    {
+      "originalPath": "benchmarks/type-entropy-first-pilot/social-coverage-pilot-current.json",
+      "archivePath": "benchmarks/type-entropy-first-pilot/social-coverage-pilot-current.json.gz",
+      "summaryPath": "benchmarks/type-entropy-first-pilot/social-coverage-pilot-current.summary.json",
+      "rawBytes": 1264754,
+      "rawSha256": "08c86e8b43c12c6f9ea02a22acb5cdac63e19b19f5a5ff523f9d11cfe478bf3e",
+      "archiveBytes": 71084,
+      "archiveSha256": "373f5cfe7e4338a29d6b8268a015ae9251aabc80de042491c9077f6a3c434aee",
+      "summarySha256": "b6e87333d13ff668bdc14954e8091152c130665c244a47ab04e6fab445c6271f",
+      "sourceRevision": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+      "sourceProvenance": {
+        "commitSha": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+        "workingTreeDirty": true,
+        "workingTreeNote": "Current checkout includes the Mixed type-entropy-first engine and benchmark instrumentation; hashes identify the exact sources used.",
+        "policyLabel": "type-entropy-first",
+        "engineSourceSha256": "291da1b22ca83cfa515017424738dc1543b14c7169bd04957e96ac09e0b7d198",
+        "measurementHarnessSha256": "86ce563cddee288b5a68ab59d4e24268e0bc026ab499f1a91f72832b0beb8368"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    },
+    {
+      "originalPath": "benchmarks/split-cadence-pilot/social-coverage-pilot-baseline.json",
+      "archivePath": "benchmarks/split-cadence-pilot/social-coverage-pilot-baseline.json.gz",
+      "summaryPath": "benchmarks/split-cadence-pilot/social-coverage-pilot-baseline.summary.json",
+      "rawBytes": 537954,
+      "rawSha256": "b560d2033b0a192b5801e008265bd86cab23b4ce1791ae7af92b6537d4777a66",
+      "archiveBytes": 23973,
+      "archiveSha256": "7b7a64d15160c6d23f92c568703a20cae497998b7188fab82857dea4ab2eae67",
+      "summarySha256": "60e573228c841f3428b22463d9831be94ec309c90c6b34cdddbef1b9acd5fbd8",
+      "sourceRevision": "de0254f84adef7414b512e3d3fd936033d65bef8",
+      "sourceProvenance": {
+        "commitSha": "de0254f84adef7414b512e3d3fd936033d65bef8",
+        "workingTreeDirty": true,
+        "policyLabel": "entropy-first",
+        "engineSourceSha256": "2c84aa6ef5fad73662f9f05300fbc810eee3028ca956b200193be16496981a2c",
+        "measurementHarnessSha256": "259891ee058ff0ec0bb490e5e2360ec597237af2b63567db19674506808d80ce"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    },
+    {
+      "originalPath": "benchmarks/split-cadence-pilot/social-coverage-pilot-current.json",
+      "archivePath": "benchmarks/split-cadence-pilot/social-coverage-pilot-current.json.gz",
+      "summaryPath": "benchmarks/split-cadence-pilot/social-coverage-pilot-current.summary.json",
+      "rawBytes": 503763,
+      "rawSha256": "2a42c579a0661fef8aa08b12cf48091c78408c34acb07d8217dc09db9cfd0636",
+      "archiveBytes": 22056,
+      "archiveSha256": "42382efcd84b9da5efea2821e65dcc3e5f2e4f7a429234547f1cfe85d7f27755",
+      "summarySha256": "cf43328ac228a281eab3377d963ae28207c747d51641a139933a5dce18c8fece",
+      "sourceRevision": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+      "sourceProvenance": {
+        "commitSha": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+        "workingTreeDirty": true,
+        "policyLabel": "split-cadence",
+        "engineSourceSha256": "735b8b7e01f3c3d0c58466b36b315cc6f39ba7a9f7da4c96f242d093f1ca3c21",
+        "measurementHarnessSha256": "259891ee058ff0ec0bb490e5e2360ec597237af2b63567db19674506808d80ce"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    },
+    {
+      "originalPath": "benchmarks/split-cadence-pilot/social-coverage-pilot-strict.json",
+      "archivePath": "benchmarks/split-cadence-pilot/social-coverage-pilot-strict.json.gz",
+      "summaryPath": "benchmarks/split-cadence-pilot/social-coverage-pilot-strict.summary.json",
+      "rawBytes": 498484,
+      "rawSha256": "8f0e581eb2b43424c044c3b6dd74745988e0f5fb42bb4a86401c7a2c0b2f0972",
+      "archiveBytes": 21961,
+      "archiveSha256": "953d469860ff26143b8c230deb9395fc777adf607c472a3c4b79c59f36c44732",
+      "summarySha256": "dda23102072d9bc448684bea46a8c3b5ee0819842231b74d972b09a23a3c39bb",
+      "sourceRevision": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+      "sourceProvenance": {
+        "commitSha": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+        "workingTreeDirty": true,
+        "policyLabel": "strict-cadence",
+        "engineSourceSha256": "5dd33ca48c7a7731883081792360f0a04e439b3ddd704f135ed3a63ed1bf2f36",
+        "measurementHarnessSha256": "259891ee058ff0ec0bb490e5e2360ec597237af2b63567db19674506808d80ce"
+      },
+      "validationStatus": "not-recorded-in-historical-source",
+      "retentionReason": "Frozen historical 20/400 report or pilot; retained for exact rerendering and prior comparisons."
+    }
+  ]
+}

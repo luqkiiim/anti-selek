@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { hasBenchmarkArtifact, readBenchmarkJson, writeBenchmarkSummary } from "./benchmark-artifacts.mjs";
 
 const root = process.cwd();
 const args = process.argv.slice(2);
@@ -29,7 +30,7 @@ const suppliedCurrentMarkdown = valueAfter("--current-markdown");
 const onlyPolicy = valueAfter("--only-policy");
 const skipBaseline = has("--skip-baseline");
 const outputDirArgument = valueAfter("--out-dir");
-const outputDir = path.resolve(root, outputDirArgument ?? "benchmarks/social-coverage-21");
+const outputDir = path.resolve(root, outputDirArgument ?? "benchmarks/generated/social-coverage-21");
 const vitest = path.join(root, "node_modules", "vitest", "vitest.mjs");
 const testFile = "src/lib/matchmaking/v3/socialCoverageBenchmark.test.ts";
 const coreEnginePaths = [
@@ -45,6 +46,7 @@ const measurementPaths = [
   "src/lib/matchmaking/v3/socialCoverageBenchmark.test.ts",
   "src/lib/matchmaking/v3/benchmarkBalanceFeasibility.ts",
   "scripts/run-matchmaking-benchmark.mjs",
+  "scripts/benchmark-artifacts.mjs",
 ];
 const seedText = seeds.join(",");
 const wideSeedText = wideSeeds.join(",");
@@ -80,6 +82,9 @@ function trackedChangedPaths(workdir, paths) {
 function runIn(workdir, label, enginePolicy, baselineJson = "", policyLabel = enginePolicy === "baseline" ? "entropy-first" : enginePolicy === "strict" ? "strict-cadence" : enginePolicy === "type-first" ? "type-entropy-first" : enginePolicy === "replay-envelope" ? "replay-envelope-best-plus-one" : "coverage-gated-best-plus-one") {
   const jsonPath = path.join(outputDir, `social-coverage-${runTag}-${label}.json`);
   const markdownPath = path.join(outputDir, `social-coverage-${runTag}-${label}.md`);
+  if (hasBenchmarkArtifact(jsonPath) || existsSync(markdownPath)) {
+    throw new Error(`Refusing to overwrite benchmark artifacts for ${label}; choose a new --out-dir.`);
+  }
   const commitSha = gitHead(workdir);
   const sourceRevision = commitSha;
   const sourceProvenance = {
@@ -130,10 +135,11 @@ function runIn(workdir, label, enginePolicy, baselineJson = "", policyLabel = en
   });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
-  const savedReport = JSON.parse(readFileSync(jsonPath, "utf8"));
+  const savedReport = readBenchmarkJson(jsonPath);
   if (savedReport.validationStatus === "pending") {
     throw new Error(`${label} benchmark JSON was written with validationStatus=pending; refusing to treat it as a completed report.`);
   }
+  writeBenchmarkSummary(jsonPath, jsonPath.replace(/\.json$/, ".summary.json"));
   return { jsonPath, markdownPath };
 }
 
@@ -143,6 +149,7 @@ function copyHarness(workdir) {
     "src/lib/matchmaking/v3/socialCoverageBenchmark.ts",
     "src/lib/matchmaking/v3/benchmarkBalanceFeasibility.ts",
     "scripts/run-matchmaking-benchmark.mjs",
+    "scripts/benchmark-artifacts.mjs",
   ];
   for (const relativePath of relativePaths) {
     const destination = path.join(workdir, relativePath);
@@ -245,11 +252,11 @@ if (!replayEnvelopeJson && replayEnvelopeWorktree) {
 const current = suppliedCurrentJson
   ? { jsonPath: path.resolve(suppliedCurrentJson), markdownPath: suppliedCurrentMarkdown ? path.resolve(suppliedCurrentMarkdown) : null }
   : runIn(root, "coverage-gated", "current", baselineJson, "coverage-gated-best-plus-one");
-const report = JSON.parse(readFileSync(current.jsonPath, "utf8"));
-const baselineReport = baselineJson && existsSync(baselineJson) ? JSON.parse(readFileSync(baselineJson, "utf8")) : null;
-const strictReport = strictJson && existsSync(strictJson) ? JSON.parse(readFileSync(strictJson, "utf8")) : null;
-const typeFirstReport = typeFirstJson && existsSync(typeFirstJson) ? JSON.parse(readFileSync(typeFirstJson, "utf8")) : null;
-const replayEnvelopeReport = replayEnvelopeJson && existsSync(replayEnvelopeJson) ? JSON.parse(readFileSync(replayEnvelopeJson, "utf8")) : null;
+const report = readBenchmarkJson(current.jsonPath);
+const baselineReport = baselineJson ? readBenchmarkJson(baselineJson) : null;
+const strictReport = strictJson ? readBenchmarkJson(strictJson) : null;
+const typeFirstReport = typeFirstJson ? readBenchmarkJson(typeFirstJson) : null;
+const replayEnvelopeReport = replayEnvelopeJson ? readBenchmarkJson(replayEnvelopeJson) : null;
 for (const [policyName, policyReport] of [
   ["current", report],
   ["entropy-first", baselineReport],
@@ -583,7 +590,11 @@ const comparisonProvenance = {
   aggregationHarnessSha256: hashFiles(root, measurementPaths),
   currentMeasurementHarnessSha256: report.sourceProvenance?.measurementHarnessSha256 ?? null,
 };
+if (hasBenchmarkArtifact(comparisonJsonPath) || existsSync(comparisonMarkdownPath)) {
+  throw new Error("Refusing to overwrite a comparison artifact; choose a new --out-dir.");
+}
 writeFileSync(comparisonJsonPath, `${JSON.stringify({ seedCount: seeds.length, seeds, wideSeeds, comparisonProvenance, policies: policyReports.map((item) => item.label), groups: policyComparison }, null, 2)}\n`, "utf8");
+writeBenchmarkSummary(comparisonJsonPath, comparisonJsonPath.replace(/\.json$/, ".summary.json"));
 const wideMissingRows = policyReports.flatMap(({ label: policy, report: policyReport }) => policyReport.sessions
   .filter((session) => session.profile === "wide" && session.checkpoints?.["400"]?.completedMatches === 400)
   .map((session) => {

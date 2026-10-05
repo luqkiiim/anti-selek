@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { hasBenchmarkArtifact, readBenchmarkJson, writeBenchmarkSummary } from "./benchmark-artifacts.mjs";
 
 const root = process.cwd();
 const args = process.argv.slice(2);
@@ -14,7 +15,7 @@ const valueAfter = (name, fallback = undefined) => {
 const policy = valueAfter("--only-policy", valueAfter("--only-horizon-21"));
 const targetMatches = Number(valueAfter("--target-matches", "21"));
 const requestedCoverageGainMetric = valueAfter("--coverage-gain-metric");
-const outputDirArgument = valueAfter("--out-dir", "benchmarks/social-horizon-321");
+const outputDirArgument = valueAfter("--out-dir", "benchmarks/generated/social-horizon-321");
 const outputDir = path.resolve(root, outputDirArgument);
 const seeds = [1, 4729, 104729, 130363, 2097593];
 const seedText = seeds.join(",");
@@ -35,6 +36,7 @@ const measurementPaths = [
   testFile,
   "src/lib/matchmaking/v3/benchmarkBalanceFeasibility.ts",
   "scripts/run-social-horizon-benchmark.mjs",
+  "scripts/benchmark-artifacts.mjs",
 ];
 
 const policyConfigurations = {
@@ -111,7 +113,7 @@ function copyBenchmarkFiles(workdir) {
 
 function printUsage() {
   process.stdout.write(
-    "Usage: node scripts/run-social-horizon-benchmark.mjs --only-policy <baseline|strict|type-first|replay-envelope|current> [--target-matches 21|400] [--coverage-gain-metric legacy-equal|social-horizon-321] [--out-dir benchmarks/social-horizon-321] [--baseline-worktree PATH] [--strict-worktree PATH] [--type-first-worktree PATH] [--replay-envelope-worktree PATH] [--current-worktree PATH]\n"
+    "Usage: node scripts/run-social-horizon-benchmark.mjs --only-policy <baseline|strict|type-first|replay-envelope|current> [--target-matches 21|400] [--coverage-gain-metric legacy-equal|social-horizon-321] [--out-dir benchmarks/generated/social-horizon-321] [--baseline-worktree PATH] [--strict-worktree PATH] [--type-first-worktree PATH] [--replay-envelope-worktree PATH] [--current-worktree PATH]\n"
   );
 }
 
@@ -142,7 +144,7 @@ const metricLabel = coverageGainMetric === "social-horizon-321" ? "horizon-321-g
 const reportStem = `social-horizon-${targetMatches}-${policy}-${metricLabel}`;
 const jsonPath = path.join(outputDir, policy, `${reportStem}.json`);
 const markdownPath = path.join(outputDir, policy, `${reportStem}.md`);
-if (existsSync(jsonPath) || existsSync(markdownPath)) {
+if (hasBenchmarkArtifact(jsonPath) || existsSync(markdownPath)) {
   throw new Error(`Refusing to overwrite an existing horizon artifact for ${policy}; choose a new --out-dir.`);
 }
 mkdirSync(path.dirname(jsonPath), { recursive: true });
@@ -187,7 +189,7 @@ const result = spawnSync(process.execPath, [vitest, "run", testFile, "--maxWorke
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
 if (!existsSync(jsonPath) || !existsSync(markdownPath)) throw new Error("The horizon benchmark test completed without writing both report files.");
-const savedReport = JSON.parse(readFileSync(jsonPath, "utf8"));
+const savedReport = readBenchmarkJson(jsonPath);
 if (savedReport.validationStatus !== "passed") throw new Error("The horizon report is not marked validationStatus=passed and cannot be treated as complete.");
 if (savedReport.schemaVersion !== "social-horizon-321-v1" || savedReport.sessions?.length !== seeds.length * 3) {
   throw new Error("The saved horizon report does not contain the expected five-seed, three-format run.");
@@ -216,4 +218,5 @@ for (const session of savedReport.sessions) {
   }
 }
 
-process.stdout.write(`\nCompleted isolated ${sourceProvenance.policyLabel} Social Horizon ${targetMatches} benchmark (${seedText}; ${coverageGainMetric} gate).\nSaved JSON: ${jsonPath}\nSaved report: ${markdownPath}\n`);
+const summaryPath = writeBenchmarkSummary(jsonPath, jsonPath.replace(/\.json$/, ".summary.json"));
+process.stdout.write(`\nCompleted isolated ${sourceProvenance.policyLabel} Social Horizon ${targetMatches} benchmark (${seedText}; ${coverageGainMetric} gate).\nSaved JSON: ${jsonPath}\nSaved report: ${markdownPath}\nSaved summary: ${summaryPath}\n`);

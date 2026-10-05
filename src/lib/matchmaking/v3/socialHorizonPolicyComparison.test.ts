@@ -1,6 +1,7 @@
-import { mkdirSync, renameSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, it } from "vitest";
+import { readBenchmarkJson } from "../../../../scripts/benchmark-artifacts.mjs";
 import type { BenchmarkReport, SocialHorizonCoverageReport } from "./socialCoverageBenchmark";
 import {
   buildSocialHorizonPolicyComparison,
@@ -13,7 +14,7 @@ const enabled = process.env.RUN_SOCIAL_HORIZON_POLICY_COMPARISON === "1";
 
 function loadJson<T>(path: string, policyName: string): T {
   const absolutePath = resolve(path);
-  const value = JSON.parse(readFileSync(absolutePath, "utf8")) as T & { validationStatus?: string };
+  const value = readBenchmarkJson(absolutePath) as T & { validationStatus?: string };
   if (value.validationStatus === "pending") throw new Error(`${policyName} report is pending validation: ${absolutePath}`);
   return value;
 }

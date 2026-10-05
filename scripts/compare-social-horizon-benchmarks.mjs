@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { hasBenchmarkArtifact, writeBenchmarkSummary } from "./benchmark-artifacts.mjs";
 
 const root = process.cwd();
 const args = process.argv.slice(2);
@@ -44,15 +45,18 @@ if (horizon321GatePath) {
   inputs.push({ policyName: "coverage-gated-horizon-321", horizonJson: horizon321GatePath });
 }
 for (const input of inputs) {
-  if (!existsSync(path.resolve(root, input.horizonJson))) throw new Error(`Missing horizon report: ${input.horizonJson}`);
-  if (input.legacy400Json && !existsSync(path.resolve(root, input.legacy400Json))) {
+  if (!hasBenchmarkArtifact(path.resolve(root, input.horizonJson))) throw new Error(`Missing horizon report: ${input.horizonJson}`);
+  if (input.legacy400Json && !hasBenchmarkArtifact(path.resolve(root, input.legacy400Json))) {
     throw new Error(`Missing legacy 400 report: ${input.legacy400Json}`);
   }
 }
 
-const outputDir = path.resolve(root, valueAfter("--out-dir", horizonDir));
+const outputDir = path.resolve(root, valueAfter("--out-dir", "benchmarks/generated/social-horizon-comparison"));
 const outputJson = path.join(outputDir, "social-horizon-policy-comparison.json");
 const outputMarkdown = path.join(outputDir, "social-horizon-policy-comparison.md");
+if (hasBenchmarkArtifact(outputJson) || existsSync(outputMarkdown)) {
+  throw new Error("Refusing to overwrite a comparison artifact; choose a new --out-dir.");
+}
 const testFile = "src/lib/matchmaking/v3/socialHorizonPolicyComparison.test.ts";
 const vitest = path.join(root, "node_modules", "vitest", "vitest.mjs");
 const env = {
@@ -70,4 +74,5 @@ const result = spawnSync(process.execPath, [vitest, "run", testFile, "--maxWorke
 });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
+writeBenchmarkSummary(outputJson, outputJson.replace(/\.json$/, ".summary.json"));
 process.stdout.write(`\nSaved independently rescored comparison.\nJSON: ${outputJson}\nMarkdown: ${outputMarkdown}\n`);

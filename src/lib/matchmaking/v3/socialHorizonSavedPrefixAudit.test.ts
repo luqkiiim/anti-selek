@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { readBenchmarkJson } from "../../../../scripts/benchmark-artifacts.mjs";
 import { assertHorizon21MatchesLegacyPrefix, rescoreSocialHorizonHistory } from "./socialHorizonCoverageReport";
 import type { SocialHorizonCoverageReport } from "./socialCoverageBenchmark";
 import type { BenchmarkReport } from "./socialCoverageBenchmark";
@@ -37,8 +37,8 @@ const artifacts = [
 describe("saved Social Horizon legacy-prefix audit", () => {
   it.skipIf(!enabled)("independently checks the five measured prefixes against their canonical 400-match reports", () => {
     for (const artifact of artifacts) {
-      const horizon = JSON.parse(readFileSync(resolve(artifact.horizon), "utf8")) as SocialHorizonCoverageReport & { validationStatus?: string };
-      const legacy = JSON.parse(readFileSync(resolve(artifact.legacy), "utf8")) as BenchmarkReport;
+      const horizon = readBenchmarkJson(resolve(artifact.horizon)) as SocialHorizonCoverageReport & { validationStatus?: string };
+      const legacy = readBenchmarkJson(resolve(artifact.legacy)) as BenchmarkReport;
       expect(horizon.validationStatus).toBe("passed");
       expect(horizon.schemaVersion).toBe("social-horizon-321-v1");
       expect(horizon.matcherCoverageGainMetric).toBe("legacy-equal");

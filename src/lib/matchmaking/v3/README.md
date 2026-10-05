@@ -83,6 +83,24 @@ behavior.
 
 ## Running the relationship-coverage benchmark
 
+The primary Social KPI is completed-only coverage after 21 matches, about six
+appearances per player: `C`, `O`, and `P` divide distinct feasible courtmates,
+opponents, and partners by `min(feasible count, 13/12/6)` respectively, cap
+each ratio at one, and score each player as `(3C + 2O + P) / 6` before averaging
+across players. Empty structural facets are omitted with weight renormalization.
+`socialHorizonCoverageScoring.ts` computes this score using the full structural
+roster; busy/paused availability, rest, and Balanced envelopes do not reduce
+its denominators. Rest quality remains measured in completed-match events.
+
+This KPI does not replace the internal equal-facet coverage admission rule.
+The matcher defaults to `legacy-four-facet`; `social-horizon-321` is an
+explicit benchmark-only opt-in and is not enabled by production callers.
+Verify the current policy against the official KPI with:
+
+```sh
+node scripts/run-social-horizon-benchmark.mjs --only-policy current --target-matches 21 --coverage-gain-metric legacy-equal --out-dir <path>
+```
+
 Run the full deterministic asynchronous benchmark manually with:
 
 ```sh
@@ -98,9 +116,9 @@ and 400 completed matches; unfinished active assignments do not count toward
 coverage. The 21-match report includes each player's completed-match count,
 minimum, maximum and spread. All point differences are zero because these runs
 measure matchmaking, not match outcomes. By default, the current-policy report
-and comparison write under `benchmarks/social-coverage-21/`; the example below
-uses an explicit output directory at
-`benchmarks/social-coverage-21/coverage-gated/`.
+and comparison write under ignored `benchmarks/generated/social-coverage-21/`.
+Historical `.json` inputs resolve to their frozen `.json.gz` fixtures. See
+`benchmarks/README.md` for checksums, publication, and rerendering instructions.
 
 Variety Coverage Score measures whether distinct relationships have occurred:
 for each player and facet, it divides experienced feasible courtmates,
@@ -131,7 +149,7 @@ To compare against saved reports, pass `--baseline-json <path>`,
 21/400 runs is:
 
 ```sh
-npm run benchmark:matchmaking -- --baseline-json benchmarks/social-coverage-21/social-coverage-full21-entropy-first.json --strict-json benchmarks/social-coverage-21/social-coverage-full21-strict-cadence.json --type-first-json benchmarks/social-coverage-21/type-first-final/social-coverage-full21-type-entropy-first.json --replay-envelope-json benchmarks/social-coverage-21/replay-envelope/social-coverage-full21-replay-envelope.json --out-dir benchmarks/social-coverage-21/coverage-gated
+npm run benchmark:matchmaking -- --baseline-json benchmarks/social-coverage-21/social-coverage-full21-entropy-first.json --strict-json benchmarks/social-coverage-21/social-coverage-full21-strict-cadence.json --type-first-json benchmarks/social-coverage-21/type-first-final/social-coverage-full21-type-entropy-first.json --replay-envelope-json benchmarks/social-coverage-21/replay-envelope/social-coverage-full21-replay-envelope.json --out-dir benchmarks/generated/social-coverage-21
 ```
 
 `--only-policy baseline|strict|type-first|replay-envelope` runs a pinned
@@ -148,17 +166,17 @@ schedule/starvation class and, for Balanced, inside the frozen balance envelope.
 It admits the minimum immediate-replay count and permits one additional
 immediate replay only when its normalized first-exposure coverage gain is
 strictly greater than the best gain available at the minimum. The gate includes
-feasible match-type first exposures in Mixed; the primary Variety Coverage Score
-still measures only partner, opponent, and courtmate coverage. Combined
+feasible match-type first exposures in Mixed; the secondary equal-weight
+relationship VCS measures only partner, opponent, and courtmate coverage. Combined
 normalized entropy and then soft rest cadence rank the admitted batches.
 Checkpoint counters are assignment/refill cohorts after completions 1 through
 N−1; the completed-match coverage history itself is sampled exactly at N.
 Root-level `social-coverage-full-*.{json,md}` reports are preserved older
 20/400-checkpoint artifacts and are not the current 21/400 benchmark.
-Two preserved late-OWN_SIDE regression tests currently fail under the exact
-first-exposure gate. They remain enabled and unchanged pending the user's
-priority clarification; the multi-seed benchmark reports late-window match
-types so this tradeoff stays visible.
+Long-run simulations retain late-window match-type counts as diagnostics.
+Recurring OWN_SIDE at 400 matches is not a mandatory product requirement;
+legality, fairness, starvation, balance, and relationship checks stay active.
+The 400-match benchmark is secondary to the 21-match coverage/rest experience.
 Coverage at 100% means every feasible people relationship has occurred once;
 it does not guarantee even repetition entropy or ongoing match-type variety.
 The gate also tracks Mixed match-type first exposure. Once all four gate facets

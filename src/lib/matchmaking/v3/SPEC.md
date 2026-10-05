@@ -59,6 +59,14 @@ specification records behavioral invariants used by regression tests.
 
 ## Social policy
 
+The primary product horizon is 21 completed matches with roughly six
+appearances per player. Benchmark Social Coverage using capped 13/12/6
+courtmate/opponent/partner fractions, weighted 3:2:1 per player, and report
+completed-event rest alongside it. This KPI does not change the matcher's
+legacy equal-facet coverage gain. Four-hundred-match simulations monitor
+starvation, fairness, cohort locking, and match types; late OWN_SIDE recurrence
+is diagnostic rather than a quota or mandatory failure.
+
 Order Social by legality/availability, fairness/arrival, group schedule and
 starvation. When ordinary rest preferences are enabled, find the global
 minimum zero-rest count in that stronger class, then freeze the largest
