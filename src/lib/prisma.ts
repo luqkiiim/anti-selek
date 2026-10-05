@@ -1,36 +1,29 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
-import { parseBooleanEnv, resolvePrismaRuntimeMode } from "./prismaRuntime";
-import { assertLocalTursoEndpoint } from "../../scripts/turso-local-target-guard.mjs";
+import { resolvePrismaRuntimeMode, selectPrismaTursoCredentials } from "./prismaRuntime";
+import { assertRuntimeTursoEndpoint } from "../../scripts/turso-local-target-guard.mjs";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
 function getPrisma() {
-  const tursoUrl = process.env.TURSO_DATABASE_URL;
-  const tursoToken = process.env.TURSO_AUTH_TOKEN;
+  const { tursoUrl, tursoToken } = selectPrismaTursoCredentials(process.env);
   const runtimeMode = resolvePrismaRuntimeMode({
     nodeEnv: process.env.NODE_ENV,
     useTurso: process.env.USE_TURSO,
     tursoUrl,
     tursoToken,
+    vercel: process.env.VERCEL,
+    vercelEnv: process.env.VERCEL_ENV,
+    vercelUrl: process.env.VERCEL_URL,
   });
-
-  if (
-    parseBooleanEnv(process.env.USE_TURSO) === true &&
-    runtimeMode === "sqlite"
-  ) {
-    console.warn(
-      "USE_TURSO=true was requested, but TURSO_DATABASE_URL/TURSO_AUTH_TOKEN are incomplete. Falling back to local SQLite."
-    );
-  }
 
   // 1. TURSO MODE
   if (runtimeMode === "turso") {
-    // Fail before adapter construction and outside its fallback catch. A local
+    // Fail before adapter construction. A local
     // checkout may connect only to its pinned development database.
-    assertLocalTursoEndpoint(tursoUrl as string, {
-      allowDeployedVercelRuntime: true,
+    assertRuntimeTursoEndpoint(tursoUrl as string, {
+      authToken: tursoToken as string,
     });
     console.log("Initializing Prisma with LibSQL adapter (Turso Mode)...");
     try {
@@ -44,8 +37,8 @@ function getPrisma() {
       return new PrismaClient(
         { adapter } as unknown as ConstructorParameters<typeof PrismaClient>[0]
       );
-    } catch (e) {
-      console.error("CRITICAL: Failed to initialize Prisma with LibSQL adapter:", e);
+    } catch {
+      throw new Error("Turso client initialization failed; database access remains disabled.");
     }
   }
   

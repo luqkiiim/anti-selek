@@ -1,5 +1,7 @@
 # Read-only production preservation rehearsal
 
+**Currently disabled.** `config/database-targets.json` sets `productionRehearsalEnabled=false`. The command refuses access before loading credentials or creating a database client. Keep it disabled until the compromised read-only token has been invalidated through coordinated rotation and a replacement credential is approved. The setup below describes the retained read-only mechanism for that later approval.
+
 The production rehearsal uses a separate read-only Turso credential. It does not read production credentials from `.env` or `.env.local`, export its credential as `TURSO_*` or `DATABASE_URL`, apply SQL to the source, or enable production application access.
 
 Create a short-lived read-only token for the production database. A one-day expiry is recommended; a Turso non-expiring read-only token is also accepted.
@@ -27,7 +29,7 @@ The protected directory and file must remain private to the current user. The lo
 
 ## Local development target pin
 
-Local Prisma and migration commands require `private/development-target.json` before using a remote Turso URL. Its version 1 format stores only the SHA-256 fingerprint of the canonical HTTPS endpoint origin (a `libsql:` URL is normalized to `https:`); it contains neither the endpoint nor a token. The current checkout already has this private registration. A different checkout must be pinned to its approved development endpoint before remote local access; missing registration fails closed. Do not pin a local checkout to production. Only a deployed Vercel runtime may use a remote URL without a local registration, and an existing local registration takes precedence even if Vercel variables are present.
+Local Prisma and migration commands require `private/development-target.json` before using a remote Turso URL. Its version 1 format stores only the SHA-256 fingerprint of the canonical HTTPS endpoint origin (a `libsql:` URL is normalized to `https:`); it contains neither the endpoint nor a token. The checked-in database policy additionally requires the approved non-production endpoint and token fingerprints, and always rejects the production endpoint outside the Production deployment. The current checkout already has this private registration. A different checkout must be pinned to its approved development endpoint before remote local access; missing registration fails closed. An existing local registration takes precedence even if Vercel variables are copied into the shell. See [database isolation](database-isolation.md).
 
 Run the dedicated command:
 

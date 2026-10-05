@@ -5,6 +5,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@libsql/client";
 import { MANAGED_MARKER, managedMigrationSql } from "./account-player-preservation.mjs";
+import {
+  ensureSessionRebuildColumns,
+  SESSION_REBUILD_MIGRATION,
+} from "./session-rebuild-prerequisite.mjs";
 import { assertLocalTursoEndpoint } from "./turso-local-target-guard.mjs";
 
 const MIGRATION_TABLE = "_turso_sql_migrations";
@@ -34,8 +38,8 @@ function escapeSqlString(value) {
 }
 
 async function main() {
-  if (process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production") {
-    throw new Error("Refusing database migrations from a Vercel production build; production cutover requires a separately approved process.");
+  if (process.env.VERCEL === "1") {
+    throw new Error("Refusing database migrations from any Vercel build; production cutover requires a separately approved process.");
   }
   if (!shouldRunMigrations()) {
     console.log(
@@ -53,7 +57,7 @@ async function main() {
     );
   }
 
-  assertLocalTursoEndpoint(url);
+  assertLocalTursoEndpoint(url, { authToken });
 
   const rootDir = path.dirname(fileURLToPath(import.meta.url));
   const migrationsRoot = path.resolve(rootDir, "..", "prisma", "migrations");
@@ -112,6 +116,15 @@ async function main() {
     }
 
     console.log(`Applying Turso migration ${migrationDir}...`);
+
+    if (migrationDir === SESSION_REBUILD_MIGRATION) {
+      const addedColumns = await ensureSessionRebuildColumns(client);
+      if (addedColumns.length > 0) {
+        console.log(
+          `Prepared legacy Session rebuild inputs: ${addedColumns.join(", ")}.`,
+        );
+      }
+    }
 
     const ledgerInsert = `INSERT INTO "${MIGRATION_TABLE}" (name, applied_at) VALUES ('${escapeSqlString(migrationDir)}', CURRENT_TIMESTAMP);`;
     if (migrationSql.includes(MANAGED_MARKER)) {

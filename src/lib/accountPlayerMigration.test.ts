@@ -97,21 +97,38 @@ describe("account/Player migration preservation", () => {
     expect(runner.stderr).not.toContain("separate-production.invalid");
   });
 
-  it("rejects Vercel production migration even when the old automatic flag is set", () => {
-    const runner = spawnSync(process.execPath, [path.resolve("scripts/apply-turso-migrations.mjs")], {
+  it.each(["production", "preview", "development"])("rejects Vercel %s migration even when forced", (environment) => {
+    const runner = spawnSync(process.execPath, [path.resolve("scripts/apply-turso-migrations.mjs"), "--force"], {
       cwd: process.cwd(),
       encoding: "utf8",
       env: {
         ...process.env,
         VERCEL: "1",
-        VERCEL_ENV: "production",
+        VERCEL_ENV: environment,
         RUN_DB_MIGRATIONS: "1",
         TURSO_DATABASE_URL: "libsql://unregistered-production.invalid",
         TURSO_AUTH_TOKEN: "test-token",
       },
     });
     expect(runner.status).not.toBe(0);
-    expect(runner.stderr).toContain("Refusing database migrations from a Vercel production build");
+    expect(runner.stderr).toContain("Refusing database migrations from any Vercel build");
+  });
+
+  it("keeps production rehearsals disabled before loading credentials or connecting", () => {
+    const runner = spawnSync(process.execPath, [path.resolve("scripts/rehearse-account-player-migration.mjs"), "--source", "production"], {
+      encoding: "utf8", env: { ...process.env, PRODUCTION_REHEARSAL_CREDENTIALS_FILE: "/nonexistent/credentials.env" },
+    });
+    expect(runner.status).not.toBe(0);
+    expect(runner.stderr).toContain("disabled pending credential-incident resolution");
+  });
+
+  it("rejects unapproved remote rehearsal credentials before connecting", () => {
+    const runner = spawnSync(process.execPath, [path.resolve("scripts/rehearse-account-player-migration.mjs"), "--source", "turso"], {
+      encoding: "utf8", env: { ...process.env, TURSO_DATABASE_URL: "libsql://unapproved-rehearsal.invalid", TURSO_AUTH_TOKEN: "fake-token" },
+    });
+    expect(runner.status).not.toBe(0);
+    expect(runner.stderr).toContain("endpoint is not the approved non-production database");
+    expect(runner.stderr).not.toContain("unapproved-rehearsal.invalid");
   });
 
   it("keeps production SQL out of the default build and exposes a read-only rehearsal command", () => {

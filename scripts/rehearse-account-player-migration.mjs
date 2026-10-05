@@ -7,10 +7,12 @@ import dotenv from "dotenv";
 import { createClient } from "@libsql/client";
 import { ACCOUNT_PLAYER_MIGRATION, LEGACY_CREATOR_ACCESS_MIGRATION, backupLibsqlReadOnly, backupLocalSqlite, legacyManifest, managedMigrationSql, safePreservationReport, validateLegacySource, verifyLegacyPreservation } from "./account-player-preservation.mjs";
 import { loadProductionRehearsalCredentials } from "./production-rehearsal-credentials.mjs";
+import { assertLocalTursoEndpoint, assertProductionRehearsalEnabled } from "./turso-local-target-guard.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Explicit command environment wins; local config supplies defaults only.
+dotenv.config({ path: path.join(projectRoot, ".env.local"), quiet: true });
 dotenv.config({ path: path.join(projectRoot, ".env"), quiet: true });
-dotenv.config({ path: path.join(projectRoot, ".env.local"), override: true, quiet: true });
 
 function argument(name) { const index = process.argv.indexOf(name); return index < 0 ? null : process.argv[index + 1]; }
 
@@ -38,6 +40,7 @@ function writeReport(filename, value, productionRehearsal) {
 async function main() {
   const sourceKind = argument("--source") ?? "sqlite";
   const productionRehearsal = sourceKind === "production";
+  if (productionRehearsal) assertProductionRehearsalEnabled();
   if (!productionRehearsal && sourceKind !== "sqlite" && sourceKind !== "libsql" && sourceKind !== "turso") {
     throw new Error("Use --source sqlite, libsql, turso, or production");
   }
@@ -58,6 +61,7 @@ async function main() {
     protectFile(sourcePath, true);
   } else if (sourceKind === "turso") {
     if (!process.env.TURSO_DATABASE_URL || !process.env.TURSO_AUTH_TOKEN) throw new Error("Turso credentials are unavailable; no source database was modified");
+    assertLocalTursoEndpoint(process.env.TURSO_DATABASE_URL, { authToken: process.env.TURSO_AUTH_TOKEN });
     const client = createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN });
     try { await backupLibsqlReadOnly(client, sourcePath); } finally { client.close(); }
   } else if (sourceKind === "sqlite" || sourceKind === "libsql") {
