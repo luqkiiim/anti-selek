@@ -1,0 +1,405 @@
+{
+  "artifactKind": "benchmark-summary",
+  "summaryVersion": 1,
+  "rawSha256": "8f0e581eb2b43424c044c3b6dd74745988e0f5fb42bb4a86401c7a2c0b2f0972",
+  "rawBytes": 498484,
+  "validationStatus": "not-recorded-in-historical-source",
+  "schemaVersion": 1,
+  "sourceRevision": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+  "sourceProvenance": {
+    "commitSha": "93262f36336b9533ba96b4e4bec5d7e8061eef6e",
+    "workingTreeDirty": true,
+    "policyLabel": "strict-cadence",
+    "engineSourceSha256": "5dd33ca48c7a7731883081792360f0a04e439b3ddd704f135ed3a63ed1bf2f36",
+    "measurementHarnessSha256": "259891ee058ff0ec0bb490e5e2360ec597237af2b63567db19674506808d80ce"
+  },
+  "generatedAt": "2026-10-03T11:29:38.776Z",
+  "enginePolicy": "strict",
+  "setup": {
+    "roster": "14 players: P1-P7 male, P8-P14 female (FEMALE_FLEX)",
+    "sessionMode": "MIXICANO",
+    "courts": 2,
+    "completionSchedule": "Independent seeded event sequence; each event completes one occupied court, then refills that court.",
+    "checkpoints": [
+      20,
+      400
+    ],
+    "coverageHistory": "Completed matches only; active assignments are used by matchmaking and excluded from coverage.",
+    "restDefinition": "Completed-match events while available; players in an active match do not accrue rest turns.",
+    "skillProfiles": {
+      "narrow": "Shared latent rank profile 0..13; Social/Points strength 10+0.1×rank, Rating strength 900+4×rank (40 rating units per point).",
+      "wide": "Same latent rank profile; Points strength 10+1×rank, Rating strength 900+40×rank (40 rating units per point)."
+    },
+    "pointDiff": "0 for all players; the benchmark has no match score outcomes."
+  },
+  "seedCount": 1,
+  "wideSeedCount": 0,
+  "sessions": [
+    {
+      "profile": "narrow",
+      "sessionType": "SOCIAL_MIX",
+      "seed": 1,
+      "maximumMatchCountSpread": 5,
+      "checkpoints": {
+        "20": {
+          "completedMatches": 20,
+          "varietyCoverageScore": 0.5054945054945056,
+          "partnerCoverage": 0.3406593406593406,
+          "opponentCoverage": 0.5384615384615385,
+          "courtmateCoverage": 0.6373626373626372,
+          "normalizedEntropyScore": 0.5070514625994551,
+          "relationshipEntropyScore": 0.6760686167992735,
+          "matchTypeEntropyScore": 0,
+          "assignmentRestGap": {
+            "max": 3,
+            "mean": 1.4848484848484849,
+            "p95": 3,
+            "count": 66
+          },
+          "backToBack": {
+            "count": 12,
+            "eligibleAssignments": 66,
+            "rate": 0.18181818181818182
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 20,
+            "OWN_SIDE": 0
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 0
+          },
+          "matchCountSpread": 1,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 0.3500000000000014,
+          "maximumObservedAvailableRestTurns": 3,
+          "starvation": {
+            "decisionsWithOverdueAvailable": 0,
+            "completedRotationDecisions": 19,
+            "overduePlayerEvents": 0,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 0,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": null,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": null
+          },
+          "optimizer": {
+            "callsStarted": 20,
+            "callsCompleted": 19,
+            "ordinaryProductionCalls": 20,
+            "ordinaryProductionWallMs": 1784.1,
+            "counterfactualWrapperCalls": 0,
+            "counterfactualWrapperWallMs": 0,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        },
+        "400": {
+          "completedMatches": 400,
+          "varietyCoverageScore": 0.8461538461538461,
+          "partnerCoverage": 0.5384615384615384,
+          "opponentCoverage": 1,
+          "courtmateCoverage": 1,
+          "normalizedEntropyScore": 0.6850838904483837,
+          "relationshipEntropyScore": 0.9134451872645115,
+          "matchTypeEntropyScore": 9.15264715375691e-16,
+          "assignmentRestGap": {
+            "max": 6,
+            "mean": 1.4955863808322825,
+            "p95": 3,
+            "count": 1586
+          },
+          "backToBack": {
+            "count": 196,
+            "eligibleAssignments": 1586,
+            "rate": 0.1235813366960908
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 400,
+            "OWN_SIDE": 0
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 0
+          },
+          "matchCountSpread": 1,
+          "maximumFairnessSpread": 5,
+          "maximumBalanceGap": 0.5999999999999996,
+          "maximumObservedAvailableRestTurns": 6,
+          "starvation": {
+            "decisionsWithOverdueAvailable": 12,
+            "completedRotationDecisions": 399,
+            "overduePlayerEvents": 28,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 12,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": 0
+          },
+          "optimizer": {
+            "callsStarted": 400,
+            "callsCompleted": 399,
+            "ordinaryProductionCalls": 388,
+            "ordinaryProductionWallMs": 13035.6,
+            "counterfactualWrapperCalls": 12,
+            "counterfactualWrapperWallMs": 692.61,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "POINTS",
+      "seed": 1,
+      "maximumMatchCountSpread": 5,
+      "checkpoints": {
+        "20": {
+          "completedMatches": 20,
+          "varietyCoverageScore": 0.4981684981684982,
+          "partnerCoverage": 0.3296703296703297,
+          "opponentCoverage": 0.5274725274725276,
+          "courtmateCoverage": 0.6373626373626374,
+          "normalizedEntropyScore": 0.5021258816273304,
+          "relationshipEntropyScore": 0.6695011755031072,
+          "matchTypeEntropyScore": 0,
+          "assignmentRestGap": {
+            "max": 3,
+            "mean": 1.4848484848484849,
+            "p95": 3,
+            "count": 66
+          },
+          "backToBack": {
+            "count": 12,
+            "eligibleAssignments": 66,
+            "rate": 0.18181818181818182
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 20,
+            "OWN_SIDE": 0
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 0
+          },
+          "matchCountSpread": 1,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 0.3500000000000014,
+          "maximumObservedAvailableRestTurns": 3,
+          "starvation": {
+            "decisionsWithOverdueAvailable": 0,
+            "completedRotationDecisions": 19,
+            "overduePlayerEvents": 0,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 0,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": null,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": null
+          },
+          "optimizer": {
+            "callsStarted": 20,
+            "callsCompleted": 19,
+            "ordinaryProductionCalls": 20,
+            "ordinaryProductionWallMs": 1127.05,
+            "counterfactualWrapperCalls": 0,
+            "counterfactualWrapperWallMs": 0,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        },
+        "400": {
+          "completedMatches": 400,
+          "varietyCoverageScore": 0.8461538461538461,
+          "partnerCoverage": 0.5384615384615384,
+          "opponentCoverage": 1,
+          "courtmateCoverage": 1,
+          "normalizedEntropyScore": 0.6851946465201341,
+          "relationshipEntropyScore": 0.9135928620268453,
+          "matchTypeEntropyScore": 9.15264715375691e-16,
+          "assignmentRestGap": {
+            "max": 6,
+            "mean": 1.4955863808322825,
+            "p95": 3,
+            "count": 1586
+          },
+          "backToBack": {
+            "count": 196,
+            "eligibleAssignments": 1586,
+            "rate": 0.1235813366960908
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 400,
+            "OWN_SIDE": 0
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 0
+          },
+          "matchCountSpread": 1,
+          "maximumFairnessSpread": 5,
+          "maximumBalanceGap": 0.5999999999999996,
+          "maximumObservedAvailableRestTurns": 6,
+          "starvation": {
+            "decisionsWithOverdueAvailable": 12,
+            "completedRotationDecisions": 399,
+            "overduePlayerEvents": 28,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 12,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": 0
+          },
+          "optimizer": {
+            "callsStarted": 400,
+            "callsCompleted": 399,
+            "ordinaryProductionCalls": 388,
+            "ordinaryProductionWallMs": 8406.58,
+            "counterfactualWrapperCalls": 12,
+            "counterfactualWrapperWallMs": 460.72,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "ELO",
+      "seed": 1,
+      "maximumMatchCountSpread": 5,
+      "checkpoints": {
+        "20": {
+          "completedMatches": 20,
+          "varietyCoverageScore": 0.5054945054945056,
+          "partnerCoverage": 0.3406593406593406,
+          "opponentCoverage": 0.5384615384615385,
+          "courtmateCoverage": 0.6373626373626374,
+          "normalizedEntropyScore": 0.5070514625994551,
+          "relationshipEntropyScore": 0.6760686167992735,
+          "matchTypeEntropyScore": 0,
+          "assignmentRestGap": {
+            "max": 3,
+            "mean": 1.4848484848484849,
+            "p95": 3,
+            "count": 66
+          },
+          "backToBack": {
+            "count": 12,
+            "eligibleAssignments": 66,
+            "rate": 0.18181818181818182
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 20,
+            "OWN_SIDE": 0
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 0
+          },
+          "matchCountSpread": 1,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 16,
+          "maximumObservedAvailableRestTurns": 3,
+          "starvation": {
+            "decisionsWithOverdueAvailable": 0,
+            "completedRotationDecisions": 19,
+            "overduePlayerEvents": 0,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 0,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": null,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": null
+          },
+          "optimizer": {
+            "callsStarted": 20,
+            "callsCompleted": 19,
+            "ordinaryProductionCalls": 20,
+            "ordinaryProductionWallMs": 1461.13,
+            "counterfactualWrapperCalls": 0,
+            "counterfactualWrapperWallMs": 0,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        },
+        "400": {
+          "completedMatches": 400,
+          "varietyCoverageScore": 0.8461538461538461,
+          "partnerCoverage": 0.5384615384615384,
+          "opponentCoverage": 1,
+          "courtmateCoverage": 1,
+          "normalizedEntropyScore": 0.6850446040508932,
+          "relationshipEntropyScore": 0.9133928054011908,
+          "matchTypeEntropyScore": 9.15264715375691e-16,
+          "assignmentRestGap": {
+            "max": 6,
+            "mean": 1.4955863808322825,
+            "p95": 3,
+            "count": 1586
+          },
+          "backToBack": {
+            "count": 196,
+            "eligibleAssignments": 1586,
+            "rate": 0.1235813366960908
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 400,
+            "OWN_SIDE": 0
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 0
+          },
+          "matchCountSpread": 1,
+          "maximumFairnessSpread": 5,
+          "maximumBalanceGap": 20,
+          "maximumObservedAvailableRestTurns": 6,
+          "starvation": {
+            "decisionsWithOverdueAvailable": 12,
+            "completedRotationDecisions": 399,
+            "overduePlayerEvents": 28,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 12,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": 0
+          },
+          "optimizer": {
+            "callsStarted": 400,
+            "callsCompleted": 399,
+            "ordinaryProductionCalls": 388,
+            "ordinaryProductionWallMs": 9269.34,
+            "counterfactualWrapperCalls": 12,
+            "counterfactualWrapperWallMs": 527.66,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    }
+  ]
+}

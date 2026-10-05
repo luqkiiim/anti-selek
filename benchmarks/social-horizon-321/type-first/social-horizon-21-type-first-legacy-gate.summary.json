@@ -1,0 +1,2815 @@
+{
+  "artifactKind": "benchmark-summary",
+  "summaryVersion": 1,
+  "rawSha256": "5878ccffb52b3e5563e921dfc1ce92ac604f9eed54c7ce2c95ae68f315457376",
+  "rawBytes": 4870586,
+  "validationStatus": "passed",
+  "schemaVersion": "social-horizon-321-v1",
+  "sourceRevision": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+  "sourceProvenance": {
+    "commitSha": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+    "workingTreeDirty": true,
+    "workingTreeNote": "Benchmark-only horizon instrumentation is copied into the pinned type-first worktree; matchmaking implementation files remain at the recorded policy commit.",
+    "policyLabel": "type-entropy-first",
+    "metric": "social-horizon-321",
+    "gateMetric": "legacy-equal",
+    "targetMatches": 21,
+    "coreEngineTrackedDiffPaths": [],
+    "sharedVarietyTrackedDiffPaths": [],
+    "measurementHarnessTrackedDiffPaths": [
+      "src/lib/matchmaking/v3/socialCoverageBenchmark.ts"
+    ],
+    "engineSourceSha256": "21c2b52a97ec90d86ac60148a3c5443e7074bd44d81f2a9358b13644d92ea643",
+    "measurementHarnessSha256": "97a41876b2ca394c45b1718db85741e2b89fa320670f6d1ee192a68d2142a0a4"
+  },
+  "generatedAt": "2026-10-04T09:12:54.211Z",
+  "enginePolicy": "type-first",
+  "matcherCoverageGainMetric": "legacy-equal",
+  "targetMatches": 21,
+  "metric": {
+    "id": "social-horizon-321",
+    "formula": "Per player: (3C + 2O + P) / the total weight of meaningful facets; C/O/P are capped unique feasible peers divided by min(feasible peers, 13/12/6).",
+    "weights": {
+      "courtmates": 3,
+      "opponents": 2,
+      "partners": 1
+    },
+    "caps": {
+      "courtmates": 13,
+      "opponents": 12,
+      "partners": 6
+    },
+    "opportunityScope": "Full structural roster opportunity sets; availability, active status, player history, and balance are not filters.",
+    "emptyFacetRule": "Exclude empty facets and renormalize the remaining per-player weights.",
+    "historyRule": "Completed matches only; active assignments and reservations are excluded from the score."
+  },
+  "seeds": [
+    1,
+    4729,
+    104729,
+    130363,
+    2097593
+  ],
+  "sessions": [
+    {
+      "profile": "narrow",
+      "sessionType": "SOCIAL_MIX",
+      "seed": 1,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.5604395604395604,
+          "partnerCoverage": 0.40659340659340665,
+          "opponentCoverage": 0.5934065934065933,
+          "courtmateCoverage": 0.6813186813186815,
+          "normalizedEntropyScore": 0.794696312012225,
+          "relationshipEntropyScore": 0.7304352035887837,
+          "matchTypeEntropyScore": 0.9874796372825487,
+          "assignmentRestGap": {
+            "max": 5,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 19,
+            "eligibleAssignments": 70,
+            "rate": 0.2714285714285714
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 10,
+            "OWN_SIDE": 11
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 2,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 5,
+          "maximumPlayerMatchCount": 7,
+          "allPlayersExactlySixMatches": false,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 0.4499999999999993,
+          "maximumObservedAvailableRestTurns": 5,
+          "socialHorizon321": {
+            "score": 0.6997863247863247,
+            "facetMean": {
+              "courtmates": 0.6813186813186815,
+              "opponents": 0.6428571428571427,
+              "partners": 0.8690476190476192
+            },
+            "averageDistinctCount": {
+              "courtmates": 8.857142857142858,
+              "opponents": 7.714285714285714,
+              "partners": 5.285714285714286
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 5,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 6,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 5,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": 0
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 1,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 1,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 1
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 16,
+            "ordinaryProductionWallMs": 3416.89,
+            "counterfactualWrapperCalls": 5,
+            "counterfactualWrapperWallMs": 625.45,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "POINTS",
+      "seed": 1,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.5604395604395604,
+          "partnerCoverage": 0.40659340659340665,
+          "opponentCoverage": 0.5934065934065933,
+          "courtmateCoverage": 0.6813186813186815,
+          "normalizedEntropyScore": 0.794696312012225,
+          "relationshipEntropyScore": 0.7304352035887837,
+          "matchTypeEntropyScore": 0.9874796372825487,
+          "assignmentRestGap": {
+            "max": 5,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 19,
+            "eligibleAssignments": 70,
+            "rate": 0.2714285714285714
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 10,
+            "OWN_SIDE": 11
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 2,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 5,
+          "maximumPlayerMatchCount": 7,
+          "allPlayersExactlySixMatches": false,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 0.4499999999999993,
+          "maximumObservedAvailableRestTurns": 5,
+          "socialHorizon321": {
+            "score": 0.6997863247863247,
+            "facetMean": {
+              "courtmates": 0.6813186813186815,
+              "opponents": 0.6428571428571427,
+              "partners": 0.8690476190476192
+            },
+            "averageDistinctCount": {
+              "courtmates": 8.857142857142858,
+              "opponents": 7.714285714285714,
+              "partners": 5.285714285714286
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 5,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 6,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 5,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": 0
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 1,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 1,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 1
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 16,
+            "ordinaryProductionWallMs": 3584,
+            "counterfactualWrapperCalls": 5,
+            "counterfactualWrapperWallMs": 400.79,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "ELO",
+      "seed": 1,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.5641025641025641,
+          "partnerCoverage": 0.41758241758241754,
+          "opponentCoverage": 0.5934065934065934,
+          "courtmateCoverage": 0.6813186813186815,
+          "normalizedEntropyScore": 0.7980053506378656,
+          "relationshipEntropyScore": 0.7348472550896379,
+          "matchTypeEntropyScore": 0.9874796372825487,
+          "assignmentRestGap": {
+            "max": 5,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 19,
+            "eligibleAssignments": 70,
+            "rate": 0.2714285714285714
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 10,
+            "OWN_SIDE": 11
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 2,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 7
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 5
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 5
+            }
+          ],
+          "minimumPlayerMatchCount": 5,
+          "maximumPlayerMatchCount": 7,
+          "allPlayersExactlySixMatches": false,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 18,
+          "maximumObservedAvailableRestTurns": 5,
+          "socialHorizon321": {
+            "score": 0.7017704517704518,
+            "facetMean": {
+              "courtmates": 0.6813186813186815,
+              "opponents": 0.6428571428571427,
+              "partners": 0.8809523809523808
+            },
+            "averageDistinctCount": {
+              "courtmates": 8.857142857142858,
+              "opponents": 7.714285714285714,
+              "partners": 5.428571428571429
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 5,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 6,
+            "materiallyChangedPlayerSet": 0,
+            "certifiedCounterfactualDecisions": 5,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0,
+            "rateAcrossCompletedDecisions": 0,
+            "rateAmongCertifiedCounterfactualDecisions": 0
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 1,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 1,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 1
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 16,
+            "ordinaryProductionWallMs": 3387.28,
+            "counterfactualWrapperCalls": 5,
+            "counterfactualWrapperWallMs": 350.51,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "SOCIAL_MIX",
+      "seed": 4729,
+      "maximumMatchCountSpread": 3,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.5787545787545788,
+          "partnerCoverage": 0.42857142857142866,
+          "opponentCoverage": 0.5824175824175823,
+          "courtmateCoverage": 0.7252747252747254,
+          "normalizedEntropyScore": 0.7990791358302607,
+          "relationshipEntropyScore": 0.7359961890091814,
+          "matchTypeEntropyScore": 0.9883279762934986,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.457142857142857,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 20,
+            "eligibleAssignments": 70,
+            "rate": 0.2857142857142857
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 3,
+          "maximumBalanceGap": 0.40000000000000036,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7277167277167278,
+            "facetMean": {
+              "courtmates": 0.7252747252747254,
+              "opponents": 0.6309523809523808,
+              "partners": 0.9285714285714287
+            },
+            "averageDistinctCount": {
+              "courtmates": 9.428571428571429,
+              "opponents": 7.571428571428571,
+              "partners": 5.571428571428571
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 4,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 8,
+            "materiallyChangedPlayerSet": 3,
+            "certifiedCounterfactualDecisions": 4,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.75,
+            "rateAcrossCompletedDecisions": 0.15,
+            "rateAmongCertifiedCounterfactualDecisions": 0.75
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 17,
+            "ordinaryProductionWallMs": 2217.46,
+            "counterfactualWrapperCalls": 4,
+            "counterfactualWrapperWallMs": 266.55,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "POINTS",
+      "seed": 4729,
+      "maximumMatchCountSpread": 3,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.5787545787545788,
+          "partnerCoverage": 0.42857142857142866,
+          "opponentCoverage": 0.5824175824175823,
+          "courtmateCoverage": 0.7252747252747254,
+          "normalizedEntropyScore": 0.7990791358302607,
+          "relationshipEntropyScore": 0.7359961890091814,
+          "matchTypeEntropyScore": 0.9883279762934986,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.457142857142857,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 20,
+            "eligibleAssignments": 70,
+            "rate": 0.2857142857142857
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 3,
+          "maximumBalanceGap": 0.40000000000000036,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7277167277167278,
+            "facetMean": {
+              "courtmates": 0.7252747252747254,
+              "opponents": 0.6309523809523808,
+              "partners": 0.9285714285714287
+            },
+            "averageDistinctCount": {
+              "courtmates": 9.428571428571429,
+              "opponents": 7.571428571428571,
+              "partners": 5.571428571428571
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 4,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 8,
+            "materiallyChangedPlayerSet": 3,
+            "certifiedCounterfactualDecisions": 4,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.75,
+            "rateAcrossCompletedDecisions": 0.15,
+            "rateAmongCertifiedCounterfactualDecisions": 0.75
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 17,
+            "ordinaryProductionWallMs": 2640.89,
+            "counterfactualWrapperCalls": 4,
+            "counterfactualWrapperWallMs": 220.19,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "ELO",
+      "seed": 4729,
+      "maximumMatchCountSpread": 3,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.5714285714285714,
+          "partnerCoverage": 0.43956043956043966,
+          "opponentCoverage": 0.5714285714285714,
+          "courtmateCoverage": 0.7032967032967032,
+          "normalizedEntropyScore": 0.8003701806387055,
+          "relationshipEntropyScore": 0.7377175820871077,
+          "matchTypeEntropyScore": 0.9883279762934986,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.457142857142857,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 19,
+            "eligibleAssignments": 70,
+            "rate": 0.2714285714285714
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 3,
+          "maximumBalanceGap": 14,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7167277167277167,
+            "facetMean": {
+              "courtmates": 0.7032967032967032,
+              "opponents": 0.6190476190476192,
+              "partners": 0.9523809523809524
+            },
+            "averageDistinctCount": {
+              "courtmates": 9.142857142857142,
+              "opponents": 7.428571428571429,
+              "partners": 5.714285714285714
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 3,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 7,
+            "materiallyChangedPlayerSet": 2,
+            "certifiedCounterfactualDecisions": 3,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.6666666666666666,
+            "rateAcrossCompletedDecisions": 0.1,
+            "rateAmongCertifiedCounterfactualDecisions": 0.6666666666666666
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 18,
+            "ordinaryProductionWallMs": 2458.58,
+            "counterfactualWrapperCalls": 3,
+            "counterfactualWrapperWallMs": 165.84,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "SOCIAL_MIX",
+      "seed": 104729,
+      "maximumMatchCountSpread": 3,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.6263736263736265,
+          "partnerCoverage": 0.4395604395604396,
+          "opponentCoverage": 0.6373626373626374,
+          "courtmateCoverage": 0.8021978021978022,
+          "normalizedEntropyScore": 0.8043348863043726,
+          "relationshipEntropyScore": 0.775783603899354,
+          "matchTypeEntropyScore": 0.8899887335194288,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 18,
+            "eligibleAssignments": 70,
+            "rate": 0.2571428571428571
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 13,
+            "OWN_SIDE": 8
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 3,
+          "maximumBalanceGap": 0.45000000000000107,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.78998778998779,
+            "facetMean": {
+              "courtmates": 0.8021978021978022,
+              "opponents": 0.6904761904761906,
+              "partners": 0.9523809523809524
+            },
+            "averageDistinctCount": {
+              "courtmates": 10.428571428571429,
+              "opponents": 8.285714285714286,
+              "partners": 5.714285714285714
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 4,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 7,
+            "materiallyChangedPlayerSet": 2,
+            "certifiedCounterfactualDecisions": 4,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.5,
+            "rateAcrossCompletedDecisions": 0.1,
+            "rateAmongCertifiedCounterfactualDecisions": 0.5
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 17,
+            "ordinaryProductionWallMs": 2063.48,
+            "counterfactualWrapperCalls": 4,
+            "counterfactualWrapperWallMs": 259.61,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "POINTS",
+      "seed": 104729,
+      "maximumMatchCountSpread": 3,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.6263736263736265,
+          "partnerCoverage": 0.4395604395604396,
+          "opponentCoverage": 0.6373626373626374,
+          "courtmateCoverage": 0.8021978021978022,
+          "normalizedEntropyScore": 0.8043348863043726,
+          "relationshipEntropyScore": 0.775783603899354,
+          "matchTypeEntropyScore": 0.8899887335194288,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 18,
+            "eligibleAssignments": 70,
+            "rate": 0.2571428571428571
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 13,
+            "OWN_SIDE": 8
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 3,
+          "maximumBalanceGap": 0.45000000000000107,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.78998778998779,
+            "facetMean": {
+              "courtmates": 0.8021978021978022,
+              "opponents": 0.6904761904761906,
+              "partners": 0.9523809523809524
+            },
+            "averageDistinctCount": {
+              "courtmates": 10.428571428571429,
+              "opponents": 8.285714285714286,
+              "partners": 5.714285714285714
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 4,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 7,
+            "materiallyChangedPlayerSet": 2,
+            "certifiedCounterfactualDecisions": 4,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.5,
+            "rateAcrossCompletedDecisions": 0.1,
+            "rateAmongCertifiedCounterfactualDecisions": 0.5
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 17,
+            "ordinaryProductionWallMs": 2326.1,
+            "counterfactualWrapperCalls": 4,
+            "counterfactualWrapperWallMs": 197.78,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "ELO",
+      "seed": 104729,
+      "maximumMatchCountSpread": 3,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.6263736263736265,
+          "partnerCoverage": 0.4395604395604396,
+          "opponentCoverage": 0.6373626373626374,
+          "courtmateCoverage": 0.8021978021978022,
+          "normalizedEntropyScore": 0.8043348863043726,
+          "relationshipEntropyScore": 0.775783603899354,
+          "matchTypeEntropyScore": 0.8899887335194288,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 18,
+            "eligibleAssignments": 70,
+            "rate": 0.2571428571428571
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 13,
+            "OWN_SIDE": 8
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 3,
+          "maximumBalanceGap": 18,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.78998778998779,
+            "facetMean": {
+              "courtmates": 0.8021978021978022,
+              "opponents": 0.6904761904761906,
+              "partners": 0.9523809523809524
+            },
+            "averageDistinctCount": {
+              "courtmates": 10.428571428571429,
+              "opponents": 8.285714285714286,
+              "partners": 5.714285714285714
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 4,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 7,
+            "materiallyChangedPlayerSet": 2,
+            "certifiedCounterfactualDecisions": 4,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.5,
+            "rateAcrossCompletedDecisions": 0.1,
+            "rateAmongCertifiedCounterfactualDecisions": 0.5
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 17,
+            "ordinaryProductionWallMs": 2360.11,
+            "counterfactualWrapperCalls": 4,
+            "counterfactualWrapperWallMs": 224.09,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "SOCIAL_MIX",
+      "seed": 130363,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.586080586080586,
+          "partnerCoverage": 0.4615384615384616,
+          "opponentCoverage": 0.5934065934065933,
+          "courtmateCoverage": 0.7032967032967032,
+          "normalizedEntropyScore": 0.7991447360680929,
+          "relationshipEntropyScore": 0.7560884791840221,
+          "matchTypeEntropyScore": 0.928313506720305,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 14,
+            "eligibleAssignments": 70,
+            "rate": 0.2
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 0.5,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7326007326007326,
+            "facetMean": {
+              "courtmates": 0.7032967032967032,
+              "opponents": 0.6428571428571427,
+              "partners": 1
+            },
+            "averageDistinctCount": {
+              "courtmates": 9.142857142857142,
+              "opponents": 7.714285714285714,
+              "partners": 6
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 5,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 5,
+            "materiallyChangedPlayerSet": 1,
+            "certifiedCounterfactualDecisions": 5,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.2,
+            "rateAcrossCompletedDecisions": 0.05,
+            "rateAmongCertifiedCounterfactualDecisions": 0.2
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 16,
+            "ordinaryProductionWallMs": 2032.79,
+            "counterfactualWrapperCalls": 5,
+            "counterfactualWrapperWallMs": 295.72,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "POINTS",
+      "seed": 130363,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.586080586080586,
+          "partnerCoverage": 0.4615384615384616,
+          "opponentCoverage": 0.5934065934065933,
+          "courtmateCoverage": 0.7032967032967032,
+          "normalizedEntropyScore": 0.7991447360680929,
+          "relationshipEntropyScore": 0.7560884791840221,
+          "matchTypeEntropyScore": 0.928313506720305,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 14,
+            "eligibleAssignments": 70,
+            "rate": 0.2
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 0.5,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7326007326007326,
+            "facetMean": {
+              "courtmates": 0.7032967032967032,
+              "opponents": 0.6428571428571427,
+              "partners": 1
+            },
+            "averageDistinctCount": {
+              "courtmates": 9.142857142857142,
+              "opponents": 7.714285714285714,
+              "partners": 6
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 5,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 5,
+            "materiallyChangedPlayerSet": 1,
+            "certifiedCounterfactualDecisions": 5,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.2,
+            "rateAcrossCompletedDecisions": 0.05,
+            "rateAmongCertifiedCounterfactualDecisions": 0.2
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 16,
+            "ordinaryProductionWallMs": 3480.11,
+            "counterfactualWrapperCalls": 5,
+            "counterfactualWrapperWallMs": 378.49,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "ELO",
+      "seed": 130363,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.586080586080586,
+          "partnerCoverage": 0.4615384615384616,
+          "opponentCoverage": 0.5934065934065933,
+          "courtmateCoverage": 0.7032967032967032,
+          "normalizedEntropyScore": 0.7991447360680929,
+          "relationshipEntropyScore": 0.7560884791840221,
+          "matchTypeEntropyScore": 0.928313506720305,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.4857142857142858,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 14,
+            "eligibleAssignments": 70,
+            "rate": 0.2
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 20,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7326007326007326,
+            "facetMean": {
+              "courtmates": 0.7032967032967032,
+              "opponents": 0.6428571428571427,
+              "partners": 1
+            },
+            "averageDistinctCount": {
+              "courtmates": 9.142857142857142,
+              "opponents": 7.714285714285714,
+              "partners": 6
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 5,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 5,
+            "materiallyChangedPlayerSet": 1,
+            "certifiedCounterfactualDecisions": 5,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.2,
+            "rateAcrossCompletedDecisions": 0.05,
+            "rateAmongCertifiedCounterfactualDecisions": 0.2
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 16,
+            "ordinaryProductionWallMs": 2399.18,
+            "counterfactualWrapperCalls": 5,
+            "counterfactualWrapperWallMs": 288.77,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "SOCIAL_MIX",
+      "seed": 2097593,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.6263736263736263,
+          "partnerCoverage": 0.4615384615384616,
+          "opponentCoverage": 0.6263736263736263,
+          "courtmateCoverage": 0.7912087912087912,
+          "normalizedEntropyScore": 0.8310797421222033,
+          "relationshipEntropyScore": 0.7825543386339385,
+          "matchTypeEntropyScore": 0.9766559525869971,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.457142857142857,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 15,
+            "eligibleAssignments": 70,
+            "rate": 0.21428571428571427
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 0.4499999999999993,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7884615384615384,
+            "facetMean": {
+              "courtmates": 0.7912087912087912,
+              "opponents": 0.6785714285714286,
+              "partners": 1
+            },
+            "averageDistinctCount": {
+              "courtmates": 10.285714285714286,
+              "opponents": 8.142857142857142,
+              "partners": 6
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 4,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 5,
+            "materiallyChangedPlayerSet": 2,
+            "certifiedCounterfactualDecisions": 4,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.5,
+            "rateAcrossCompletedDecisions": 0.1,
+            "rateAmongCertifiedCounterfactualDecisions": 0.5
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 17,
+            "ordinaryProductionWallMs": 2191.75,
+            "counterfactualWrapperCalls": 4,
+            "counterfactualWrapperWallMs": 267.16,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "POINTS",
+      "seed": 2097593,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.6263736263736263,
+          "partnerCoverage": 0.4615384615384616,
+          "opponentCoverage": 0.6263736263736263,
+          "courtmateCoverage": 0.7912087912087912,
+          "normalizedEntropyScore": 0.8310797421222033,
+          "relationshipEntropyScore": 0.7825543386339385,
+          "matchTypeEntropyScore": 0.9766559525869971,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.457142857142857,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 15,
+            "eligibleAssignments": 70,
+            "rate": 0.21428571428571427
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 0.4499999999999993,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7884615384615384,
+            "facetMean": {
+              "courtmates": 0.7912087912087912,
+              "opponents": 0.6785714285714286,
+              "partners": 1
+            },
+            "averageDistinctCount": {
+              "courtmates": 10.285714285714286,
+              "opponents": 8.142857142857142,
+              "partners": 6
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 4,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 5,
+            "materiallyChangedPlayerSet": 2,
+            "certifiedCounterfactualDecisions": 4,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.5,
+            "rateAcrossCompletedDecisions": 0.1,
+            "rateAmongCertifiedCounterfactualDecisions": 0.5
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 17,
+            "ordinaryProductionWallMs": 2932.46,
+            "counterfactualWrapperCalls": 4,
+            "counterfactualWrapperWallMs": 265.85,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    },
+    {
+      "profile": "narrow",
+      "sessionType": "ELO",
+      "seed": 2097593,
+      "maximumMatchCountSpread": 2,
+      "checkpoints": {
+        "21": {
+          "completedMatches": 21,
+          "varietyCoverageScore": 0.6263736263736263,
+          "partnerCoverage": 0.4615384615384616,
+          "opponentCoverage": 0.6263736263736263,
+          "courtmateCoverage": 0.7912087912087912,
+          "normalizedEntropyScore": 0.8310797421222033,
+          "relationshipEntropyScore": 0.7825543386339385,
+          "matchTypeEntropyScore": 0.9766559525869971,
+          "assignmentRestGap": {
+            "max": 4,
+            "mean": 1.457142857142857,
+            "p95": 4,
+            "count": 70
+          },
+          "backToBack": {
+            "count": 15,
+            "eligibleAssignments": 70,
+            "rate": 0.21428571428571427
+          },
+          "completedMatchTypeCounts": {
+            "MIXED": 11,
+            "OWN_SIDE": 10
+          },
+          "matchTypeCoverage": {
+            "MIXED": 1,
+            "OWN_SIDE": 1
+          },
+          "matchCountSpread": 0,
+          "playerMatchCounts": [
+            {
+              "userId": "P1",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P10",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P11",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P12",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P13",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P14",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P2",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P3",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P4",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P5",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P6",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P7",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P8",
+              "matchesPlayed": 6
+            },
+            {
+              "userId": "P9",
+              "matchesPlayed": 6
+            }
+          ],
+          "minimumPlayerMatchCount": 6,
+          "maximumPlayerMatchCount": 6,
+          "allPlayersExactlySixMatches": true,
+          "maximumFairnessSpread": 2,
+          "maximumBalanceGap": 18,
+          "maximumObservedAvailableRestTurns": 4,
+          "socialHorizon321": {
+            "score": 0.7884615384615384,
+            "facetMean": {
+              "courtmates": 0.7912087912087912,
+              "opponents": 0.6785714285714286,
+              "partners": 1
+            },
+            "averageDistinctCount": {
+              "courtmates": 10.285714285714286,
+              "opponents": 8.142857142857142,
+              "partners": 6
+            }
+          },
+          "starvation": {
+            "decisionsWithOverdueAvailable": 4,
+            "completedRotationDecisions": 20,
+            "overduePlayerEvents": 5,
+            "materiallyChangedPlayerSet": 2,
+            "certifiedCounterfactualDecisions": 4,
+            "uncertifiedCounterfactualDecisions": 0,
+            "rateWhenOverdue": 0.5,
+            "rateAcrossCompletedDecisions": 0.1,
+            "rateAmongCertifiedCounterfactualDecisions": 0.5
+          },
+          "coverageGate": {
+            "policyApplied": false,
+            "refillDecisions": 20,
+            "certifiedDecisions": 0,
+            "uncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "plusOneAvailableDecisions": 0,
+            "plusOneAvailableCandidates": 0,
+            "plusOneCoverageEligibleDecisions": 0,
+            "plusOneCoverageEligibleCandidates": 0,
+            "plusOneSelectedDecisions": 0,
+            "plusOneSelectedCandidates": 0,
+            "plusOneRejectedWithoutImprovedCoverageDecisions": 0,
+            "plusOneRejectedWithoutImprovedCoverageCandidates": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneDecisions": 0,
+            "zeroCoverageFrontierHigherTypeGainRejectedPlusOneCandidates": 0,
+            "acceptedGreaterCoverageDecisions": 0,
+            "acceptedGreaterCoverageCandidates": 0,
+            "higherEntropyBeyondAllowanceDecisions": 0,
+            "higherEntropyBeyondAllowanceCandidates": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0
+          },
+          "replayEnvelope": {
+            "policyApplied": false,
+            "productionRefillDecisions": 20,
+            "productionReplayEnvelopeCertifiedDecisions": 0,
+            "productionCertifiedDecisions": 0,
+            "productionUncertifiedDecisions": 0,
+            "noStarvationRefillDecisions": 0,
+            "noStarvationReplayEnvelopeCertifiedDecisions": 0,
+            "noStarvationCertifiedDecisions": 0,
+            "noStarvationUncertifiedDecisions": 0,
+            "noStarvationCounterfactualDecisions": 0,
+            "acceptedPlusOneDecisions": 0,
+            "acceptedPlusOneRate": null,
+            "betterEntropyBeyondAllowanceDecisions": 0,
+            "betterEntropyBeyondAllowanceCandidateCount": 0,
+            "fivePlusCompletedRestEpisodes": 0,
+            "fivePlusEpisodesLinkedAcceptedPlusOneReplay": 0,
+            "fivePlusEpisodesLinkedOtherRestZeroReplay": 0,
+            "fivePlusEpisodesWithoutLinkedRestZeroReplay": 0
+          },
+          "optimizer": {
+            "callsStarted": 21,
+            "callsCompleted": 20,
+            "ordinaryProductionCalls": 17,
+            "ordinaryProductionWallMs": 3305.18,
+            "counterfactualWrapperCalls": 4,
+            "counterfactualWrapperWallMs": 247.14,
+            "searchLimitCalls": 0,
+            "fairnessCertificateFailures": 0,
+            "starvationCertificateFailures": 0,
+            "balanceCertificateFailures": 0,
+            "incompleteCounterfactualCalls": 0
+          }
+        }
+      }
+    }
+  ]
+}

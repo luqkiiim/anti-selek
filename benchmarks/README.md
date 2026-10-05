@@ -1,5 +1,69 @@
 # Matchmaking benchmark artifacts
 
+## Artifact storage and publication
+
+Keep benchmark code, reviewed Markdown reports, compact `*.summary.json`
+snapshots, and source provenance in Git. Normal runs write raw JSON, reports,
+and summaries under ignored `benchmarks/generated/`. Raw JSON, compressed raw
+JSON, incomplete `.pending` outputs, and `.writing` files elsewhere under
+`benchmarks/` are also ignored unless explicitly listed as frozen fixtures.
+
+The 19 historical session dumps present at `c0c033af` are frozen lossless
+`.json.gz` fixtures. Their original 200.63 MiB of JSON occupies 8.58 MiB as
+archives. Each has a readable summary and an entry in
+[fixtures.manifest.json](fixtures.manifest.json) recording original and archive
+byte counts, SHA-256 hashes, the summary hash, original source provenance, and
+retention reason. No raw history was truncated or rescored during archival.
+Older reports without validation status are explicitly marked as unrecorded,
+not retroactively certified.
+
+Ten fixtures are the five canonical 21/400 policy runs and their five matching
+21-match horizon runs; comparisons and independent prefix audits need the full
+completed histories, schedules, and structural evidence. Four older 20/400
+runs and five pilot session dumps remain frozen to support exact rerendering
+and existing historical comparison commands. Small comparison JSONs remain
+tracked because they already contain compact metrics and provenance.
+
+The three largest retained archives are the coverage-gated canonical run
+(77.83 MiB raw → 2.81 MiB gzip), ungated replay-envelope canonical run
+(28.55 → 1.26 MiB), and older 20/400 current run (26.84 → 1.21 MiB). The first
+two support current policy comparisons; the older run preserves the previous
+measurement cohort. These are frozen compatibility fixtures, not destinations
+for subsequent benchmark runs. Ordinary writes refuse to overwrite existing
+run artifacts. Git history is unchanged, so existing clones/history retain
+their old blobs; this cleanup reduces checkout size and prevents future raw
+dump commits rather than shrinking history.
+
+Benchmark readers accept an explicit `.json.gz` path or resolve an old `.json`
+argument to its compressed sibling when the plain file is absent. Summaries
+are deliberately rejected as full-fixture inputs: they cannot certify layout
+prefixes or witness diagnostics. Verify all frozen contents with:
+
+```sh
+node scripts/verify-benchmark-fixtures.mjs
+```
+
+Run the default legacy matcher against the official 21-match KPI with:
+
+```sh
+node scripts/run-social-horizon-benchmark.mjs --only-policy current
+node scripts/compare-social-horizon-benchmarks.mjs
+```
+
+Both commands write only into ignored generated directories. For another run,
+use a fresh `--out-dir benchmarks/generated/<run-name>`. Once reviewed, publish
+a compact snapshot (maximum 1 MiB) and selected human report deliberately:
+
+```sh
+node scripts/summarize-benchmark.mjs benchmarks/generated/social-horizon-321/current/social-horizon-21-current-legacy-gate.json benchmarks/results/my-run.summary.json
+```
+
+Copy the corresponding Markdown report into `benchmarks/results/` if it is
+useful for review. Summaries retain source hashes, raw-content hash, cohort,
+per-seed checkpoint coverage/KPI, B2B, event rest, fairness, balance and
+certification counters; unbounded witness lists and raw assignment histories
+remain in local generated output. New runs do not need new frozen archives.
+
 ## Primary social-horizon 3:2:1 score
 
 The current benchmark's primary score is the structural relationship horizon score. For each player, courtmate coverage `C` is distinct feasible courtmates seen divided by `min(feasible courtmates, 13)`, opponent coverage `O` uses cap 12, and partner coverage `P` uses cap 6. The player score is `(3C + 2O + P) / active weight`; empty facets are excluded and the remaining weights are renormalized. The session score is the average across players with at least one feasible facet. Feasibility comes from the full structural roster vocabulary and never shrinks for availability, pauses, or the Balanced guardrail. Only completed tuples count at a checkpoint.
@@ -28,8 +92,8 @@ node scripts/compare-social-horizon-benchmarks.mjs
 The opt-in matcher variant uses the same 3:2:1 coverage delta for its replay gate. A 400-target run contains both the exact 21 and 400 completed-match checkpoints. It can be run and added to the comparison with:
 
 ```powershell
-node scripts/run-social-horizon-benchmark.mjs --only-policy current --target-matches 400 --coverage-gain-metric social-horizon-321 --out-dir benchmarks/social-horizon-321/manual-rerun
-node scripts/compare-social-horizon-benchmarks.mjs --horizon-321-gated benchmarks/social-horizon-321/manual-rerun/current/social-horizon-400-current-horizon-321-gate.json
+node scripts/run-social-horizon-benchmark.mjs --only-policy current --target-matches 400 --coverage-gain-metric social-horizon-321 --out-dir benchmarks/generated/horizon-manual-rerun
+node scripts/compare-social-horizon-benchmarks.mjs --horizon-321-gated benchmarks/generated/horizon-manual-rerun/current/social-horizon-400-current-horizon-321-gate.json
 ```
 
 That opt-in variant's 400 score, normalized entropy, uncapped relationship VCS/facets, starvation, rest, fairness, and early/late match types are reported separately; the earlier policy rows remain unchanged.
@@ -79,12 +143,12 @@ The wide profile reached 98.5% relationship coverage for Points and 95.6% for El
 Run the current policy and compare it against the saved historical JSONs with:
 
 ```powershell
-npm run benchmark:matchmaking -- --baseline-json benchmarks/social-coverage-21/social-coverage-full21-entropy-first.json --strict-json benchmarks/social-coverage-21/social-coverage-full21-strict-cadence.json --type-first-json benchmarks/social-coverage-21/type-first-final/social-coverage-full21-type-entropy-first.json --replay-envelope-json benchmarks/social-coverage-21/replay-envelope/social-coverage-full21-replay-envelope.json --out-dir benchmarks/social-coverage-21/coverage-gated
+npm run benchmark:matchmaking -- --baseline-json benchmarks/social-coverage-21/social-coverage-full21-entropy-first.json --strict-json benchmarks/social-coverage-21/social-coverage-full21-strict-cadence.json --type-first-json benchmarks/social-coverage-21/type-first-final/social-coverage-full21-type-entropy-first.json --replay-envelope-json benchmarks/social-coverage-21/replay-envelope/social-coverage-full21-replay-envelope.json --out-dir benchmarks/generated/social-coverage-21
 ```
 
 The default seed lists and 21/400 checkpoints are used unless overridden. `--seeds` and `--wide-seeds` accept comma-separated seed lists. `--out-dir` isolates report output. To rerun one historical policy, use `--only-policy baseline|strict|type-first|replay-envelope` with the matching `--baseline-worktree`, `--strict-worktree`, `--type-first-worktree`, or `--replay-envelope-worktree` option and an explicit `--out-dir`. The worktree must be at the pinned revision named above. The current policy can be run alone with `--only-policy current --out-dir <path>`.
 
-The comparison command above saves the legacy-metric current run as `social-coverage-full21-coverage-gated.{json,md}` and its five-policy comparison as `social-coverage-full21-policy-comparison.{json,md}` inside `coverage-gated/`. Without `--out-dir`, the runner writes to `benchmarks/social-coverage-21/`.
+The comparison command above saves the legacy-metric current run as `social-coverage-full21-coverage-gated.{json,md}` and its five-policy comparison as `social-coverage-full21-policy-comparison.{json,md}` inside `coverage-gated/`. Without `--out-dir`, the runner writes to ignored `benchmarks/generated/social-coverage-21/`.
 
 ## Metrics and interpretation
 
@@ -92,7 +156,9 @@ Relationship Variety Coverage Score is based on the shared structural opportunit
 
 Rest is measured in completed-match events while a player is available. Assignment-rest values are sampled only for completed assignments; inter-completion gaps are a separate diagnostic because they include time spent playing. Back-to-back rates exclude initial assignments. At checkpoint N, refill/replay/gate counters cover assignments made after completions 1 through N−1, so the final refill may still be active; the opening two-court decision is outside that refill-decision cohort. Starvation counterfactual rates show certified and unknown decisions explicitly. Long-rest linkage to an accepted +1 decision is decision-level and does not claim that a particular player was the marginal extra replay.
 
-The multi-seed 400-completion benchmark is intentionally manual. Two preserved late-OWN_SIDE regression tests currently fail under the exact first-exposure gate; they remain enabled and unchanged, and this behavior is intentionally deferred under the latest requested scope. The gate has four Mixed facets, including match type. Once all four are covered, every immediate coverage gain is zero, so no +1 replay can pass the strict-improvement test; when the minimum-replay class then offers only MIXED, that can lock out OWN_SIDE. This is a consequence of the specified gate, not a claim that every session enters the same state. Reports include late-window types and distinguish +1 available, coverage-eligible, selected, and rejected candidates; decision and candidate totals are separate, and decision-level counts can overlap when a refill has both eligible and rejected candidates.
+The primary product horizon is 21 completed matches (about six appearances per player), evaluated using the 3:2:1 Social Coverage score and reasonable event-based rest. The multi-seed 400-completion benchmark is intentionally manual and secondary: use it to detect starvation, permanent player exclusions, extreme cohort locking, or fairness failures. Late OWN_SIDE recurrence is monitored without a quota or a mandatory test failure. The bounded asynchronous and 400-match simulations still run their legality, fairness, starvation, balance, and relationship checks and log late-window match-type diagnostics.
+
+The gate has four Mixed facets, including match type. Once all four are covered, every immediate coverage gain is zero, so no +1 replay can pass the strict-improvement test; when the minimum-replay class then offers only MIXED, that can lock out OWN_SIDE. This is a consequence of the specified gate, not a claim that every session enters the same state. Reports include late-window types and distinguish +1 available, coverage-eligible, selected, and rejected candidates; decision and candidate totals are separate, and decision-level counts can overlap when a refill has both eligible and rejected candidates.
 
 The final narrow Points seed-1 run gives a concrete late-session witness at event 397: the chosen MIXED batch `P3–P13` vs. `P6–P8` had zero immediate replays, coverage gain `0/1456`, combined entropy gain `−0.014792419949`, and balance gap `0.1`. A legal OWN_SIDE batch `P8–P13` vs. `P9–P12` in the same fairness/starvation class and inside the balance envelope had one immediate replay, the same zero coverage gain, higher combined entropy gain `+0.114959326167`, and balance gap `0`. It was rejected by the strict coverage improvement gate, demonstrating a gate tradeoff rather than a Mixed legality, fairness, starvation, or balance exclusion. This witness is from engine implementation `39e0d351924f40411e7eb33564b04825b76f8049`, measured by the benchmark at `71927c6cbc70e13e6ec28b4a534fcdf8481a95c1`.
 
