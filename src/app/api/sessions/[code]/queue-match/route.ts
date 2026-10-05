@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -42,7 +43,7 @@ async function parseQueueMatchBody(request: Request) {
 async function ensureManagePermission(
   sessionId: string,
   clubId: string | null | undefined,
-  userId: string,
+  accountUserId: string,
   requesterIsAdmin: boolean
 ) {
   if (requesterIsAdmin) {
@@ -51,7 +52,7 @@ async function ensureManagePermission(
 
   const membership = await getSessionOperatorMembership(prisma, {
     session: { id: sessionId, clubId },
-    userId,
+    userId: accountUserId,
     acceptedOnly: true,
   });
 
@@ -70,13 +71,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:queue-match");
@@ -125,7 +126,7 @@ export async function POST(
         );
       }
 
-      return NextResponse.json({
+      return sportingJson({
         queuedMatch: await reshuffleQueuedMatchForSession(sessionData, {
           excludedUserId,
         }),
@@ -146,7 +147,7 @@ export async function POST(
         );
       }
 
-      return NextResponse.json({
+      return sportingJson({
         queuedMatch: await replaceQueuedMatchPlayerForSession(
           sessionData,
           replaceUserId
@@ -178,7 +179,7 @@ export async function POST(
         parsedTeams
       );
 
-      return NextResponse.json({
+      return sportingJson({
         queuedMatch: await createManualQueuedMatchForSession(
           sessionData,
           parsedTeams,
@@ -187,7 +188,7 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({
+    return sportingJson({
       queuedMatch: await createQueuedMatchForSession(sessionData),
     });
   } catch (error) {
@@ -196,7 +197,7 @@ export async function POST(
         return invalidTargetResponse(request, "api:sessions:code:queue-match");
       }
 
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return sportingJson({ error: error.message }, { status: error.status });
     }
 
     logError("Queue next match error", error);
@@ -214,13 +215,13 @@ export async function DELETE(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:queue-match");
@@ -249,23 +250,23 @@ export async function DELETE(
         await applyPendingPlayerGroupChangesInTransaction(tx, {
           sessionId: sessionData.id,
           userIds: [
-            queuedMatch.team1User1Id,
-            queuedMatch.team1User2Id,
-            queuedMatch.team2User1Id,
-            queuedMatch.team2User2Id,
+            queuedMatch.team1Player1Id,
+            queuedMatch.team1Player2Id,
+            queuedMatch.team2Player1Id,
+            queuedMatch.team2Player2Id,
           ],
         });
       }
     });
 
-    return NextResponse.json({ ok: true, queuedMatch: null });
+    return sportingJson({ ok: true, queuedMatch: null });
   } catch (error) {
     if (error instanceof GenerateMatchError) {
       if (error.status === 403) {
         return invalidTargetResponse(_request, "api:sessions:code:queue-match");
       }
 
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return sportingJson({ error: error.message }, { status: error.status });
     }
 
     logError("Clear queued match error", error);

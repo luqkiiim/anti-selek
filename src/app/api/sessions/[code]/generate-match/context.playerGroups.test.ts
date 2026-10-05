@@ -52,10 +52,10 @@ describe("undo current court player-group lifecycle", () => {
       currentMatch: {
         id: "match-1",
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: "player-1",
-        team1User2Id: "player-2",
-        team2User1Id: "player-3",
-        team2User2Id: "player-4",
+        team1Player1Id: "player-1",
+        team1Player2Id: "player-2",
+        team2Player1Id: "player-3",
+        team2Player2Id: "player-4",
       },
     } as never);
 
@@ -92,10 +92,10 @@ describe("undo current court player-group lifecycle", () => {
       currentMatch: {
         id: "match-1",
         status: MatchStatus.PENDING,
-        team1User1Id: "player-1",
-        team1User2Id: "player-2",
-        team2User1Id: "player-3",
-        team2User2Id: "player-4",
+        team1Player1Id: "player-1",
+        team1Player2Id: "player-2",
+        team2Player1Id: "player-3",
+        team2Player2Id: "player-4",
       },
     } as never);
 

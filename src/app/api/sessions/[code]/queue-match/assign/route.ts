@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
@@ -19,7 +20,7 @@ import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@
 async function ensureManagePermission(
   sessionId: string,
   clubId: string | null | undefined,
-  userId: string,
+  accountUserId: string,
   requesterIsAdmin: boolean
 ) {
   if (requesterIsAdmin) {
@@ -28,7 +29,7 @@ async function ensureManagePermission(
 
   const membership = await getSessionOperatorMembership(prisma, {
     session: { id: sessionId, clubId },
-    userId,
+    userId: accountUserId,
     acceptedOnly: true,
   });
 
@@ -47,13 +48,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:queue-match:assign");
@@ -103,12 +104,12 @@ export async function POST(
     });
     const partition = {
       team1: [
-        sessionData.queuedMatch.team1User1Id,
-        sessionData.queuedMatch.team1User2Id,
+        sessionData.queuedMatch.team1Player1Id,
+        sessionData.queuedMatch.team1Player2Id,
       ] as [string, string],
       team2: [
-        sessionData.queuedMatch.team2User1Id,
-        sessionData.queuedMatch.team2User2Id,
+        sessionData.queuedMatch.team2Player1Id,
+        sessionData.queuedMatch.team2Player2Id,
       ] as [string, string],
     };
 
@@ -139,7 +140,7 @@ export async function POST(
       isAutomatic: sessionData.queuedMatch.isAutomatic,
     });
 
-    return NextResponse.json({
+    return sportingJson({
       ...match,
       courtId: targetCourt.id,
       assignedCourt: {
@@ -154,7 +155,7 @@ export async function POST(
         return invalidTargetResponse(_request, "api:sessions:code:queue-match:assign");
       }
 
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return sportingJson({ error: error.message }, { status: error.status });
     }
 
     logError("Assign queued match error", error);

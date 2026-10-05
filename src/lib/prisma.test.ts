@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolvePrismaRuntimeMode } from "./prismaRuntime";
+import { resolvePrismaRuntimeMode, selectPrismaTursoCredentials } from "./prismaRuntime";
 
 describe("resolvePrismaRuntimeMode", () => {
   it("defaults development to sqlite even when Turso credentials exist", () => {
@@ -23,15 +23,15 @@ describe("resolvePrismaRuntimeMode", () => {
     ).toBe("turso");
   });
 
-  it("falls back to sqlite when Turso is explicitly enabled without full credentials", () => {
-    expect(
+  it("fails closed when Turso is explicitly enabled without full credentials", () => {
+    expect(() =>
       resolvePrismaRuntimeMode({
         nodeEnv: "development",
         useTurso: "true",
         tursoUrl: "libsql://example.turso.io",
         tursoToken: "",
       })
-    ).toBe("sqlite");
+    ).toThrow("requires complete non-production");
   });
 
   it("respects an explicit sqlite override", () => {
@@ -45,23 +45,45 @@ describe("resolvePrismaRuntimeMode", () => {
     ).toBe("sqlite");
   });
 
-  it("keeps production on Turso when credentials exist and no override is set", () => {
+  it("keeps an actual Production deployment on Turso", () => {
     expect(
       resolvePrismaRuntimeMode({
         nodeEnv: "production",
+        vercel: "1",
+        vercelEnv: "production",
+        vercelUrl: "production.example.invalid",
         tursoUrl: "libsql://example.turso.io",
         tursoToken: "token",
       })
     ).toBe("turso");
   });
 
-  it("uses sqlite in production when Turso credentials are absent", () => {
-    expect(
+  it("fails closed for a deployment without matching credentials", () => {
+    expect(() =>
       resolvePrismaRuntimeMode({
         nodeEnv: "production",
+        vercel: "1",
+        vercelEnv: "preview",
+        vercelUrl: "preview.example.invalid",
         tursoUrl: "",
         tursoToken: "",
       })
-    ).toBe("sqlite");
+    ).toThrow("Deployment database access is disabled");
+  });
+
+  it("keeps local production builds on SQLite despite remote credentials", () => {
+    expect(resolvePrismaRuntimeMode({ nodeEnv: "production", tursoUrl: "libsql://production.invalid", tursoToken: "production-token" })).toBe("sqlite");
+  });
+
+  it("uses only dedicated Preview credentials", () => {
+    expect(selectPrismaTursoCredentials({ NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "preview", VERCEL_URL: "preview.invalid", PREVIEW_TURSO_DATABASE_URL: "libsql://staging.invalid", PREVIEW_TURSO_AUTH_TOKEN: "staging-token" })).toEqual({ tursoUrl: "libsql://staging.invalid", tursoToken: "staging-token" });
+  });
+
+  it("rejects Production-style credentials in Preview even with safe Preview credentials", () => {
+    expect(() => selectPrismaTursoCredentials({ NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "preview", VERCEL_URL: "preview.invalid", TURSO_DATABASE_URL: "libsql://production.invalid", TURSO_AUTH_TOKEN: "production-token", PREVIEW_TURSO_DATABASE_URL: "libsql://staging.invalid", PREVIEW_TURSO_AUTH_TOKEN: "staging-token" })).toThrow("Preview refuses");
+  });
+
+  it("never selects production defaults for tests with copied Vercel metadata", () => {
+    expect(resolvePrismaRuntimeMode({ nodeEnv: "test", vercel: "1", vercelEnv: "production", vercelUrl: "production.invalid", tursoUrl: "libsql://production.invalid", tursoToken: "production-token" })).toBe("sqlite");
   });
 });

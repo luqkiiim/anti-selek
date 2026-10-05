@@ -4,18 +4,18 @@ import { PlayerProfileView } from "@/components/profile/PlayerProfileView";
 import { EmptyState, SectionCard } from "@/components/ui/chrome";
 
 export function ClubProfilePanel({
-  userId,
+  playerId,
   clubId,
 }: {
-  userId?: string | null;
+  playerId?: string | null;
   clubId: string;
 }) {
-  if (!userId) {
+  if (!playerId) {
     return (
       <SectionCard eyebrow="Profile" title="Player profile">
         <EmptyState
           title="Profile unavailable"
-          detail="Sign in again to load your club profile."
+          detail="There is no Player profile attached to this account in this club yet."
         />
       </SectionCard>
     );
@@ -23,7 +23,7 @@ export function ClubProfilePanel({
 
   return (
     <PlayerProfileView
-      userId={userId}
+      playerId={playerId}
       clubId={clubId}
       mode="embedded"
     />

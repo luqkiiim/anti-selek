@@ -3,6 +3,7 @@ import "dotenv/config";
 import { createClient } from "@libsql/client";
 import bcrypt from "bcryptjs";
 import { chromium } from "@playwright/test";
+import { assertLocalTursoEndpoint } from "./turso-local-target-guard.mjs";
 
 const DEFAULT_BASE_URL = "https://antiselek.com";
 const DEFAULT_ALLOWED_HOSTS = ["antiselek.com", "www.antiselek.com"];
@@ -27,6 +28,9 @@ const allowMutation = process.env.PRODUCTION_SMOKE_MUTATE === "1";
 const allowNonProductionTarget =
   process.env.ALLOW_NON_PROD_SMOKE_TARGET === "1";
 const preflightOnly = process.argv.includes("--preflight");
+const reviewedProductionAccess =
+  process.argv.includes("--reviewed-production-access") &&
+  process.env.PRODUCTION_SMOKE_REVIEWED_ACCESS === "1";
 const legacyCommunityContractSunsetDate =
   process.env.LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE ?? "";
 const legacyDeprecationMessage =
@@ -48,6 +52,25 @@ function log(message) {
 
 function failPreflight(message) {
   throw new Error(`Production smoke preflight failed: ${message}`);
+}
+
+function configuredAllowedHosts() {
+  return (
+    process.env.PRODUCTION_SMOKE_ALLOWED_HOSTS?.split(",") ??
+    DEFAULT_ALLOWED_HOSTS
+  )
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function assertProductionSmokeAccess() {
+  const targetHost = new URL(baseURL).hostname.toLowerCase();
+  const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+  if (!loopbackHosts.has(targetHost) && !reviewedProductionAccess) {
+    throw new Error(
+      "Refusing full external smoke access. Provide --reviewed-production-access and PRODUCTION_SMOKE_REVIEWED_ACCESS=1 after the target and smoke have been reviewed."
+    );
+  }
 }
 
 async function assertFetchOk(pathname, label) {
@@ -448,12 +471,7 @@ async function createAuthenticatedContext(browser) {
 
 function validateSmokeConfiguration() {
   const targetHost = new URL(baseURL).hostname.toLowerCase();
-  const allowedHosts = (
-    process.env.PRODUCTION_SMOKE_ALLOWED_HOSTS?.split(",") ??
-    DEFAULT_ALLOWED_HOSTS
-  )
-    .map((host) => host.trim().toLowerCase())
-    .filter(Boolean);
+  const allowedHosts = configuredAllowedHosts();
   const usesCredentials = !!smokeEmail || !!smokePassword || allowMutation;
 
   if (
@@ -539,15 +557,18 @@ async function verifySmokeAccountAndTargets(db) {
   const normalizedEmail = smokeEmail.trim().toLowerCase();
   const user = await getSingleRow(
     db,
-    `SELECT "id", "passwordHash", "isClaimed" FROM "User" WHERE lower("email") = ?`,
+    `SELECT "id", "passwordHash", "isActive" FROM "Account" WHERE lower("email") = ?`,
     [normalizedEmail],
-    "smoke user lookup"
+    "smoke account lookup"
   );
   if (!user) {
-    failPreflight("smoke user was not found in Turso.");
+    failPreflight("smoke account was not found in Turso.");
+  }
+  if (!user.isActive) {
+    failPreflight("smoke account is disabled.");
   }
   if (!user.passwordHash) {
-    failPreflight("smoke user exists but has no password hash.");
+    failPreflight("smoke account exists but has no password hash.");
   }
 
   const passwordMatches = await bcrypt.compare(
@@ -555,9 +576,9 @@ async function verifySmokeAccountAndTargets(db) {
     String(user.passwordHash)
   );
   if (!passwordMatches) {
-    failPreflight("smoke user password does not match PRODUCTION_SMOKE_PASSWORD.");
+    failPreflight("smoke account password does not match PRODUCTION_SMOKE_PASSWORD.");
   }
-  log("preflight smoke user verified");
+  log("preflight smoke account verified");
 
   const club = await getSingleRow(
     db,
@@ -569,16 +590,29 @@ async function verifySmokeAccountAndTargets(db) {
     failPreflight("smoke club was not found in Turso.");
   }
 
-  const membership = await getSingleRow(
+  const access = await getSingleRow(
     db,
-    `SELECT "id" FROM "CommunityMember" WHERE "communityId" = ? AND "userId" = ?`,
+    `SELECT "id" FROM "ClubAccess" WHERE "clubId" = ? AND "userId" = ? AND "status" = 'ACTIVE'`,
     [smokeClubId, user.id],
-    "smoke club membership lookup"
+    "smoke club access lookup"
   );
-  if (!membership) {
-    failPreflight("smoke user is not a member of the smoke club.");
+  if (!access) {
+    failPreflight("smoke account does not have active access to the smoke club.");
   }
-  log("preflight smoke club membership verified");
+  log("preflight smoke club access verified");
+
+  const ownedPlayer = await getSingleRow(
+    db,
+    `SELECT p."id" FROM "User" AS p
+     JOIN "CommunityMember" AS m ON m."userId" = p."id"
+     WHERE m."communityId" = ? AND m."archivedAt" IS NULL AND p."ownerUserId" = ?`,
+    [smokeClubId, user.id],
+    "smoke owned Player lookup"
+  );
+  if (!ownedPlayer) {
+    failPreflight("smoke account has no active roster Player in the smoke club.");
+  }
+  log("preflight owned Player resolution verified");
 
   const session = await getSingleRow(
     db,
@@ -679,6 +713,10 @@ async function runProductionSmokePreflight() {
     );
     log("preflight complete");
     return;
+  }
+
+  if (!reviewedProductionAccess) {
+    assertLocalTursoEndpoint(process.env.TURSO_DATABASE_URL, { authToken: process.env.TURSO_AUTH_TOKEN });
   }
 
   const db = createTursoSmokeClient();
@@ -940,6 +978,7 @@ async function smokeSignedInSurface(
 }
 
 async function main() {
+  if (!preflightOnly) assertProductionSmokeAccess();
   log(`base URL: ${baseURL}`);
   await runProductionSmokePreflight();
   if (preflightOnly) {

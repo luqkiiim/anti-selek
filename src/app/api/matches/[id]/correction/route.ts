@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
@@ -44,10 +45,10 @@ function correctionErrorResponse(error: CorrectCompletedMatchScoreError) {
     error.code === "NEWER_OUTSIDE_MATCHES" ||
     error.code === "LEGACY_COLLAB_REPLAY_UNSUPPORTED"
   ) {
-    return NextResponse.json({ error: error.message }, { status: 409 });
+    return sportingJson({ error: error.message }, { status: 409 });
   }
 
-  return NextResponse.json({ error: error.message }, { status: 400 });
+  return sportingJson({ error: error.message }, { status: 400 });
 }
 
 export async function POST(
@@ -64,12 +65,12 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
     if (typeof id !== "string" || id.length === 0) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid request parameters" },
         { status: 400 }
       );
@@ -83,7 +84,7 @@ export async function POST(
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid request body" },
         { status: 400 }
       );
@@ -94,10 +95,10 @@ export async function POST(
       team2Score?: unknown;
     };
     if (typeof team1Score !== "number" || typeof team2Score !== "number") {
-      return NextResponse.json({ error: "Invalid score" }, { status: 400 });
+      return sportingJson({ error: "Invalid score" }, { status: 400 });
     }
     if (!isValidMatchScore(team1Score, team2Score)) {
-      return NextResponse.json(
+      return sportingJson(
         { error: MATCH_SCORE_ERROR_MESSAGE },
         { status: 400 }
       );
@@ -131,7 +132,7 @@ export async function POST(
       return invalidTargetResponse(request, "api:matches:id:correction");
     }
     if (match.status !== MatchStatus.COMPLETED) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only completed matches can be corrected." },
         { status: 400 }
       );
@@ -140,7 +141,7 @@ export async function POST(
       match.session.status !== SessionStatus.ACTIVE &&
       match.session.status !== SessionStatus.COMPLETED
     ) {
-      return NextResponse.json(
+      return sportingJson(
         {
           error:
             "Only active or ended tournaments can correct completed scores.",
@@ -149,7 +150,7 @@ export async function POST(
       );
     }
     if (match.session.isTest) {
-      return NextResponse.json(
+      return sportingJson(
         {
           error:
             "Test tournaments do not support completed score correction.",
@@ -158,7 +159,7 @@ export async function POST(
       );
     }
     if (match.team1Score === team1Score && match.team2Score === team2Score) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Enter a different score to correct this match." },
         { status: 400 }
       );
@@ -209,7 +210,7 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(result);
+    return sportingJson(result);
   } catch (error: unknown) {
     if (error instanceof CorrectCompletedMatchScoreError) {
       const response = correctionErrorResponse(error);

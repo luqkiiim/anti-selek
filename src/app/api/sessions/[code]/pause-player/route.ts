@@ -1,9 +1,15 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
-import { getSessionOperatorMembership } from "@/lib/sessionCollab";
+import { getOwnedPlayer } from "@/lib/playerIdentity";
+import {
+  getAcceptedSessionClubIds,
+  getSessionMembership,
+  getSessionOperatorMembership,
+} from "@/lib/sessionCollab";
 import { getQueuedMatchUserIds, hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import {
@@ -28,13 +34,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:pause-player");
@@ -42,23 +48,23 @@ export async function POST(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return sportingJson({ error: "Invalid request body" }, { status: 400 });
     }
-    const { userId, isPaused, courtId, currentMatchId } = body as {
-      userId?: unknown;
+    const { playerId, isPaused, courtId, currentMatchId } = body as {
+      playerId?: unknown;
       isPaused?: unknown;
       courtId?: unknown;
       currentMatchId?: unknown;
     };
-    if (typeof userId !== "string" || typeof isPaused !== "boolean") {
-      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    if (typeof playerId !== "string" || typeof isPaused !== "boolean") {
+      return sportingJson({ error: "Invalid payload" }, { status: 400 });
     }
     const isCourtPause = courtId !== undefined || currentMatchId !== undefined;
     if (
       isCourtPause &&
       (!isPaused || typeof courtId !== "string" || typeof currentMatchId !== "string")
     ) {
-      return NextResponse.json({ error: "Invalid court pause request" }, { status: 400 });
+      return sportingJson({ error: "Invalid court pause request" }, { status: 400 });
     }
 
     const sessionData = await prisma.session.findUnique({
@@ -80,7 +86,24 @@ export async function POST(
     });
 
     // Check if the requester is a manager or the player themselves
-    if (!session.user.isAdmin && !operatorMembership && session.user.id !== userId) {
+    const ownedTarget = await getOwnedPlayer(prisma, {
+      userId: session.user.id,
+      playerId,
+    });
+    const [acceptedClubIds, requesterMembership] = ownedTarget
+      ? await Promise.all([
+          getAcceptedSessionClubIds(prisma, sessionData),
+          getSessionMembership(prisma, {
+            session: sessionData,
+            userId: session.user.id,
+            acceptedOnly: true,
+          }),
+        ])
+      : [[], null];
+    const canManageOwnedTarget =
+      !!ownedTarget &&
+      (acceptedClubIds.length === 0 || !!requesterMembership);
+    if (!session.user.isAdmin && !operatorMembership && !canManageOwnedTarget) {
       return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
     if (isCourtPause && !session.user.isAdmin && !operatorMembership) {
@@ -88,17 +111,17 @@ export async function POST(
     }
 
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json({ error: "Tournament already ended" }, { status: 400 });
+      return sportingJson({ error: "Tournament already ended" }, { status: 400 });
     }
     if (isCourtPause && sessionData.status !== SessionStatus.ACTIVE) {
-      return NextResponse.json({ error: "Tournament not active" }, { status: 400 });
+      return sportingJson({ error: "Tournament not active" }, { status: 400 });
     }
 
     const existingPlayer = await prisma.sessionPlayer.findUnique({
       where: {
-        sessionId_userId: {
+        sessionId_playerId: {
           sessionId: sessionData.id,
-          userId,
+          playerId,
         },
       },
       select: {
@@ -126,31 +149,31 @@ export async function POST(
           courtId: courtPauseTarget.courtId,
           status: { in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS] },
           OR: [
-            { team1User1Id: userId },
-            { team1User2Id: userId },
-            { team2User1Id: userId },
-            { team2User2Id: userId },
+            { team1Player1Id: playerId },
+            { team1Player2Id: playerId },
+            { team2Player1Id: playerId },
+            { team2Player2Id: playerId },
           ],
         },
         select: {
           id: true,
-          team1User1Id: true,
-          team1User2Id: true,
-          team2User1Id: true,
-          team2User2Id: true,
+          team1Player1Id: true,
+          team1Player2Id: true,
+          team2Player1Id: true,
+          team2Player2Id: true,
         },
       });
       if (!liveMatch) {
-        return NextResponse.json(
+        return sportingJson(
           { error: "This court match has changed. Refresh and try again." },
           { status: 409 }
         );
       }
       courtMatchUserIds = [
-        liveMatch.team1User1Id,
-        liveMatch.team1User2Id,
-        liveMatch.team2User1Id,
-        liveMatch.team2User2Id,
+        liveMatch.team1Player1Id,
+        liveMatch.team1Player2Id,
+        liveMatch.team2Player1Id,
+        liveMatch.team2Player2Id,
       ];
     }
 
@@ -180,10 +203,10 @@ export async function POST(
           ],
           NOT: {
             OR: [
-              { team1User1Id: userId },
-              { team1User2Id: userId },
-              { team2User1Id: userId },
-              { team2User2Id: userId },
+              { team1Player1Id: playerId },
+              { team1Player2Id: playerId },
+              { team2Player1Id: playerId },
+              { team2Player2Id: playerId },
             ],
           },
         },
@@ -196,7 +219,7 @@ export async function POST(
         const activePlayers = await prisma.sessionPlayer.findMany({
           where: {
             sessionId: sessionData.id,
-            userId: { not: userId },
+            playerId: { not: playerId },
             isPaused: false,
             ...(sessionData.poolsEnabled ? { pool: existingPlayer.pool } : {}),
           },
@@ -238,10 +261,10 @@ export async function POST(
             courtId: courtPauseTarget.courtId,
             status: { in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS] },
             OR: [
-              { team1User1Id: userId },
-              { team1User2Id: userId },
-              { team2User1Id: userId },
-              { team2User2Id: userId },
+              { team1Player1Id: playerId },
+              { team1Player2Id: playerId },
+              { team2Player1Id: playerId },
+              { team2Player2Id: playerId },
             ],
           },
         });
@@ -254,9 +277,9 @@ export async function POST(
 
       const nextPlayer = await tx.sessionPlayer.update({
         where: {
-          sessionId_userId: {
+          sessionId_playerId: {
             sessionId: sessionData.id,
-            userId,
+            playerId,
           },
         },
         data: {
@@ -278,7 +301,7 @@ export async function POST(
           where: { sessionId: sessionData.id },
         });
 
-        if (hasQueuedMatchUser(queuedMatch, userId)) {
+        if (hasQueuedMatchUser(queuedMatch, playerId)) {
           await tx.queuedMatch.delete({
             where: { sessionId: sessionData.id },
           });
@@ -308,14 +331,14 @@ export async function POST(
         ? await tryRebuildAutomaticQueuedMatchForCode(code)
       : null;
 
-    return NextResponse.json({
+    return sportingJson({
       ...nextPlayer,
       queuedMatchAffected: queuedMatchAffected || shouldSetArrivalPriority,
       queuedMatch,
     });
   } catch (error) {
     if (error instanceof CourtPauseConflictError) {
-      return NextResponse.json({ error: error.message }, { status: 409 });
+      return sportingJson({ error: error.message }, { status: 409 });
     }
     logError("Pause player error", error);
     return safeErrorResponse();

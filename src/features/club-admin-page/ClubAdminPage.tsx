@@ -51,9 +51,9 @@ function getPlayerActionDialogCopy(action: {
   kind: "remove" | "promote" | "demote-admin";
   player: { id: string; name: string; email: string | null };
   role?: ClubRole.STAFF | ClubRole.MEMBER;
-}, currentUserId?: string | null) {
+}, currentPlayerId?: string | null) {
   if (action.kind === "remove") {
-    const isSelfRemoval = action.player.id === currentUserId;
+    const isSelfRemoval = action.player.id === currentPlayerId;
 
     return {
       title: isSelfRemoval
@@ -200,6 +200,7 @@ export default function ClubAdminPage() {
   const {
     status,
     currentUserId,
+    currentPlayerId,
     isGlobalAdmin,
     clubId,
     club,
@@ -403,7 +404,7 @@ export default function ClubAdminPage() {
   }, [clubId, router]);
 
   const pendingPlayerActionDialog = pendingPlayerAction
-    ? getPlayerActionDialogCopy(pendingPlayerAction, currentUserId)
+    ? getPlayerActionDialogCopy(pendingPlayerAction, currentPlayerId)
     : null;
   const pendingClubActionDialog = pendingClubAction
     ? getClubActionDialogCopy(
@@ -640,7 +641,7 @@ export default function ClubAdminPage() {
       <ClubPlayerEditorModal
         player={editingPlayer}
         clubId={clubId}
-        currentUserId={currentUserId}
+        currentPlayerId={currentPlayerId}
         editorName={editorName}
         editorRating={editorRating}
         savingName={savingName}
@@ -663,7 +664,7 @@ export default function ClubAdminPage() {
         onOpenPasswordReset={openPasswordResetModal}
         canDemoteAdmins={
           (club?.viewerIsOwner === true || isGlobalAdmin) &&
-          editingPlayer?.id !== currentUserId
+          editingPlayer?.id !== currentPlayerId
         }
         canOpenEmergencyPasswordReset={isGlobalAdmin}
         onUploadAvatar={handleUploadPlayerAvatar}

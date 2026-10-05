@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -8,6 +9,7 @@ import {
 } from "@/lib/matchCompletion";
 import { isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
+import { getAccountClubContext } from "@/lib/playerIdentity";
 import {
   DEFAULT_SESSION_POOL_A_NAME,
   DEFAULT_SESSION_POOL_B_NAME,
@@ -33,7 +35,7 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const body = (await request.json().catch(() => null)) as
@@ -45,7 +47,7 @@ export async function POST(
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:create-real");
@@ -64,7 +66,7 @@ export async function POST(
         },
         players: {
           include: {
-            user: {
+            player: {
               select: {
                 id: true,
                 name: true,
@@ -80,10 +82,11 @@ export async function POST(
             courtId: true,
             status: true,
             scoreSubmittedByUserId: true,
-            team1User1Id: true,
-            team1User2Id: true,
-            team2User1Id: true,
-            team2User2Id: true,
+            scoreSubmittedByPlayerId: true,
+            team1Player1Id: true,
+            team1Player2Id: true,
+            team2Player1Id: true,
+            team2Player2Id: true,
             team1Score: true,
             team2Score: true,
             courtGroupType: true,
@@ -106,33 +109,27 @@ export async function POST(
       return invalidTargetResponse(request, "api:sessions:code:create-real");
     }
 
-    let isClubAdmin = false;
-    if (sourceSession.clubId) {
-      const membership = await prisma.clubMember.findUnique({
-        where: {
-          clubId_userId: {
-            clubId: sourceSession.clubId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isClubAdmin = membership?.role === "ADMIN";
-    }
+    const hostClubContext = sourceSession.clubId
+      ? await getAccountClubContext(prisma, {
+          userId: session.user.id,
+          clubId: sourceSession.clubId,
+          isGlobalAdmin: !!session.user.isAdmin,
+        })
+      : null;
 
-    if (!session.user.isAdmin && !isClubAdmin) {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    if (!hostClubContext?.canAdmin) {
+      return sportingJson({ error: "Admin only" }, { status: 403 });
     }
 
     if (!sourceSession.isTest) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only test tournaments can create a real tournament copy" },
         { status: 400 }
       );
     }
 
     if (sourceSession.club?.isTutorial) {
-      return NextResponse.json(
+      return sportingJson(
         {
           error:
             "Tutorial playground tournaments cannot create real tournaments",
@@ -142,7 +139,7 @@ export async function POST(
     }
 
     if (sourceSession.players.length < 2) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Need at least 2 players to create a real tournament" },
         { status: 400 }
       );
@@ -175,7 +172,7 @@ export async function POST(
         (match) => !isValidMatchScore(match.team1Score, match.team2Score)
       );
       if (invalidMatch) {
-        return NextResponse.json(
+        return sportingJson(
           {
             error:
               "Cannot copy results because the test tournament contains an invalid completed score.",
@@ -185,19 +182,19 @@ export async function POST(
       }
 
       const sourcePlayerIds = new Set(
-        sourceSession.players.map((player) => player.userId)
+        sourceSession.players.map((player) => player.playerId)
       );
       const sourceCourtIds = new Set(sourceSession.courts.map((court) => court.id));
       const orphanedMatch = completedScoredMatches.find((match) =>
         [
-          match.team1User1Id,
-          match.team1User2Id,
-          match.team2User1Id,
-          match.team2User2Id,
-        ].some((userId) => !sourcePlayerIds.has(userId))
+          match.team1Player1Id,
+          match.team1Player2Id,
+          match.team2Player1Id,
+          match.team2Player2Id,
+        ].some((playerId) => !sourcePlayerIds.has(playerId))
       );
       if (orphanedMatch) {
-        return NextResponse.json(
+        return sportingJson(
           {
             error:
               "Cannot copy results because a completed match includes a player who is no longer in the test roster.",
@@ -210,7 +207,7 @@ export async function POST(
         (match) => !sourceCourtIds.has(match.courtId)
       );
       if (missingCourtMatch) {
-        return NextResponse.json(
+        return sportingJson(
           {
             error:
               "Cannot copy results because a completed match references a court that is no longer in the test tournament.",
@@ -236,7 +233,7 @@ export async function POST(
         });
 
         if (existingResultCopy) {
-          return NextResponse.json(
+          return sportingJson(
             {
               error:
                 "This test tournament already has a real copy with results. Use that tournament to avoid double-counting standings or ratings.",
@@ -258,7 +255,7 @@ export async function POST(
       sourceSession.players
         .filter((player) => !player.isGuest)
         .forEach((player) => {
-          userIdBySourceUserId.set(player.userId, player.userId);
+          userIdBySourceUserId.set(player.playerId, player.playerId);
         });
 
       const nextSession = await tx.session.create({
@@ -305,13 +302,11 @@ export async function POST(
       const guestPlayers = sourceSession.players.filter((player) => player.isGuest);
       if (guestPlayers.length > 0) {
         for (const guestPlayer of guestPlayers) {
-          const guest = await tx.user.create({
+          const guest = await tx.player.create({
             data: {
-              name: guestPlayer.user.name,
-              email: null,
-              passwordHash: null,
-              isClaimed: false,
-              elo: guestPlayer.user.elo,
+              name: guestPlayer.player.name,
+              ownerUserId: null,
+              elo: guestPlayer.player.elo,
               gender: guestPlayer.gender,
               partnerPreference: guestPlayer.partnerPreference,
               mixedSideOverride: guestPlayer.mixedSideOverride,
@@ -320,21 +315,21 @@ export async function POST(
               id: true,
             },
           });
-          userIdBySourceUserId.set(guestPlayer.userId, guest.id);
+          userIdBySourceUserId.set(guestPlayer.playerId, guest.id);
         }
       }
 
       await tx.sessionPlayer.createMany({
         data: sourceSession.players.map((player) => ({
           sessionId: nextSession.id,
-          userId: userIdBySourceUserId.get(player.userId) ?? player.userId,
+          playerId: userIdBySourceUserId.get(player.playerId) ?? player.playerId,
           isGuest: player.isGuest,
           gender: player.gender,
           partnerPreference: player.partnerPreference,
           mixedSideOverride: player.mixedSideOverride,
           pool: sourceSession.poolsEnabled ? player.pool : SessionPool.A,
           sessionPoints: 0,
-          lastPartnerId: null,
+          lastPartnerPlayerId: null,
           isPaused: includeResults ? player.isPaused : false,
           matchesPlayed: 0,
           matchmakingMatchesCredit: includeResults
@@ -358,16 +353,16 @@ export async function POST(
         for (const sourceMatch of completedScoredMatches) {
           const mappedCourtId = courtIdBySourceCourtId.get(sourceMatch.courtId);
           const mappedTeam1User1Id = userIdBySourceUserId.get(
-            sourceMatch.team1User1Id
+            sourceMatch.team1Player1Id
           );
           const mappedTeam1User2Id = userIdBySourceUserId.get(
-            sourceMatch.team1User2Id
+            sourceMatch.team1Player2Id
           );
           const mappedTeam2User1Id = userIdBySourceUserId.get(
-            sourceMatch.team2User1Id
+            sourceMatch.team2Player1Id
           );
           const mappedTeam2User2Id = userIdBySourceUserId.get(
-            sourceMatch.team2User2Id
+            sourceMatch.team2Player2Id
           );
 
           if (
@@ -386,20 +381,20 @@ export async function POST(
               sessionId: nextSession.id,
               courtId: mappedCourtId,
               status: MatchStatus.IN_PROGRESS,
-              team1User1Id: mappedTeam1User1Id,
-              team1User2Id: mappedTeam1User2Id,
-              team2User1Id: mappedTeam2User1Id,
-              team2User2Id: mappedTeam2User2Id,
+              team1Player1Id: mappedTeam1User1Id,
+              team1Player2Id: mappedTeam1User2Id,
+              team2Player1Id: mappedTeam2User1Id,
+              team2Player2Id: mappedTeam2User2Id,
               courtGroupType: sourceMatch.courtGroupType,
               poolASeatCount: sourceMatch.poolASeatCount,
               poolBSeatCount: sourceMatch.poolBSeatCount,
               createdAt: sourceMatch.createdAt,
             },
             include: {
-              team1User1: { select: { id: true, name: true, elo: true } },
-              team1User2: { select: { id: true, name: true, elo: true } },
-              team2User1: { select: { id: true, name: true, elo: true } },
-              team2User2: { select: { id: true, name: true, elo: true } },
+              team1Player1: { select: { id: true, name: true, elo: true } },
+              team1Player2: { select: { id: true, name: true, elo: true } },
+              team2Player1: { select: { id: true, name: true, elo: true } },
+              team2Player2: { select: { id: true, name: true, elo: true } },
             },
           });
 
@@ -413,18 +408,20 @@ export async function POST(
             },
           };
 
-          const scoreSubmittedByUserId =
-            sourceMatch.scoreSubmittedByUserId === null
+          const scoreSubmittedByPlayerId =
+            sourceMatch.scoreSubmittedByPlayerId === null
               ? undefined
-              : userIdBySourceUserId.get(sourceMatch.scoreSubmittedByUserId) ??
-                sourceMatch.scoreSubmittedByUserId;
+              : userIdBySourceUserId.get(sourceMatch.scoreSubmittedByPlayerId) ??
+                sourceMatch.scoreSubmittedByPlayerId;
 
           await finalizeMatchResultInTransaction(tx, {
             match: copiedFinalizableMatch,
             expectedStatus: MatchStatus.IN_PROGRESS,
             finalTeam1Score: sourceMatch.team1Score,
             finalTeam2Score: sourceMatch.team2Score,
-            scoreSubmittedByUserId,
+            scoreSubmittedByUserId:
+              sourceMatch.scoreSubmittedByUserId ?? undefined,
+            scoreSubmittedByPlayerId,
             completedAt: sourceMatch.completedAt ?? sourceMatch.createdAt,
           });
         }
@@ -436,11 +433,10 @@ export async function POST(
           courts: true,
           players: {
             include: {
-              user: {
+              player: {
                 select: {
                   id: true,
                   name: true,
-                  email: true,
                   elo: true,
                   gender: true,
                   partnerPreference: true,
@@ -469,12 +465,12 @@ export async function POST(
             createdSession.players,
             await getClubEloByUserId(
               createdSession.clubId,
-              createdSession.players.map((player) => player.userId)
+              createdSession.players.map((player) => player.playerId)
             )
           )
         : createdSession.players;
 
-    return NextResponse.json({
+    return sportingJson({
       ...createdSession,
       players,
     });

@@ -8,7 +8,7 @@ import {
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   clubFindUnique: vi.fn(),
-  clubMemberFindUnique: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
   clubMemberFindMany: vi.fn(),
   offlineIdentityLinkRequestFindFirst: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
@@ -23,8 +23,10 @@ vi.mock("@/lib/prisma", () => ({
     club: {
       findUnique: mocks.clubFindUnique,
     },
+    clubAccess: {
+      findUnique: mocks.clubAccessFindUnique,
+    },
     clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
       findMany: mocks.clubMemberFindMany,
     },
     offlineIdentityLinkRequest: {
@@ -59,71 +61,65 @@ describe("collab roster route", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.auth.mockResolvedValue({
-      user: { id: "admin-1", isAdmin: false },
+      user: { id: "account-operator", isAdmin: false },
     });
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "STAFF", status: "ACTIVE" });
     mocks.clubFindUnique.mockResolvedValue({ isTutorial: false });
     mocks.offlineIdentityLinkRequestFindFirst.mockResolvedValue(null);
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
   });
 
-  it("allows staff to load outgoing collab rosters and de-duplicates shared unclaimed players", async () => {
+  it("deduplicates a shared player identity and keeps claimed account details private", async () => {
     const createdAt = new Date("2026-05-14T10:00:00.000Z");
     mocks.clubMemberFindMany.mockResolvedValue([
       {
-        userId: "user-shared",
+        playerId: "player-shared",
         elo: 1200,
         status: ClubPlayerStatus.CORE,
-        role: "MEMBER",
         createdAt,
         club: { id: "community-1", name: "Host Club" },
-        user: {
-          id: "user-shared",
+        player: {
+          id: "player-shared",
+          ownerUserId: null,
           name: "Alex Lee",
-          email: null,
           gender: PlayerGender.MALE,
           partnerPreference: PartnerPreference.OPEN,
           mixedSideOverride: null,
           isActive: true,
-          isClaimed: false,
           createdAt,
         },
       },
       {
-        userId: "user-shared",
+        playerId: "player-shared",
         elo: 1310,
         status: ClubPlayerStatus.OCCASIONAL,
-        role: "MEMBER",
         createdAt,
         club: { id: "community-2", name: "Partner Club" },
-        user: {
-          id: "user-shared",
+        player: {
+          id: "player-shared",
+          ownerUserId: null,
           name: "Alex Lee",
-          email: null,
           gender: PlayerGender.MALE,
           partnerPreference: PartnerPreference.OPEN,
           mixedSideOverride: null,
           isActive: true,
-          isClaimed: false,
           createdAt,
         },
       },
       {
-        userId: "user-duplicate-name",
+        playerId: "player-duplicate-name",
         elo: 980,
         status: ClubPlayerStatus.CORE,
-        role: "MEMBER",
         createdAt,
         club: { id: "community-2", name: "Partner Club" },
-        user: {
-          id: "user-duplicate-name",
+        player: {
+          id: "player-duplicate-name",
+          ownerUserId: "account-duplicate",
           name: "Alex Lee",
-          email: null,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.OPEN,
           mixedSideOverride: null,
           isActive: true,
-          isClaimed: false,
           createdAt,
         },
       },
@@ -136,35 +132,39 @@ describe("collab roster route", () => {
     expect(body).toHaveLength(2);
 
     const sharedPlayer = body.find(
-      (player: { id: string }) => player.id === "user-shared"
+      (player: { id: string }) => player.id === "player-shared"
     );
     const duplicateNamePlayer = body.find(
-      (player: { id: string }) => player.id === "user-duplicate-name"
+      (player: { id: string }) => player.id === "player-duplicate-name"
     );
 
     expect(sharedPlayer).toMatchObject({
-      id: "user-shared",
+      id: "player-shared",
       name: "Alex Lee",
+      email: null,
       elo: 1200,
       isClaimed: false,
       communityBadges: [
-        { id: "community-1", name: "Host Club", elo: 1200 },
+        { id: "community-1", name: "Host Club", userId: "player-shared", elo: 1200 },
         { id: "community-2", name: "Partner Club", elo: 1310 },
       ],
     });
     expect(duplicateNamePlayer).toMatchObject({
-      id: "user-duplicate-name",
+      id: "player-duplicate-name",
       name: "Alex Lee",
+      email: null,
+      isClaimed: true,
       communityBadges: [
         { id: "community-2", name: "Partner Club", elo: 980 },
       ],
     });
+    expect(JSON.stringify(duplicateNamePlayer)).not.toContain("account-duplicate");
   });
 
   it("requires operator access to the partner club before exposing its roster", async () => {
-    mocks.clubMemberFindUnique
-      .mockResolvedValueOnce({ role: "STAFF" })
-      .mockResolvedValueOnce({ role: "MEMBER" });
+    mocks.clubAccessFindUnique
+      .mockResolvedValueOnce({ role: "STAFF", status: "ACTIVE" })
+      .mockResolvedValueOnce({ role: "MEMBER", status: "ACTIVE" });
 
     const response = await getCollabRoster();
 
@@ -173,9 +173,9 @@ describe("collab roster route", () => {
   });
 
   it("allows host operators to load rosters for already linked clubs", async () => {
-    mocks.clubMemberFindUnique
-      .mockResolvedValueOnce({ role: "STAFF" })
-      .mockResolvedValueOnce({ role: "MEMBER" });
+    mocks.clubAccessFindUnique
+      .mockResolvedValueOnce({ role: "STAFF", status: "ACTIVE" })
+      .mockResolvedValueOnce({ role: "MEMBER", status: "ACTIVE" });
     mocks.offlineIdentityLinkRequestFindFirst.mockResolvedValue({ id: "link-1" });
     mocks.clubMemberFindMany.mockResolvedValue([]);
 

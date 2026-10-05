@@ -8,16 +8,16 @@ type PendingPoolTransaction = Prisma.TransactionClient & {
     findUnique?: (args: unknown) => Promise<{
       id: string;
       isAutomatic: boolean;
-      team1User1Id: string;
-      team1User2Id: string;
-      team2User1Id: string;
-      team2User2Id: string;
+      team1Player1Id: string;
+      team1Player2Id: string;
+      team2Player1Id: string;
+      team2Player2Id: string;
     } | null>;
     deleteMany?: (args: unknown) => Promise<{ count: number }>;
   };
   sessionPlayer: Prisma.TransactionClient["sessionPlayer"] & {
     findMany?: (args: unknown) => Promise<
-      Array<{ userId: string; pendingPool: string | null }>
+      Array<{ playerId: string; pendingPool: string | null }>
     >;
   };
 };
@@ -38,18 +38,18 @@ export async function propagatePreferredPoolToClubSessions(
   db: PrismaClient,
   {
     clubId,
-    userId,
+    playerId,
     preferredPool,
   }: {
     clubId: string;
-    userId: string;
+    playerId: string;
     preferredPool: SessionPool;
   }
 ): Promise<PreferredPoolPropagationResult> {
   return db.$transaction(async (tx) => {
     const sessionPlayers = await tx.sessionPlayer.findMany({
       where: {
-        userId,
+        playerId,
         session: {
           poolsEnabled: true,
           status: { not: SessionStatus.COMPLETED },
@@ -57,7 +57,7 @@ export async function propagatePreferredPoolToClubSessions(
             { clubId },
             {
               sessionClubs: { some: { clubId } },
-              club: { members: { none: { userId } } },
+              club: { members: { none: { playerId } } },
             },
           ],
         },
@@ -74,20 +74,20 @@ export async function propagatePreferredPoolToClubSessions(
                 id: true,
                 createdAt: true,
                 isAutomatic: true,
-                team1User1Id: true,
-                team1User2Id: true,
-                team2User1Id: true,
-                team2User2Id: true,
+                team1Player1Id: true,
+                team1Player2Id: true,
+                team2Player1Id: true,
+                team2Player2Id: true,
               },
             },
             courts: {
               select: {
                 currentMatch: {
                   select: {
-                    team1User1Id: true,
-                    team1User2Id: true,
-                    team2User1Id: true,
-                    team2User2Id: true,
+                    team1Player1Id: true,
+                    team1Player2Id: true,
+                    team2Player1Id: true,
+                    team2Player2Id: true,
                   },
                 },
               },
@@ -108,24 +108,24 @@ export async function propagatePreferredPoolToClubSessions(
         return (
           !!match &&
           [
-            match.team1User1Id,
-            match.team1User2Id,
-            match.team2User1Id,
-            match.team2User2Id,
-          ].includes(userId)
+            match.team1Player1Id,
+            match.team1Player2Id,
+            match.team2Player1Id,
+            match.team2Player2Id,
+          ].includes(playerId)
         );
       });
       const isManuallyQueued =
         !!queuedMatch &&
         !queuedMatch.isAutomatic &&
-        hasQueuedMatchUser(queuedMatch, userId);
+        hasQueuedMatchUser(queuedMatch, playerId);
       const changesCurrentPool = player.pool !== preferredPool;
 
       if (changesCurrentPool && (isPlaying || isManuallyQueued)) {
         if (player.pendingPool !== preferredPool) {
           await tx.sessionPlayer.update({
             where: {
-              sessionId_userId: { sessionId: player.sessionId, userId },
+              sessionId_playerId: { sessionId: player.sessionId, playerId },
             },
             data: { pendingPool: preferredPool },
           });
@@ -137,7 +137,7 @@ export async function propagatePreferredPoolToClubSessions(
       if (changesCurrentPool || player.pendingPool !== null) {
         await tx.sessionPlayer.update({
           where: {
-            sessionId_userId: { sessionId: player.sessionId, userId },
+            sessionId_playerId: { sessionId: player.sessionId, playerId },
           },
           data: { pool: preferredPool, pendingPool: null },
         });
@@ -197,10 +197,10 @@ export async function applyPendingPlayerGroupChangesInTransaction(
   const pendingPlayers = await tx.sessionPlayer.findMany({
     where: {
       sessionId,
-      userId: { in: uniqueUserIds },
+      playerId: { in: uniqueUserIds },
       pendingPool: { not: null },
     },
-    select: { userId: true, pendingPool: true },
+    select: { playerId: true, pendingPool: true },
   });
   if (pendingPlayers.length === 0) {
     return {
@@ -216,36 +216,36 @@ export async function applyPendingPlayerGroupChangesInTransaction(
         select: {
           id: true,
           isAutomatic: true,
-          team1User1Id: true,
-          team1User2Id: true,
-          team2User1Id: true,
-          team2User2Id: true,
+          team1Player1Id: true,
+          team1Player2Id: true,
+          team2Player1Id: true,
+          team2Player2Id: true,
         },
       })
     : null;
   const manualQueueUserIds =
     queuedMatch && !queuedMatch.isAutomatic
       ? new Set([
-          queuedMatch.team1User1Id,
-          queuedMatch.team1User2Id,
-          queuedMatch.team2User1Id,
-          queuedMatch.team2User2Id,
+          queuedMatch.team1Player1Id,
+          queuedMatch.team1Player2Id,
+          queuedMatch.team2Player1Id,
+          queuedMatch.team2Player2Id,
         ])
       : new Set<string>();
   const applicablePlayers = pendingPlayers.filter(
     (player) =>
       isValidSessionPool(player.pendingPool) &&
-      !manualQueueUserIds.has(player.userId)
+      !manualQueueUserIds.has(player.playerId)
   );
 
   for (const pool of ["A", "B"] as const) {
     const poolUserIds = applicablePlayers
       .filter((player) => player.pendingPool === pool)
-      .map((player) => player.userId);
+      .map((player) => player.playerId);
     if (poolUserIds.length === 0) continue;
 
     await tx.sessionPlayer.updateMany({
-      where: { sessionId, userId: { in: poolUserIds } },
+      where: { sessionId, playerId: { in: poolUserIds } },
       data: { pool, pendingPool: null },
     });
   }
@@ -268,7 +268,7 @@ export async function applyPendingPlayerGroupChangesInTransaction(
 
   return {
     appliedCount: applicablePlayers.length,
-    appliedUserIds: applicablePlayers.map((player) => player.userId),
+    appliedUserIds: applicablePlayers.map((player) => player.playerId),
     automaticQueueInvalidated,
   };
 }

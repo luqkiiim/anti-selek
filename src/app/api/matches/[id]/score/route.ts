@@ -1,12 +1,13 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { finalizeMatchResult } from "@/lib/matchCompletion";
-import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
+import { getOwnedMatchParticipant, shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
-import { getSessionOperatorMembership } from "@/lib/sessionCollab";
+import { getSessionMembership, getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
-import { MatchStatus } from "@/types/enums";
+import { MatchStatus, SessionClubStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -23,13 +24,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
 
     if (typeof id !== "string" || id.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:matches:id:score");
@@ -37,7 +38,7 @@ export async function POST(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return sportingJson({ error: "Invalid request body" }, { status: 400 });
     }
 
     const { team1Score, team2Score } = body as {
@@ -55,26 +56,32 @@ export async function POST(
         session: {
           select: {
             clubId: true,
+            sessionClubs: {
+              where: { status: SessionClubStatus.ACCEPTED },
+              select: { clubId: true },
+            },
             type: true,
             balanceMetric: true,
             isTest: true,
           },
         },
-        team1User1Id: true,
-        team1User2Id: true,
-        team2User1Id: true,
-        team2User2Id: true,
-        team1User1: {
-          select: { id: true, name: true, elo: true, isClaimed: true },
+        team1ClubId: true,
+        team2ClubId: true,
+        team1Player1Id: true,
+        team1Player2Id: true,
+        team2Player1Id: true,
+        team2Player2Id: true,
+        team1Player1: {
+          select: { id: true, name: true, elo: true, ownerUserId: true },
         },
-        team1User2: {
-          select: { id: true, name: true, elo: true, isClaimed: true },
+        team1Player2: {
+          select: { id: true, name: true, elo: true, ownerUserId: true },
         },
-        team2User1: {
-          select: { id: true, name: true, elo: true, isClaimed: true },
+        team2Player1: {
+          select: { id: true, name: true, elo: true, ownerUserId: true },
         },
-        team2User2: {
-          select: { id: true, name: true, elo: true, isClaimed: true },
+        team2Player2: {
+          select: { id: true, name: true, elo: true, ownerUserId: true },
         },
       },
     });
@@ -97,22 +104,57 @@ export async function POST(
 
     const isOperator =
       !!session.user.isAdmin || !!operatorMembership;
-    const isParticipant = [
-      match.team1User1Id,
-      match.team1User2Id,
-      match.team2User1Id,
-      match.team2User2Id,
-    ].includes(session.user.id);
+    const participant = getOwnedMatchParticipant([
+      match.team1Player1, match.team1Player2, match.team2Player1, match.team2Player2,
+    ], session.user.id);
+    let isParticipant = false;
+    if (participant) {
+      const sessionClubIds = new Set([
+        ...(match.session.clubId ? [match.session.clubId] : []),
+        ...(match.session.sessionClubs ?? []).map((link) => link.clubId),
+      ]);
+      if (match.team1ClubId || match.team2ClubId) {
+        const isTeam1Participant = [
+          match.team1Player1Id,
+          match.team1Player2Id,
+        ].includes(participant.id);
+        const participantClubId = isTeam1Participant
+          ? match.team1ClubId
+          : match.team2ClubId;
+        if (participantClubId && sessionClubIds.has(participantClubId)) {
+          const participantClubAccess = await prisma.clubAccess.findUnique({
+            where: {
+              clubId_userId: {
+                clubId: participantClubId,
+                userId: session.user.id,
+              },
+            },
+            select: { status: true },
+          });
+          isParticipant = participantClubAccess?.status === "ACTIVE";
+        }
+      } else if (sessionClubIds.size === 0) {
+        // Legacy clubless sessions have no ClubAccess rows to check.
+        isParticipant = true;
+      } else {
+        const participantMembership = await getSessionMembership(prisma, {
+          session: { id: match.sessionId, clubId: match.session.clubId },
+          userId: session.user.id,
+          acceptedOnly: true,
+        });
+        isParticipant = !!participantMembership;
+      }
+    }
 
     if (!isOperator && !isParticipant) {
       return invalidTargetResponse(request, "api:matches:id:score");
     }
 
     if (typeof team1Score !== "number" || typeof team2Score !== "number") {
-      return NextResponse.json({ error: "Invalid score" }, { status: 400 });
+      return sportingJson({ error: "Invalid score" }, { status: 400 });
     }
     if (!isValidMatchScore(team1Score, team2Score)) {
-      return NextResponse.json(
+      return sportingJson(
         { error: MATCH_SCORE_ERROR_MESSAGE },
         { status: 400 }
       );
@@ -120,14 +162,15 @@ export async function POST(
 
     const winnerTeam = team1Score > team2Score ? 1 : 2;
     const claimedByUserId = new Map<string, boolean>([
-      [match.team1User1.id, match.team1User1.isClaimed],
-      [match.team1User2.id, match.team1User2.isClaimed],
-      [match.team2User1.id, match.team2User1.isClaimed],
-      [match.team2User2.id, match.team2User2.isClaimed],
+      [match.team1Player1.id, !!match.team1Player1.ownerUserId],
+      [match.team1Player2.id, !!match.team1Player2.ownerUserId],
+      [match.team2Player1.id, !!match.team2Player1.ownerUserId],
+      [match.team2Player2.id, !!match.team2Player2.ownerUserId],
     ]);
     const requiresApproval = shouldRequireOpponentApproval({
       match,
       submitterUserId: session.user.id,
+      submitterPlayerId: participant?.id ?? null,
       submitterIsAdmin: isOperator,
       claimedByUserId,
     });
@@ -140,6 +183,7 @@ export async function POST(
           finalTeam1Score: team1Score,
           finalTeam2Score: team2Score,
           scoreSubmittedByUserId: session.user.id,
+          scoreSubmittedByPlayerId: participant?.id ?? null,
         });
         const automaticQueueInvalidated =
           !!updated &&
@@ -151,7 +195,7 @@ export async function POST(
                 generateAutomaticIfMissing: true,
               })
             : reconcileSessionQueueAfterCourtChange(match.sessionId));
-        return NextResponse.json({
+        return sportingJson({
           ...updated,
           autoAssignedMatch,
           queuedMatchCleared,
@@ -160,7 +204,7 @@ export async function POST(
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "";
         if (message === "ALREADY_PROCESSED") {
-          return NextResponse.json(
+          return sportingJson(
             { error: "Match already completed or updated." },
             { status: 409 }
           );
@@ -178,13 +222,14 @@ export async function POST(
         status: MatchStatus.PENDING_APPROVAL,
         completedAt: new Date(),
         scoreSubmittedByUserId: session.user.id,
+        scoreSubmittedByPlayerId: participant?.id ?? null,
       },
     });
 
     if (updatedResult.count === 0) {
       // Re-fetch to see current status for better error message
       const currentMatch = await prisma.match.findUnique({ where: { id } });
-      return NextResponse.json(
+      return sportingJson(
         {
           error: `Cannot submit score. Match is currently ${currentMatch?.status || "unknown"}. Expected ${MatchStatus.IN_PROGRESS}.`,
           status: currentMatch?.status,
@@ -197,14 +242,14 @@ export async function POST(
     const updated = await prisma.match.findUnique({
       where: { id },
       include: {
-        team1User1: { select: { id: true, name: true } },
-        team1User2: { select: { id: true, name: true } },
-        team2User1: { select: { id: true, name: true } },
-        team2User2: { select: { id: true, name: true } },
+        team1Player1: { select: { id: true, name: true } },
+        team1Player2: { select: { id: true, name: true } },
+        team2Player1: { select: { id: true, name: true } },
+        team2Player2: { select: { id: true, name: true } },
       },
     });
 
-    return NextResponse.json(updated);
+    return sportingJson(updated);
   } catch (error) {
     logError("Score submission error", error);
     return safeErrorResponse();

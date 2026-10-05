@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 
 interface GuestRatingMatch {
   team1User1Id: string;
@@ -22,12 +23,12 @@ export async function getGuestRating(tx: Prisma.TransactionClient, userId: strin
   const matches = await tx.match.findMany({
     where: {
       status: "COMPLETED",
-      session: { isTest: false, players: { some: { userId, isGuest: true } } },
-      OR: [{ team1User1Id: userId }, { team1User2Id: userId }, { team2User1Id: userId }, { team2User2Id: userId }],
+      session: { isTest: false, players: { some: { playerId: userId, isGuest: true } } },
+      OR: [{ team1Player1Id: userId }, { team1Player2Id: userId }, { team2Player1Id: userId }, { team2Player2Id: userId }],
     },
-    select: { team1User1Id: true, team1User2Id: true, team2User1Id: true, team2User2Id: true, team1EloChange: true, team2EloChange: true },
+    select: { team1Player1Id: true, team1Player2Id: true, team2Player1Id: true, team2Player2Id: true, team1EloChange: true, team2EloChange: true },
   });
-  return guestRatingFromMatches(userId, startingRating, matches);
+  return guestRatingFromMatches(userId, startingRating, withLegacySportingAliases(matches));
 }
 
 export async function getGuestRatingsByUserId(
@@ -39,17 +40,17 @@ export async function getGuestRatingsByUserId(
   const matches = await tx.match.findMany({
     where: {
       status: "COMPLETED",
-      session: { isTest: false, players: { some: { userId: { in: userIds }, isGuest: true } } },
-      OR: [{ team1User1Id: { in: userIds } }, { team1User2Id: { in: userIds } }, { team2User1Id: { in: userIds } }, { team2User2Id: { in: userIds } }],
+      session: { isTest: false, players: { some: { playerId: { in: userIds }, isGuest: true } } },
+      OR: [{ team1Player1Id: { in: userIds } }, { team1Player2Id: { in: userIds } }, { team2Player1Id: { in: userIds } }, { team2Player2Id: { in: userIds } }],
     },
     select: {
-      team1User1Id: true, team1User2Id: true, team2User1Id: true, team2User2Id: true,
+      team1Player1Id: true, team1Player2Id: true, team2Player1Id: true, team2Player2Id: true,
       team1EloChange: true, team2EloChange: true,
-      session: { select: { players: { where: { userId: { in: userIds }, isGuest: true }, select: { userId: true } } } },
+      session: { select: { players: { where: { playerId: { in: userIds }, isGuest: true }, select: { playerId: true } } } },
     },
   });
   return new Map(guests.map(guest => [guest.userId, guestRatingFromMatches(
     guest.userId, guest.startingRating,
-    matches.filter(match => match.session.players.some(player => player.userId === guest.userId))
+    withLegacySportingAliases(matches.filter(match => match.session.players.some(player => player.playerId === guest.userId)))
   )]));
 }

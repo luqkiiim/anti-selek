@@ -1,6 +1,8 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccountClubContext } from "@/lib/playerIdentity";
 import { logAuditEvent } from "@/lib/serverAudit";
 import {
   collectGuestUserIds,
@@ -23,13 +25,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:rollback");
@@ -57,7 +59,7 @@ export async function POST(
       return invalidTargetResponse(_request, "api:sessions:code:rollback");
     }
     if (targetSession.isTest) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Test tournaments use reset or delete instead of rollback" },
         { status: 400 }
       );
@@ -66,34 +68,28 @@ export async function POST(
       if (targetSession.club.tutorialOwnerId !== session.user.id) {
         return invalidTargetResponse(_request, "api:sessions:code:rollback");
       }
-      return NextResponse.json(
+      return sportingJson(
         { error: "Tutorial playground history is restored with reset." },
         { status: 400 }
       );
     }
     if (targetSession.status !== SessionStatus.COMPLETED) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only completed tournaments can be rolled back" },
         { status: 400 }
       );
     }
 
-    let isClubAdmin = false;
-    if (targetSession.clubId) {
-      const membership = await prisma.clubMember.findUnique({
-        where: {
-          clubId_userId: {
-            clubId: targetSession.clubId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isClubAdmin = membership?.role === "ADMIN";
-    }
+    const hostClubContext = targetSession.clubId
+      ? await getAccountClubContext(prisma, {
+          userId: session.user.id,
+          clubId: targetSession.clubId,
+          isGlobalAdmin: !!session.user.isAdmin,
+        })
+      : null;
 
-    if (!session.user.isAdmin && !isClubAdmin) {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    if (!hostClubContext?.canAdmin) {
+      return sportingJson({ error: "Admin only" }, { status: 403 });
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -145,11 +141,11 @@ export async function POST(
 
       const sessionPlayers = await tx.sessionPlayer.findMany({
         where: { sessionId: freshTarget.id },
-        select: { userId: true, isGuest: true },
+        select: { playerId: true, isGuest: true },
       });
 
       const isGuestByUserId = new Map<string, boolean>(
-        sessionPlayers.map((row) => [row.userId, row.isGuest])
+        sessionPlayers.map((row) => [row.playerId, row.isGuest])
       );
       const guestUserIds = collectGuestUserIds(sessionPlayers);
 
@@ -160,10 +156,10 @@ export async function POST(
         },
         select: {
           id: true,
-          team1User1Id: true,
-          team1User2Id: true,
-          team2User1Id: true,
-          team2User2Id: true,
+          team1Player1Id: true,
+          team1Player2Id: true,
+          team2Player1Id: true,
+          team2Player2Id: true,
           team1EloChange: true,
           team2EloChange: true,
         },
@@ -175,7 +171,7 @@ export async function POST(
         },
         select: {
           clubId: true,
-          userId: true,
+          playerId: true,
           delta: true,
         },
       });
@@ -184,13 +180,13 @@ export async function POST(
       if (ledgerAdjustments.length > 0) {
         const reverseDeltaByClubAndUserId = new Map<
           string,
-          { clubId: string; userId: string; delta: number }
+          { clubId: string; playerId: string; delta: number }
         >();
         for (const adjustment of ledgerAdjustments) {
-          const key = `${adjustment.clubId}:${adjustment.userId}`;
+          const key = `${adjustment.clubId}:${adjustment.playerId}`;
           const current = reverseDeltaByClubAndUserId.get(key) ?? {
             clubId: adjustment.clubId,
-            userId: adjustment.userId,
+            playerId: adjustment.playerId,
             delta: 0,
           };
           current.delta -= adjustment.delta;
@@ -202,13 +198,13 @@ export async function POST(
           await tx.clubMember.updateMany({
             where: {
               clubId: item.clubId,
-              userId: item.userId,
+              playerId: item.playerId,
             },
             data: {
               elo: { increment: item.delta },
             },
           });
-          reversedPlayerKeys.add(`${item.clubId}:${item.userId}`);
+          reversedPlayerKeys.add(`${item.clubId}:${item.playerId}`);
         }
       } else {
         const eloReverseDeltaByUserId = computeRollbackEloDeltas(
@@ -216,27 +212,27 @@ export async function POST(
           isGuestByUserId
         );
 
-        for (const [userId, delta] of eloReverseDeltaByUserId.entries()) {
+        for (const [playerId, delta] of eloReverseDeltaByUserId.entries()) {
           if (delta === 0) continue;
           if (freshTarget.clubId) {
             await tx.clubMember.updateMany({
               where: {
                 clubId: freshTarget.clubId,
-                userId,
+                playerId,
               },
               data: {
                 elo: { increment: delta },
               },
             });
-            reversedPlayerKeys.add(`${freshTarget.clubId}:${userId}`);
+            reversedPlayerKeys.add(`${freshTarget.clubId}:${playerId}`);
           } else {
-            await tx.user.updateMany({
-              where: { id: userId },
+            await tx.player.updateMany({
+              where: { id: playerId },
               data: {
                 elo: { increment: delta },
               },
             });
-            reversedPlayerKeys.add(userId);
+            reversedPlayerKeys.add(playerId);
           }
         }
       }
@@ -287,32 +283,32 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ success: true, ...result });
+    return sportingJson({ success: true, ...result });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "";
     if (message === "NOT_FOUND") {
       return invalidTargetResponse(_request, "api:sessions:code:rollback");
     }
     if (message === "NOT_COMPLETED") {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only completed tournaments can be rolled back" },
         { status: 400 }
       );
     }
     if (message === "IS_TEST") {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Test tournaments use reset or delete instead of rollback" },
         { status: 400 }
       );
     }
     if (message === "IS_TUTORIAL") {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Tutorial playground history is restored with reset." },
         { status: 400 }
       );
     }
     if (message === "NOT_LATEST_COMPLETED") {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only the latest completed tournament can be rolled back" },
         { status: 409 }
       );

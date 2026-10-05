@@ -48,6 +48,7 @@ interface LiveCourtCardProps {
   sessionStatus: string;
   court: Court;
   poolLabel?: string | null;
+  currentAccountId?: string;
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
@@ -90,6 +91,7 @@ export function LiveCourtCard({
   sessionStatus,
   court,
   poolLabel,
+  currentAccountId,
   currentUserId,
   isAdmin,
   isClaimedUser,
@@ -328,6 +330,7 @@ export function LiveCourtCard({
             >
               <LiveMatchCard
                 match={currentMatch}
+                currentAccountId={currentAccountId}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
                 isClaimedUser={isClaimedUser}

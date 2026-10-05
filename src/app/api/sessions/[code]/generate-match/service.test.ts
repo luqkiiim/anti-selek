@@ -1,3 +1,4 @@
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import { buildSocialVarietyContext, getSocialVarietyGain } from "@/lib/matchmaking/v3/socialVariety";
 import { getDoublesPartitions } from "@/lib/matchmaking/v3/balance";
@@ -122,8 +123,14 @@ function createSessionPlayer(
     representingClubId?: string | null;
   } = {}
 ) {
-  return {
-    userId,
+  return withLegacySportingAliases({
+    id: `seat-${userId}`,
+    sessionId: "session-1",
+    pendingPool: null,
+    lastPlayedAt: null,
+    pausedAt: null,
+    ladderEntryAt: options.joinedAt ?? new Date("2026-01-01T00:00:00Z"),
+    playerId: userId,
     sessionPoints: options.sessionPoints ?? 1000,
     isPaused: options.isPaused ?? false,
     isGuest: options.isGuest ?? false,
@@ -131,7 +138,7 @@ function createSessionPlayer(
     gender: options.gender ?? PlayerGender.MALE,
     partnerPreference: options.partnerPreference ?? PartnerPreference.OPEN,
     mixedSideOverride: options.mixedSideOverride ?? null,
-    lastPartnerId: options.lastPartnerId ?? null,
+    lastPartnerPlayerId: options.lastPartnerId ?? null,
     matchesPlayed: options.matchesPlayed ?? 0,
     matchmakingMatchesCredit: options.matchmakingMatchesCredit ?? 0,
     joinedAt: options.joinedAt ?? new Date("2026-01-01T00:00:00Z"),
@@ -141,19 +148,20 @@ function createSessionPlayer(
     skipNextMatchRequestedById: options.skipNextMatchRequestedById ?? null,
     arrivalPriorityAt: options.arrivalPriorityAt ?? null,
     pool: options.pool ?? SessionPool.A,
-    ...(options.needsMoreRest ? { needsMoreRest: true } : {}),
-    user: {
+    needsMoreRest: options.needsMoreRest ?? false,
+    player: {
       id: userId,
+      ownerUserId: `account-${userId}`,
       name: options.name ?? userId,
       elo: options.elo ?? 1000,
     },
-  } as GenerateMatchSession["players"][number];
+  }) as GenerateMatchSession["players"][number];
 }
 
 function createSessionData(
   overrides: Partial<GenerateMatchSession> = {}
 ): GenerateMatchSession {
-  return {
+  const value = {
     id: "session-1",
     code: "session-1",
     clubId: "community-1",
@@ -175,6 +183,8 @@ function createSessionData(
     matches: [],
     ...overrides,
   } as unknown as GenerateMatchSession;
+  const canonicalMatch = <T extends { team1User1Id: string; team1User2Id: string; team2User1Id: string; team2User2Id: string }>(match: T) => withLegacySportingAliases({ ...match, team1Player1Id: match.team1User1Id, team1Player2Id: match.team1User2Id, team2Player1Id: match.team2User1Id, team2Player2Id: match.team2User2Id });
+  return { ...value, matches: value.matches.map(canonicalMatch), queuedMatch: value.queuedMatch ? canonicalMatch(value.queuedMatch) : null };
 }
 
 function createInterclubLinks() {
@@ -806,7 +816,7 @@ describe("generate match service", () => {
     it("uses the guest's earned rating and refreshes it for the next selection", async () => {
       vi.mocked(getClubEloByUserId).mockResolvedValue(new Map([["B", 1330]]));
       const players = [createSessionPlayer("A", { elo: 1000, isGuest: true }), createSessionPlayer("B", { elo: 1080 })];
-      const match = { team1User1Id: "A", team1User2Id: "B", team2User1Id: "C", team2User2Id: "D", team1EloChange: 70, team2EloChange: -70, session: { players: [{userId: "A"}] } };
+      const match = { team1Player1Id: "A", team1Player2Id: "B", team2Player1Id: "C", team2Player2Id: "D", team1EloChange: 70, team2EloChange: -70, session: { players: [{playerId: "A"}] } };
       vi.mocked(prisma.match.findMany).mockResolvedValue([match] as never);
       const session = createSessionData({ type: SessionType.ELO, players });
       const first = await buildMatchmakingState(session);

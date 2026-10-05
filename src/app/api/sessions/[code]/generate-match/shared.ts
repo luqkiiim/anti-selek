@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import { SessionMode } from "@/types/enums";
@@ -29,7 +30,7 @@ export interface ParsedGenerateMatchRequest {
 
 const sessionRecordInclude = {
   players: {
-    include: { user: { select: { id: true, name: true, elo: true } } },
+    include: { player: { select: { id: true, name: true, elo: true } } },
   },
   courts: true,
   matches: true,
@@ -42,17 +43,17 @@ const sessionRecordInclude = {
 };
 
 export async function loadSessionRecord(code: string) {
-  return prisma.session.findUnique({
+  return withLegacySportingAliases(await prisma.session.findUnique({
     where: { code },
     include: sessionRecordInclude,
-  });
+  }));
 }
 
 export async function loadSessionRecordById(id: string) {
-  return prisma.session.findUnique({
+  return withLegacySportingAliases(await prisma.session.findUnique({
     where: { id },
     include: sessionRecordInclude,
-  });
+  }));
 }
 
 export async function loadCourtRecords(

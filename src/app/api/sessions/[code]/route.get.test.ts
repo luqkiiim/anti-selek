@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   getPlayerClubBadges: vi.fn(),
   withPlayerClubBadges: vi.fn(),
   getQueuedMatchUserIds: vi.fn(),
+  getQuickAccessPlayerId: vi.fn(),
+  isAccountSessionPlayer: vi.fn(),
+  clubFindUnique: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
+  clubMemberFindMany: vi.fn(),
   parseMatchmakingReasonJson: vi.fn(),
   rateLimit: vi.fn(async () => null),
 }));
@@ -33,6 +38,13 @@ vi.mock("@/lib/prisma", () => ({
     },
     clubMember: {
       findUnique: mocks.clubMemberFindUnique,
+      findMany: mocks.clubMemberFindMany,
+    },
+    club: {
+      findUnique: mocks.clubFindUnique,
+    },
+    clubAccess: {
+      findUnique: mocks.clubAccessFindUnique,
     },
   },
 }));
@@ -42,6 +54,7 @@ vi.mock("@/lib/sessionCollab", () => ({
   getSessionAdminMembership: mocks.getSessionAdminMembership,
   getSessionMembership: mocks.getSessionMembership,
   getSessionOperatorMembership: mocks.getSessionOperatorMembership,
+  isAccountSessionPlayer: mocks.isAccountSessionPlayer,
   withPlayerClubBadges: mocks.withPlayerClubBadges,
 }));
 
@@ -52,6 +65,7 @@ vi.mock("@/lib/clubElo", () => ({
 
 vi.mock("@/lib/quickAccess", () => ({
   canQuickAccessSessionRead: mocks.canQuickAccessSessionRead,
+  getQuickAccessPlayerId: mocks.getQuickAccessPlayerId,
   getQuickAccessDeniedMessage: vi.fn(() => "Denied"),
   isQuickAccessSession: vi.fn(
     (session: { user?: { isQuickAccess?: boolean } } | null | undefined) =>
@@ -84,7 +98,7 @@ describe("session route GET", () => {
     mocks.rateLimit.mockResolvedValue(null);
 
     mocks.auth.mockResolvedValue({
-      user: { id: "u1", isAdmin: false },
+      user: { id: "account-u1", isAdmin: false },
     });
     mocks.canQuickAccessSessionRead.mockImplementation(
       (
@@ -114,6 +128,11 @@ describe("session route GET", () => {
     mocks.getSessionAdminMembership.mockResolvedValue(null);
     mocks.getSessionOperatorMembership.mockResolvedValue(null);
     mocks.clubMemberFindUnique.mockResolvedValue(null);
+    mocks.clubMemberFindMany.mockResolvedValue([]);
+    mocks.clubFindUnique.mockResolvedValue({ id: "community-1", createdById: "account-owner", isTutorial: false, tutorialOwnerId: null });
+    mocks.clubAccessFindUnique.mockResolvedValue(null);
+    mocks.getQuickAccessPlayerId.mockImplementation((session: { user?: { isQuickAccess?: boolean; guestPlayerId?: string | null } } | null | undefined) => session?.user?.isQuickAccess ? session.user.guestPlayerId ?? null : null);
+    mocks.isAccountSessionPlayer.mockImplementation(async (_db: unknown, _sessionId: string, accountId: string) => accountId === "account-u1" || accountId === "account-u2");
     mocks.sessionFindFirst.mockResolvedValue({ id: "session-1" });
     mocks.getClubEloByUserId.mockResolvedValue(new Map());
     mocks.withClubElo.mockImplementation((players) => players);
@@ -122,9 +141,10 @@ describe("session route GET", () => {
     mocks.getQueuedMatchUserIds.mockReturnValue(["u1", "u2", "u3", "u4"]);
     mocks.parseMatchmakingReasonJson.mockReturnValue(null);
 
-    const user = (id: string, name: string) => ({
+    const player = (id: string, name: string, ownerUserId: string | null = null) => ({
       id,
       name,
+      ownerUserId,
       avatarKey: `https://blob.vercel-storage.com/avatars/${id}/photo.jpg`,
       elo: 1000,
       gender: "MALE",
@@ -132,10 +152,10 @@ describe("session route GET", () => {
       mixedSideOverride: null,
     });
     const sessionPlayers = [
-      { userId: "u1", sessionPoints: 0, isPaused: false, isGuest: false, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null, pool: "A", user: user("u1", "Alice") },
-      { userId: "u2", sessionPoints: 0, isPaused: false, isGuest: false, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null, pool: "A", user: user("u2", "Bianca") },
-      { userId: "u3", sessionPoints: 0, isPaused: false, isGuest: false, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null, pool: "A", user: user("u3", "Charlie") },
-      { userId: "u4", sessionPoints: 0, isPaused: false, isGuest: false, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null, pool: "A", user: user("u4", "Dinesh") },
+      { playerId: "u1", sessionPoints: 0, isPaused: false, isGuest: false, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null, pool: "A", player: player("u1", "Alice", "account-u1") },
+      { playerId: "u2", sessionPoints: 0, isPaused: false, isGuest: false, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null, pool: "A", player: player("u2", "Bianca", "account-u2") },
+      { playerId: "u3", sessionPoints: 0, isPaused: false, isGuest: false, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null, pool: "A", player: player("u3", "Charlie") },
+      { playerId: "u4", sessionPoints: 0, isPaused: false, isGuest: false, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null, pool: "A", player: player("u4", "Dinesh") },
     ];
 
     mocks.sessionFindUnique.mockResolvedValue({
@@ -171,10 +191,10 @@ describe("session route GET", () => {
             completedAt: null,
             scoreSubmittedByUserId: null,
             matchmakingReasonJson: null,
-            team1User1: { id: "u1", name: "Alice", avatarKey: "https://blob.vercel-storage.com/avatars/u1/photo.jpg" },
-            team1User2: { id: "u2", name: "Bianca", avatarKey: "https://blob.vercel-storage.com/avatars/u2/photo.jpg" },
-            team2User1: { id: "u3", name: "Charlie", avatarKey: "https://blob.vercel-storage.com/avatars/u3/photo.jpg" },
-            team2User2: { id: "u4", name: "Dinesh", avatarKey: "https://blob.vercel-storage.com/avatars/u4/photo.jpg" },
+            team1Player1: { id: "u1", name: "Alice", avatarKey: "https://blob.vercel-storage.com/avatars/u1/photo.jpg" },
+            team1Player2: { id: "u2", name: "Bianca", avatarKey: "https://blob.vercel-storage.com/avatars/u2/photo.jpg" },
+            team2Player1: { id: "u3", name: "Charlie", avatarKey: "https://blob.vercel-storage.com/avatars/u3/photo.jpg" },
+            team2Player2: { id: "u4", name: "Dinesh", avatarKey: "https://blob.vercel-storage.com/avatars/u4/photo.jpg" },
           },
         },
       ],
@@ -186,10 +206,10 @@ describe("session route GET", () => {
         createdAt: new Date("2026-05-18T00:00:00.000Z"),
         targetPool: null,
         matchmakingReasonJson: null,
-        team1User1Id: "u1",
-        team1User2Id: "u2",
-        team2User1Id: "u3",
-        team2User2Id: "u4",
+        team1Player1Id: "u1",
+        team1Player2Id: "u2",
+        team2Player1Id: "u3",
+        team2Player2Id: "u4",
       },
     });
   });
@@ -223,6 +243,39 @@ describe("session route GET", () => {
     expectAliasPair(body, "clubs", "communities");
     expectAliasPair(body, "viewerClubRole", "viewerCommunityRole");
     expect(body.respectPlayerRest).toBe(true);
+    expect(body.viewerUserId).toBe("account-u1");
+    expect(body.viewerPlayerId).toBe("u1");
+    expect(body.players[0].player.ownerUserId).toBeUndefined();
+    expect(body.players[0].user.ownerUserId).toBeUndefined();
+  });
+
+  it("leaves the viewer Player identity unset when the account owns multiple participants", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({
+      ...sessionData,
+      players: [
+        ...sessionData.players,
+        {
+          ...sessionData.players[0],
+          playerId: "u5",
+          player: {
+            ...sessionData.players[0].player,
+            id: "u5",
+            name: "Alice’s second profile",
+          },
+        },
+      ],
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      { params: Promise.resolve({ code: "ABC123" }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.viewerUserId).toBe("account-u1");
+    expect(body.viewerPlayerId).toBeNull();
   });
 
   it("uses a separate authenticated read bucket for viewers behind the same IP", async () => {
@@ -241,7 +294,7 @@ describe("session route GET", () => {
     );
     expect(firstResponse.status).toBe(200);
 
-    mocks.auth.mockResolvedValueOnce({ user: { id: "u2", isAdmin: false } });
+    mocks.auth.mockResolvedValueOnce({ user: { id: "account-u2", isAdmin: false } });
     const secondResponse = await GET(
       new Request("http://localhost/api/sessions/ABC123", {
         headers: sharedHeaders,
@@ -256,7 +309,7 @@ describe("session route GET", () => {
       "api:sessions:code:get",
       {
         applyHighRiskBucket: false,
-        identity: "u1",
+        identity: "account-u1",
         limit: 120,
         windowMs: 60_000,
       }
@@ -267,7 +320,7 @@ describe("session route GET", () => {
       "api:sessions:code:get",
       {
         applyHighRiskBucket: false,
-        identity: "u2",
+        identity: "account-u2",
         limit: 120,
         windowMs: 60_000,
       }
@@ -278,9 +331,10 @@ describe("session route GET", () => {
   it("allows quick-access host club spectators without management permissions", async () => {
     mocks.auth.mockResolvedValue({
       user: {
-        id: "u1",
+        id: "guest:u1",
         isAdmin: false,
         isQuickAccess: true,
+        guestPlayerId: "u1",
         quickAccessClubId: "community-1",
       },
     });
@@ -480,7 +534,7 @@ describe("session route GET", () => {
   it("offers rollback to the host club admin for the latest completed real session", async () => {
     const sessionData = await mocks.sessionFindUnique();
     mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, status: "COMPLETED" });
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
 
     const response = await GET(
       new Request("http://localhost/api/sessions/ABC123"),
@@ -504,7 +558,7 @@ describe("session route GET", () => {
   it("offers rollback to a global admin without host club membership", async () => {
     const sessionData = await mocks.sessionFindUnique();
     mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, status: "COMPLETED" });
-    mocks.auth.mockResolvedValue({ user: { id: "u1", isAdmin: true } });
+    mocks.auth.mockResolvedValue({ user: { id: "account-u1", isAdmin: true } });
 
     const response = await GET(
       new Request("http://localhost/api/sessions/ABC123"),
@@ -518,7 +572,7 @@ describe("session route GET", () => {
   it("does not offer rollback for an older completed session", async () => {
     const sessionData = await mocks.sessionFindUnique();
     mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, status: "COMPLETED" });
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
     mocks.sessionFindFirst.mockResolvedValue({ id: "newer-session" });
 
     const response = await GET(
@@ -545,18 +599,18 @@ describe("session route GET", () => {
       status: caseData.status ?? "COMPLETED",
       isTest: caseData.isTest ?? false,
       club: caseData.tutorial
-        ? { id: "community-1", isTutorial: true, tutorialOwnerId: "u1" }
+        ? { id: "community-1", isTutorial: true, tutorialOwnerId: "account-u1" }
         : null,
     });
     mocks.clubMemberFindUnique.mockResolvedValue(
-      caseData.hostRole ? { role: caseData.hostRole } : null
+      caseData.hostRole ? { role: caseData.hostRole, status: "ACTIVE" } : null
     );
     if (caseData.partnerAdmin) {
       mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
     }
     if (caseData.quickAccess) {
       mocks.auth.mockResolvedValue({
-        user: { id: "u1", isAdmin: false, isQuickAccess: true, quickAccessClubId: "community-1" },
+        user: { id: "guest:u1", guestPlayerId: "u1", isAdmin: false, isQuickAccess: true, quickAccessClubId: "community-1" },
       });
     }
 
@@ -578,7 +632,7 @@ describe("session route GET", () => {
       club: {
         id: "community-1",
         isTutorial: true,
-        tutorialOwnerId: "u1",
+        tutorialOwnerId: "account-u1",
       },
       sessionClubs: [
         {

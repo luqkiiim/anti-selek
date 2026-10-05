@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getSideSpecificCourtCreateLabel } from "@/lib/courtCreate";
@@ -39,13 +40,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:generate-match");
@@ -72,7 +73,7 @@ export async function POST(
       reshuffleSource,
     } = await loadGenerateMatchContext({
       code,
-      userId: session.user.id,
+      requesterAccountId: session.user.id,
       requesterIsAdmin: !!session.user.isAdmin,
       requestedCourtIds,
       forceReshuffle,
@@ -86,7 +87,7 @@ export async function POST(
     }
 
     if (undoCurrentMatch) {
-      return NextResponse.json(await undoCurrentCourtMatch(targetCourt));
+      return sportingJson(await undoCurrentCourtMatch(targetCourt));
     }
 
     ensureInterclubSessionReady(sessionData);
@@ -126,7 +127,7 @@ export async function POST(
         },
       ]);
 
-      return NextResponse.json({
+      return sportingJson({
         ...createdMatch,
         queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
       });
@@ -141,10 +142,10 @@ export async function POST(
       }
 
       const currentMatchUserIds = [
-        targetCourt.currentMatch.team1User1Id,
-        targetCourt.currentMatch.team1User2Id,
-        targetCourt.currentMatch.team2User1Id,
-        targetCourt.currentMatch.team2User2Id,
+        targetCourt.currentMatch.team1Player1Id,
+        targetCourt.currentMatch.team1Player2Id,
+        targetCourt.currentMatch.team2Player1Id,
+        targetCourt.currentMatch.team2Player2Id,
       ];
 
       if (!currentMatchUserIds.includes(replaceUserId)) {
@@ -155,7 +156,7 @@ export async function POST(
       }
 
       const retainedUserIds = currentMatchUserIds.filter(
-        (userId) => userId !== replaceUserId
+        (playerId) => playerId !== replaceUserId
       );
 
       if (retainedUserIds.length !== 3) {
@@ -220,7 +221,7 @@ export async function POST(
           releasePendingUserIds: [replaceUserId],
         });
 
-      return NextResponse.json({
+      return sportingJson({
         ...replacementMatch,
         queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
       });
@@ -228,10 +229,10 @@ export async function POST(
 
     if (forceReshuffle && targetCourt.currentMatch) {
       const reshuffleUserIds = [
-        targetCourt.currentMatch.team1User1Id,
-        targetCourt.currentMatch.team1User2Id,
-        targetCourt.currentMatch.team2User1Id,
-        targetCourt.currentMatch.team2User2Id,
+        targetCourt.currentMatch.team1Player1Id,
+        targetCourt.currentMatch.team1Player2Id,
+        targetCourt.currentMatch.team2Player1Id,
+        targetCourt.currentMatch.team2Player2Id,
       ];
 
       if (excludedUserId && !reshuffleUserIds.includes(excludedUserId)) {
@@ -301,7 +302,7 @@ export async function POST(
         consumeSkipNextUserIds: consumedSkipUserIds,
         creditRestUserIds: restUserId ? [restUserId] : [],
         releasePendingUserIds: reshuffleUserIds.filter(
-          (userId) => !bestSelection.ids.includes(userId)
+          (playerId) => !bestSelection.ids.includes(playerId)
         ),
       });
 
@@ -314,7 +315,7 @@ export async function POST(
         queuedMatch = null;
       }
 
-      return NextResponse.json({ ...newMatch, queuedMatch });
+      return sportingJson({ ...newMatch, queuedMatch });
     }
 
     const { busyPlayerIds, playersById, rotationHistory } =
@@ -380,7 +381,7 @@ export async function POST(
         },
       ]);
 
-      return NextResponse.json({
+      return sportingJson({
         ...newMatch,
         queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
       });
@@ -449,7 +450,7 @@ export async function POST(
         (requestedCourtOrder.get(right.courtId) ?? Number.MAX_SAFE_INTEGER)
     );
 
-    return NextResponse.json({
+    return sportingJson({
       matches: newMatches,
       queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
     });
@@ -459,7 +460,7 @@ export async function POST(
         return invalidTargetResponse(request, "api:sessions:code:generate-match");
       }
 
-      return NextResponse.json(
+      return sportingJson(
         { error: error.message },
         { status: error.status }
       );

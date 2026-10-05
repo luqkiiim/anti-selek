@@ -58,12 +58,12 @@ import {
   tryRebuildAutomaticQueuedMatchForSessionId,
 } from "./shared";
 
-function player(userId: string, pool: SessionPool = SessionPool.B) {
+function player(playerId: string, pool: SessionPool = SessionPool.B) {
   return {
-    userId,
+    playerId,
     pool,
     isPaused: false,
-    user: { id: userId, name: userId, elo: 1000 },
+    player: { id: playerId, name: playerId, elo: 1000 },
   };
 }
 
@@ -72,10 +72,10 @@ function queueRecord(overrides: Record<string, unknown> = {}) {
     id: "queue-1",
     sessionId: "session-1",
     createdAt: new Date("2026-08-23T00:00:00.000Z"),
-    team1User1Id: "a1",
-    team1User2Id: "b1",
-    team2User1Id: "a2",
-    team2User2Id: "b2",
+    team1Player1Id: "a1",
+    team1Player2Id: "b1",
+    team2Player1Id: "a2",
+    team2Player2Id: "b2",
     team1ClubId: null,
     team2ClubId: null,
     targetPool: null,
@@ -136,16 +136,16 @@ function createTransactionMock() {
   const sessionPlayerFindMany = vi.fn(
     async ({ where, select }): Promise<
       Array<{
-        userId: string;
+        playerId: string;
         pool?: SessionPool;
         pendingPool?: SessionPool | null;
       }>
     > => {
-      if (select?.gender) return (where.userId.in as string[]).map((userId) => ({ userId }));
+      if (select?.gender) return (where.playerId.in as string[]).map((playerId) => ({ playerId }));
       if (!select?.pool) return [];
-      return (where.userId.in as string[]).map((userId) => ({
-        userId,
-        pool: userId.startsWith("a") ? SessionPool.A : SessionPool.B,
+      return (where.playerId.in as string[]).map((playerId) => ({
+        playerId,
+        pool: playerId.startsWith("a") ? SessionPool.A : SessionPool.B,
       }));
     }
   );
@@ -249,7 +249,7 @@ describe("queued player-group lifecycle", () => {
       mode: SessionMode.MIXICANO,
     });
     tx.sessionPlayer.findMany.mockImplementation(async ({ where }) =>
-      where.userId.in.map((userId: string) => ({ userId, gender: PlayerGender.UNSPECIFIED }))
+      where.playerId.in.map((playerId: string) => ({ playerId, gender: PlayerGender.UNSPECIFIED }))
     );
     mocks.transaction.mockImplementation(async (callback) => callback(tx));
     const result = await createManualQueuedMatchForSession(
@@ -271,10 +271,10 @@ describe("queued player-group lifecycle", () => {
 
     expect(tx.queuedMatch.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        team1User1Id: "a3",
-        team1User2Id: "b3",
-        team2User1Id: "a4",
-        team2User2Id: "b4",
+        team1Player1Id: "a3",
+        team1Player2Id: "b3",
+        team2Player1Id: "a4",
+        team2Player2Id: "b4",
         courtGroupType: CourtGroupType.CROSSOVER,
         poolASeatCount: 2,
         poolBSeatCount: 2,
@@ -287,10 +287,10 @@ describe("queued player-group lifecycle", () => {
   it("rejects an automatic queue when a selected player's group changes before persistence", async () => {
     const tx = createTransactionMock();
     tx.sessionPlayer.findMany.mockResolvedValue([
-      { userId: "a3", pool: SessionPool.B },
-      { userId: "b3", pool: SessionPool.B },
-      { userId: "a4", pool: SessionPool.A },
-      { userId: "b4", pool: SessionPool.B },
+      { playerId: "a3", pool: SessionPool.B },
+      { playerId: "b3", pool: SessionPool.B },
+      { playerId: "a4", pool: SessionPool.A },
+      { playerId: "b4", pool: SessionPool.B },
     ]);
     mocks.transaction.mockImplementation(async (callback) => callback(tx));
 
@@ -305,10 +305,10 @@ describe("queued player-group lifecycle", () => {
   it("reclassifies a manual queue from the current transactional player groups", async () => {
     const tx = createTransactionMock();
     tx.sessionPlayer.findMany.mockResolvedValue([
-      { userId: "a1", pool: SessionPool.B },
-      { userId: "b1", pool: SessionPool.B },
-      { userId: "a2", pool: SessionPool.A },
-      { userId: "b2", pool: SessionPool.B },
+      { playerId: "a1", pool: SessionPool.B },
+      { playerId: "b1", pool: SessionPool.B },
+      { playerId: "a2", pool: SessionPool.A },
+      { playerId: "b2", pool: SessionPool.B },
     ]);
     mocks.transaction.mockImplementation(async (callback) => callback(tx));
 
@@ -328,10 +328,10 @@ describe("queued player-group lifecycle", () => {
 
   it("reselects and replaces a stale automatic queue with a fresh snapshot", async () => {
     const oldQueue = queueRecord({
-      team1User1Id: "a1",
-      team1User2Id: "b1",
-      team2User1Id: "a2",
-      team2User2Id: "b2",
+      team1Player1Id: "a1",
+      team1Player2Id: "b1",
+      team2Player1Id: "a2",
+      team2Player2Id: "b2",
       courtGroupType: CourtGroupType.OPEN_OVERFLOW,
       poolASeatCount: 3,
       poolBSeatCount: 1,
@@ -349,10 +349,10 @@ describe("queued player-group lifecycle", () => {
     expect(tx.queuedMatch.update).toHaveBeenCalledWith({
       where: { id: "queue-1" },
       data: expect.objectContaining({
-        team1User1Id: "a3",
-        team1User2Id: "b3",
-        team2User1Id: "a4",
-        team2User2Id: "b4",
+        team1Player1Id: "a3",
+        team1Player2Id: "b3",
+        team2Player1Id: "a4",
+        team2Player2Id: "b4",
         courtGroupType: CourtGroupType.CROSSOVER,
         poolASeatCount: 2,
         poolBSeatCount: 2,
@@ -369,10 +369,10 @@ describe("queued player-group lifecycle", () => {
 
   it("applies a replaced manual-queue player's pending group", async () => {
     const oldQueue = queueRecord({
-      team1User1Id: "a1",
-      team1User2Id: "b1",
-      team2User1Id: "a2",
-      team2User2Id: "b2",
+      team1Player1Id: "a1",
+      team1Player2Id: "b1",
+      team2Player1Id: "a2",
+      team2Player2Id: "b2",
       isAutomatic: false,
       matchmakingReasonJson: null,
     });
@@ -382,18 +382,18 @@ describe("queued player-group lifecycle", () => {
       // Assignment history and pending-group state are separate reads. Answer
       // the requested projection so another snapshot query cannot consume a
       // pending-group result by changing the call order.
-      if (select?.pendingPool) return [{ userId: "b2", pendingPool: SessionPool.A }];
-      if (select?.gender) return where.userId.in.map((userId: string) => ({ userId }));
-      return where.userId.in.map((userId: string) => ({
-        userId, pool: userId.startsWith("a") ? SessionPool.A : SessionPool.B,
+      if (select?.pendingPool) return [{ playerId: "b2", pendingPool: SessionPool.A }];
+      if (select?.gender) return where.playerId.in.map((playerId: string) => ({ playerId }));
+      return where.playerId.in.map((playerId: string) => ({
+        playerId, pool: playerId.startsWith("a") ? SessionPool.A : SessionPool.B,
       }));
     });
     tx.queuedMatch.findUnique.mockResolvedValue(
       queueRecord({
-        team1User1Id: "a1",
-        team1User2Id: "b1",
-        team2User1Id: "a2",
-        team2User2Id: "spare",
+        team1Player1Id: "a1",
+        team1Player2Id: "b1",
+        team2Player1Id: "a2",
+        team2Player2Id: "spare",
         isAutomatic: false,
       })
     );
@@ -418,13 +418,13 @@ describe("queued player-group lifecycle", () => {
     expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
       where: {
         sessionId: "session-1",
-        userId: { in: ["b2"] },
+        playerId: { in: ["b2"] },
       },
       data: { pool: SessionPool.A, pendingPool: null },
     });
     expect(tx.sessionPlayer.findMany).toHaveBeenCalledWith({
-      where: { sessionId: "session-1", userId: { in: ["b2"] }, pendingPool: { not: null } },
-      select: { userId: true, pendingPool: true },
+      where: { sessionId: "session-1", playerId: { in: ["b2"] }, pendingPool: { not: null } },
+      select: { playerId: true, pendingPool: true },
     });
     expect(tx.sessionPlayer.updateMany).toHaveBeenCalledTimes(1);
     const metadata = JSON.parse(tx.queuedMatch.update.mock.calls[0][0].data.matchmakingReasonJson);
@@ -434,10 +434,10 @@ describe("queued player-group lifecycle", () => {
 
   it("applies pending groups for players removed by a manual queue reshuffle", async () => {
     const oldQueue = queueRecord({
-      team1User1Id: "a1",
-      team1User2Id: "b1",
-      team2User1Id: "a2",
-      team2User2Id: "b2",
+      team1Player1Id: "a1",
+      team1Player2Id: "b1",
+      team2Player1Id: "a2",
+      team2Player2Id: "b2",
       isAutomatic: false,
       matchmakingReasonJson: null,
     });
@@ -447,18 +447,18 @@ describe("queued player-group lifecycle", () => {
       // Assignment history and pending-group state are separate reads. Answer
       // the requested projection so another snapshot query cannot consume a
       // pending-group result by changing the call order.
-      if (select?.pendingPool) return [{ userId: "b2", pendingPool: SessionPool.A }];
-      if (select?.gender) return where.userId.in.map((userId: string) => ({ userId }));
-      return where.userId.in.map((userId: string) => ({
-        userId, pool: userId.startsWith("a") ? SessionPool.A : SessionPool.B,
+      if (select?.pendingPool) return [{ playerId: "b2", pendingPool: SessionPool.A }];
+      if (select?.gender) return where.playerId.in.map((playerId: string) => ({ playerId }));
+      return where.playerId.in.map((playerId: string) => ({
+        playerId, pool: playerId.startsWith("a") ? SessionPool.A : SessionPool.B,
       }));
     });
     tx.queuedMatch.findUnique.mockResolvedValue(
       queueRecord({
-        team1User1Id: "a1",
-        team1User2Id: "b1",
-        team2User1Id: "a2",
-        team2User2Id: "spare",
+        team1Player1Id: "a1",
+        team1Player2Id: "b1",
+        team2Player1Id: "a2",
+        team2Player2Id: "spare",
         isAutomatic: false,
       })
     );
@@ -483,13 +483,13 @@ describe("queued player-group lifecycle", () => {
     expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
       where: {
         sessionId: "session-1",
-        userId: { in: ["b2"] },
+        playerId: { in: ["b2"] },
       },
       data: { pool: SessionPool.A, pendingPool: null },
     });
     expect(tx.sessionPlayer.findMany).toHaveBeenCalledWith({
-      where: { sessionId: "session-1", userId: { in: ["b2"] }, pendingPool: { not: null } },
-      select: { userId: true, pendingPool: true },
+      where: { sessionId: "session-1", playerId: { in: ["b2"] }, pendingPool: { not: null } },
+      select: { playerId: true, pendingPool: true },
     });
     expect(tx.sessionPlayer.updateMany).toHaveBeenCalledTimes(1);
     const metadata = JSON.parse(tx.queuedMatch.update.mock.calls[0][0].data.matchmakingReasonJson);

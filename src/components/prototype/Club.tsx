@@ -82,12 +82,13 @@ export default function Club({
 }) {
   const resource = useResource<Snapshot>("/api/clubs/" + club.id);
   const data = resource.data;
+  const viewerPlayerId = data?.viewer.playerId ?? null;
   const profile = useResource<Profile>(
-    data?.viewer
-      ? `/api/users/${data.viewer.id}/stats?clubId=${club.id}`
+    viewerPlayerId
+      ? `/api/users/${encodeURIComponent(viewerPlayerId)}/stats?clubId=${encodeURIComponent(club.id)}`
       : null,
   );
-  const achievements = useResource<AchievementCollection>(data?.viewer ? `/api/clubs/${club.id}/achievements` : null);
+  const achievements = useResource<AchievementCollection>(viewerPlayerId ? `/api/clubs/${club.id}/achievements` : null);
   const [achievementRequest, setAchievementRequest] = useState<{id:AchievementId;nonce:number}>();
   async function saveAchievementPreferences(body: unknown) {
     await api(`/api/clubs/${club.id}/achievements`, "PATCH", body);
@@ -125,7 +126,7 @@ export default function Club({
     );
   const visiblePastSessionCount = pastSessionPagination.visibleCount;
   const recent = profile.data?.recentSessions?.find(r=>sessions.some(s=>s.id===r.id&&s.status==="COMPLETED"));
-  const member = data?.clubMembers.find((p) => p.id === data.viewer.id);
+  const member = viewerPlayerId ? data?.clubMembers.find((p) => p.id === viewerPlayerId) : undefined;
   const rating = profile.data?.user.elo ?? member?.elo;
   const rank = profile.data?.context?.rankContext;
   function openMember(id: string) { setMemberStack(stack => stack.includes(id) ? stack.slice(0, stack.indexOf(id) + 1) : [...stack, id]); }
@@ -143,7 +144,7 @@ export default function Club({
     setPage(p);
   }
 
-  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={target.id===data.viewer.id} onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={target.id===data.viewer.id ? renderAchievement() : undefined} milestone={target.id===data.viewer.id ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
+  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); const isSelf=target?.id===viewerPlayerId; return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={isSelf} canInvite={!!canAdmin} onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={isSelf ? renderAchievement() : undefined} milestone={isSelf ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
   function openSession(code: string) {
     setSessionCode(code);
     go("session");
@@ -423,8 +424,9 @@ export default function Club({
               </section>
             </>
           )}
-          {data && page === "rankings" && <Rankings onOpenProfile={openMember} members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
-          {data && page === "profile" && member && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(data.viewer.id)!} isSelf onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={renderAchievement()} milestone={renderMilestone()} />}
+          {data && page === "rankings" && <Rankings onOpenProfile={openMember} members={data.clubMembers} viewerId={viewerPlayerId ?? ""} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
+          {data && page === "profile" && member && viewerPlayerId && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(viewerPlayerId)!} isSelf onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={renderAchievement()} milestone={renderMilestone()} />}
+          {data && page === "profile" && !viewerPlayerId && <div className="profile-empty"><h2>Your Player profile will appear here.</h2><p>Join this club with a Player profile to see your sporting history and preferences.</p></div>}
           {page === "recap" && recap && (
             <>
               <div className="celebration">

@@ -5,7 +5,11 @@ const mocks = vi.hoisted(() => ({
   clubFindMany: vi.fn(),
   clubFindUnique: vi.fn(),
   clubMemberFindUnique: vi.fn(),
+  clubAdmissionFindFirst: vi.fn(),
+  invitationFindFirst: vi.fn(),
+  clubDelete: vi.fn(),
   clubUpdate: vi.fn(),
+  deleteTutorialPlayground: vi.fn(),
   rateLimit: vi.fn(async () => null),
   checkInvalidTargetRateLimit: vi.fn(async () => null),
   invalidTargetResponse: vi.fn(() =>
@@ -22,9 +26,12 @@ vi.mock("@/lib/prisma", () => ({
     club: {
       findMany: mocks.clubFindMany,
       findUnique: mocks.clubFindUnique,
+      delete: mocks.clubDelete,
       update: mocks.clubUpdate,
     },
-    clubMember: {
+    clubAdmissionRequest: { findFirst: mocks.clubAdmissionFindFirst },
+    playerInvitation: { findFirst: mocks.invitationFindFirst },
+    clubAccess: {
       findUnique: mocks.clubMemberFindUnique,
     },
   },
@@ -54,8 +61,12 @@ vi.mock("@/lib/errors", () => ({
     Response.json({ error: "Internal server error" }, { status: 500 })
   ),
 }));
+vi.mock("@/lib/tutorialPlayground", () => ({
+  deleteTutorialPlayground: mocks.deleteTutorialPlayground,
+  getTutorialClubDisplayName: vi.fn((club: { name: string }) => club.name),
+}));
 
-import { PATCH } from "./route";
+import { DELETE, PATCH } from "./route";
 
 const session = {
   user: {
@@ -81,9 +92,10 @@ describe("club settings rules", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue(session);
-    mocks.clubMemberFindUnique.mockResolvedValue(null);
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "OWNER", status: "ACTIVE" });
     mocks.clubFindUnique.mockResolvedValue(existingClub());
     mocks.clubFindMany.mockResolvedValue([]);
+    mocks.clubAdmissionFindFirst.mockResolvedValue(null);
     mocks.rateLimit.mockResolvedValue(null);
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
   });
@@ -154,5 +166,59 @@ describe("club settings rules", () => {
       error: "Club rules must be 3000 characters or fewer",
     });
     expect(mocks.clubUpdate).not.toHaveBeenCalled();
+  });
+
+  it("preserves admission history and returns a conflict when deleting a club", async () => {
+    mocks.clubAdmissionFindFirst.mockResolvedValue({ id: "admission-1" });
+
+    const response = await DELETE(
+      new Request("http://localhost/api/clubs/club-1", {
+        method: "DELETE",
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      }),
+      { params: Promise.resolve({ id: "club-1" }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "This club has admission history that must be retained and cannot be deleted.",
+    });
+    expect(mocks.clubDelete).not.toHaveBeenCalled();
+  });
+
+  it("turns a concurrent foreign-key failure into a retryable conflict", async () => {
+    mocks.clubDelete.mockRejectedValue(Object.assign(new Error("foreign key constraint failed"), { code: "P2003" }));
+
+    const response = await DELETE(
+      new Request("http://localhost/api/clubs/club-1", {
+        method: "DELETE",
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      }),
+      { params: Promise.resolve({ id: "club-1" }) },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "This club has linked history that must be retained and cannot be deleted.",
+    });
+  });
+
+  it("still deletes a tutorial club without admission history", async () => {
+    mocks.clubFindUnique.mockResolvedValue({
+      ...existingClub(),
+      isTutorial: true,
+      tutorialOwnerId: "owner-1",
+    });
+
+    const response = await DELETE(
+      new Request("http://localhost/api/clubs/club-1", {
+        method: "DELETE",
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      }),
+      { params: Promise.resolve({ id: "club-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.deleteTutorialPlayground).toHaveBeenCalledWith("owner-1", "club-1");
   });
 });

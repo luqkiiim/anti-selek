@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
@@ -9,7 +10,7 @@ import {
 } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
-import { getSessionOperatorMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership, isAccountSessionPlayer } from "@/lib/sessionCollab";
 import {
   getAcceptedInterclubClubIds,
   isInterclubSession,
@@ -39,12 +40,12 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return sportingJson({ error: "Invalid request body" }, { status: 400 });
     }
 
     const {
@@ -66,13 +67,13 @@ export async function POST(
       representingClubId?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
-      return NextResponse.json({ error: "Guest name must be at least 2 characters" }, { status: 400 });
+      return sportingJson({ error: "Guest name must be at least 2 characters" }, { status: 400 });
     }
 
     let guestElo = 1000;
     if (typeof initialElo === "number") {
       if (!Number.isInteger(initialElo) || initialElo < 0 || initialElo > 5000) {
-        return NextResponse.json({ error: "Invalid guest rating" }, { status: 400 });
+        return sportingJson({ error: "Invalid guest rating" }, { status: 400 });
       }
       guestElo = initialElo;
     }
@@ -95,7 +96,7 @@ export async function POST(
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:guests");
@@ -118,7 +119,7 @@ export async function POST(
       return invalidTargetResponse(request, "api:sessions:code:guests");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Tournament already ended" },
         { status: 400 }
       );
@@ -127,14 +128,16 @@ export async function POST(
       sessionData.mode === SessionMode.MIXICANO &&
       ![PlayerGender.MALE, PlayerGender.FEMALE].includes(normalizedGender)
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: `${mixedModeLabel} requires guest gender (MALE/FEMALE)` },
         { status: 400 }
       );
     }
 
+    const acceptedSessionClubIds = getAcceptedInterclubClubIds(sessionData);
+    const hasClubContext = acceptedSessionClubIds.length > 0;
     let canManage = !!session.user.isAdmin;
-    if (sessionData.clubId) {
+    if (hasClubContext) {
       const membership = await getSessionOperatorMembership(prisma, {
         session: sessionData,
         userId: session.user.id,
@@ -142,20 +145,13 @@ export async function POST(
       });
       canManage = canManage || !!membership;
     } else if (!canManage) {
-      const isSessionPlayer = await prisma.sessionPlayer.findUnique({
-        where: {
-          sessionId_userId: {
-            sessionId: sessionData.id,
-            userId: session.user.id,
-          },
-        },
-        select: { id: true },
-      });
-      canManage = !!isSessionPlayer;
+      canManage =
+        canManage ||
+        (await isAccountSessionPlayer(prisma, sessionData.id, session.user.id));
     }
 
     if (!canManage) {
-      return NextResponse.json({ error: "Only admins or staff can add guests" }, { status: 403 });
+      return sportingJson({ error: "Only admins or staff can add guests" }, { status: 403 });
     }
 
     const acceptedInterclubClubIds = getAcceptedInterclubClubIds(sessionData);
@@ -166,7 +162,7 @@ export async function POST(
         typeof representingClubId !== "string" ||
         !acceptedInterclubClubIds.includes(representingClubId)
       ) {
-        return NextResponse.json(
+        return sportingJson(
           {
             error:
               "Guests in club vs club tournaments must represent one club",
@@ -211,12 +207,10 @@ export async function POST(
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
 
     const createdGuest = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
+      const user = await tx.player.create({
         data: {
           name: guestName,
-          email: null,
-          passwordHash: null,
-          isClaimed: false,
+          ownerUserId: null,
           elo: guestElo,
           gender: normalizedGender,
           partnerPreference: normalizedMixedState.partnerPreference,
@@ -235,7 +229,7 @@ export async function POST(
       await tx.sessionPlayer.create({
         data: {
           sessionId: sessionData.id,
-          userId: user.id,
+          playerId: user.id,
           isGuest: true,
           representingClubId: normalizedRepresentingClubId,
           gender: user.gender,
@@ -258,7 +252,7 @@ export async function POST(
         ? await tryRebuildAutomaticQueuedMatchForSessionId(sessionData.id)
         : undefined;
 
-    return NextResponse.json({
+    return sportingJson({
       id: createdGuest.id,
       name: createdGuest.name,
       elo: createdGuest.elo,

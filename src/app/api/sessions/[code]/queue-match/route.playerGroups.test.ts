@@ -62,10 +62,10 @@ describe("manual queue cancellation", () => {
         id: "queue-1",
         isAutomatic: false,
         matchmakingReasonJson: JSON.stringify({ legacy: "present" }),
-        team1User1Id: "player-1",
-        team1User2Id: "player-2",
-        team2User1Id: "player-3",
-        team2User2Id: "player-4",
+        team1Player1Id: "player-1",
+        team1Player2Id: "player-2",
+        team2Player1Id: "player-3",
+        team2Player2Id: "player-4",
       },
     });
 
@@ -101,10 +101,10 @@ describe("manual queue cancellation", () => {
         id: "queue-1",
         isAutomatic: true,
         matchmakingReasonJson: null,
-        team1User1Id: "player-1",
-        team1User2Id: "player-2",
-        team2User1Id: "player-3",
-        team2User2Id: "player-4",
+        team1Player1Id: "player-1",
+        team1Player2Id: "player-2",
+        team2Player1Id: "player-3",
+        team2Player2Id: "player-4",
       },
     });
 

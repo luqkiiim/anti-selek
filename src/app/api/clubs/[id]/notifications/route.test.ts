@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  clubMemberFindUnique: vi.fn(),
+  clubMemberFindMany: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
   clubFindUnique: vi.fn(),
   clubNotificationCount: vi.fn(),
   clubNotificationFindMany: vi.fn(),
@@ -16,7 +17,10 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
+      findMany: mocks.clubMemberFindMany,
+    },
+    clubAccess: {
+      findUnique: mocks.clubAccessFindUnique,
     },
     club: {
       findUnique: mocks.clubFindUnique,
@@ -59,12 +63,20 @@ describe("club notifications route", () => {
     vi.clearAllMocks();
 
     mocks.auth.mockResolvedValue({
-      user: { id: "viewer-1", isAdmin: false },
+      user: { id: "account-viewer", isAdmin: false },
     });
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "MEMBER", status: "ACTIVE" });
+    mocks.clubMemberFindMany.mockResolvedValue([
+      {
+        id: "membership-viewer",
+        clubId: "club-1",
+        playerId: "player-viewer",
+        player: { id: "player-viewer", ownerUserId: "account-viewer" },
+      },
+    ]);
     mocks.clubFindUnique.mockResolvedValue({
       id: "club-1",
-      createdById: "owner-1",
+      createdById: "account-owner",
       isTutorial: false,
       tutorialOwnerId: null,
     });
@@ -113,7 +125,7 @@ describe("club notifications route", () => {
       expect.objectContaining({
         where: {
           clubId: "club-1",
-          recipientUserId: "viewer-1",
+          recipientPlayer: { ownerUserId: "account-viewer" },
         },
       })
     );
@@ -169,7 +181,7 @@ describe("club notifications route", () => {
     expect(mocks.clubNotificationUpdateMany).toHaveBeenCalledWith({
       where: {
         clubId: "club-1",
-        recipientUserId: "viewer-1",
+        recipientPlayer: { ownerUserId: "account-viewer" },
         readAt: null,
       },
       data: {
@@ -180,13 +192,8 @@ describe("club notifications route", () => {
   });
 
   it("rejects users outside the club", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValueOnce(null);
-    mocks.clubFindUnique.mockResolvedValueOnce({
-      id: "club-1",
-      createdById: "owner-1",
-      isTutorial: false,
-      tutorialOwnerId: null,
-    });
+    // The legacy roster row remains, but only an active account grant authorizes access.
+    mocks.clubAccessFindUnique.mockResolvedValueOnce(null);
 
     const response = requireResponse(
       await GET(

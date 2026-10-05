@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
@@ -22,13 +23,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:reset");
@@ -54,14 +55,14 @@ export async function POST(
       acceptedOnly: true,
     });
     if (!session.user.isAdmin && !operatorMembership) {
-      return NextResponse.json({ error: "Admin or staff only" }, { status: 403 });
+      return sportingJson({ error: "Admin or staff only" }, { status: 403 });
     }
 
     if (
       !targetSession.isTest &&
       targetSession.status !== SessionStatus.ACTIVE
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only active tournaments can be reset" },
         { status: 400 }
       );
@@ -94,18 +95,18 @@ export async function POST(
           sessionId: targetSession.id,
           pendingPool: { not: null },
         },
-        select: { userId: true },
+        select: { playerId: true },
       });
       await applyPendingPlayerGroupChangesInTransaction(tx, {
         sessionId: targetSession.id,
-        userIds: pendingPlayers.map((player) => player.userId),
+        userIds: pendingPlayers.map((player) => player.playerId),
       });
 
       await tx.sessionPlayer.updateMany({
         where: { sessionId: targetSession.id },
         data: {
           sessionPoints: 0,
-          lastPartnerId: null,
+          lastPartnerPlayerId: null,
           isPaused: false,
           matchesPlayed: 0,
           matchmakingMatchesCredit: 0,
@@ -142,17 +143,17 @@ export async function POST(
                   team2Score: true,
                   completedAt: true,
                   scoreSubmittedByUserId: true,
-                  team1User1: { select: { id: true, name: true, avatarKey: true } },
-                  team1User2: { select: { id: true, name: true, avatarKey: true } },
-                  team2User1: { select: { id: true, name: true, avatarKey: true } },
-                  team2User2: { select: { id: true, name: true, avatarKey: true } },
+                  team1Player1: { select: { id: true, name: true, avatarKey: true } },
+                  team1Player2: { select: { id: true, name: true, avatarKey: true } },
+                  team2Player1: { select: { id: true, name: true, avatarKey: true } },
+                  team2Player2: { select: { id: true, name: true, avatarKey: true } },
                 },
               },
             },
           },
           players: {
             include: {
-              user: {
+              player: {
                 select: {
                   id: true,
                   name: true,
@@ -174,10 +175,10 @@ export async function POST(
             },
             select: {
               id: true,
-              team1User1Id: true,
-              team1User2Id: true,
-              team2User1Id: true,
-              team2User2Id: true,
+              team1Player1Id: true,
+              team1Player2Id: true,
+              team2Player1Id: true,
+              team2Player2Id: true,
               team1Score: true,
               team2Score: true,
               winnerTeam: true,
@@ -196,28 +197,28 @@ export async function POST(
             updatedSession.players,
             await getClubEloByUserId(
               updatedSession.clubId,
-              updatedSession.players.map((player) => player.userId)
+              updatedSession.players.map((player) => player.playerId)
             )
           )
         : updatedSession.players;
     const serializedPlayers = players.map((player) => ({
       ...player,
-      user: serializeAvatarEntity(player.user),
+      player: serializeAvatarEntity(player.player),
     }));
     const courts = updatedSession.courts.map((court) => ({
       ...court,
       currentMatch: court.currentMatch
         ? {
             ...court.currentMatch,
-            team1User1: serializeAvatarEntity(court.currentMatch.team1User1),
-            team1User2: serializeAvatarEntity(court.currentMatch.team1User2),
-            team2User1: serializeAvatarEntity(court.currentMatch.team2User1),
-            team2User2: serializeAvatarEntity(court.currentMatch.team2User2),
+            team1Player1: serializeAvatarEntity(court.currentMatch.team1Player1),
+            team1Player2: serializeAvatarEntity(court.currentMatch.team1Player2),
+            team2Player1: serializeAvatarEntity(court.currentMatch.team2Player1),
+            team2Player2: serializeAvatarEntity(court.currentMatch.team2Player2),
           }
         : null,
     }));
 
-    return NextResponse.json({
+    return sportingJson({
       ...updatedSession,
       courts,
       players: serializedPlayers,

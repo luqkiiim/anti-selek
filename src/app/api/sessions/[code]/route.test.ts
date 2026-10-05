@@ -22,6 +22,18 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/playerGroupPreferences", () => ({
   applyPendingPlayerGroupChangesInTransaction: vi.fn(),
 }));
+vi.mock("@/lib/sessionCollab", () => ({
+  getPlayerClubBadges: vi.fn(async () => new Map()),
+  getSessionAdminMembership: vi.fn(async () => null),
+  getSessionMembership: vi.fn(async () => null),
+  getSessionOperatorMembership: vi.fn(async () => null),
+  isAccountSessionPlayer: vi.fn(async () => true),
+  withPlayerClubBadges: vi.fn((players) => players),
+}));
+vi.mock("@/lib/clubElo", () => ({
+  getClubEloByUserId: vi.fn(async () => new Map()),
+  withClubElo: vi.fn((players) => players),
+}));
 vi.mock("./queue-match/shared", () => ({
   tryRebuildQueuedMatchForSessionId: vi.fn(),
 }));
@@ -29,7 +41,7 @@ vi.mock("./queue-match/shared", () => ({
 import { auth } from "@/lib/auth";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
-import { PATCH } from "./route";
+import { GET, PATCH } from "./route";
 
 const baseSession = {
   id: "session-1",
@@ -95,6 +107,38 @@ function request(body: Record<string, unknown>) {
 }
 
 describe("session settings route", () => {
+  it("returns the viewer Account ID and owned Player ID without exposing owner IDs", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "account-1", isAdmin: false } } as never);
+    const player = { id: "player-1", ownerUserId: "account-1", name: "Alex", avatarKey: null, elo: 1200, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: null };
+    const currentMatch = {
+      id: "match-live", createdAt: new Date("2026-05-01T10:00:00Z"), status: "IN_PROGRESS",
+      team1ClubId: null, team2ClubId: null, team1Score: null, team2Score: null, completedAt: null,
+      scoreSubmittedByUserId: "account-1", scoreSubmittedByPlayerId: "player-1",
+      matchmakingReasonJson: null, courtGroupType: null, poolASeatCount: null, poolBSeatCount: null,
+      team1Player1: { id: "player-1", name: "Alex", avatarKey: null },
+      team1Player2: { id: "player-2", name: "Bea", avatarKey: null },
+      team2Player1: { id: "player-3", name: "Casey", avatarKey: null },
+      team2Player2: { id: "player-4", name: "Dev", avatarKey: null },
+    };
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({
+      id: "session-1", code: "ABC123", name: "Session", clubId: null,
+      status: SessionStatus.ACTIVE, isTest: false, type: SessionType.POINTS,
+      collabFormat: SessionCollabFormat.FREE_PLAY, sessionClubs: [],
+      club: null, courts: [{ id: "court-1", courtNumber: 1, currentMatch: currentMatch as never }],
+      players: [{ id: "appearance-1", sessionId: "session-1", playerId: "player-1", player }],
+      matches: [{ id: "match-history", createdAt: new Date("2026-05-01T10:00:00Z"), team1Player1Id: "player-1", team1Player2Id: "player-2", team2Player1Id: "player-3", team2Player2Id: "player-4", team1ClubId: null, team2ClubId: null, team1Score: 15, team2Score: 14, winnerTeam: 1, status: "COMPLETED", completedAt: new Date("2026-05-01T10:30:00Z"), scoreSubmittedByUserId: "account-1", scoreSubmittedByPlayerId: "player-1", courtGroupType: null, poolASeatCount: null, poolBSeatCount: null }],
+      queuedMatch: null,
+    } as never);
+
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123"), { params: Promise.resolve({ code: "ABC123" }) });
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.viewerUserId).toBe("account-1");
+    expect(body.viewerPlayerId).toBe("player-1");
+    expect(body.players[0].player).not.toHaveProperty("ownerUserId");
+    expect(body.courts[0].currentMatch).toMatchObject({ scoreSubmittedByUserId: "account-1", scoreSubmittedByPlayerId: "player-1" });
+    expect(body.matches[0]).toMatchObject({ scoreSubmittedByUserId: "account-1", scoreSubmittedByPlayerId: "player-1" });
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue({
@@ -145,10 +189,10 @@ describe("session settings route", () => {
     const manualQueue = {
       id: "queue-1",
       isAutomatic: false,
-      team1User1Id: "p1",
-      team1User2Id: "p2",
-      team2User1Id: "p3",
-      team2User2Id: "p4",
+      team1Player1Id: "p1",
+      team1Player2Id: "p2",
+      team2Player1Id: "p3",
+      team2Player2Id: "p4",
     };
     vi.mocked(prisma.session.findUnique)
       .mockResolvedValueOnce(baseSession as never)
@@ -214,7 +258,8 @@ describe("session settings route", () => {
       { params: Promise.resolve({ code: "session-1" }) }
     );
 
-    expect(response.status).toBe(200);
+    const responsePayload = await response.clone().json();
+    expect(response.status, JSON.stringify(responsePayload)).toBe(200);
     expect(tx.session.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -327,13 +372,13 @@ describe("session settings route", () => {
       .mockResolvedValueOnce(updatedSession({ poolsEnabled: true }) as never);
     const tx = transactionDouble();
     tx.sessionPlayer.findMany.mockResolvedValue([
-      { userId: "competitive", isGuest: false },
-      { userId: "social", isGuest: false },
-      { userId: "guest", isGuest: true },
+      { playerId: "competitive", isGuest: false },
+      { playerId: "social", isGuest: false },
+      { playerId: "guest", isGuest: true },
     ]);
     tx.clubMember.findMany.mockResolvedValue([
-      { userId: "competitive", preferredPool: "A" },
-      { userId: "social", preferredPool: "B" },
+      { playerId: "competitive", preferredPool: "A" },
+      { playerId: "social", preferredPool: "B" },
     ]);
     vi.mocked(prisma.$transaction).mockImplementation(async (callback) =>
       callback(tx as never)
@@ -364,7 +409,7 @@ describe("session settings route", () => {
     expect(tx.sessionPlayer.updateMany).toHaveBeenNthCalledWith(2, {
       where: {
         sessionId: "session-1",
-        userId: { in: ["competitive"] },
+        playerId: { in: ["competitive"] },
       },
       data: { pool: "A", pendingPool: null },
     });

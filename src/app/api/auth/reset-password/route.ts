@@ -50,7 +50,7 @@ export async function POST(request: Request) {
             id: true,
             email: true,
             name: true,
-            isClaimed: true,
+            isActive: true,
           },
         },
       },
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       !resetToken ||
       resetToken.usedAt !== null ||
       isPasswordResetTokenExpired(resetToken.expiresAt) ||
-      !resetToken.user.isClaimed ||
+      !resetToken.user.isActive ||
       !resetToken.user.email
     ) {
       return NextResponse.json({ error: INVALID_TOKEN_ERROR }, { status: 400 });
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
 
       await tx.user.update({
         where: { id: resetToken.user.id },
-        data: { passwordHash },
+        data: { passwordHash, sessionVersion: { increment: 1 } },
       });
 
       await tx.passwordResetToken.updateMany({

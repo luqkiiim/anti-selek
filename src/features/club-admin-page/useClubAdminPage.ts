@@ -27,9 +27,14 @@ export function useClubAdminPage() {
     router,
   });
 
+  const currentAccountId = session?.user?.id;
+  const currentPlayerId = adminData.players.find(
+    (player) => player.ownerUserId === currentAccountId
+  )?.id ?? null;
+
   const playerActions = useClubAdminPlayerActions({
     clubId,
-    currentUserId: session?.user?.id,
+    currentPlayerId,
     players: adminData.players,
     setPlayers: adminData.setPlayers,
     refreshClubData: adminData.fetchClubAndPlayers,
@@ -83,6 +88,7 @@ export function useClubAdminPage() {
   return {
     status,
     currentUserId: session?.user?.id,
+    currentPlayerId,
     isGlobalAdmin: !!session?.user?.isAdmin,
     clubId,
     activeSection,

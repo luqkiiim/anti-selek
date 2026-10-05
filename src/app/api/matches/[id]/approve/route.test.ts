@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   isQuickAccessSession: vi.fn(),
   matchFindUnique: vi.fn(),
   reconcileSessionQueueAfterCourtChange: vi.fn(),
+  sessionMembership: vi.fn(),
   userFindUnique: vi.fn(),
 }));
 
@@ -49,6 +50,7 @@ vi.mock("@/lib/rateLimit", () => ({
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
+  getSessionMembership: mocks.sessionMembership,
   getSessionOperatorMembership: mocks.getSessionOperatorMembership,
 }));
 
@@ -105,6 +107,7 @@ describe("approve match route", () => {
         session?.user?.isQuickAccess === true
     );
     mocks.matchFindUnique.mockResolvedValue(createPendingMatch());
+    mocks.sessionMembership.mockResolvedValue({ clubId: "club-a", role: "MEMBER" });
     mocks.getSessionOperatorMembership.mockResolvedValue(null);
     mocks.reconcileSessionQueueAfterCourtChange.mockResolvedValue({
       autoAssignedMatch: null,

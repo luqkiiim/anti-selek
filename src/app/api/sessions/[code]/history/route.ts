@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
@@ -5,9 +6,11 @@ import { prisma } from "@/lib/prisma";
 import {
   canQuickAccessSessionRead,
   isQuickAccessSession,
+  getQuickAccessPlayerId,
 } from "@/lib/quickAccess";
 import {
   getSessionAdminMembership,
+  isAccountSessionPlayer,
   getSessionMembership,
   getSessionOperatorMembership,
 } from "@/lib/sessionCollab";
@@ -27,7 +30,7 @@ const NEWER_OUTSIDE_MATCH_BLOCKED_REASON =
 interface CorrectionAvailabilitySession {
   id: string;
   clubId?: string | null;
-  players: Array<{ userId: string }>;
+  players: Array<{ playerId: string }>;
   sessionClubs: Array<{ clubId: string; status: string }>;
   matches: Array<{
     status: string;
@@ -105,23 +108,23 @@ async function getCompletedScoreCorrectionBlockedReason(
               {
                 OR: [
                   {
-                    team1User1Id: {
-                      in: sessionData.players.map((player) => player.userId),
+                    team1Player1Id: {
+                      in: sessionData.players.map((player) => player.playerId),
                     },
                   },
                   {
-                    team1User2Id: {
-                      in: sessionData.players.map((player) => player.userId),
+                    team1Player2Id: {
+                      in: sessionData.players.map((player) => player.playerId),
                     },
                   },
                   {
-                    team2User1Id: {
-                      in: sessionData.players.map((player) => player.userId),
+                    team2Player1Id: {
+                      in: sessionData.players.map((player) => player.playerId),
                     },
                   },
                   {
-                    team2User2Id: {
-                      in: sessionData.players.map((player) => player.userId),
+                    team2Player2Id: {
+                      in: sessionData.players.map((player) => player.playerId),
                     },
                   },
                 ],
@@ -140,13 +143,13 @@ async function getSessionHistory(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return sportingJson({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { code } = await params;
 
   if (typeof code !== "string" || code.length === 0) {
-    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
   }
 
   const rateLimitResponse = await rateLimit(
@@ -191,7 +194,7 @@ async function getSessionHistory(
       },
       players: {
         select: {
-          userId: true,
+          playerId: true,
         },
       },
       matches: {
@@ -206,10 +209,10 @@ async function getSessionHistory(
           status: true,
           createdAt: true,
           completedAt: true,
-          team1User1Id: true,
-          team1User2Id: true,
-          team2User1Id: true,
-          team2User2Id: true,
+          team1Player1Id: true,
+          team1Player2Id: true,
+          team2Player1Id: true,
+          team2Player2Id: true,
           team1ClubId: true,
           team2ClubId: true,
           winnerTeam: true,
@@ -223,10 +226,10 @@ async function getSessionHistory(
               label: true,
             },
           },
-          team1User1: { select: { id: true, name: true } },
-          team1User2: { select: { id: true, name: true } },
-          team2User1: { select: { id: true, name: true } },
-          team2User2: { select: { id: true, name: true } },
+          team1Player1: { select: { id: true, name: true } },
+          team1Player2: { select: { id: true, name: true } },
+          team2Player1: { select: { id: true, name: true } },
+          team2Player2: { select: { id: true, name: true } },
         },
       },
     },
@@ -256,7 +259,10 @@ async function getSessionHistory(
   });
   const clubRole = membership?.role ?? null;
 
-  const isSessionPlayer = sessionData.players.some((player) => player.userId === session.user.id);
+  const quickPlayerId = getQuickAccessPlayerId(session);
+  const isSessionPlayer = quickPlayerId
+    ? sessionData.players.some((player) => player.playerId === quickPlayerId)
+    : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
   const viewerCanManage =
     !isQuickAccess &&
@@ -298,7 +304,7 @@ async function getSessionHistory(
     }
   }
 
-  return NextResponse.json({
+  return sportingJson({
     session: {
       id: sessionData.id,
       code: sessionData.code,

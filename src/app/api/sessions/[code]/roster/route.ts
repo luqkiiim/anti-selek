@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
@@ -38,7 +39,7 @@ export async function GET(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
     if (isQuickAccessSession(session)) {
       return invalidTargetResponse(request, "api:sessions:code:roster");
@@ -46,7 +47,7 @@ export async function GET(
 
     const { code } = await params;
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid request parameters" },
         { status: 400 }
       );
@@ -83,13 +84,13 @@ export async function GET(
 
     const acceptedClubIds = getAcceptedInterclubClubIds(sessionData);
     if (isInterclubSession(sessionData) && acceptedClubIds.length !== 2) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Club vs club roster requires two accepted clubs" },
         { status: 400 }
       );
     }
     if (acceptedClubIds.length < 2) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Tournament roster requires accepted partner clubs" },
         { status: 400 }
       );
@@ -107,10 +108,11 @@ export async function GET(
     const manageableClubIds = session.user.isAdmin
       ? acceptedClubIds
       : (
-          await prisma.clubMember.findMany({
+          await prisma.clubAccess.findMany({
             where: {
               clubId: { in: acceptedClubIds },
               userId: session.user.id,
+              status: "ACTIVE",
               role: { in: [...COMMUNITY_OPERATOR_ROLES] },
             },
             select: {
@@ -139,17 +141,16 @@ export async function GET(
             name: true,
           },
         },
-        user: {
+        player: {
           select: {
             id: true,
             name: true,
-            email: true,
             avatarKey: true,
             gender: true,
             partnerPreference: true,
             mixedSideOverride: true,
             isActive: true,
-            isClaimed: true,
+            ownerUserId: true,
             createdAt: true,
           },
         },
@@ -157,13 +158,13 @@ export async function GET(
       orderBy: { createdAt: "asc" },
     });
 
-    return NextResponse.json(
+    return sportingJson(
       memberships
         .map((membership) => ({
-          id: membership.user.id,
-          name: membership.user.name,
-          email: membership.user.email,
-          avatarUrl: serializeAvatarEntity(membership.user).avatarUrl,
+          id: membership.player.id,
+          name: membership.player.name,
+          email: null,
+          avatarUrl: serializeAvatarEntity(membership.player).avatarUrl,
           preferredPool: isValidSessionPool(membership.preferredPool)
             ? membership.preferredPool
             : SessionPool.B,
@@ -172,22 +173,23 @@ export async function GET(
               ? ClubPlayerStatus.OCCASIONAL
               : ClubPlayerStatus.CORE,
           gender: [PlayerGender.MALE, PlayerGender.FEMALE].includes(
-            membership.user.gender as PlayerGender
+            membership.player.gender as PlayerGender
           )
-            ? membership.user.gender
+            ? membership.player.gender
             : PlayerGender.MALE,
-          partnerPreference: membership.user.partnerPreference,
+          partnerPreference: membership.player.partnerPreference,
           mixedSideOverride:
-            typeof membership.user.mixedSideOverride === "string"
-              ? membership.user.mixedSideOverride
+            typeof membership.player.mixedSideOverride === "string"
+              ? membership.player.mixedSideOverride
               : null,
           elo: membership.elo,
-          isActive: membership.user.isActive,
-          isClaimed: membership.user.isClaimed,
-          createdAt: membership.user.createdAt,
+          isActive: membership.player.isActive,
+          isClaimed: !!membership.player.ownerUserId,
+          ownerUserId: membership.player.ownerUserId,
+          createdAt: membership.player.createdAt,
           wins: 0,
           losses: 0,
-          role: membership.role,
+          role: "MEMBER",
           representingClubId: membership.clubId,
           representingClubName:
             membership.club.name ??

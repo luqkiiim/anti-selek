@@ -4,16 +4,17 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@libsql/client";
+import { MANAGED_MARKER, managedMigrationSql } from "./account-player-preservation.mjs";
+import {
+  ensureSessionRebuildColumns,
+  SESSION_REBUILD_MIGRATION,
+} from "./session-rebuild-prerequisite.mjs";
+import { assertLocalTursoEndpoint } from "./turso-local-target-guard.mjs";
 
 const MIGRATION_TABLE = "_turso_sql_migrations";
 
 function shouldRunMigrations() {
-  return (
-    process.argv.includes("--force") ||
-    (process.env.VERCEL === "1" &&
-      process.env.VERCEL_ENV === "production" &&
-      process.env.RUN_DB_MIGRATIONS === "1")
-  );
+  return process.argv.includes("--force");
 }
 
 function getBaselineThroughName() {
@@ -37,9 +38,12 @@ function escapeSqlString(value) {
 }
 
 async function main() {
+  if (process.env.VERCEL === "1") {
+    throw new Error("Refusing database migrations from any Vercel build; production cutover requires a separately approved process.");
+  }
   if (!shouldRunMigrations()) {
     console.log(
-      "Skipping Turso SQL migrations; use --force locally or set RUN_DB_MIGRATIONS=1 on production Vercel builds."
+      "Skipping development Turso SQL migrations; use --force only for an explicitly selected local file or registered development database."
     );
     return;
   }
@@ -52,6 +56,8 @@ async function main() {
       "Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN for Turso migration run."
     );
   }
+
+  assertLocalTursoEndpoint(url, { authToken });
 
   const rootDir = path.dirname(fileURLToPath(import.meta.url));
   const migrationsRoot = path.resolve(rootDir, "..", "prisma", "migrations");
@@ -111,19 +117,39 @@ async function main() {
 
     console.log(`Applying Turso migration ${migrationDir}...`);
 
-    await client.executeMultiple(`
+    if (migrationDir === SESSION_REBUILD_MIGRATION) {
+      const addedColumns = await ensureSessionRebuildColumns(client);
+      if (addedColumns.length > 0) {
+        console.log(
+          `Prepared legacy Session rebuild inputs: ${addedColumns.join(", ")}.`,
+        );
+      }
+    }
+
+    const ledgerInsert = `INSERT INTO "${MIGRATION_TABLE}" (name, applied_at) VALUES ('${escapeSqlString(migrationDir)}', CURRENT_TIMESTAMP);`;
+    if (migrationSql.includes(MANAGED_MARKER)) {
+      // A rebuilding migration must disable foreign keys before its transaction.
+      // Recording success inside that same transaction keeps data and ledger atomic.
+      try {
+        await client.executeMultiple(managedMigrationSql(migrationSql, ledgerInsert));
+      } catch (error) {
+        await client.executeMultiple("ROLLBACK; PRAGMA foreign_keys=ON;").catch(() => {});
+        throw error;
+      }
+    } else {
+      await client.executeMultiple(`
 BEGIN;
 ${migrationSql}
-INSERT INTO "${MIGRATION_TABLE}" (name, applied_at)
-VALUES ('${escapeSqlString(migrationDir)}', CURRENT_TIMESTAMP);
+${ledgerInsert}
 COMMIT;
 `);
+    }
   }
 
   console.log(`Applied ${pendingDirs.length} Turso migration(s).`);
 }
 
 main().catch((error) => {
-  console.error("Turso migration runner failed:", error);
+  console.error("Turso migration runner failed:", error instanceof Error ? error.message.replace(/(?:libsql|https?):\/\/\S+/g, "[redacted endpoint]") : "unknown error");
   process.exitCode = 1;
 });

@@ -53,10 +53,10 @@ function queuedMatch(isAutomatic: boolean) {
     sessionId: "session-1",
     isAutomatic,
     matchmakingReasonJson: isAutomatic ? null : JSON.stringify({ legacy: true }),
-    team1User1Id: "p1",
-    team1User2Id: "p2",
-    team2User1Id: "p3",
-    team2User2Id: "p4",
+    team1Player1Id: "p1",
+    team1Player2Id: "p2",
+    team2Player1Id: "p3",
+    team2Player2Id: "p4",
   };
 }
 
@@ -94,9 +94,9 @@ describe("remove player queue cancellation", () => {
     });
     mocks.getSessionOperatorMembership.mockResolvedValue(null);
     mocks.sessionPlayerFindUnique.mockResolvedValue({
-      userId: "p1",
+      playerId: "p1",
       isGuest: false,
-      user: { name: "Player One" },
+      player: { name: "Player One" },
     });
     mocks.matchFindFirst.mockResolvedValue(null);
     mocks.applyPendingPlayerGroupChangesInTransaction.mockResolvedValue({

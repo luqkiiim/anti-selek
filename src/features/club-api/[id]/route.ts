@@ -3,540 +3,72 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { applyClubPulseNewsLikes, buildClubPulse } from "@/lib/clubPulse";
-import {
-  getClubStatUserResolver,
-  getOfflineIdentityInfoByUserId,
-} from "@/lib/offlineIdentities";
+import { getClubStatUserResolver, getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import { buildClubLeaderboardRankMovements } from "@/lib/profileClubRank";
 import { prisma } from "@/lib/prisma";
+import { getClubRoster } from "@/lib/clubRoster";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { listSessionsForClub } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
-import {
-  deleteTutorialPlayground,
-  getTutorialClubDisplayName,
-} from "@/lib/tutorialPlayground";
+import { deleteTutorialPlayground, getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
-import {
-  canQuickAccessClub,
-  getQuickAccessDeniedMessage,
-  isQuickAccessSession,
-  normalizeNameLookupKey,
-} from "@/lib/quickAccess";
-import {
-  ClaimRequestStatus,
-  ClubRole,
-  ClubPlayerStatus,
-  PartnerPreference,
-  PlayerGender,
-  SessionPool,
-  SessionStatus,
-} from "@/types/enums";
-import { isValidSessionPool } from "@/lib/sessionPools";
+import { canQuickAccessClub, getQuickAccessDeniedMessage, isQuickAccessSession, normalizeNameLookupKey } from "@/lib/quickAccess";
 
-function toClaimRequestResponse(request: {
-  id: string;
-  clubId: string;
-  requesterUserId: string;
-  targetUserId: string;
-  status: string;
-  note: string | null;
-  createdAt: Date;
-  reviewedAt: Date | null;
-  requester: { id: string; name: string; email: string | null };
-  target: { id: string; name: string; email: string | null };
-  linkedClubNames?: string[];
-}) {
-  return withLegacyClubAliases({
-    id: request.id,
-    clubId: request.clubId,
-    requesterUserId: request.requesterUserId,
-    requesterName: request.requester.name,
-    requesterEmail: request.requester.email,
-    targetUserId: request.targetUserId,
-    targetName: request.target.name,
-    targetEmail: request.target.email,
-    status: request.status,
-    note: request.note,
-    linkedClubNames: request.linkedClubNames ?? [],
-    linkedCommunityNames: request.linkedClubNames ?? [],
-    createdAt: request.createdAt,
-    reviewedAt: request.reviewedAt,
-  });
-}
-
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:communities:id:get", { limit: 30, windowMs: 60_000 });
-    if (rateLimitResponse) return rateLimitResponse;
-
+    const limited = await rateLimit(request, "api:communities:id:get", { limit: 30, windowMs: 60_000 });
+    if (limited) return limited;
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
-
+    if (!session?.user?.id) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     const { id } = await params;
-
-    if (typeof id !== "string" || id.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
-    }
-
-    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id");
-
-    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    if (!canQuickAccessClub(session, id)) {
-      return invalidTargetResponse(request, "api:communities:id");
-    }
-
-    const viewerId = session.user.id;
-    const viewerIsQuickAccess = isQuickAccessSession(session);
-    const viewerIsAdmin = !viewerIsQuickAccess && !!session.user.isAdmin;
-
-    const [viewer, membership, club] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: viewerId },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          avatarKey: true,
-          elo: true,
-          gender: true,
-          partnerPreference: true,
-          mixedSideOverride: true,
-        },
-      }),
-      prisma.clubMember.findUnique({
-        where: {
-          clubId_userId: {
-            clubId: id,
-            userId: viewerId,
-          },
-        },
-        select: {
-          role: true,
-          elo: true,
-        },
-      }),
-      prisma.club.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          name: true,
-          rules: true,
-          avatarKey: true,
-          createdById: true,
-          isTutorial: true,
-          tutorialOwnerId: true,
-          isPasswordProtected: true,
-          _count: {
-            select: {
-              members: true,
-              sessions: true,
-            },
-          },
-        },
-      }),
+    if (!canQuickAccessClub(session, id)) return invalidTargetResponse(request, "api:communities:id");
+    const quick = isQuickAccessSession(session);
+    const actorId = session.user.id;
+    const [account, access, club, viewerMembership] = await Promise.all([
+      quick ? Promise.resolve(null) : prisma.user.findUnique({ where: { id: actorId } }),
+      quick ? Promise.resolve(null) : prisma.clubAccess.findUnique({ where: { clubId_userId: { clubId: id, userId: actorId } } }),
+      prisma.club.findUnique({ where: { id }, include: { _count: { select: { members: true, sessions: true } } } }),
+      prisma.clubMember.findFirst({ where: { clubId: id, archivedAt: null, ...(quick ? { playerId: session.user.guestPlayerId ?? "" } : { ownerUserId: actorId }) }, include: { player: true } }),
     ]);
-
-    if (!club) {
-      return invalidTargetResponse(request, "api:communities:id");
-    }
-
-    const viewerIsOwner = club.createdById === viewerId;
-    const viewerCanAdminClub =
-      viewerIsAdmin || viewerIsOwner || membership?.role === ClubRole.ADMIN;
-
-    if (club.isTutorial && club.tutorialOwnerId !== viewerId) {
-      return invalidTargetResponse(request, "api:communities:id");
-    }
-
-    if (!membership && !viewerIsAdmin && !viewerIsOwner) {
-      return invalidTargetResponse(request, "api:communities:id");
-    }
-
-    if (!viewer) {
-      return invalidTargetResponse(request, "api:communities:id");
-    }
-
-    const [
-      members,
-      completedMatches,
-      sessions,
-      claimRequests,
-      unreadNotificationCount,
-    ] = await Promise.all([
-      prisma.clubMember.findMany({
-        where: { clubId: id },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatarKey: true,
-              gender: true,
-              partnerPreference: true,
-              mixedSideOverride: true,
-              isActive: true,
-              isClaimed: true,
-              createdAt: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.match.findMany({
-        where: {
-          status: "COMPLETED",
-          session: {
-            isTest: false,
-            OR: [
-              { clubId: id },
-              {
-                sessionClubs: {
-                  some: {
-                    clubId: id,
-                    status: "ACCEPTED",
-                  },
-                },
-              },
-            ],
-          },
-        },
-        select: {
-          id: true,
-          completedAt: true,
-          winnerTeam: true,
-          team1User1Id: true,
-          team1User2Id: true,
-          team2User1Id: true,
-          team2User2Id: true,
-          team1Score: true,
-          team2Score: true,
-          team1EloChange: true,
-          team2EloChange: true,
-          team1User1: { select: { id: true, name: true, avatarKey: true } },
-          team1User2: { select: { id: true, name: true, avatarKey: true } },
-          team2User1: { select: { id: true, name: true, avatarKey: true } },
-          team2User2: { select: { id: true, name: true, avatarKey: true } },
-          eloAdjustments: {
-            where: { clubId: id },
-            select: {
-              userId: true,
-              delta: true,
-              beforeElo: true,
-              afterElo: true,
-            },
-          },
-          session: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              type: true,
-              createdAt: true,
-              endedAt: true,
-            },
-          },
-        },
-      }),
-      listSessionsForClub({
-        clubId: id,
-        viewerId,
-        viewerIsAdmin: viewerCanAdminClub,
-      }),
-      prisma.claimRequest.findMany({
-        where:
-          viewerCanAdminClub
-            ? {
-                clubId: id,
-                status: ClaimRequestStatus.PENDING,
-              }
-            : {
-                clubId: id,
-                requesterUserId: viewerId,
-                status: ClaimRequestStatus.PENDING,
-              },
-        include: {
-          requester: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-          target: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.clubNotification.count({
-        where: {
-          clubId: id,
-          recipientUserId: viewerId,
-          readAt: null,
-        },
-      }),
+    if (!club || (!quick && !account) || (club.isTutorial && club.tutorialOwnerId !== actorId)) return invalidTargetResponse(request, "api:communities:id");
+    const isOwner = !quick && club.createdById === actorId && access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role);
+    const canAdmin = !quick && (!!session.user.isAdmin || isOwner || (access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role)));
+    if (quick ? !viewerMembership : !canAdmin && access?.status !== "ACTIVE") return invalidTargetResponse(request, "api:communities:id");
+    const [roster, storedMatches, sessions, unreadCount] = await Promise.all([
+      getClubRoster(prisma, id),
+      prisma.match.findMany({ where: { status: "COMPLETED", session: { isTest: false, OR: [{ clubId: id }, { sessionClubs: { some: { clubId: id, status: "ACCEPTED" } } }] } }, include: { team1Player1: true, team1Player2: true, team2Player1: true, team2Player2: true, eloAdjustments: { where: { clubId: id } }, session: true } }),
+      listSessionsForClub({ clubId: id, viewerId: actorId, viewerIsAdmin: canAdmin }),
+      quick ? Promise.resolve(0) : prisma.clubNotification.count({ where: { clubId: id, recipientPlayer: { ownerUserId: actorId }, readAt: null } }),
     ]);
-
-    const statsByUserId = new Map<string, { wins: number; losses: number }>();
-    const offlineIdentityInfoByUserId = await getOfflineIdentityInfoByUserId(
-      prisma,
-      members.map((member) => member.user.id)
-    );
-    for (const member of members) {
-      statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
+    const matches = withLegacySportingAliases(storedMatches);
+    const resolve = await getClubStatUserResolver(prisma, { clubId: id, memberUserIds: roster.map(p => p.id) });
+    const links = await getOfflineIdentityInfoByUserId(prisma, roster.map(p => p.id));
+    const stats = new Map(roster.map(p => [p.id, { wins: 0, losses: 0, matches: 0 }]));
+    for (const match of matches) {
+      const team1 = [match.team1Player1Id, match.team1Player2Id].map(resolve);
+      const team2 = [match.team2Player1Id, match.team2Player2Id].map(resolve);
+      for (const playerId of new Set([...team1, ...team2])) { const stat = stats.get(playerId); if (stat) stat.matches++; }
+      if (match.winnerTeam !== 1 && match.winnerTeam !== 2) continue;
+      for (const playerId of match.winnerTeam === 1 ? team1 : team2) { const stat = stats.get(playerId); if (stat) stat.wins++; }
+      for (const playerId of match.winnerTeam === 1 ? team2 : team1) { const stat = stats.get(playerId); if (stat) stat.losses++; }
     }
-    const resolveStatUserId = await getClubStatUserResolver(prisma, {
-      clubId: id,
-      memberUserIds: members.map((member) => member.user.id),
-    });
-    const recordedMatchCountByUserId = new Map<string, number>(
-      members.map((member) => [member.user.id, 0])
-    );
-    for (const match of completedMatches) {
-      const participantIds = new Set(
-        [
-          match.team1User1Id,
-          match.team1User2Id,
-          match.team2User1Id,
-          match.team2User2Id,
-        ].map(resolveStatUserId)
-      );
-
-      for (const participantId of participantIds) {
-        if (recordedMatchCountByUserId.has(participantId)) {
-          recordedMatchCountByUserId.set(
-            participantId,
-            (recordedMatchCountByUserId.get(participantId) ?? 0) + 1
-          );
-        }
-      }
-    }
-    const latestCompletedSession = sessions
-      .filter(
-        (sessionItem) =>
-          !sessionItem.isTest && sessionItem.status === SessionStatus.COMPLETED
-      )
-      .sort((left, right) => {
-        const leftTime = new Date(left.endedAt ?? left.createdAt).getTime();
-        const rightTime = new Date(right.endedAt ?? right.createdAt).getTime();
-        return rightTime - leftTime;
-      })[0];
-    const latestCompletedSessionMatches = latestCompletedSession
-      ? completedMatches.filter(
-          (match) => match.session.id === latestCompletedSession.id
-        )
-      : [];
-    const rankMovements = buildClubLeaderboardRankMovements({
-      members: members.map((member) => ({
-        userId: member.user.id,
-        name: member.user.name,
-        elo: member.elo,
-        isLeaderboardEligible:
-          member.status !== ClubPlayerStatus.OCCASIONAL &&
-          (recordedMatchCountByUserId.get(member.user.id) ?? 0) > 0,
-      })),
-      matchesSinceWindowStart: latestCompletedSessionMatches,
-      resolveUserId: resolveStatUserId,
-    });
-
-    for (const match of completedMatches) {
-      if (match.winnerTeam !== 1 && match.winnerTeam !== 2) {
-        continue;
-      }
-
-      const team1Ids = [match.team1User1Id, match.team1User2Id].map(
-        resolveStatUserId
-      );
-      const team2Ids = [match.team2User1Id, match.team2User2Id].map(
-        resolveStatUserId
-      );
-      const winners = match.winnerTeam === 1 ? team1Ids : team2Ids;
-      const losers = match.winnerTeam === 1 ? team2Ids : team1Ids;
-
-      for (const winnerId of winners) {
-        const stat = statsByUserId.get(winnerId);
-        if (stat) stat.wins += 1;
-      }
-
-      for (const loserId of losers) {
-        const stat = statsByUserId.get(loserId);
-        if (stat) stat.losses += 1;
-      }
-    }
-
-    const clubMembers = members.map((member) => {
-      const offlineIdentityInfo = offlineIdentityInfoByUserId.get(member.user.id);
-      const rankMovement = rankMovements.get(member.user.id);
-
-      return {
-        id: member.user.id,
-        name: member.user.name,
-        email: member.user.email,
-        avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
-        preferredPool: isValidSessionPool(member.preferredPool)
-          ? member.preferredPool
-          : SessionPool.B,
-        status:
-          member.status === ClubPlayerStatus.OCCASIONAL
-            ? ClubPlayerStatus.OCCASIONAL
-            : ClubPlayerStatus.CORE,
-        gender: [
-          PlayerGender.MALE,
-          PlayerGender.FEMALE,
-          PlayerGender.UNSPECIFIED,
-        ].includes(member.user.gender as PlayerGender)
-          ? member.user.gender
-          : PlayerGender.UNSPECIFIED,
-        partnerPreference: member.user.partnerPreference,
-        mixedSideOverride:
-          typeof member.user.mixedSideOverride === "string"
-            ? member.user.mixedSideOverride
-            : null,
-        elo: member.elo,
-        isActive: member.user.isActive,
-        isClaimed: member.user.isClaimed,
-        createdAt: member.user.createdAt,
-        matchesPlayed: recordedMatchCountByUserId.get(member.user.id) ?? 0,
-        wins: statsByUserId.get(member.user.id)?.wins ?? 0,
-        losses: statsByUserId.get(member.user.id)?.losses ?? 0,
-        previousRank: rankMovement?.previousRank ?? null,
-        rankDelta: rankMovement?.rankDelta ?? null,
-        role: member.role,
-        isOwner: member.user.id === club.createdById,
-        offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
-        linkedClubBadges: offlineIdentityInfo?.linkedClubBadges ?? [],
-      };
-    });
-    let clubPulse = buildClubPulse({
-      members: clubMembers.map((member) => ({
-        id: member.id,
-        name: member.name,
-        avatarUrl: member.avatarUrl,
-        elo: member.elo,
-        status: member.status,
-      })),
-      sessions,
-      completedMatches: completedMatches.map((match) => ({
-        ...match,
-        team1User1: serializeAvatarEntity(match.team1User1),
-        team1User2: serializeAvatarEntity(match.team1User2),
-        team2User1: serializeAvatarEntity(match.team2User1),
-        team2User2: serializeAvatarEntity(match.team2User2),
-      })),
-    });
-    const newsItemIds = clubPulse.sessionNews.map((item) => item.id);
-
-    if (newsItemIds.length > 0) {
-      const newsLikes = await prisma.clubNewsLike.findMany({
-        where: {
-          clubId: id,
-          newsItemId: {
-            in: newsItemIds,
-          },
-        },
-        select: {
-          newsItemId: true,
-          userId: true,
-        },
-      });
-      const likeStateByNewsItemId = new Map<
-        string,
-        { likeCount: number; likedByMe: boolean }
-      >();
-
-      for (const like of newsLikes) {
-        const likeState = likeStateByNewsItemId.get(like.newsItemId) ?? {
-          likeCount: 0,
-          likedByMe: false,
-        };
-        likeState.likeCount += 1;
-        if (like.userId === viewerId) {
-          likeState.likedByMe = true;
-        }
-        likeStateByNewsItemId.set(like.newsItemId, likeState);
-      }
-
-      clubPulse = applyClubPulseNewsLikes(clubPulse, likeStateByNewsItemId);
-    }
-
-    const clubPayload = {
-      id: club.id,
-      name: getTutorialClubDisplayName(club),
-      avatarUrl: serializeAvatarEntity(club).avatarUrl,
-      clubId: club.id,
-      clubName: getTutorialClubDisplayName(club),
-      rules: club.rules,
-      isTutorial: club.isTutorial,
-      tutorialOwnerId: club.tutorialOwnerId,
-      viewerIsOwner,
-      role: viewerIsQuickAccess
-        ? ClubRole.MEMBER
-        : viewerCanAdminClub
-          ? ClubRole.ADMIN
-          : membership?.role ?? "MEMBER",
-      isPasswordProtected: club.isPasswordProtected,
-      membersCount: club._count.members,
-      sessionsCount: club._count.sessions,
-    };
+    const latest = [...sessions].filter(s => !s.isTest && s.status === "COMPLETED").sort((a, b) => new Date(b.endedAt ?? b.createdAt).getTime() - new Date(a.endedAt ?? a.createdAt).getTime())[0];
+    const movements = buildClubLeaderboardRankMovements({ members: roster.map(p => ({ userId: p.id, name: p.name, elo: p.elo, isLeaderboardEligible: p.status !== "OCCASIONAL" && (stats.get(p.id)?.matches ?? 0) > 0 })), matchesSinceWindowStart: matches.filter(m => m.sessionId === latest?.id), resolveUserId: resolve });
+    const members = roster.map(p => ({ ...p, wins: stats.get(p.id)?.wins ?? 0, losses: stats.get(p.id)?.losses ?? 0, matchesPlayed: stats.get(p.id)?.matches ?? 0, previousRank: movements.get(p.id)?.previousRank ?? null, rankDelta: movements.get(p.id)?.rankDelta ?? null, offlineIdentityId: links.get(p.id)?.offlineIdentityId ?? null, linkedClubBadges: links.get(p.id)?.linkedClubBadges ?? [] }));
+    let pulse = buildClubPulse({ members, sessions: withLegacySportingAliases(sessions), completedMatches: matches.map(m => ({ ...m, team1User1: serializeAvatarEntity(m.team1Player1), team1User2: serializeAvatarEntity(m.team1Player2), team2User1: serializeAvatarEntity(m.team2Player1), team2User2: serializeAvatarEntity(m.team2Player2) })) });
+    const likes = await prisma.clubNewsLike.findMany({ where: { clubId: id, newsItemId: { in: pulse.sessionNews.map(n => n.id) } }, select: { newsItemId: true, userId: true } });
+    const likeState = new Map<string, { likeCount: number; likedByMe: boolean }>();
+    for (const like of likes) { const state = likeState.get(like.newsItemId) ?? { likeCount: 0, likedByMe: false }; state.likeCount++; state.likedByMe ||= !quick && like.userId === actorId; likeState.set(like.newsItemId, state); }
+    pulse = applyClubPulseNewsLikes(pulse, likeState);
+    const player = viewerMembership?.player;
+    const clubPayload = withLegacyClubAliases({ id: club.id, name: getTutorialClubDisplayName(club), rules: club.rules, avatarUrl: serializeAvatarEntity(club).avatarUrl, clubId: club.id, clubName: getTutorialClubDisplayName(club), isTutorial: club.isTutorial, tutorialOwnerId: club.tutorialOwnerId, viewerIsOwner: isOwner, role: canAdmin ? "ADMIN" : access?.role ?? "MEMBER", isPasswordProtected: club.isPasswordProtected, membersCount: members.length, sessionsCount: club._count.sessions });
     return NextResponse.json({
-      viewer: {
-        id: viewer.id,
-        name: viewer.name,
-        email: viewer.email,
-        avatarUrl: serializeAvatarEntity(viewer).avatarUrl,
-        isAdmin: viewerIsAdmin,
-        elo: membership?.elo ?? viewer.elo,
-        gender:
-          [PlayerGender.MALE, PlayerGender.FEMALE].includes(
-            viewer.gender as PlayerGender
-          )
-            ? viewer.gender
-            : PlayerGender.MALE,
-        partnerPreference:
-          typeof viewer.partnerPreference === "string"
-            ? (viewer.partnerPreference as PartnerPreference)
-            : PartnerPreference.OPEN,
-        mixedSideOverride:
-          typeof viewer.mixedSideOverride === "string"
-            ? viewer.mixedSideOverride
-            : null,
-      },
-      club: withLegacyClubAliases(clubPayload),
-      community: withLegacyClubAliases(clubPayload),
-      clubMembers,
-      communityMembers: clubMembers,
-      sessions,
-      clubPulse: clubPulse,
-      communityPulse: clubPulse,
-      notifications: {
-        unreadCount: unreadNotificationCount,
-      },
-      claimRequests: claimRequests.map((claimRequest) =>
-        toClaimRequestResponse({
-          ...claimRequest,
-          linkedClubNames:
-            offlineIdentityInfoByUserId
-              .get(claimRequest.targetUserId)
-              ?.linkedClubBadges.map((badge) => badge.name) ?? [],
-        })
-      ),
+      viewer: { id: actorId, userId: quick ? null : actorId, playerId: player?.id ?? null, name: player?.name ?? account?.name ?? "Guest", email: account?.email ?? null, avatarUrl: serializeAvatarEntity(player ?? account ?? { avatarKey: null }).avatarUrl, isAdmin: !quick && !!session.user.isAdmin, isQuickAccess: quick, elo: viewerMembership?.elo ?? player?.elo ?? 1000, gender: player?.gender ?? "UNSPECIFIED", partnerPreference: player?.partnerPreference ?? "OPEN", mixedSideOverride: player?.mixedSideOverride ?? null },
+      club: clubPayload, community: clubPayload, clubMembers: members, communityMembers: members, sessions: withLegacySportingAliases(sessions), clubPulse: pulse, communityPulse: pulse, notifications: { unreadCount }, claimRequests: [],
     });
-  } catch (error) {
-    logError("Get club snapshot error", error);
-    return safeErrorResponse();
-  }
+  } catch (error) { logError("Get club", error); return safeErrorResponse(); }
 }
 
 export async function PATCH(
@@ -569,14 +101,14 @@ export async function PATCH(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const [membership, existing] = await Promise.all([
-      prisma.clubMember.findUnique({
+      prisma.clubAccess.findUnique({
         where: {
           clubId_userId: {
             clubId: id,
             userId: session.user.id,
           },
         },
-        select: { role: true },
+        select: { role: true, status: true },
       }),
       prisma.club.findUnique({
         where: { id },
@@ -594,10 +126,10 @@ export async function PATCH(
     if (!existing) {
       return invalidTargetResponse(request, "api:communities:id");
     }
-    const viewerIsOwner = existing.createdById === session.user.id;
+    const viewerIsOwner = existing.createdById === session.user.id && membership?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(membership.role);
     if (
       !viewerIsOwner &&
-      membership?.role !== ClubRole.ADMIN &&
+      (membership?.status !== "ACTIVE" || !["ADMIN", "OWNER"].includes(membership.role)) &&
       !session.user.isAdmin
     ) {
       return invalidTargetResponse(request, "api:communities:id");
@@ -782,14 +314,14 @@ export async function DELETE(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const [membership, existing] = await Promise.all([
-      prisma.clubMember.findUnique({
+      prisma.clubAccess.findUnique({
         where: {
           clubId_userId: {
             clubId: id,
             userId: session.user.id,
           },
         },
-        select: { role: true },
+        select: { role: true, status: true },
       }),
       prisma.club.findUnique({
         where: { id },
@@ -805,10 +337,10 @@ export async function DELETE(
     if (!existing) {
       return invalidTargetResponse(request, "api:communities:id");
     }
-    const viewerIsOwner = existing.createdById === session.user.id;
+    const viewerIsOwner = existing.createdById === session.user.id && membership?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(membership.role);
     if (
       !viewerIsOwner &&
-      membership?.role !== ClubRole.ADMIN &&
+      (membership?.status !== "ACTIVE" || !["ADMIN", "OWNER"].includes(membership.role)) &&
       !session.user.isAdmin
     ) {
       return invalidTargetResponse(request, "api:communities:id");
@@ -822,6 +354,20 @@ export async function DELETE(
     if (confirmation !== "DELETE") {
       return NextResponse.json({ error: "Invalid confirmation text" }, { status: 400 });
     }
+
+    const admissionHistory = await prisma.clubAdmissionRequest.findFirst({
+      where: { clubId: id },
+      select: { id: true },
+    });
+    if (admissionHistory) {
+      return NextResponse.json(
+        { error: "This club has admission history that must be retained and cannot be deleted." },
+        { status: 409 },
+      );
+    }
+
+    const invitationHistory = await prisma.playerInvitation.findFirst({ where: { clubId: id }, select: { id: true } });
+    if (invitationHistory) return NextResponse.json({ error: "This club has Player invitation history that must be retained and cannot be deleted." }, { status: 409 });
 
     if (existing.isTutorial) {
       if (existing.tutorialOwnerId !== session.user.id) {
@@ -853,6 +399,16 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (["P2003", "P2004", "P2014"].includes(String(code))) {
+      return NextResponse.json(
+        { error: "This club has linked history that must be retained and cannot be deleted." },
+        { status: 409 },
+      );
+    }
     logError("Delete club error", error);
     return safeErrorResponse();
   }

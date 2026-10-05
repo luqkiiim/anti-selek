@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
@@ -12,6 +13,7 @@ import {
   isValidSessionPool,
 } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
+import { IdentityConflictError, resolveOwnedSessionPlayer } from "@/lib/playerIdentity";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
   getAcceptedSessionClubIds,
@@ -47,13 +49,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:join");
@@ -61,7 +63,7 @@ export async function POST(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => ({}));
     const {
-      userId: targetUserId,
+      playerId: targetPlayerIdInput,
       gender: overrideGender,
       partnerPreference: overridePreference,
       mixedSideOverride: overrideMixedSideOverride,
@@ -69,7 +71,7 @@ export async function POST(
       representingClubId,
     } =
       body as {
-        userId?: unknown;
+        playerId?: unknown;
         gender?: unknown;
         partnerPreference?: unknown;
         mixedSideOverride?: unknown;
@@ -81,14 +83,14 @@ export async function POST(
       representingClubId !== null &&
       typeof representingClubId !== "string"
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid representing club" },
         { status: 400 }
       );
     }
 
     // Determine who is joining
-    let userIdToJoin = session.user.id;
+    // Resolve an explicitly owned Player profile below.
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
@@ -106,7 +108,7 @@ export async function POST(
     }
 
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Tournament already ended" },
         { status: 400 }
       );
@@ -117,27 +119,69 @@ export async function POST(
       userId: session.user.id,
       acceptedOnly: true,
     });
+    const acceptedSessionClubIds = await getAcceptedSessionClubIds(
+      prisma,
+      sessionData
+    );
     const requesterOperatorMembership = await getSessionOperatorMembership(prisma, {
       session: sessionData,
       userId: session.user.id,
       acceptedOnly: true,
     });
-    if (sessionData.clubId) {
+    if (sessionData.clubId || acceptedSessionClubIds.length > 0) {
       if (!requesterMembership && !session.user.isAdmin) {
-        return NextResponse.json({ error: "Not a member of this club" }, { status: 403 });
+        return sportingJson({ error: "Not a member of this club" }, { status: 403 });
       }
     }
 
-    // If admin is trying to add someone else
-    if (typeof targetUserId === "string" && targetUserId !== session.user.id) {
-      if (!session.user.isAdmin && !requesterOperatorMembership) {
-        return NextResponse.json({ error: "Only club admins or staff can add other players" }, { status: 403 });
+    const acceptedInterclubClubIds = isInterclubSession(sessionData)
+      ? getAcceptedInterclubClubIds(sessionData)
+      : [];
+    const ownedProfileClubIds = acceptedInterclubClubIds.length > 0
+      ? acceptedInterclubClubIds
+      : sessionData.clubId
+        ? [sessionData.clubId]
+        : acceptedSessionClubIds;
+    const requestedPlayerId =
+      typeof targetPlayerIdInput === "string" && targetPlayerIdInput.length > 0
+        ? targetPlayerIdInput
+        : null;
+    let playerIdToJoin: string;
+    let requesterOwnsTarget = false;
+
+    if (requestedPlayerId) {
+      const requestedPlayer = await prisma.player.findUnique({
+        where: { id: requestedPlayerId },
+        select: { ownerUserId: true },
+      });
+      if (!requestedPlayer) {
+        return invalidTargetResponse(request, "api:sessions:code:join");
       }
-      userIdToJoin = targetUserId;
+      requesterOwnsTarget = requestedPlayer.ownerUserId === session.user.id;
+      if (!requesterOwnsTarget && !session.user.isAdmin && !requesterOperatorMembership) {
+        return sportingJson(
+          { error: "Only club admins or staff can add other players" },
+          { status: 403 }
+        );
+      }
+      playerIdToJoin = requestedPlayerId;
+    } else {
+      const ownedPlayer = await resolveOwnedSessionPlayer(prisma, {
+        userId: session.user.id,
+        clubIds: ownedProfileClubIds,
+      });
+      if (!ownedPlayer) {
+        return sportingJson(
+          { error: "Choose a player profile before joining this tournament" },
+          { status: 400 }
+        );
+      }
+      playerIdToJoin = ownedPlayer.id;
+      requesterOwnsTarget = true;
     }
 
     if (overridePool !== undefined && !isValidSessionPool(overridePool)) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Invalid player group" },
         { status: 400 }
       );
@@ -148,7 +192,7 @@ export async function POST(
       !session.user.isAdmin &&
       !requesterOperatorMembership
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only club admins or staff can override a player group" },
         { status: 403 }
       );
@@ -157,19 +201,19 @@ export async function POST(
     // Check if already in session
     const existing = await prisma.sessionPlayer.findUnique({
       where: {
-        sessionId_userId: {
+        sessionId_playerId: {
           sessionId: sessionData.id,
-          userId: userIdToJoin,
+          playerId: playerIdToJoin,
         },
       },
     });
 
     if (existing) {
-      return NextResponse.json(sessionData);
+      return sportingJson(sessionData);
     }
 
-    const userProfile = await prisma.user.findUnique({
-      where: { id: userIdToJoin },
+    const userProfile = await prisma.player.findUnique({
+      where: { id: playerIdToJoin },
       select: {
         gender: true,
         partnerPreference: true,
@@ -225,15 +269,15 @@ export async function POST(
       const clubBadges = await getPlayerClubBadges(
         prisma,
         acceptedInterclubClubIds,
-        [userIdToJoin]
+        [playerIdToJoin]
       );
-      const eligibleClubIds = (clubBadges.get(userIdToJoin) ?? [])
+      const eligibleClubIds = (clubBadges.get(playerIdToJoin) ?? [])
         .map((badge) => badge.id)
         .filter((clubId) => acceptedInterclubClubIds.includes(clubId));
       const uniqueEligibleClubIds = Array.from(new Set(eligibleClubIds));
 
       if (uniqueEligibleClubIds.length === 0) {
-        return NextResponse.json(
+        return sportingJson(
           { error: "Player must belong to one of the two clubs" },
           { status: 400 }
         );
@@ -241,7 +285,7 @@ export async function POST(
 
       if (typeof representingClubId === "string" && representingClubId !== "") {
         if (!uniqueEligibleClubIds.includes(representingClubId)) {
-          return NextResponse.json(
+          return sportingJson(
             { error: "Player can only represent a club they belong to" },
             { status: 400 }
           );
@@ -251,7 +295,7 @@ export async function POST(
       } else if (uniqueEligibleClubIds.length === 1) {
         normalizedRepresentingClubId = uniqueEligibleClubIds[0];
       } else {
-        return NextResponse.json(
+        return sportingJson(
           { error: "Choose which club this player represents" },
           { status: 400 }
         );
@@ -259,7 +303,7 @@ export async function POST(
 
       const representedClubId = normalizedRepresentingClubId;
       if (!representedClubId) {
-        return NextResponse.json(
+        return sportingJson(
           { error: "Choose which club this player represents" },
           { status: 400 }
         );
@@ -267,20 +311,38 @@ export async function POST(
 
       const targetMembership = await prisma.clubMember.findUnique({
         where: {
-          clubId_userId: {
+          clubId_playerId: {
             clubId: representedClubId,
-            userId: userIdToJoin,
+            playerId: playerIdToJoin,
           },
+          archivedAt: null,
         },
         select: {
           preferredPool: true,
         },
       });
       if (!targetMembership) {
-        return NextResponse.json(
+        return sportingJson(
           { error: "Target player is not a member of this club" },
           { status: 400 }
         );
+      }
+      if (requesterOwnsTarget && !session.user.isAdmin) {
+        const representedClubAccess = await prisma.clubAccess.findUnique({
+          where: {
+            clubId_userId: {
+              clubId: representedClubId,
+              userId: session.user.id,
+            },
+          },
+          select: { status: true },
+        });
+        if (representedClubAccess?.status !== "ACTIVE") {
+          return sportingJson(
+            { error: "You need active access to the club this Player represents" },
+            { status: 403 }
+          );
+        }
       }
 
       targetPreferredPool =
@@ -288,13 +350,87 @@ export async function POST(
           ? SessionPool.A
           : SessionPool.B;
     } else if (sessionData.clubId) {
-      const targetMembership = await getSessionMembership(prisma, {
-        session: sessionData,
-        userId: userIdToJoin,
-        acceptedOnly: true,
+      const targetMembership = await prisma.clubMember.findUnique({
+        where: {
+          clubId_playerId: {
+            clubId: sessionData.clubId,
+            playerId: playerIdToJoin,
+          },
+          archivedAt: null,
+        },
+        select: { preferredPool: true },
       });
       if (!targetMembership) {
-        return NextResponse.json({ error: "Target player is not a member of this club" }, { status: 400 });
+        return sportingJson({ error: "Target player is not a member of this club" }, { status: 400 });
+      }
+      if (requesterOwnsTarget && !session.user.isAdmin) {
+        const hostClubAccess = await prisma.clubAccess.findUnique({
+          where: {
+            clubId_userId: {
+              clubId: sessionData.clubId,
+              userId: session.user.id,
+            },
+          },
+          select: { status: true },
+        });
+        if (hostClubAccess?.status !== "ACTIVE") {
+          return sportingJson(
+            { error: "You need active access to this club to join with this Player" },
+            { status: 403 }
+          );
+        }
+      }
+      targetPreferredPool =
+        targetMembership.preferredPool === SessionPool.A
+          ? SessionPool.A
+          : SessionPool.B;
+    } else if (acceptedSessionClubIds.length > 0) {
+      let targetMembership: { preferredPool: string } | null = null;
+      let ownedRosterWithoutAccess = false;
+      for (const linkedClubId of acceptedSessionClubIds) {
+        const linkedTargetMembership = await prisma.clubMember.findUnique({
+          where: {
+            clubId_playerId: {
+              clubId: linkedClubId,
+              playerId: playerIdToJoin,
+            },
+            archivedAt: null,
+          },
+          select: { preferredPool: true },
+        });
+        if (!linkedTargetMembership) continue;
+
+        if (requesterOwnsTarget && !session.user.isAdmin) {
+          const linkedClubAccess = await prisma.clubAccess.findUnique({
+            where: {
+              clubId_userId: {
+                clubId: linkedClubId,
+                userId: session.user.id,
+              },
+            },
+            select: { status: true },
+          });
+          if (linkedClubAccess?.status !== "ACTIVE") {
+            ownedRosterWithoutAccess = true;
+            continue;
+          }
+        }
+
+        targetMembership = linkedTargetMembership;
+        break;
+      }
+
+      if (!targetMembership) {
+        if (ownedRosterWithoutAccess) {
+          return sportingJson(
+            { error: "You need active access to the club this Player represents" },
+            { status: 403 }
+          );
+        }
+        return sportingJson(
+          { error: "Target player is not a member of this club" },
+          { status: 400 }
+        );
       }
       targetPreferredPool =
         targetMembership.preferredPool === SessionPool.A
@@ -331,7 +467,7 @@ export async function POST(
       data: {
         players: {
           create: {
-            userId: userIdToJoin,
+            playerId: playerIdToJoin,
             isGuest: false,
             representingClubId: normalizedRepresentingClubId,
             gender: sessionGender,
@@ -351,7 +487,7 @@ export async function POST(
         courts: { include: { currentMatch: true } },
         players: {
           include: {
-            user: {
+            player: {
               select: {
                 id: true,
                 name: true,
@@ -370,7 +506,7 @@ export async function POST(
       prisma,
       updatedSession
     );
-    const playerIds = updatedSession.players.map((p) => p.userId);
+    const playerIds = updatedSession.players.map((p) => p.playerId);
     const players =
       linkedClubIds.length > 1 && updatedSession.players.length > 0
         ? withPlayerClubBadges(
@@ -389,8 +525,11 @@ export async function POST(
         ? await tryRebuildAutomaticQueuedMatchForSessionId(sessionData.id)
         : undefined;
 
-    return NextResponse.json({ ...updatedSession, players, queuedMatch });
+    return sportingJson({ ...updatedSession, players, queuedMatch });
   } catch (error) {
+    if (error instanceof IdentityConflictError) {
+      return sportingJson({ error: error.message }, { status: error.statusCode });
+    }
     logError("Join session error", error);
     return safeErrorResponse();
   }

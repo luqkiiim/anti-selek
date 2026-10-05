@@ -9,9 +9,9 @@ describe("offline identity response contracts", () => {
       id: "request-1",
       offlineIdentityId: "identity-1",
       sourceClubId: "community-1",
-      sourceUserId: "source-user-1",
+      sourcePlayerId: "source-user-1",
       targetClubId: "community-2",
-      targetUserId: "target-user-1",
+      targetPlayerId: "target-user-1",
       status: "PENDING",
       requestedById: "admin-1",
       reviewedById: null,
@@ -25,15 +25,15 @@ describe("offline identity response contracts", () => {
         id: "community-2",
         name: "Target Club",
       },
-      sourceUser: {
+      sourcePlayer: {
         id: "source-user-1",
         name: "Source Player",
-        email: null,
+        ownerUser: null,
       },
-      targetUser: {
+      targetPlayer: {
         id: "target-user-1",
         name: "Target Player",
-        email: null,
+        ownerUser: null,
       },
       requestedBy: {
         id: "admin-1",

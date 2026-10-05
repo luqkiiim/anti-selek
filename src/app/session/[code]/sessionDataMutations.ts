@@ -40,6 +40,7 @@ export interface MatchPayload {
   }>;
   completedAt?: string | Date | null;
   scoreSubmittedByUserId?: string | null;
+  scoreSubmittedByPlayerId?: string | null;
   team1User1Id?: string;
   team1User2Id?: string;
   team2User1Id?: string;
@@ -55,6 +56,8 @@ export interface MatchPayload {
 }
 
 export interface SessionSnapshotLike {
+  viewerUserId?: string | null;
+  viewerPlayerId?: string | null;
   status?: string;
   type?: string;
   mode?: SessionData["mode"];
@@ -211,6 +214,10 @@ function buildLiveMatch(
     status: payload.status,
     createdAt: normalizeOptionalDate(payload.createdAt) ?? fallbackMatch?.createdAt,
     scoreSubmittedByUserId: payload.scoreSubmittedByUserId ?? null,
+    scoreSubmittedByPlayerId:
+      payload.scoreSubmittedByPlayerId !== undefined
+        ? payload.scoreSubmittedByPlayerId
+        : fallbackMatch?.scoreSubmittedByPlayerId ?? null,
     team1User1,
     team1User2,
     team2User1,

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
@@ -16,11 +17,11 @@ export async function autoAssignQueuedMatch(
   sessionId: string,
   options?: { generateIfMissing?: boolean }
 ) {
-  const sessionData = await prisma.session.findUnique({
+  const sessionData = withLegacySportingAliases(await prisma.session.findUnique({
     where: { id: sessionId },
     include: {
       players: {
-        include: { user: { select: { id: true, name: true, elo: true } } },
+        include: { player: { select: { id: true, name: true, elo: true } } },
       },
       matches: true,
       sessionClubs: {
@@ -33,7 +34,7 @@ export async function autoAssignQueuedMatch(
         include: { currentMatch: true },
       },
     },
-  });
+  }));
 
   if (!sessionData) {
     return { autoAssignedMatch: null, queuedMatchCleared: false };
@@ -98,12 +99,12 @@ export async function autoAssignQueuedMatch(
   });
   const partition = {
     team1: [
-      sessionData.queuedMatch.team1User1Id,
-      sessionData.queuedMatch.team1User2Id,
+      sessionData.queuedMatch.team1Player1Id,
+      sessionData.queuedMatch.team1Player2Id,
     ] as [string, string],
     team2: [
-      sessionData.queuedMatch.team2User1Id,
-      sessionData.queuedMatch.team2User2Id,
+      sessionData.queuedMatch.team2Player1Id,
+      sessionData.queuedMatch.team2Player2Id,
     ] as [string, string],
   };
 

@@ -10,12 +10,14 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
   searchParams: new URLSearchParams(),
+  sessionStatus: "unauthenticated" as "loading" | "authenticated" | "unauthenticated",
   signIn: vi.fn(),
 }));
 
 vi.mock("next-auth/react", () => ({
   getSession: mocks.getSession,
   signIn: mocks.signIn,
+  useSession: () => ({ data: null, status: mocks.sessionStatus }),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -67,6 +69,7 @@ describe("authentication pages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.searchParams = new URLSearchParams();
+    mocks.sessionStatus = "unauthenticated";
     mocks.signIn.mockResolvedValue({ ok: true });
     mocks.getSession.mockResolvedValue({
       user: { quickAccessClubId: "club-1" },

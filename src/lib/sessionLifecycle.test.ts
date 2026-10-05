@@ -10,18 +10,18 @@ describe("session lifecycle rollback", () => {
   it("reverses completed-match Elo deltas for core players and ignores guests", () => {
     const matches: CompletedMatchEloChange[] = [
       {
-        team1User1Id: "A",
-        team1User2Id: "GUEST_X",
-        team2User1Id: "B",
-        team2User2Id: "C",
+        team1Player1Id: "A",
+        team1Player2Id: "GUEST_X",
+        team2Player1Id: "B",
+        team2Player2Id: "C",
         team1EloChange: 8,
         team2EloChange: -8,
       },
       {
-        team1User1Id: "A",
-        team1User2Id: "B",
-        team2User1Id: "C",
-        team2User2Id: "D",
+        team1Player1Id: "A",
+        team1Player2Id: "B",
+        team2Player1Id: "C",
+        team2Player2Id: "D",
         team1EloChange: -5,
         team2EloChange: 5,
       },
@@ -46,18 +46,18 @@ describe("session lifecycle rollback", () => {
   it("drops zero-sum deltas to avoid unnecessary updates", () => {
     const matches: CompletedMatchEloChange[] = [
       {
-        team1User1Id: "A",
-        team1User2Id: "B",
-        team2User1Id: "C",
-        team2User2Id: "D",
+        team1Player1Id: "A",
+        team1Player2Id: "B",
+        team2Player1Id: "C",
+        team2Player2Id: "D",
         team1EloChange: 4,
         team2EloChange: -4,
       },
       {
-        team1User1Id: "A",
-        team1User2Id: "B",
-        team2User1Id: "C",
-        team2User2Id: "D",
+        team1Player1Id: "A",
+        team1Player2Id: "B",
+        team2Player1Id: "C",
+        team2Player2Id: "D",
         team1EloChange: -4,
         team2EloChange: 4,
       },
@@ -70,10 +70,10 @@ describe("session lifecycle rollback", () => {
 
   it("collects unique guest user IDs and ignores core players", () => {
     const guestUserIds = collectGuestUserIds([
-      { userId: "A", isGuest: false },
-      { userId: "GUEST_X", isGuest: true },
-      { userId: "GUEST_Y", isGuest: true },
-      { userId: "GUEST_X", isGuest: true },
+      { playerId: "A", isGuest: false },
+      { playerId: "GUEST_X", isGuest: true },
+      { playerId: "GUEST_Y", isGuest: true },
+      { playerId: "GUEST_X", isGuest: true },
     ]);
 
     expect(guestUserIds).toEqual(["GUEST_X", "GUEST_Y"]);
@@ -84,18 +84,18 @@ describe("session lifecycle rollback", () => {
     const tx = {
       sessionPlayer: {
         findMany: vi.fn().mockResolvedValue([
-          { userId: "A", isGuest: false },
-          { userId: "B", isGuest: false },
+          { playerId: "A", isGuest: false },
+          { playerId: "B", isGuest: false },
         ]),
       },
       match: {
         findMany: vi.fn().mockResolvedValue([
           {
             id: "match-1",
-            team1User1Id: "A",
-            team1User2Id: "B",
-            team2User1Id: "C",
-            team2User2Id: "D",
+            team1Player1Id: "A",
+            team1Player2Id: "B",
+            team2Player1Id: "C",
+            team2Player2Id: "D",
             team1EloChange: 7,
             team2EloChange: -7,
           },
@@ -103,13 +103,13 @@ describe("session lifecycle rollback", () => {
       },
       matchEloAdjustment: {
         findMany: vi.fn().mockResolvedValue([
-          { clubId: "club-1", userId: "A", delta: 7 },
-          { clubId: "club-1", userId: "A", delta: 2 },
-          { clubId: "club-1", userId: "B", delta: -7 },
+          { clubId: "club-1", playerId: "A", delta: 7 },
+          { clubId: "club-1", playerId: "A", delta: 2 },
+          { clubId: "club-1", playerId: "B", delta: -7 },
         ]),
       },
       clubMember: { updateMany },
-      user: { updateMany: vi.fn() },
+      player: { updateMany: vi.fn() },
     };
 
     const reversedPlayers = await reverseSessionEloChanges(tx as never, {
@@ -119,11 +119,11 @@ describe("session lifecycle rollback", () => {
 
     expect(reversedPlayers).toBe(2);
     expect(updateMany).toHaveBeenCalledWith({
-      where: { clubId: "club-1", userId: "A" },
+      where: { clubId: "club-1", playerId: "A" },
       data: { elo: { increment: -9 } },
     });
     expect(updateMany).toHaveBeenCalledWith({
-      where: { clubId: "club-1", userId: "B" },
+      where: { clubId: "club-1", playerId: "B" },
       data: { elo: { increment: 7 } },
     });
   });

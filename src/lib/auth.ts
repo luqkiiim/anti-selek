@@ -53,28 +53,19 @@ async function findQuickAccessProfile({
 
   const club = matchingClubs[0];
   const members = await prisma.clubMember.findMany({
-    where: { clubId: club.id },
+    where: { clubId: club.id, archivedAt: null },
     include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          passwordHash: true,
-          isActive: true,
-          isClaimed: true,
-        },
+      player: {
+        select: { id: true, name: true, ownerUserId: true, isActive: true },
       },
     },
   });
   const matchingPlayers = members
-    .map((member) => member.user)
+    .map((member) => member.player)
     .filter(
       (user) =>
         user.isActive &&
-        !user.isClaimed &&
-        user.email === null &&
-        user.passwordHash === null &&
+        user.ownerUserId === null &&
         normalizeNameLookupKey(user.name) === playerKey
     );
 
@@ -175,7 +166,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             logAuditEvent({
               action: "auth.quick_access",
               actor: {
-                userId: match.user.id,
+                userId: null,
               },
               outcome: "success",
               request,
@@ -191,7 +182,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             });
 
             return {
-              id: match.user.id,
+              id: `guest:${match.user.id}`,
+              guestPlayerId: match.user.id,
               email: null,
               name: match.user.name,
               isAdmin: false,
@@ -266,7 +258,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             where: { email: normalizedEmail },
           });
 
-          if (!user || !user.passwordHash) {
+          if (!user || !user.passwordHash || !user.isActive) {
             logAuditEvent({
               action: "auth.sign_in",
               actor: {
@@ -339,6 +331,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           return {
             id: user.id,
+            sessionVersion: user.sessionVersion,
             email: resolvedEmail,
             name: user.name,
             isAdmin,
@@ -372,41 +365,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        if (typeof user.id === "string") {
-          token.id = user.id;
-        }
-        if (typeof user.name === "string") {
-          token.name = user.name;
-        }
-        token.email = typeof user.email === "string" ? user.email : null;
+        token.identityVersion = 2;
+        token.sessionVersion = user.sessionVersion;
+        token.id = user.id ?? "";
+        token.name = user.name;
+        token.email = user.email;
         token.isQuickAccess = !!user.isQuickAccess;
-        token.quickAccessClubId =
-          typeof user.quickAccessClubId === "string"
-            ? user.quickAccessClubId
-            : typeof user.quickAccessCommunityId === "string"
-              ? user.quickAccessCommunityId
-            : null;
+        token.guestPlayerId = user.guestPlayerId ?? null;
+        token.quickAccessClubId = user.quickAccessClubId ?? null;
         token.quickAccessCommunityId = token.quickAccessClubId;
-        token.isAdmin = token.isQuickAccess ? false : !!user.isAdmin;
-      } else if (trigger === "update" && typeof session?.name === "string") {
-        token.name = session.name;
-      } else if (typeof token.email === "string") {
-        token.isAdmin = token.isQuickAccess ? false : isGlobalAdminEmail(token.email);
       }
-      if (typeof token.isAdmin !== "boolean") token.isAdmin = false;
-      if (typeof token.isQuickAccess !== "boolean") token.isQuickAccess = false;
-      if (token.isQuickAccess && typeof token.quickAccessClubId !== "string") {
-        token.quickAccessClubId =
-          typeof token.quickAccessCommunityId === "string"
-            ? token.quickAccessCommunityId
-            : null;
+      // Pre-separation tokens must never authenticate a historical Player as an account.
+      if (token.identityVersion !== 2) return null;
+      if (token.isQuickAccess) {
+        if (typeof token.guestPlayerId !== "string" || typeof token.quickAccessClubId !== "string") return null;
+        const guest = await prisma.clubMember.findUnique({
+          where: { clubId_playerId: { clubId: token.quickAccessClubId, playerId: token.guestPlayerId } },
+          include: { player: { select: { ownerUserId: true, isActive: true } } },
+        });
+        if (!guest || guest.archivedAt || guest.player.ownerUserId !== null || !guest.player.isActive) return null;
+        token.isAdmin = false;
+      } else {
+        if (typeof token.id !== "string") return null;
+        const account = await prisma.user.findUnique({ where: { id: token.id } });
+        if (!account?.isActive || !account.passwordHash || token.sessionVersion !== account.sessionVersion) return null;
+        token.email = account.email;
+        token.name = account.name;
+        token.isAdmin = isGlobalAdminEmail(account.email);
+        token.guestPlayerId = null;
+        token.quickAccessClubId = null;
+        if (trigger === "update" && typeof session?.name === "string") token.name = account.name;
       }
-      token.quickAccessCommunityId = token.quickAccessClubId ?? null;
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.userId = !token.isQuickAccess && typeof token.id === "string" ? token.id : null;
+        session.user.guestPlayerId = typeof token.guestPlayerId === "string" ? token.guestPlayerId : null;
+        session.user.identityVersion = typeof token.identityVersion === "number" ? token.identityVersion : undefined;
         session.user.name =
           typeof token.name === "string" ? token.name : session.user.name ?? "";
         session.user.email =

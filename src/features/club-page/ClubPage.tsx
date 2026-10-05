@@ -792,7 +792,7 @@ export default function ClubPage() {
       clubPulse={clubPulse}
       activeTournaments={activeTournaments}
       memberCount={club.membersCount}
-      currentUserId={user?.id}
+      currentUserId={user?.playerId}
       viewerIsQuickAccess={viewerIsQuickAccess}
       canManageClub={canManageClub}
       canAdminClub={canAdminClub}
@@ -807,13 +807,13 @@ export default function ClubPage() {
     />
   );
   const profilePanel = (
-    <ClubProfilePanel userId={user?.id} clubId={clubId} />
+    <ClubProfilePanel playerId={user?.playerId} clubId={clubId} />
   );
   const tournamentsPanel = (
     <div className="space-y-8">
       <CurrentTournamentsPanel
         tournaments={activeTournaments}
-        currentUserId={user?.id}
+        currentUserId={user?.playerId}
         currentClubId={clubId}
         canManageClub={canAdminClub}
         viewerIsQuickAccess={viewerIsQuickAccess}
@@ -823,7 +823,7 @@ export default function ClubPage() {
       />
       <TestSessionsPanel
         sessions={testSessions}
-        currentUserId={user?.id}
+        currentUserId={user?.playerId}
         currentClubId={clubId}
         canReviewCollabs={canAdminClub}
         onOpenSession={openTournament}

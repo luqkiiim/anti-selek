@@ -44,3 +44,24 @@
 .manage-player-preferences { margin: 16px 0; padding-top: 4px; border-top: 1px solid #eee5ef; }
 .manage-player-preferences select { width: 100%; min-height: 48px; font-size: 16px; line-height: 1.4; }
 .manage-preference-hint { margin: -6px 0 14px; font-size: 12px; color: #80718b; }
+.admission-review-card { display: flex; flex-direction: column; gap: 11px; padding: 15px; border: 1px solid #eee5ef; border-radius: 17px; background: #fffdfb; }
+.admission-review-account { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.admission-review-account > div { display: flex; flex-direction: column; min-width: 0; }
+.admission-review-account strong { font-size: 15px; overflow-wrap: anywhere; }
+.admission-review-account small { color: #80718b; font-size: 11px; overflow-wrap: anywhere; }
+.admission-review-kind { margin: -7px 0 0 !important; color: #765788; font-size: 11px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+.admission-review-player { display: flex; flex-direction: column; gap: 3px; padding: 11px; border-radius: 12px; background: #f5f0f8; }
+.admission-review-player strong { overflow-wrap: anywhere; }
+.admission-review-player span, .admission-review-events, .admission-selected-candidate { color: #73637c; font-size: 12px; }
+.admission-review-conflict, .admission-review-closed { padding: 10px 12px; border: 1px solid #eac8cb; border-radius: 12px; background: #fff4f4; color: #8a3946; font-size: 12px; }
+.admission-review-note { margin: 0; padding: 10px 12px; border-left: 3px solid #b7a1d0; background: #faf7fc; color: #55465d; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.admission-duplicate-list { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.admission-duplicate-list > strong { font-size: 12px; }
+.admission-duplicate-list .text-button { min-height: 38px; padding: 5px 0; font-size: 12px; text-align: left; }
+.admission-change-candidate { align-self: flex-start; padding: 3px 0; min-height: 38px; }
+.admission-candidate-picker select, .admission-rejection-reason textarea { width: 100%; min-height: 46px; margin-top: 4px; border: 1px solid #e8ddef; border-radius: 12px; background: #fffdfb; padding: 10px 12px; color: #291440; font: inherit; font-size: 14px; }
+.admission-rejection-reason textarea { resize: vertical; line-height: 1.4; }
+.admission-selected-candidate { margin: -6px 0 0 !important; }
+.admission-review-actions { display: flex; flex-direction: column; gap: 8px; }
+.admission-review-actions > button { width: 100%; margin: 0; }
+.admission-review-actions .admission-reject { min-height: 42px; background: #fff2f3; color: #913c4b; border-color: #efd4d7; }

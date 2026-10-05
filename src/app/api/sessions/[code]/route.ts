@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { resolveAvatarUrl, serializeAvatarEntity } from "@/lib/avatar";
@@ -7,13 +8,14 @@ import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
   getPlayerClubBadges,
   getSessionAdminMembership,
+  isAccountSessionPlayer,
   getSessionMembership,
   getSessionOperatorMembership,
   withPlayerClubBadges,
 } from "@/lib/sessionCollab";
 import {
   MatchStatus,
-  ClubRole,
+
   SessionCollabFormat,
   SessionPool,
   SessionScoringType,
@@ -24,6 +26,7 @@ import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import {
   canQuickAccessSessionRead,
   getQuickAccessDeniedMessage,
+  getQuickAccessPlayerId,
   isQuickAccessSession,
 } from "@/lib/quickAccess";
 import { tryRebuildQueuedMatchForSessionId } from "./queue-match/shared";
@@ -41,6 +44,7 @@ import {
 } from "@/lib/sessionSettings";
 import { isValidSessionCrossoverFrequency } from "@/lib/sessionPools";
 import { SessionRouteError } from "../sessionRouteShared";
+import { getAccountClubContext } from "@/lib/playerIdentity";
 
 export const dynamic = "force-dynamic";
 
@@ -131,13 +135,13 @@ async function getSessionRoute(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return sportingJson({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { code } = await params;
 
   if (typeof code !== "string" || code.length === 0) {
-    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
   }
 
   const rateLimitResponse = await rateLimit(
@@ -179,14 +183,15 @@ async function getSessionRoute(
               team2Score: true,
               completedAt: true,
               scoreSubmittedByUserId: true,
+              scoreSubmittedByPlayerId: true,
               matchmakingReasonJson: true,
               courtGroupType: true,
               poolASeatCount: true,
               poolBSeatCount: true,
-              team1User1: { select: { id: true, name: true, avatarKey: true } },
-              team1User2: { select: { id: true, name: true, avatarKey: true } },
-              team2User1: { select: { id: true, name: true, avatarKey: true } },
-              team2User2: { select: { id: true, name: true, avatarKey: true } },
+              team1Player1: { select: { id: true, name: true, avatarKey: true } },
+              team1Player2: { select: { id: true, name: true, avatarKey: true } },
+              team2Player1: { select: { id: true, name: true, avatarKey: true } },
+              team2Player2: { select: { id: true, name: true, avatarKey: true } },
             },
           },
         },
@@ -205,9 +210,10 @@ async function getSessionRoute(
       },
       players: {
         include: {
-          user: {
+          player: {
             select: {
               id: true,
+              ownerUserId: true,
               name: true,
               avatarKey: true,
               elo: true,
@@ -224,10 +230,10 @@ async function getSessionRoute(
         select: {
           id: true,
           createdAt: true,
-          team1User1Id: true,
-          team1User2Id: true,
-          team2User1Id: true,
-          team2User2Id: true,
+          team1Player1Id: true,
+          team1Player2Id: true,
+          team2Player1Id: true,
+          team2Player2Id: true,
           team1ClubId: true,
           team2ClubId: true,
           team1Score: true,
@@ -235,6 +241,8 @@ async function getSessionRoute(
           winnerTeam: true,
           status: true,
           completedAt: true,
+          scoreSubmittedByUserId: true,
+          scoreSubmittedByPlayerId: true,
           courtGroupType: true,
           poolASeatCount: true,
           poolBSeatCount: true,
@@ -272,16 +280,26 @@ async function getSessionRoute(
     userId: session.user.id,
     acceptedOnly: true,
   });
-  const hostOperatorMembership = sessionData.clubId
-    ? await prisma.clubMember.findUnique({
-        where: { clubId_userId: { clubId: sessionData.clubId, userId: session.user.id } },
-        select: { role: true },
+  const hostClubContext = sessionData.clubId
+    ? await getAccountClubContext(prisma, {
+        userId: session.user.id,
+        clubId: sessionData.clubId,
       })
     : null;
   const clubRole = membership?.role ?? null;
 
-  const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
+  const quickPlayerId = getQuickAccessPlayerId(session);
+  const isSessionPlayer = quickPlayerId
+    ? sessionData.players.some((player) => player.playerId === quickPlayerId)
+    : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
+  const viewerOwnedPlayers = isQuickAccess
+    ? []
+    : sessionData.players.filter((player) => player.player.ownerUserId === session.user.id);
+  const viewerPlayerId = quickPlayerId
+    ? sessionData.players.some((player) => player.playerId === quickPlayerId) ? quickPlayerId : null
+    : viewerOwnedPlayers.length === 1 ? viewerOwnedPlayers[0].playerId : null;
+  const viewerUserId = isQuickAccess ? null : session.user.id;
   const canView =
     (!isQuickAccess && session.user.isAdmin) || !!clubRole || isSessionPlayer;
   if (!canView) {
@@ -293,7 +311,7 @@ async function getSessionRoute(
     sessionData.status === SessionStatus.COMPLETED &&
     !sessionData.isTest &&
     sessionData.club?.isTutorial !== true &&
-    (session.user.isAdmin || hostOperatorMembership?.role === ClubRole.ADMIN);
+    (session.user.isAdmin || hostClubContext?.canAdmin === true);
   const latestCompleted = canRequestRollback
     ? await prisma.session.findFirst({
         where: {
@@ -315,7 +333,7 @@ async function getSessionRoute(
       ].filter(Boolean)
     )
   );
-  const playerIds = sessionData.players.map((p) => p.userId);
+  const playerIds = sessionData.players.map((p) => p.playerId);
   const players =
     linkedClubIds.length > 1 && sessionData.players.length > 0
       ? withPlayerClubBadges(
@@ -334,22 +352,30 @@ async function getSessionRoute(
     ...(sessionData.status === SessionStatus.COMPLETED
       ? { isPaused: false, pausedAt: null }
       : {}),
-    user: serializeAvatarEntity(player.user),
+    player: serializeAvatarEntity({
+      id: player.player.id,
+      name: player.player.name,
+      avatarKey: player.player.avatarKey,
+      elo: player.player.elo,
+      gender: player.player.gender,
+      partnerPreference: player.player.partnerPreference,
+      mixedSideOverride: player.player.mixedSideOverride,
+    }),
   }));
 
   const queuedMatch = sessionData.queuedMatch
     ? (() => {
         const playerById = new Map(
-          serializedPlayers.map((player) => [player.userId, player.user])
+          serializedPlayers.map((player) => [player.playerId, player.player])
         );
-        const [team1User1Id, team1User2Id, team2User1Id, team2User2Id] =
+        const [team1Player1Id, team1Player2Id, team2Player1Id, team2Player2Id] =
           getQueuedMatchUserIds(sessionData.queuedMatch);
-        const team1User1 = playerById.get(team1User1Id);
-        const team1User2 = playerById.get(team1User2Id);
-        const team2User1 = playerById.get(team2User1Id);
-        const team2User2 = playerById.get(team2User2Id);
+        const team1Player1 = playerById.get(team1Player1Id);
+        const team1Player2 = playerById.get(team1Player2Id);
+        const team2Player1 = playerById.get(team2Player1Id);
+        const team2Player2 = playerById.get(team2Player2Id);
 
-        if (!team1User1 || !team1User2 || !team2User1 || !team2User2) {
+        if (!team1Player1 || !team1Player2 || !team2Player1 || !team2Player2) {
           return null;
         }
 
@@ -366,10 +392,10 @@ async function getSessionRoute(
           matchmakingReason: parseMatchmakingReasonJson(
             sessionData.queuedMatch.matchmakingReasonJson
           ),
-          team1User1,
-          team1User2,
-          team2User1,
-          team2User2,
+          team1Player1,
+          team1Player2,
+          team2Player1,
+          team2Player2,
         };
       })()
     : null;
@@ -384,21 +410,23 @@ async function getSessionRoute(
       ...court,
       currentMatch: {
         ...currentMatch,
-        team1User1: serializeAvatarEntity(currentMatch.team1User1),
-        team1User2: serializeAvatarEntity(currentMatch.team1User2),
-        team2User1: serializeAvatarEntity(currentMatch.team2User1),
-        team2User2: serializeAvatarEntity(currentMatch.team2User2),
+        team1Player1: serializeAvatarEntity(currentMatch.team1Player1),
+        team1Player2: serializeAvatarEntity(currentMatch.team1Player2),
+        team2Player1: serializeAvatarEntity(currentMatch.team2Player1),
+        team2Player2: serializeAvatarEntity(currentMatch.team2Player2),
         matchmakingReason: parseMatchmakingReasonJson(matchmakingReasonJson),
       },
     };
   });
 
-  return NextResponse.json(withLegacyClubAliases({
+  return sportingJson(withLegacyClubAliases({
     ...sessionData,
     courts,
     players: serializedPlayers,
     queuedMatch,
     viewerClubRole: clubRole,
+    viewerUserId,
+    viewerPlayerId,
     viewerIsQuickAccess: isQuickAccess,
     viewerCanManage:
       !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
@@ -407,7 +435,7 @@ async function getSessionRoute(
     viewerCanDelete:
       !isQuickAccess &&
       (sessionData.status !== SessionStatus.COMPLETED || sessionData.isTest) &&
-      (session.user.isAdmin || hostOperatorMembership?.role === ClubRole.ADMIN || hostOperatorMembership?.role === ClubRole.STAFF),
+      (session.user.isAdmin || hostClubContext?.canAdmin === true || hostClubContext?.canOperate === true),
     viewerCanRollback,
     isTutorialClub: sessionData.club?.isTutorial === true,
     tutorialOwnerId: sessionData.club?.tutorialOwnerId ?? null,
@@ -445,10 +473,10 @@ export async function PATCH(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
     if (isQuickAccessSession(session)) {
-      return NextResponse.json(
+      return sportingJson(
         { error: getQuickAccessDeniedMessage() },
         { status: 403 }
       );
@@ -462,7 +490,7 @@ export async function PATCH(
       typeof body.autoQueueEnabled !== "boolean" ||
       typeof body.respectPlayerRest !== "boolean"
     ) {
-      return NextResponse.json(
+      return sportingJson(
         {
           error:
             "autoQueueEnabled and respectPlayerRest must be true or false",
@@ -478,7 +506,7 @@ export async function PATCH(
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code");
@@ -518,7 +546,7 @@ export async function PATCH(
     }
 
     if (gameplaySettings && sessionData.status !== SessionStatus.WAITING) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Reset the tournament before changing gameplay settings" },
         { status: 409 }
       );
@@ -527,7 +555,7 @@ export async function PATCH(
       gameplaySettings?.poolsEnabled &&
       sessionData.collabFormat === SessionCollabFormat.INTERCLUB
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Club vs club tournaments do not support player groups" },
         { status: 400 }
       );
@@ -538,7 +566,7 @@ export async function PATCH(
         (court) => court.courtNumber > gameplaySettings.courtCount
       )
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Court labels must match the selected court count" },
         { status: 400 }
       );
@@ -554,7 +582,7 @@ export async function PATCH(
         (court) => court.currentMatchId || court._count.matches > 0
       )
     ) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Courts with match history cannot be removed" },
         { status: 409 }
       );
@@ -569,23 +597,23 @@ export async function PATCH(
         initializeLegacyPools = true;
         const players = await tx.sessionPlayer.findMany({
           where: { sessionId: sessionData.id },
-          select: { userId: true, isGuest: true },
+          select: { playerId: true, isGuest: true },
         });
         const memberUserIds = players
           .filter((player) => !player.isGuest)
-          .map((player) => player.userId);
+          .map((player) => player.playerId);
         const memberships = sessionData.clubId
           ? await tx.clubMember.findMany({
               where: {
                 clubId: sessionData.clubId,
-                userId: { in: memberUserIds },
+                playerId: { in: memberUserIds },
               },
-              select: { userId: true, preferredPool: true },
+              select: { playerId: true, preferredPool: true },
             })
           : [];
         const preferredPoolByUserId = new Map(
           memberships.map((membership) => [
-            membership.userId,
+            membership.playerId,
             membership.preferredPool === SessionPool.A
               ? SessionPool.A
               : SessionPool.B,
@@ -595,9 +623,9 @@ export async function PATCH(
           .filter(
             (player) =>
               !player.isGuest &&
-              preferredPoolByUserId.get(player.userId) === SessionPool.A
+              preferredPoolByUserId.get(player.playerId) === SessionPool.A
           )
-          .map((player) => player.userId);
+          .map((player) => player.playerId);
         await tx.sessionPlayer.updateMany({
           where: { sessionId: sessionData.id },
           data: { pool: SessionPool.B, pendingPool: null },
@@ -606,7 +634,7 @@ export async function PATCH(
           await tx.sessionPlayer.updateMany({
             where: {
               sessionId: sessionData.id,
-              userId: { in: competitiveUserIds },
+              playerId: { in: competitiveUserIds },
             },
             data: { pool: SessionPool.A, pendingPool: null },
           });
@@ -695,7 +723,7 @@ export async function PATCH(
         courts: { orderBy: { courtNumber: "asc" } },
         players: {
           include: {
-            user: {
+            player: {
               select: {
                 id: true,
                 name: true,
@@ -712,7 +740,7 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code");
     }
 
-    return NextResponse.json({
+    return sportingJson({
       type: updatedSession.type,
       mode: updatedSession.mode,
       scoringType: updatedSession.scoringType,
@@ -735,7 +763,7 @@ export async function PATCH(
             })),
             players: updatedSession.players.map((player) => ({
               ...player,
-              user: serializeAvatarEntity(player.user),
+              player: serializeAvatarEntity(player.player),
             })),
           }
         : {}),
@@ -745,7 +773,7 @@ export async function PATCH(
     });
   } catch (error) {
     if (error instanceof SessionRouteError) {
-      return NextResponse.json(
+      return sportingJson(
         { error: error.message },
         { status: error.status }
       );

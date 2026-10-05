@@ -5,14 +5,17 @@ import type { ClubPageMember } from "@/components/club/clubTypes";
 import type { PlayerProfileSessionSummary, PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
 import type { MemberProfileData, RecordedSessionSummary } from "@/lib/memberProfile";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
-import { useResource } from "./api";
+import { api, useAction, useResource } from "./api";
 import { MemberPins, type PublicAchievementCollection } from "./MemberPins";
 import { ProfileActivityHistory } from "./ProfileActivityHistory";
 import { formatProfileDate as dateLabel } from "./profileDate";
 import { ProfilePeople, ProfileRecords } from "./ProfileHighlights";
 import { ratingJourneyPoints } from "@/lib/ratingJourney";
+import { getMixedSideOverrideOptionForGender, getStoredPartnerPreference, normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
+import { PlayerGender } from "@/types/enums";
 import { AccountSettings } from "./AccountSettings";
 import { MainNav } from "./MainNav";
+import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
 import "./player-profile.css";
 
 export type MemberProfileResponse = {
@@ -21,13 +24,14 @@ export type MemberProfileResponse = {
 };
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
 
-export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievements, milestone, onOpenMember, onAccountSaved }: {
+export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite = false, achievements, milestone, onOpenMember, onAccountSaved }: {
   clubId: string; clubName: string; member: ClubPageMember; isSelf: boolean;
   onAccountSaved?: () => Promise<unknown>;
+  canInvite?: boolean;
   achievements?: ReactNode; milestone?: ReactNode; onOpenMember: (id: string) => void;
 }) {
-  const resource = useResource<MemberProfileResponse>(`/api/users/${member.id}/stats?clubId=${encodeURIComponent(clubId)}`);
-  const pins = useResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${clubId}/achievements?userId=${encodeURIComponent(member.id)}`);
+  const resource = useResource<MemberProfileResponse>(`/api/users/${encodeURIComponent(member.id)}/stats?clubId=${encodeURIComponent(clubId)}`);
+  const pins = useResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${encodeURIComponent(clubId)}/achievements?userId=${encodeURIComponent(member.id)}`);
   const data = resource.data?.profile;
   const user = resource.data?.user;
   const [accountOpen, setAccountOpen] = useState(false);
@@ -35,7 +39,9 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievemen
   const [match, setMatch] = useState<PlayerProfileMatchHistoryEntry | null>(null);
   return <article className="player-profile" aria-label={`${member.name}’s club profile`}>
     <header className="player-profile-identity">{!isSelf && <span className="eyebrow">{clubName}</span>}{isSelf ? <button className="profile-account-button" aria-label="Account settings" onClick={() => setAccountOpen(true)}><Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /></button> : <Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} />}<h1>{user?.name ?? member.name}</h1>{!isSelf && <span className="player-profile-membership">{member.status === "CORE" ? "Core member" : "Occasional member"}</span>}</header>
-    <div className="player-standing profile-overview-stats"><div><span>Club rating</span><strong>{user?.elo ?? member.elo}</strong></div><div><span>Club rank</span><strong>{(member as RankedMember).currentRank ? `#${(member as RankedMember).currentRank}` : "—"}</strong>{member.rankDelta != null && member.rankDelta !== 0 && member.previousRank != null && <small className={member.rankDelta > 0 ? "positive" : "negative"}>{member.rankDelta > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{Math.abs(member.rankDelta)} {Math.abs(member.rankDelta) === 1 ? "place" : "places"}</small>}</div><p className="profile-activity-totals">{data ? new Set(data.matchHistory.map(m => m.sessionId)).size : "\u2014"} sessions {"\u00b7"} {data?.matchHistory.length ?? "\u2014"} matches</p></div>
+      <div className="player-standing profile-overview-stats"><div><span>Club rating</span><strong>{user?.elo ?? member.elo}</strong></div><div><span>Club rank</span><strong>{(member as RankedMember).currentRank ? `#${(member as RankedMember).currentRank}` : "—"}</strong>{member.rankDelta != null && member.rankDelta !== 0 && member.previousRank != null && <small className={member.rankDelta > 0 ? "positive" : "negative"}>{member.rankDelta > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{Math.abs(member.rankDelta)} {Math.abs(member.rankDelta) === 1 ? "place" : "places"}</small>}</div><p className="profile-activity-totals">{data ? new Set(data.matchHistory.map(m => m.sessionId)).size : "\u2014"} sessions {"\u00b7"} {data?.matchHistory.length ?? "\u2014"} matches</p></div>
+      {canInvite && !isSelf && <PlayerInvitationPanel key={`invite:${member.id}`} clubId={clubId} playerId={member.id} playerName={member.name} rating={user?.elo ?? member.elo} matchesPlayed={data?.matchHistory.length} connected={member.isClaimed} />}
+      {isSelf && <PlayerPreferences key={`${member.id}:${member.gender}:${member.mixedSideOverride}:${member.partnerPreference}`} member={member} clubId={clubId} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
     {resource.error && <div className="profile-load-error"><ErrorText error={resource.error} /><button className="secondary" onClick={() => void resource.refresh().catch(() => {})}>Try again</button></div>}
     {!data && !resource.error && <div className="profile-loading" role="status">Loading the story so far…</div>}
     {data && <>
@@ -45,7 +51,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievemen
       {isSelf ? <section className="profile-achievements" aria-label="Achievements"><div className="section-heading"><h2>Achievements</h2></div>{achievements}{milestone}</section> : pins.data ? <MemberPins collection={pins.data} /> : <ErrorText error={pins.error} />}
       <ProfilePeople relationships={data.relationships} isSelf={isSelf} onOpenMember={onOpenMember} />
       <ProfileRecords records={data.records} onOpenSession={setRecap} />
-      <ProfileActivityHistory key={member.id} clubId={clubId} userId={member.id} history={data.history} onOpen={setRecap} matches={data.matchHistory} onOpenMatch={setMatch} />
+      <ProfileActivityHistory key={member.id} clubId={clubId} playerId={member.id} history={data.history} onOpen={setRecap} matches={data.matchHistory} onOpenMatch={setMatch} />
     </>}
     <details className="profile-rating-help"><summary>How ratings work</summary><p>Ratings and ranks belong to this club. Match results change your rating; manual adjustments are marked separately. Achievements are separate from matchmaking ratings.</p></details>
     {isSelf && <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
@@ -53,6 +59,37 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievemen
     <Sheet open={!!match} title="Match details" onClose={() => setMatch(null)}>{match && <div className="profile-match"><span className="eyebrow">{match.sessionName}</span><h2>{match.result === "WIN" ? "Win" : "Loss"} · {match.score}</h2><p className="muted">{dateLabel(match.date)}</p><h3>Partners</h3><p>{member.name} & {match.partner.name}</p><h3>Opponents</h3><p>{match.opponents.map(p => p.name).join(" & ")}</p><p>{match.eloChange === null ? "Rating change unavailable" : `${signed(match.eloChange)} rating`}</p></div>}</Sheet>
   </article>;
 }
+
+function PlayerPreferences({ member, clubId, onSaved }: { member: ClubPageMember; clubId: string; onSaved: () => Promise<unknown> }) {
+  const initialSide = normalizeMixedSideOverrideForGender(member.gender, member.mixedSideOverride, member.partnerPreference) ?? "";
+  const [gender, setGender] = useState<PlayerGender>(member.gender);
+  const [playerLevel, setPlayerLevel] = useState<string>(initialSide);
+  const [notice, setNotice] = useState("");
+  const action = useAction();
+  const levelOption = getMixedSideOverrideOptionForGender(gender);
+  const changed = gender !== member.gender || playerLevel !== initialSide;
+  return <section className="player-preferences" aria-labelledby="player-preferences-title">
+    <div className="section-heading"><h2 id="player-preferences-title">Player preferences</h2></div>
+    <p>These settings belong to your Player profile and guide mixed pairing in this club.</p>
+    <label className="field-label">Gender for mixed pairing<select value={gender} onChange={event => { setGender(event.target.value as PlayerGender); setPlayerLevel(""); }} disabled={action.busy}>
+      <option value={PlayerGender.UNSPECIFIED}>Not set</option><option value={PlayerGender.MALE}>Male</option><option value={PlayerGender.FEMALE}>Female</option>
+    </select></label>
+    <label className="field-label">Player level<select value={playerLevel} onChange={event => setPlayerLevel(event.target.value)} disabled={action.busy || !levelOption}>
+      <option value="">Default</option>{levelOption && <option value={levelOption.value}>{levelOption.label}</option>}
+    </select></label>
+    <button type="button" className="secondary full" disabled={action.busy || !changed} onClick={() => void action.run(async () => {
+      await api(`/api/clubs/${encodeURIComponent(clubId)}/members/${encodeURIComponent(member.id)}`, "PATCH", {
+        gender,
+        mixedSideOverride: playerLevel || null,
+        partnerPreference: getStoredPartnerPreference(gender, playerLevel || null),
+      });
+      setNotice("Player preferences updated.");
+      await onSaved();
+    })}>{action.busy ? "Saving…" : "Save Player preferences"}</button>
+    <ErrorText error={action.error} />{notice && <p className="player-preferences-notice" role="status">{notice}</p>}
+  </section>;
+}
+
 export type RankedMember = ClubPageMember & { currentRank?: number | null };
 
 function RatingJourney({ timeline, onOpenSession }: { timeline: MemberProfileData["timeline"]; onOpenSession: (id: string) => void }) {

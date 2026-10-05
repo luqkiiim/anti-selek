@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   getSessionMembership: vi.fn(),
   invalidTargetResponse: vi.fn(),
   isQuickAccessSession: vi.fn(),
+  getQuickAccessPlayerId: vi.fn(),
+  isAccountSessionPlayer: vi.fn(),
   sessionFindUnique: vi.fn(),
 }));
 
@@ -29,6 +31,7 @@ vi.mock("@/lib/clubElo", () => ({
 
 vi.mock("@/lib/quickAccess", () => ({
   canQuickAccessSessionRead: mocks.canQuickAccessSessionRead,
+  getQuickAccessPlayerId: mocks.getQuickAccessPlayerId,
   isQuickAccessSession: mocks.isQuickAccessSession,
 }));
 
@@ -40,6 +43,7 @@ vi.mock("@/lib/rateLimit", () => ({
 
 vi.mock("@/lib/sessionCollab", () => ({
   getSessionMembership: mocks.getSessionMembership,
+  isAccountSessionPlayer: mocks.isAccountSessionPlayer,
 }));
 
 import { GET } from "./route";
@@ -55,11 +59,11 @@ function createLeaderboardSession() {
     ],
     players: [
       {
-        userId: "quick-1",
+        playerId: "quick-1",
         isGuest: false,
         sessionPoints: 12,
         ladderEntryAt: null,
-        user: {
+        player: {
           id: "quick-1",
           name: "Quick Player",
           elo: 1000,
@@ -68,11 +72,11 @@ function createLeaderboardSession() {
         },
       },
       {
-        userId: "player-2",
+        playerId: "player-2",
         isGuest: false,
         sessionPoints: 8,
         ladderEntryAt: null,
-        user: {
+        player: {
           id: "player-2",
           name: "Player Two",
           elo: 990,
@@ -83,10 +87,10 @@ function createLeaderboardSession() {
     ],
     matches: [
       {
-        team1User1Id: "quick-1",
-        team1User2Id: "player-2",
-        team2User1Id: "player-3",
-        team2User2Id: "player-4",
+        team1Player1Id: "quick-1",
+        team1Player2Id: "player-2",
+        team2Player1Id: "player-3",
+        team2Player2Id: "player-4",
         team1Score: 21,
         team2Score: 18,
         status: MatchStatus.COMPLETED,
@@ -114,6 +118,8 @@ describe("session leaderboard route", () => {
     mocks.canQuickAccessSessionRead.mockReturnValue(true);
     mocks.getClubEloByUserId.mockResolvedValue(new Map());
     mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
+    mocks.getQuickAccessPlayerId.mockImplementation((session: { user?: { isQuickAccess?: boolean; guestPlayerId?: string | null } } | null | undefined) => session?.user?.isQuickAccess ? session.user.guestPlayerId ?? null : null);
+    mocks.isAccountSessionPlayer.mockResolvedValue(false);
     mocks.invalidTargetResponse.mockImplementation(async () =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
@@ -127,7 +133,8 @@ describe("session leaderboard route", () => {
   it("allows quick-access accepted linked-club spectators to read standings", async () => {
     mocks.auth.mockResolvedValue({
       user: {
-        id: "quick-1",
+        id: "guest:quick-1",
+        guestPlayerId: "quick-1",
         isAdmin: false,
         isQuickAccess: true,
         quickAccessClubId: "club-b",
@@ -145,7 +152,7 @@ describe("session leaderboard route", () => {
     expect(mocks.getSessionMembership).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        userId: "quick-1",
+        userId: "guest:quick-1",
         acceptedOnly: true,
       })
     );
@@ -155,6 +162,7 @@ describe("session leaderboard route", () => {
     mocks.auth.mockResolvedValue({
       user: {
         id: "quick-1",
+        guestPlayerId: "quick-1",
         isAdmin: false,
         isQuickAccess: true,
         quickAccessClubId: "club-c",

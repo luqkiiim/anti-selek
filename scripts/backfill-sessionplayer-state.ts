@@ -6,7 +6,7 @@ async function backfill() {
   const sessionPlayers = await prisma.sessionPlayer.findMany({
     include: {
       session: true,
-      user: true,
+      player: true,
     },
   });
 
@@ -16,10 +16,10 @@ async function backfill() {
         sessionId: sp.sessionId,
         status: "COMPLETED",
         OR: [
-          { team1User1Id: sp.userId },
-          { team1User2Id: sp.userId },
-          { team2User1Id: sp.userId },
-          { team2User2Id: sp.userId },
+          { team1Player1Id: sp.playerId },
+          { team1Player2Id: sp.playerId },
+          { team2Player1Id: sp.playerId },
+          { team2Player2Id: sp.playerId },
         ],
       },
       orderBy: {

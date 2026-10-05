@@ -3,17 +3,20 @@ import { ClubRole } from "@/types/enums";
 export type ClubRoleValue = `${ClubRole}`;
 
 export const COMMUNITY_ROLES = [
+  ClubRole.OWNER,
   ClubRole.MEMBER,
   ClubRole.STAFF,
   ClubRole.ADMIN,
 ] as const;
 
 export const COMMUNITY_OPERATOR_ROLES = [
+  ClubRole.OWNER,
   ClubRole.ADMIN,
   ClubRole.STAFF,
 ] as const;
 
 const COMMUNITY_ROLE_RANK: Record<ClubRole, number> = {
+  [ClubRole.OWNER]: 3,
   [ClubRole.MEMBER]: 0,
   [ClubRole.STAFF]: 1,
   [ClubRole.ADMIN]: 2,
@@ -22,6 +25,7 @@ const COMMUNITY_ROLE_RANK: Record<ClubRole, number> = {
 export function normalizeClubRole(
   role: string | null | undefined
 ): ClubRole {
+  if (role === ClubRole.OWNER) return ClubRole.OWNER;
   if (role === ClubRole.ADMIN) return ClubRole.ADMIN;
   if (role === ClubRole.STAFF) return ClubRole.STAFF;
   return ClubRole.MEMBER;
@@ -29,6 +33,7 @@ export function normalizeClubRole(
 
 export function isValidClubRole(role: unknown): role is ClubRole {
   return (
+    role === ClubRole.OWNER ||
     role === ClubRole.MEMBER ||
     role === ClubRole.STAFF ||
     role === ClubRole.ADMIN
@@ -38,7 +43,7 @@ export function isValidClubRole(role: unknown): role is ClubRole {
 export function isClubAdminRole(
   role: string | null | undefined
 ): boolean {
-  return normalizeClubRole(role) === ClubRole.ADMIN;
+  return role === ClubRole.OWNER || normalizeClubRole(role) === ClubRole.ADMIN;
 }
 
 export function isClubOperatorRole(
@@ -46,6 +51,7 @@ export function isClubOperatorRole(
 ): boolean {
   const normalizedRole = normalizeClubRole(role);
   return (
+    normalizedRole === ClubRole.OWNER ||
     normalizedRole === ClubRole.ADMIN ||
     normalizedRole === ClubRole.STAFF
   );
@@ -64,6 +70,8 @@ export function getHighestClubRole(
 
 export function getClubRoleLabel(role: string | null | undefined) {
   switch (normalizeClubRole(role)) {
+    case ClubRole.OWNER:
+      return "Owner";
     case ClubRole.ADMIN:
       return "Admin";
     case ClubRole.STAFF:

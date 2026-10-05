@@ -21,11 +21,11 @@ describe("club claim rules", () => {
       })
     ).toEqual({
       canRequest: false,
-      reason: "Only claimed accounts can request a profile merge.",
+      reason: "Sign in with an account to request a Player connection.",
     });
   });
 
-  it("blocks accounts with club rating history", () => {
+  it("does not use Elo as identity proof", () => {
     expect(
       getClaimRequesterEligibility({
         isClaimed: true,
@@ -33,12 +33,12 @@ describe("club claim rules", () => {
         hasClubSessionHistory: false,
       })
     ).toEqual({
-      canRequest: false,
-      reason: "This account already has club rating history. Manual merge required.",
+      canRequest: true,
+      reason: null,
     });
   });
 
-  it("blocks accounts with tournament history", () => {
+  it("allows requesting a connection after participation", () => {
     expect(
       getClaimRequesterEligibility({
         isClaimed: true,
@@ -46,8 +46,8 @@ describe("club claim rules", () => {
         hasClubSessionHistory: true,
       })
     ).toEqual({
-      canRequest: false,
-      reason: "This account already has tournament history in this club. Manual merge required.",
+      canRequest: true,
+      reason: null,
     });
   });
 

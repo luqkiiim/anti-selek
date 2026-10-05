@@ -190,7 +190,12 @@ describe("ClubPlayersModal saved group preference", () => {
     });
 
     expect(onGuestNameChange).toHaveBeenCalledWith("New Guest");
-    expect(document.body.textContent).toContain("Average (1000)");
+    expect(document.body.textContent).toContain("Starting rating");
+    expect(
+      document.body.querySelector<HTMLInputElement>(
+        'input[aria-label="Guest starting rating"]'
+      )?.value
+    ).toBe("1000");
 
     await act(async () => {
       root.render(

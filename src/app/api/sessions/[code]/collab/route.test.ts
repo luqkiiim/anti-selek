@@ -8,7 +8,9 @@ import { SessionClubStatus } from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  clubMemberFindUnique: vi.fn(),
+  clubMemberFindMany: vi.fn(),
+  clubFindUnique: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
   isQuickAccessSession: vi.fn(() => false),
   sessionClubUpdate: vi.fn(),
   sessionFindUnique: vi.fn(),
@@ -22,7 +24,13 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
+      findMany: mocks.clubMemberFindMany,
+    },
+    club: {
+      findUnique: mocks.clubFindUnique,
+    },
+    clubAccess: {
+      findUnique: mocks.clubAccessFindUnique,
     },
     session: {
       findUnique: mocks.sessionFindUnique,
@@ -54,7 +62,7 @@ describe("session collab review route", () => {
     mocks.isQuickAccessSession.mockReturnValue(false);
     mocks.auth.mockResolvedValue({
       user: {
-        id: "admin-1",
+        id: "partner-admin-account",
         isAdmin: false,
       },
     });
@@ -72,7 +80,17 @@ describe("session collab review route", () => {
         },
       ],
     });
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.clubFindUnique.mockResolvedValue({
+      id: "community-2",
+      createdById: "another-account",
+      isTutorial: false,
+      tutorialOwnerId: null,
+    });
+    mocks.clubAccessFindUnique.mockResolvedValue({
+      role: "ADMIN",
+      status: "ACTIVE",
+    });
+    mocks.clubMemberFindMany.mockResolvedValue([]);
     mocks.sessionClubUpdate.mockResolvedValue({
       id: "link-1",
       clubId: "community-2",

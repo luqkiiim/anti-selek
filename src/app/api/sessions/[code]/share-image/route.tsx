@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -6,6 +7,7 @@ import { logError, safeErrorResponse } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import {
   canQuickAccessClub,
+  getQuickAccessPlayerId,
   isQuickAccessSession,
 } from "@/lib/quickAccess";
 import {
@@ -21,8 +23,9 @@ import {
   SESSION_SHARE_IMAGE_HEIGHT,
   SESSION_SHARE_IMAGE_WIDTH,
 } from "@/lib/sessionShareImage";
-import { getSessionMembership } from "@/lib/sessionCollab";
+import { getSessionMembership, isAccountSessionPlayer } from "@/lib/sessionCollab";
 import { getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import {
   MatchStatus,
   SessionClubRole,
@@ -62,12 +65,12 @@ async function getSessionShareImageRoute(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return sportingJson({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { code } = await params;
   if (typeof code !== "string" || code.length === 0) {
-    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
   }
 
   const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(
@@ -110,12 +113,12 @@ async function getSessionShareImageRoute(
       },
       players: {
         select: {
-          userId: true,
+          playerId: true,
           sessionPoints: true,
           joinedAt: true,
           ladderEntryAt: true,
           isGuest: true,
-          user: {
+          player: {
             select: {
               id: true,
               name: true,
@@ -129,10 +132,10 @@ async function getSessionShareImageRoute(
           status: { in: [MatchStatus.COMPLETED, MatchStatus.PENDING_APPROVAL] },
         },
         select: {
-          team1User1Id: true,
-          team1User2Id: true,
-          team2User1Id: true,
-          team2User2Id: true,
+          team1Player1Id: true,
+          team1Player2Id: true,
+          team2Player1Id: true,
+          team2Player2Id: true,
           team1Score: true,
           team2Score: true,
           winnerTeam: true,
@@ -163,9 +166,10 @@ async function getSessionShareImageRoute(
     userId: session.user.id,
     acceptedOnly: false,
   });
-  const isSessionPlayer = sessionData.players.some(
-    (player) => player.userId === session.user.id
-  );
+  const quickPlayerId = getQuickAccessPlayerId(session);
+  const isSessionPlayer = quickPlayerId
+    ? sessionData.players.some((player) => player.playerId === quickPlayerId)
+    : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
   const canView =
     (!isQuickAccess && session.user.isAdmin) || !!membership || isSessionPlayer;
@@ -174,14 +178,14 @@ async function getSessionShareImageRoute(
   }
 
   if (sessionData.status !== SessionStatus.COMPLETED) {
-    return NextResponse.json(
+    return sportingJson(
       { error: "Final standings are available after the tournament ends." },
       { status: 400 }
     );
   }
 
   if (sessionData.players.length === 0) {
-    return NextResponse.json(
+    return sportingJson(
       { error: "There are no standings to share yet." },
       { status: 400 }
     );
@@ -196,18 +200,18 @@ async function getSessionShareImageRoute(
     completedMatchCount: sessionData.matches.filter(
       (match) => match.status === MatchStatus.COMPLETED
     ).length,
-    players: sessionData.players.map((player) => ({
-      userId: player.userId,
+    players: withLegacySportingAliases(sessionData.players.map((player) => ({
+      playerId: player.playerId,
       sessionPoints: player.sessionPoints,
       joinedAt: player.joinedAt,
       ladderEntryAt: player.ladderEntryAt,
       isGuest: player.isGuest,
-      user: {
-        name: player.user.name,
-        avatarUrl: resolveAvatarUrl(player.user.avatarKey),
+      player: {
+        name: player.player.name,
+        avatarUrl: resolveAvatarUrl(player.player.avatarKey),
       },
-    })),
-    matches: sessionData.matches,
+    }))),
+    matches: withLegacySportingAliases(sessionData.matches),
   });
   const avatarDataUrlsByUserId = await fetchShareImageAvatarDataUrls(
     viewModel.standings

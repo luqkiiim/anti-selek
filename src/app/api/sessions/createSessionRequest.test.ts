@@ -27,12 +27,12 @@ describe("parseCreateSessionRequest", () => {
       playerIds: ["user-1", "user-2", 3],
       playerConfigs: [
         {
-          userId: "user-1",
+          playerId: "user-1",
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         },
         {
-          userId: "user-2",
+          playerId: "user-2",
           gender: "INVALID",
         },
       ],
@@ -186,7 +186,7 @@ describe("parseCreateSessionRequest", () => {
       mode: SessionMode.MIXICANO,
       playerConfigs: [
         {
-          userId: "user-1",
+          playerId: "user-1",
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.OPEN,
         },
@@ -366,7 +366,7 @@ describe("parseCreateSessionRequest", () => {
       partnerClubId: "community-2",
       collabFormat: SessionCollabFormat.INTERCLUB,
       playerConfigs: [
-        { userId: "player-1", representingClubId: "community-1" },
+        { playerId: "player-1", representingClubId: "community-1" },
       ],
       guestConfigs: [
         { name: "Guest A", representingClubId: "community-2" },

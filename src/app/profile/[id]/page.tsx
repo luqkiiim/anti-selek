@@ -7,7 +7,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const userId = typeof params.id === "string" ? params.id : "";
+  const playerId = typeof params.id === "string" ? params.id : "";
   const clubId = searchParams.get("clubId") || "";
   const fallbackBackHref = clubId ? `/club/${clubId}` : "/";
 
@@ -22,7 +22,7 @@ export default function ProfilePage() {
 
   return (
     <PlayerProfileView
-      userId={userId}
+      playerId={playerId}
       clubId={clubId}
       mode="standalone"
       onBack={handleBack}

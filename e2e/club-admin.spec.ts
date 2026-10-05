@@ -4,6 +4,7 @@ import {
   claimClubId,
   claimPlaceholderUserId,
   claimRequesterUserId,
+  claimRequesterAccountId,
   createClaimRequest,
   readClubClaimRequestsSnapshot,
   hostClubId,
@@ -178,11 +179,17 @@ test("admin can approve a pending claim request from the admin page", async ({
       );
       return {
         placeholderExists: !!placeholder,
-        requesterName: requester?.name ?? null,
+        placeholderName: placeholder?.name ?? null,
+        ownerUserId: placeholder?.ownerUserId ?? null,
+        isClaimed: placeholder?.isClaimed ?? false,
+        separateRequesterPlayerExists: !!requester,
       };
     })
     .toEqual({
-      placeholderExists: false,
-      requesterName: "CLAIM Candidate",
+      placeholderExists: true,
+      placeholderName: "Claim Candidate",
+      ownerUserId: claimRequesterAccountId,
+      isClaimed: true,
+      separateRequesterPlayerExists: false,
     });
 });

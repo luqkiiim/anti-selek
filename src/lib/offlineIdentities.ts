@@ -1,14 +1,15 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { ClubRole, OfflineIdentityLinkStatus } from "@/types/enums";
+import { isClubAdminRole } from "@/lib/clubRoles";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
 
 const MATCH_USER_FIELDS = [
-  "team1User1Id",
-  "team1User2Id",
-  "team2User1Id",
-  "team2User2Id",
+  "team1Player1Id",
+  "team1Player2Id",
+  "team2Player1Id",
+  "team2Player2Id",
 ] as const;
 
 export class OfflineIdentityError extends Error {
@@ -21,88 +22,81 @@ export class OfflineIdentityError extends Error {
   }
 }
 
-export function isOfflineIdentityPlaceholder(user: {
-  isClaimed: boolean;
-  email: string | null;
+export function isOfflineIdentityPlaceholder(player: {
+  ownerUserId: string | null;
 }) {
-  return !user.isClaimed && user.email === null;
+  return player.ownerUserId === null;
 }
 
 export async function getClubAdminMembership(
   tx: DbClient,
   clubId: string,
-  userId: string,
+  accountUserId: string,
   isGlobalAdmin = false
 ) {
   if (isGlobalAdmin) {
     return { role: ClubRole.ADMIN };
   }
 
-  const [club, membership] = await Promise.all([
+  const [club, access] = await Promise.all([
     tx.club.findUnique({
       where: { id: clubId },
       select: { createdById: true },
     }),
-    tx.clubMember.findUnique({
-      where: {
-        clubId_userId: {
-          clubId,
-          userId,
-        },
-      },
-      select: { role: true },
+    tx.clubAccess.findUnique({
+      where: { clubId_userId: { clubId, userId: accountUserId } },
+      select: { role: true, status: true },
     }),
   ]);
 
-  if (club?.createdById === userId) {
-    return { role: ClubRole.ADMIN };
+  if (club?.createdById === accountUserId) {
+    return access?.status === "ACTIVE" && isClubAdminRole(access.role) ? { role: ClubRole.OWNER } : null;
   }
 
-  return membership;
+  return access?.status === "ACTIVE" && isClubAdminRole(access.role) ? access : null;
 }
 
 export async function isClubAdmin(
   tx: DbClient,
   clubId: string,
-  userId: string,
+  accountUserId: string,
   isGlobalAdmin = false
 ) {
   const membership = await getClubAdminMembership(
     tx,
     clubId,
-    userId,
+    accountUserId,
     isGlobalAdmin
   );
 
-  return membership?.role === "ADMIN";
+  return membership?.role === ClubRole.OWNER || membership?.role === ClubRole.ADMIN;
 }
 
 async function assertPlaceholderMembership(
   tx: DbClient,
   {
     clubId,
-    userId,
+    playerId,
     label,
   }: {
     clubId: string;
-    userId: string;
+    playerId: string;
     label: string;
   }
 ) {
   const membership = await tx.clubMember.findUnique({
     where: {
-      clubId_userId: {
+      clubId_playerId: {
         clubId,
-        userId,
+        playerId,
       },
     },
     include: {
-      user: {
+      player: {
         select: {
           id: true,
           name: true,
-          email: true,
-          isClaimed: true,
+          ownerUserId: true,
         },
       },
       club: {
@@ -118,7 +112,7 @@ async function assertPlaceholderMembership(
     throw new OfflineIdentityError(`${label} placeholder is not in that club`, 404);
   }
 
-  if (!isOfflineIdentityPlaceholder(membership.user)) {
+  if (!isOfflineIdentityPlaceholder(membership.player)) {
     throw new OfflineIdentityError(
       `${label} must be an unclaimed placeholder without email`,
       400
@@ -130,26 +124,26 @@ async function assertPlaceholderMembership(
 
 async function getExistingIdentityIdsForUsers(tx: DbClient, userIds: string[]) {
   const rows = await tx.offlineIdentityMember.findMany({
-    where: { userId: { in: userIds } },
+    where: { playerId: { in: userIds } },
     select: {
-      userId: true,
+      playerId: true,
       offlineIdentityId: true,
     },
   });
 
-  return new Map(rows.map((row) => [row.userId, row.offlineIdentityId]));
+  return new Map(rows.map((row) => [row.playerId, row.offlineIdentityId]));
 }
 
 async function assertNoSameSessionOrMatchConflict(
   tx: DbClient,
-  sourceUserId: string,
-  targetUserId: string
+  sourcePlayerId: string,
+  targetPlayerId: string
 ) {
   const sharedSession = await tx.session.findFirst({
     where: {
       AND: [
-        { players: { some: { userId: sourceUserId } } },
-        { players: { some: { userId: targetUserId } } },
+        { players: { some: { playerId: sourcePlayerId } } },
+        { players: { some: { playerId: targetPlayerId } } },
       ],
     },
     select: { name: true },
@@ -167,12 +161,12 @@ async function assertNoSameSessionOrMatchConflict(
       AND: [
         {
           OR: MATCH_USER_FIELDS.map((field) => ({
-            [field]: sourceUserId,
+            [field]: sourcePlayerId,
           })),
         },
         {
           OR: MATCH_USER_FIELDS.map((field) => ({
-            [field]: targetUserId,
+            [field]: targetPlayerId,
           })),
         },
       ],
@@ -192,24 +186,24 @@ async function resolveIdentityForAcceptedLink(
   tx: Prisma.TransactionClient,
   {
     sourceClubId,
-    sourceUserId,
+    sourcePlayerId,
     targetClubId,
-    targetUserId,
+    targetPlayerId,
     requestedById,
   }: {
     sourceClubId: string;
-    sourceUserId: string;
+    sourcePlayerId: string;
     targetClubId: string;
-    targetUserId: string;
+    targetPlayerId: string;
     requestedById: string;
   }
 ) {
   const identityIds = await getExistingIdentityIdsForUsers(tx, [
-    sourceUserId,
-    targetUserId,
+    sourcePlayerId,
+    targetPlayerId,
   ]);
-  const sourceIdentityId = identityIds.get(sourceUserId) ?? null;
-  const targetIdentityId = identityIds.get(targetUserId) ?? null;
+  const sourceIdentityId = identityIds.get(sourcePlayerId) ?? null;
+  const targetIdentityId = identityIds.get(targetPlayerId) ?? null;
 
   if (sourceIdentityId && targetIdentityId && sourceIdentityId !== targetIdentityId) {
     throw new OfflineIdentityError(
@@ -234,23 +228,23 @@ async function resolveIdentityForAcceptedLink(
     where: { offlineIdentityId },
     select: {
       clubId: true,
-      userId: true,
+      playerId: true,
     },
   });
   for (const member of existingMembers) {
-    if (member.userId !== sourceUserId) {
-      await assertNoSameSessionOrMatchConflict(tx, member.userId, sourceUserId);
+    if (member.playerId !== sourcePlayerId) {
+      await assertNoSameSessionOrMatchConflict(tx, member.playerId, sourcePlayerId);
     }
-    if (member.userId !== targetUserId) {
-      await assertNoSameSessionOrMatchConflict(tx, member.userId, targetUserId);
+    if (member.playerId !== targetPlayerId) {
+      await assertNoSameSessionOrMatchConflict(tx, member.playerId, targetPlayerId);
     }
   }
   const memberByClubId = new Map(
-    existingMembers.map((member) => [member.clubId, member.userId])
+    existingMembers.map((member) => [member.clubId, member.playerId])
   );
 
   const existingSourceUserId = memberByClubId.get(sourceClubId);
-  if (existingSourceUserId && existingSourceUserId !== sourceUserId) {
+  if (existingSourceUserId && existingSourceUserId !== sourcePlayerId) {
     throw new OfflineIdentityError(
       "This offline identity already has another placeholder in the source club",
       409
@@ -258,7 +252,7 @@ async function resolveIdentityForAcceptedLink(
   }
 
   const existingTargetUserId = memberByClubId.get(targetClubId);
-  if (existingTargetUserId && existingTargetUserId !== targetUserId) {
+  if (existingTargetUserId && existingTargetUserId !== targetPlayerId) {
     throw new OfflineIdentityError(
       "This offline identity already has another placeholder in the target club",
       409
@@ -267,32 +261,32 @@ async function resolveIdentityForAcceptedLink(
 
   await tx.offlineIdentityMember.upsert({
     where: {
-      clubId_userId: {
+      clubId_playerId: {
         clubId: sourceClubId,
-        userId: sourceUserId,
+        playerId: sourcePlayerId,
       },
     },
     update: {},
     create: {
       offlineIdentityId,
       clubId: sourceClubId,
-      userId: sourceUserId,
+      playerId: sourcePlayerId,
       addedById: requestedById,
     },
   });
 
   await tx.offlineIdentityMember.upsert({
     where: {
-      clubId_userId: {
+      clubId_playerId: {
         clubId: targetClubId,
-        userId: targetUserId,
+        playerId: targetPlayerId,
       },
     },
     update: {},
     create: {
       offlineIdentityId,
       clubId: targetClubId,
-      userId: targetUserId,
+      playerId: targetPlayerId,
       addedById: requestedById,
     },
   });
@@ -304,16 +298,16 @@ export async function createOfflineIdentityLinkRequest(
   tx: Prisma.TransactionClient,
   {
     sourceClubId,
-    sourceUserId,
+    sourcePlayerId,
     targetClubId,
-    targetUserId,
+    targetPlayerId,
     requestedById,
     autoApprove,
   }: {
     sourceClubId: string;
-    sourceUserId: string;
+    sourcePlayerId: string;
     targetClubId: string;
-    targetUserId: string;
+    targetPlayerId: string;
     requestedById: string;
     autoApprove: boolean;
   }
@@ -322,36 +316,36 @@ export async function createOfflineIdentityLinkRequest(
     throw new OfflineIdentityError("Choose placeholders from two different clubs", 400);
   }
 
-  if (sourceUserId === targetUserId) {
+  if (sourcePlayerId === targetPlayerId) {
     throw new OfflineIdentityError("These placeholders are already the same account", 400);
   }
 
   await assertPlaceholderMembership(tx, {
     clubId: sourceClubId,
-    userId: sourceUserId,
+    playerId: sourcePlayerId,
     label: "Source",
   });
   await assertPlaceholderMembership(tx, {
     clubId: targetClubId,
-    userId: targetUserId,
+    playerId: targetPlayerId,
     label: "Target",
   });
-  await assertNoSameSessionOrMatchConflict(tx, sourceUserId, targetUserId);
+  await assertNoSameSessionOrMatchConflict(tx, sourcePlayerId, targetPlayerId);
 
   const existingRequest = await tx.offlineIdentityLinkRequest.findFirst({
     where: {
       OR: [
         {
           sourceClubId,
-          sourceUserId,
+          sourcePlayerId,
           targetClubId,
-          targetUserId,
+          targetPlayerId,
         },
         {
           sourceClubId: targetClubId,
-          sourceUserId: targetUserId,
+          sourcePlayerId: targetPlayerId,
           targetClubId: sourceClubId,
-          targetUserId: sourceUserId,
+          targetPlayerId: sourcePlayerId,
         },
       ],
     },
@@ -370,11 +364,11 @@ export async function createOfflineIdentityLinkRequest(
   }
 
   const identityIds = await getExistingIdentityIdsForUsers(tx, [
-    sourceUserId,
-    targetUserId,
+    sourcePlayerId,
+    targetPlayerId,
   ]);
   const initialIdentityId =
-    identityIds.get(sourceUserId) ?? identityIds.get(targetUserId) ?? null;
+    identityIds.get(sourcePlayerId) ?? identityIds.get(targetPlayerId) ?? null;
   const reviewedAt = autoApprove ? new Date() : null;
   const status = autoApprove
     ? OfflineIdentityLinkStatus.ACCEPTED
@@ -383,9 +377,9 @@ export async function createOfflineIdentityLinkRequest(
     data: {
       offlineIdentityId: initialIdentityId,
       sourceClubId,
-      sourceUserId,
+      sourcePlayerId,
       targetClubId,
-      targetUserId,
+      targetPlayerId,
       status,
       requestedById,
       reviewedById: autoApprove ? requestedById : null,
@@ -400,9 +394,9 @@ export async function createOfflineIdentityLinkRequest(
 
   const offlineIdentityId = await resolveIdentityForAcceptedLink(tx, {
     sourceClubId,
-    sourceUserId,
+    sourcePlayerId,
     targetClubId,
-    targetUserId,
+    targetPlayerId,
     requestedById,
   });
 
@@ -459,25 +453,25 @@ export async function reviewOfflineIdentityLinkRequest(
 
   await assertPlaceholderMembership(tx, {
     clubId: request.sourceClubId,
-    userId: request.sourceUserId,
+    playerId: request.sourcePlayerId,
     label: "Source",
   });
   await assertPlaceholderMembership(tx, {
     clubId: request.targetClubId,
-    userId: request.targetUserId,
+    playerId: request.targetPlayerId,
     label: "Target",
   });
   await assertNoSameSessionOrMatchConflict(
     tx,
-    request.sourceUserId,
-    request.targetUserId
+    request.sourcePlayerId,
+    request.targetPlayerId
   );
 
   const offlineIdentityId = await resolveIdentityForAcceptedLink(tx, {
     sourceClubId: request.sourceClubId,
-    sourceUserId: request.sourceUserId,
+    sourcePlayerId: request.sourcePlayerId,
     targetClubId: request.targetClubId,
-    targetUserId: request.targetUserId,
+    targetPlayerId: request.targetPlayerId,
     requestedById: request.requestedById ?? reviewerUserId,
   });
 
@@ -496,8 +490,8 @@ export async function reviewOfflineIdentityLinkRequest(
 export const offlineIdentityLinkRequestInclude = {
   sourceClub: { select: { id: true, name: true } },
   targetClub: { select: { id: true, name: true } },
-  sourceUser: { select: { id: true, name: true, email: true } },
-  targetUser: { select: { id: true, name: true, email: true } },
+  sourcePlayer: { select: { id: true, name: true, ownerUser: { select: { email: true } } } },
+  targetPlayer: { select: { id: true, name: true, ownerUser: { select: { email: true } } } },
   requestedBy: { select: { id: true, name: true, email: true } },
   reviewedBy: { select: { id: true, name: true, email: true } },
 } satisfies Prisma.OfflineIdentityLinkRequestInclude;
@@ -506,9 +500,9 @@ export function toOfflineIdentityLinkResponse(request: {
   id: string;
   offlineIdentityId: string | null;
   sourceClubId: string;
-  sourceUserId: string;
+  sourcePlayerId: string;
   targetClubId: string;
-  targetUserId: string;
+  targetPlayerId: string;
   status: string;
   requestedById: string | null;
   reviewedById: string | null;
@@ -516,8 +510,8 @@ export function toOfflineIdentityLinkResponse(request: {
   createdAt: Date;
   sourceClub: { id: string; name: string };
   targetClub: { id: string; name: string };
-  sourceUser: { id: string; name: string; email: string | null };
-  targetUser: { id: string; name: string; email: string | null };
+  sourcePlayer: { id: string; name: string; ownerUser: { email: string } | null };
+  targetPlayer: { id: string; name: string; ownerUser: { email: string } | null };
   requestedBy: { id: string; name: string; email: string | null } | null;
   reviewedBy: { id: string; name: string; email: string | null } | null;
 }) {
@@ -526,14 +520,18 @@ export function toOfflineIdentityLinkResponse(request: {
     offlineIdentityId: request.offlineIdentityId,
     sourceClubId: request.sourceClubId,
     sourceClubName: request.sourceClub.name,
-    sourceUserId: request.sourceUserId,
-    sourceUserName: request.sourceUser.name,
-    sourceUserEmail: request.sourceUser.email,
+    sourcePlayerId: request.sourcePlayerId,
+    sourceUserId: request.sourcePlayerId,
+    sourcePlayerName: request.sourcePlayer.name,
+    sourceUserName: request.sourcePlayer.name,
+    sourceUserEmail: request.sourcePlayer.ownerUser?.email ?? null,
     targetClubId: request.targetClubId,
     targetClubName: request.targetClub.name,
-    targetUserId: request.targetUserId,
-    targetUserName: request.targetUser.name,
-    targetUserEmail: request.targetUser.email,
+    targetPlayerId: request.targetPlayerId,
+    targetUserId: request.targetPlayerId,
+    targetPlayerName: request.targetPlayer.name,
+    targetUserName: request.targetPlayer.name,
+    targetUserEmail: request.targetPlayer.ownerUser?.email ?? null,
     status: request.status,
     requestedById: request.requestedById,
     requestedByName: request.requestedBy?.name ?? null,
@@ -545,9 +543,9 @@ export function toOfflineIdentityLinkResponse(request: {
 }
 
 export interface LinkedClubUserResolver {
-  getUserIdForClub: (sourceUserId: string, clubId: string) => string;
-  getLinkedUserIds: (sourceUserId: string) => string[];
-  getOfflineIdentityId: (sourceUserId: string) => string | null;
+  getUserIdForClub: (sourcePlayerId: string, clubId: string) => string;
+  getLinkedUserIds: (sourcePlayerId: string) => string[];
+  getOfflineIdentityId: (sourcePlayerId: string) => string | null;
 }
 
 export async function getLinkedClubUserResolver(
@@ -564,27 +562,27 @@ export async function getLinkedClubUserResolver(
   const uniqueClubIds = Array.from(new Set(clubIds));
   if (uniqueUserIds.length === 0 || uniqueClubIds.length === 0) {
     return {
-      getUserIdForClub: (sourceUserId) => sourceUserId,
-      getLinkedUserIds: (sourceUserId) => [sourceUserId],
+      getUserIdForClub: (sourcePlayerId) => sourcePlayerId,
+      getLinkedUserIds: (sourcePlayerId) => [sourcePlayerId],
       getOfflineIdentityId: () => null,
     };
   }
 
   const seedMembers = await tx.offlineIdentityMember.findMany({
-    where: { userId: { in: uniqueUserIds } },
+    where: { playerId: { in: uniqueUserIds } },
     select: {
-      userId: true,
+      playerId: true,
       offlineIdentityId: true,
     },
   });
   const identityIdByUserId = new Map(
-    seedMembers.map((member) => [member.userId, member.offlineIdentityId])
+    seedMembers.map((member) => [member.playerId, member.offlineIdentityId])
   );
   const identityIds = Array.from(new Set(seedMembers.map((member) => member.offlineIdentityId)));
   if (identityIds.length === 0) {
     return {
-      getUserIdForClub: (sourceUserId) => sourceUserId,
-      getLinkedUserIds: (sourceUserId) => [sourceUserId],
+      getUserIdForClub: (sourcePlayerId) => sourcePlayerId,
+      getLinkedUserIds: (sourcePlayerId) => [sourcePlayerId],
       getOfflineIdentityId: () => null,
     };
   }
@@ -597,7 +595,7 @@ export async function getLinkedClubUserResolver(
     select: {
       offlineIdentityId: true,
       clubId: true,
-      userId: true,
+      playerId: true,
     },
   });
   const userIdByIdentityAndClub = new Map<string, string>();
@@ -606,30 +604,30 @@ export async function getLinkedClubUserResolver(
   for (const member of allMembers) {
     userIdByIdentityAndClub.set(
       `${member.offlineIdentityId}:${member.clubId}`,
-      member.userId
+      member.playerId
     );
     const current = linkedUserIdsByIdentity.get(member.offlineIdentityId) ?? [];
-    current.push(member.userId);
+    current.push(member.playerId);
     linkedUserIdsByIdentity.set(member.offlineIdentityId, current);
   }
 
   return {
-    getUserIdForClub: (sourceUserId, clubId) => {
-      const identityId = identityIdByUserId.get(sourceUserId);
-      if (!identityId) return sourceUserId;
+    getUserIdForClub: (sourcePlayerId, clubId) => {
+      const identityId = identityIdByUserId.get(sourcePlayerId);
+      if (!identityId) return sourcePlayerId;
       return (
         userIdByIdentityAndClub.get(`${identityId}:${clubId}`) ??
-        sourceUserId
+        sourcePlayerId
       );
     },
-    getLinkedUserIds: (sourceUserId) => {
-      const identityId = identityIdByUserId.get(sourceUserId);
-      if (!identityId) return [sourceUserId];
+    getLinkedUserIds: (sourcePlayerId) => {
+      const identityId = identityIdByUserId.get(sourcePlayerId);
+      if (!identityId) return [sourcePlayerId];
       return Array.from(
-        new Set([sourceUserId, ...(linkedUserIdsByIdentity.get(identityId) ?? [])])
+        new Set([sourcePlayerId, ...(linkedUserIdsByIdentity.get(identityId) ?? [])])
       );
     },
-    getOfflineIdentityId: (sourceUserId) => identityIdByUserId.get(sourceUserId) ?? null,
+    getOfflineIdentityId: (sourcePlayerId) => identityIdByUserId.get(sourcePlayerId) ?? null,
   };
 }
 
@@ -646,15 +644,15 @@ export async function getClubStatUserResolver(
   const localMembers = await tx.offlineIdentityMember.findMany({
     where: {
       clubId,
-      userId: { in: memberUserIds },
+      playerId: { in: memberUserIds },
     },
     select: {
       offlineIdentityId: true,
-      userId: true,
+      playerId: true,
     },
   });
   const localUserIdByIdentityId = new Map(
-    localMembers.map((member) => [member.offlineIdentityId, member.userId])
+    localMembers.map((member) => [member.offlineIdentityId, member.playerId])
   );
   const identityIds = Array.from(localUserIdByIdentityId.keys());
   const linkedMembers =
@@ -663,12 +661,12 @@ export async function getClubStatUserResolver(
           where: { offlineIdentityId: { in: identityIds } },
           select: {
             offlineIdentityId: true,
-            userId: true,
+            playerId: true,
           },
         })
       : [];
   const identityIdByUserId = new Map(
-    linkedMembers.map((member) => [member.userId, member.offlineIdentityId])
+    linkedMembers.map((member) => [member.playerId, member.offlineIdentityId])
   );
   const directMemberUserIds = new Set(memberUserIds);
 
@@ -684,16 +682,16 @@ export async function getOfflineIdentityInfoByUserId(
   userIds: string[]
 ) {
   const rows = await tx.offlineIdentityMember.findMany({
-    where: { userId: { in: Array.from(new Set(userIds)) } },
+    where: { playerId: { in: Array.from(new Set(userIds)) } },
     select: {
-      userId: true,
+      playerId: true,
       offlineIdentityId: true,
       offlineIdentity: {
         select: {
           members: {
             select: {
               clubId: true,
-              userId: true,
+              playerId: true,
               club: {
                 select: {
                   id: true,
@@ -709,13 +707,13 @@ export async function getOfflineIdentityInfoByUserId(
 
   return new Map(
     rows.map((row) => [
-      row.userId,
+      row.playerId,
       {
         offlineIdentityId: row.offlineIdentityId,
         linkedClubBadges: row.offlineIdentity.members.map((member) => ({
           id: member.club.id,
           name: member.club.name,
-          userId: member.userId,
+          userId: member.playerId,
         })),
       },
     ])

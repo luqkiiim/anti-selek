@@ -3,10 +3,10 @@ import type { SessionData } from "@/components/session/sessionTypes";
 export interface SessionQueuedMatchRecord {
   id: string;
   sessionId?: string;
-  team1User1Id: string;
-  team1User2Id: string;
-  team2User1Id: string;
-  team2User2Id: string;
+  team1Player1Id: string;
+  team1Player2Id: string;
+  team2Player1Id: string;
+  team2Player2Id: string;
   createdAt: Date | string;
 }
 
@@ -17,12 +17,12 @@ export function getQueuedMatchUserIds(
     return [];
   }
 
-  if ("team1User1Id" in queuedMatch) {
+  if ("team1Player1Id" in queuedMatch) {
     return [
-      queuedMatch.team1User1Id,
-      queuedMatch.team1User2Id,
-      queuedMatch.team2User1Id,
-      queuedMatch.team2User2Id,
+      queuedMatch.team1Player1Id,
+      queuedMatch.team1Player2Id,
+      queuedMatch.team2Player1Id,
+      queuedMatch.team2Player2Id,
     ];
   }
 
@@ -36,7 +36,7 @@ export function getQueuedMatchUserIds(
 
 export function hasQueuedMatchUser(
   queuedMatch: SessionQueuedMatchRecord | SessionData["queuedMatch"] | null | undefined,
-  userId: string
+  playerId: string
 ) {
-  return getQueuedMatchUserIds(queuedMatch).includes(userId);
+  return getQueuedMatchUserIds(queuedMatch).includes(playerId);
 }

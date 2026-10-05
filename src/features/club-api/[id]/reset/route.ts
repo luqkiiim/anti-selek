@@ -86,7 +86,7 @@ export async function POST(
                   isGuest: true,
                 },
                 select: {
-                  userId: true,
+                  playerId: true,
                   isGuest: true,
                 },
               })

@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -11,8 +12,8 @@ import {
   compareCompetitiveStandings,
   compareSessionStandings,
 } from "@/lib/sessionStandings";
-import { canQuickAccessSessionRead, isQuickAccessSession } from "@/lib/quickAccess";
-import { getSessionMembership } from "@/lib/sessionCollab";
+import { canQuickAccessSessionRead, getQuickAccessPlayerId, isQuickAccessSession } from "@/lib/quickAccess";
+import { getSessionMembership, isAccountSessionPlayer } from "@/lib/sessionCollab";
 import { MatchStatus, SessionType } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -25,13 +26,13 @@ async function getSessionLeaderboard(
 ) {
   const session = await auth();
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return sportingJson({ error: "Not authenticated" }, { status: 401 });
   }
 
   const { code } = await params;
 
   if (typeof code !== "string" || code.length === 0) {
-    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
   }
 
   const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:leaderboard");
@@ -42,7 +43,7 @@ async function getSessionLeaderboard(
     include: {
       players: {
         include: {
-          user: {
+          player: {
             select: {
               id: true,
               name: true,
@@ -56,10 +57,10 @@ async function getSessionLeaderboard(
       matches: {
         where: { status: { in: [MatchStatus.COMPLETED, MatchStatus.PENDING_APPROVAL] } },
         select: {
-          team1User1Id: true,
-          team1User2Id: true,
-          team2User1Id: true,
-          team2User2Id: true,
+          team1Player1Id: true,
+          team1Player2Id: true,
+          team2Player1Id: true,
+          team2Player2Id: true,
           team1Score: true,
           team2Score: true,
           status: true,
@@ -89,7 +90,10 @@ async function getSessionLeaderboard(
   });
   const clubRole = membership?.role ?? null;
 
-  const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
+  const quickPlayerId = getQuickAccessPlayerId(session);
+  const isSessionPlayer = quickPlayerId
+    ? sessionData.players.some((player) => player.playerId === quickPlayerId)
+    : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
   const canView =
     (!isQuickAccessSession(session) && session.user.isAdmin) ||
     !!clubRole ||
@@ -102,7 +106,7 @@ async function getSessionLeaderboard(
   const matchCounts: Record<string, number> = {};
   const pointDiffByUserId: Record<string, number> = {};
   sessionData.matches.forEach(m => {
-    [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id].forEach(id => {
+    [m.team1Player1Id, m.team1Player2Id, m.team2Player1Id, m.team2Player2Id].forEach(id => {
       matchCounts[id] = (matchCounts[id] || 0) + 1;
     });
 
@@ -113,10 +117,10 @@ async function getSessionLeaderboard(
     ) {
       const team1Diff = m.team1Score - m.team2Score;
       const team2Diff = m.team2Score - m.team1Score;
-      [m.team1User1Id, m.team1User2Id].forEach((id) => {
+      [m.team1Player1Id, m.team1Player2Id].forEach((id) => {
         pointDiffByUserId[id] = (pointDiffByUserId[id] || 0) + team1Diff;
       });
-      [m.team2User1Id, m.team2User2Id].forEach((id) => {
+      [m.team2Player1Id, m.team2Player2Id].forEach((id) => {
         pointDiffByUserId[id] = (pointDiffByUserId[id] || 0) + team2Diff;
       });
     }
@@ -126,22 +130,22 @@ async function getSessionLeaderboard(
     sessionData.clubId && sessionData.players.length > 0
       ? await getClubEloByUserId(
           sessionData.clubId,
-          sessionData.players.map((p) => p.userId)
+          sessionData.players.map((p) => p.playerId)
         )
       : new Map<string, number>();
 
-  const getPlayerElo = (userId: string, fallbackElo: number) =>
-    clubEloByUserId.get(userId) ?? fallbackElo;
+  const getPlayerElo = (playerId: string, fallbackElo: number) =>
+    clubEloByUserId.get(playerId) ?? fallbackElo;
 
   const leaderboardEntries = sessionData.players
     .map((p) => ({
-      userId: p.userId,
-      name: p.user.name,
+      playerId: p.playerId,
+      name: p.player.name,
       isGuest: p.isGuest,
       sessionPoints: p.sessionPoints,
-      elo: getPlayerElo(p.userId, p.user.elo),
-      matchesPlayed: matchCounts[p.userId] || 0,
-      pointDiff: pointDiffByUserId[p.userId] || 0,
+      elo: getPlayerElo(p.playerId, p.player.elo),
+      matchesPlayed: matchCounts[p.playerId] || 0,
+      pointDiff: pointDiffByUserId[p.playerId] || 0,
       ladderEntryAt: p.ladderEntryAt,
     }));
 
@@ -156,13 +160,13 @@ async function getSessionLeaderboard(
   const ladderRecordByUserId = deriveLadderRecordsByEntryTime(
     new Map(
       sessionData.players.map((player) => [
-        player.userId,
+        player.playerId,
         getCompetitiveEntryAt(player),
       ])
     ),
     sessionData.matches.map((match) => ({
-      team1: [match.team1User1Id, match.team1User2Id] as [string, string],
-      team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      team1: [match.team1Player1Id, match.team1Player2Id] as [string, string],
+      team2: [match.team2Player1Id, match.team2Player2Id] as [string, string],
       team1Score: match.team1Score,
       team2Score: match.team2Score,
       status: match.status,
@@ -171,7 +175,7 @@ async function getSessionLeaderboard(
   );
   const ladderLeaderboard = leaderboardEntries
     .map((entry) => {
-      const record = ladderRecordByUserId.get(entry.userId) ?? {
+      const record = ladderRecordByUserId.get(entry.playerId) ?? {
         ladderScore: 0,
         pointDiff: 0,
       };
@@ -187,13 +191,13 @@ async function getSessionLeaderboard(
   const raceRecordByUserId = deriveRaceRecordsByEntryTime(
     new Map(
       sessionData.players.map((player) => [
-        player.userId,
+        player.playerId,
         getCompetitiveEntryAt(player),
       ])
     ),
     sessionData.matches.map((match) => ({
-      team1: [match.team1User1Id, match.team1User2Id] as [string, string],
-      team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      team1: [match.team1Player1Id, match.team1Player2Id] as [string, string],
+      team2: [match.team2Player1Id, match.team2Player2Id] as [string, string],
       team1Score: match.team1Score,
       team2Score: match.team2Score,
       status: match.status,
@@ -202,7 +206,7 @@ async function getSessionLeaderboard(
   );
   const raceLeaderboard = leaderboardEntries
     .map((entry) => {
-      const record = raceRecordByUserId.get(entry.userId) ?? {
+      const record = raceRecordByUserId.get(entry.playerId) ?? {
         ladderScore: 0,
         pointDiff: 0,
       };
@@ -215,7 +219,7 @@ async function getSessionLeaderboard(
     })
     .sort(compareCompetitiveStandings);
 
-  return NextResponse.json({
+  return sportingJson({
     sessionPointsLeaderboard,
     eloLeaderboard,
     ladderLeaderboard,

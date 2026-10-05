@@ -80,7 +80,7 @@ function renderClaimControls({
     !onRequestClaim ||
     player.isClaimed ||
     player.email !== null ||
-    player.id === currentUser?.id
+    player.id === currentUser?.playerId
   ) {
     return null;
   }

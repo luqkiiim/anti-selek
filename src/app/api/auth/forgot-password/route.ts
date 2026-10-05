@@ -99,11 +99,11 @@ export async function POST(request: Request) {
         id: true,
         email: true,
         name: true,
-        isClaimed: true,
+        isActive: true,
       },
     });
 
-    if (!user?.isClaimed || !user.email) {
+    if (!user?.isActive || !user.email) {
       logAuditEvent({
         action: "auth.forgot_password",
         actor: {

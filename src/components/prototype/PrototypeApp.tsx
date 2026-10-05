@@ -14,6 +14,7 @@ import { api, useResource, useAction } from "./api";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 import Club from "./Club";
 import { AccountSettings, type AccountUser } from "./AccountSettings";
+import { JoinClubAdmission } from "./JoinClubAdmission";
 import "@fontsource/nunito-sans/400.css";
 import "@fontsource/nunito-sans/600.css";
 import "@fontsource/nunito-sans/700.css";
@@ -44,8 +45,7 @@ export default function PrototypeApp() {
   );
   const [selected, setSelected] = useState<string | null>(null),
     [form, setForm] = useState(""),
-    [value, setValue] = useState(""),
-    [notice, setNotice] = useState("");
+    [value, setValue] = useState("");
   const action = useAction(clubs.refresh);
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/signin?callbackUrl="+encodeURIComponent(location.pathname+location.search));
@@ -114,7 +114,6 @@ export default function PrototypeApp() {
                 <p>Choose your club to get started.</p>
               </div>
               <ErrorText error={clubs.error} />
-              {notice && <p role="status">{notice}</p>}
               {!clubs.data && !clubs.error && (
                 <p role="status">Loading your clubs…</p>
               )}
@@ -146,7 +145,7 @@ export default function PrototypeApp() {
                   <CaretRight size={20} />
                 </button>
               ))}
-              {status === "authenticated" && !auth?.user?.isQuickAccess && (
+              {status === "authenticated" && account.data && !account.data.user.isQuickAccess && (
                 <div className="chooser-actions">
                   <button
                     className="secondary"
@@ -175,29 +174,19 @@ export default function PrototypeApp() {
         </div>
       )}
       <AccountSettings open={form === "account"} onClose={() => setForm("")} onSaved={account.refresh} />
-      <Sheet open={!!form && form !== "account"}
-          title={
-            form === "create"
-              ? "Create club"
-              : form === "join"
-                ? "Join a club"
-                : "Your account"
-          }
+      <Sheet open={!!form && form !== "account" && form !== "join"}
+          title="Create club"
           busy={action.busy}
           onClose={() => setForm("")}
         >
           <ErrorText error={action.error} />
             <>
               <label className="field-label">
-                {form === "create" ? "Club name" : "Invite link"}
+                Club name
                 <input
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
-                  placeholder={
-                    form === "create"
-                      ? "Your club name"
-                      : "Paste an invite link"
-                  }
+                  placeholder="Your club name"
                 />
               </label>
               <button
@@ -206,38 +195,29 @@ export default function PrototypeApp() {
                 onClick={() =>
                   void action.run(
                     async () => {
-                      if (form === "join") {
-                        let clubId = value.trim();
-                        try {
-                          clubId =
-                            new URL(value).searchParams.get("join") || "";
-                        } catch {}
-                        const result = await api<{
-                          status: string;
-                          clubId: string;
-                        }>("/api/clubs/join-requests", "POST", { clubId });
-                        if (result.status === "MEMBER") select(result.clubId);
-                        else
-                          setNotice(
-                            "Request sent. A club admin will review it.",
-                          );
-                      } else {
-                        const result = await api<{ id: string }>(
-                          "/api/clubs",
-                          "POST",
-                          { name: value.trim(), allowJoinRequests: true },
-                        );
-                        select(result.id);
-                      }
+                      const result = await api<{ id: string }>(
+                        "/api/clubs",
+                        "POST",
+                        { name: value.trim(), allowJoinRequests: true },
+                      );
+                      select(result.id);
                     },
                     () => setForm(""),
                   )
                 }
               >
-                {form === "create" ? "Create club" : "Request to join"}
+                Create club
               </button>
             </>
         </Sheet>
+      {form === "join" && <JoinClubAdmission
+        open
+        initialValue={value}
+        accountName={account.data?.user.name || auth?.user?.name || ""}
+        accountGender={account.data?.user.gender || ""}
+        onClose={() => setForm("")}
+        onOpenClub={id => { select(id); setForm(""); void clubs.refresh().catch(() => {}); }}
+      />}
     </div>
   );
 }

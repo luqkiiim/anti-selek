@@ -13,7 +13,6 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn(), update: vi.fn() },
-    clubMember: { findUnique: vi.fn() },
   },
 }));
 
@@ -33,13 +32,13 @@ describe("start session route", () => {
 
   it("normalizes player availability when a session starts", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "admin-1", isAdmin: true },
+      user: { id: "global-admin-account", isAdmin: true },
     } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       code: "session-1",
       clubId: null,
       status: SessionStatus.WAITING,
-      players: [{ id: "player-1" }],
+      players: [{ playerId: "player-1" }],
     } as never);
     vi.mocked(prisma.session.update).mockResolvedValue({
       clubId: null,
@@ -72,7 +71,7 @@ describe("start session route", () => {
 
   it("revalidates the minimum active roster for player groups", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "admin-1", isAdmin: true },
+      user: { id: "global-admin-account", isAdmin: true },
     } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       code: "session-1",
@@ -80,10 +79,10 @@ describe("start session route", () => {
       status: SessionStatus.WAITING,
       poolsEnabled: true,
       players: [
-        { id: "player-1", pool: SessionPool.A, isPaused: false },
-        { id: "player-2", pool: SessionPool.B, isPaused: false },
-        { id: "player-3", pool: SessionPool.B, isPaused: false },
-        { id: "player-4", pool: SessionPool.A, isPaused: true },
+        { playerId: "player-1", pool: SessionPool.A, isPaused: false },
+        { playerId: "player-2", pool: SessionPool.B, isPaused: false },
+        { playerId: "player-3", pool: SessionPool.B, isPaused: false },
+        { playerId: "player-4", pool: SessionPool.A, isPaused: true },
       ],
     } as never);
 
@@ -99,7 +98,7 @@ describe("start session route", () => {
 
   it("names the player whose gender blocks mixed pairing", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "admin-1", isAdmin: true },
+      user: { id: "global-admin-account", isAdmin: true },
     } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       code: "session-1",
@@ -109,9 +108,9 @@ describe("start session route", () => {
       pairingMode: SessionPairingMode.MIXED,
       players: [
         {
-          id: "player-1",
+          playerId: "player-1",
           gender: PlayerGender.UNSPECIFIED,
-          user: { name: "Alex" },
+          player: { name: "Alex" },
         },
       ],
       sessionClubs: [],

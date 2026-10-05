@@ -61,7 +61,7 @@ USE_TURSO="false"
 # - Ignored in production
 LOCAL_DISABLE_RATE_LIMITS="false"
 
-# Cloud runtime database
+# Optional approved development Turso database (never production locally)
 TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
 
@@ -77,9 +77,12 @@ APP_BASE_URL="https://antiselek.com"
 Runtime database selection:
 
 - Local development defaults to SQLite via `DATABASE_URL`, even if Turso credentials are present in `.env`
-- Set `USE_TURSO=true` when you want local `npm run dev` to use Turso intentionally
-- Set `USE_TURSO=false` to force SQLite explicitly in any environment
-- Production uses Turso automatically when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present and `USE_TURSO` is not set to `false`
+- Set `USE_TURSO=true` to opt into the approved development Turso database locally; endpoint and token pins are required
+- Local builds and tests also default to SQLite, including with `NODE_ENV=production`
+- Vercel Production requires Production-only `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`
+- Vercel Preview requires Preview-only `PREVIEW_TURSO_DATABASE_URL` and `PREVIEW_TURSO_AUTH_TOKEN`; it rejects standard `TURSO_*` variables, production endpoints, unapproved tokens, and missing configuration
+- Vercel Development has no production credentials and defaults to SQLite; deployed builds never fall back to SQLite or production on a configuration error
+- `USE_TURSO=false` disables database access in deployed Production/Preview rather than selecting SQLite
 - Prisma schema and `prisma migrate dev` still use the SQLite datasource from `DATABASE_URL`
 - Profile photos use Vercel Blob and require `BLOB_READ_WRITE_TOKEN`
 - Password reset emails use Resend and require `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `APP_BASE_URL`
@@ -135,7 +138,7 @@ Use Turso intentionally in local dev:
 USE_TURSO="true"
 ```
 
-This requires valid `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+This requires approved development `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, plus the private development endpoint registration. See [database isolation](docs/database-isolation.md). Do not pull Production environment variables into local configuration.
 
 To test profile photo uploads locally, create a public Vercel Blob store for the
 same Vercel project and pull `BLOB_READ_WRITE_TOKEN` into your local env:

@@ -96,17 +96,8 @@ async function createUser({
   email?: string | null;
   isClaimed?: boolean;
 }) {
-  await prisma.user.create({
-    data: {
-      id,
-      name,
-      email,
-      passwordHash: isClaimed ? "test-password-hash" : null,
-      isClaimed,
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-    },
-  });
+  if (isClaimed) await prisma.user.create({ data: { id, name, email: email!, passwordHash: "test-password-hash" } });
+  await prisma.player.create({ data: { id, name, ownerUserId: isClaimed ? id : null, gender: PlayerGender.MALE, partnerPreference: PartnerPreference.OPEN } });
 }
 
 async function createClub({
@@ -125,11 +116,11 @@ async function createClub({
       createdById: adminId,
     },
   });
+  await prisma.clubAccess.create({ data: { clubId: id, userId: adminId, role: "OWNER" } });
   await prisma.clubMember.create({
     data: {
       clubId: id,
-      userId: adminId,
-      role: "ADMIN",
+      playerId: adminId,
     },
   });
 }
@@ -138,8 +129,7 @@ async function addMember(clubId: string, userId: string, elo = 1000) {
   await prisma.clubMember.create({
     data: {
       clubId,
-      userId,
-      role: "MEMBER",
+      playerId: userId,
       elo,
     },
   });
@@ -248,20 +238,7 @@ beforeAll(async () => {
   await removeDatabaseFiles();
   await fs.writeFile(tempDatabaseFile, "");
 
-  const prismaBinary = getPrismaBinary();
-  if (process.platform === "win32") {
-    execFileSync("cmd.exe", ["/c", prismaBinary, "db", "push", "--skip-generate"], {
-      cwd: process.cwd(),
-      env: process.env as NodeJS.ProcessEnv,
-      stdio: "inherit",
-    });
-  } else {
-    execFileSync(prismaBinary, ["db", "push", "--skip-generate"], {
-      cwd: process.cwd(),
-      env: process.env as NodeJS.ProcessEnv,
-      stdio: "inherit",
-    });
-  }
+  execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "deploy"], { cwd: process.cwd(), env: process.env as NodeJS.ProcessEnv, stdio: "pipe" });
 
   vi.resetModules();
   (globalThis as { prisma?: PrismaInstance }).prisma = undefined;
@@ -291,7 +268,9 @@ beforeEach(async () => {
   await prisma.offlineIdentityMember.deleteMany();
   await prisma.offlineIdentity.deleteMany();
   await prisma.clubMember.deleteMany();
+  await prisma.clubAccess.deleteMany();
   await prisma.club.deleteMany();
+  await prisma.player.deleteMany();
   await prisma.user.deleteMany();
 });
 
@@ -446,7 +425,7 @@ describe("offline identity links", () => {
         },
         players: {
           create: [haziqAId, ...playerIds].map((userId) => ({
-            userId,
+            playerId: userId,
             gender: PlayerGender.MALE,
             partnerPreference: PartnerPreference.OPEN,
           })),
@@ -459,10 +438,10 @@ describe("offline identity links", () => {
         sessionId,
         courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: haziqAId,
-        team1User2Id: playerIds[0],
-        team2User1Id: playerIds[1],
-        team2User2Id: playerIds[2],
+        team1Player1Id: haziqAId,
+        team1Player2Id: playerIds[0],
+        team2Player1Id: playerIds[1],
+        team2Player2Id: playerIds[2],
       },
     });
 
@@ -478,10 +457,10 @@ describe("offline identity links", () => {
 
     const [haziqA, haziqB] = await Promise.all([
       prisma.clubMember.findUnique({
-        where: { clubId_userId: { clubId: communityAId, userId: haziqAId } },
+        where: { clubId_playerId: { clubId: communityAId, playerId: haziqAId } },
       }),
       prisma.clubMember.findUnique({
-        where: { clubId_userId: { clubId: communityBId, userId: haziqBId } },
+        where: { clubId_playerId: { clubId: communityBId, playerId: haziqBId } },
       }),
     ]);
     expect(haziqA?.elo).toBeGreaterThan(1000);
@@ -501,10 +480,10 @@ describe("offline identity links", () => {
 
     const [rolledBackA, rolledBackB] = await Promise.all([
       prisma.clubMember.findUnique({
-        where: { clubId_userId: { clubId: communityAId, userId: haziqAId } },
+        where: { clubId_playerId: { clubId: communityAId, playerId: haziqAId } },
       }),
       prisma.clubMember.findUnique({
-        where: { clubId_userId: { clubId: communityBId, userId: haziqBId } },
+        where: { clubId_playerId: { clubId: communityBId, playerId: haziqBId } },
       }),
     ]);
     expect(rolledBackA?.elo).toBe(1000);

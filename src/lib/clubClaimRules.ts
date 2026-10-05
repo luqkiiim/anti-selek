@@ -23,23 +23,10 @@ export function getClaimRequesterEligibility(
   if (!input.isClaimed) {
     return {
       canRequest: false,
-      reason: "Only claimed accounts can request a profile merge.",
+      reason: "Sign in with an account to request a Player connection.",
     };
   }
 
-  if (input.clubElo !== 1000) {
-    return {
-      canRequest: false,
-      reason: "This account already has club rating history. Manual merge required.",
-    };
-  }
-
-  if (input.hasClubSessionHistory) {
-    return {
-      canRequest: false,
-      reason: "This account already has tournament history in this club. Manual merge required.",
-    };
-  }
 
   return {
     canRequest: true,

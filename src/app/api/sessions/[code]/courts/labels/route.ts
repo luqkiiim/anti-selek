@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -24,13 +25,13 @@ export async function PATCH(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:courts:labels");
@@ -38,7 +39,7 @@ export async function PATCH(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = (await request.json().catch(() => null)) as CourtLabelUpdateRequest | null;
     if (!body || !Array.isArray(body.courts) || body.courts.length === 0) {
-      return NextResponse.json({ error: "Court labels are required" }, { status: 400 });
+      return sportingJson({ error: "Court labels are required" }, { status: 400 });
     }
 
     const sessionData = await prisma.session.findUnique({
@@ -79,11 +80,11 @@ export async function PATCH(
 
     for (const court of body.courts) {
       if (typeof court?.courtId !== "string") {
-        return NextResponse.json({ error: "Invalid court label payload" }, { status: 400 });
+        return sportingJson({ error: "Invalid court label payload" }, { status: 400 });
       }
 
       if (seenCourtIds.has(court.courtId)) {
-        return NextResponse.json({ error: "Duplicate court label entry" }, { status: 400 });
+        return sportingJson({ error: "Duplicate court label entry" }, { status: 400 });
       }
       seenCourtIds.add(court.courtId);
 
@@ -92,12 +93,12 @@ export async function PATCH(
       }
 
       if (court.label !== undefined && typeof court.label !== "string") {
-        return NextResponse.json({ error: "Invalid court label value" }, { status: 400 });
+        return sportingJson({ error: "Invalid court label value" }, { status: 400 });
       }
 
       const normalizedLabel = typeof court.label === "string" ? court.label.trim() : "";
       if (normalizedLabel.length > 24) {
-        return NextResponse.json(
+        return sportingJson(
           { error: "Court labels must be 24 characters or fewer" },
           { status: 400 }
         );
@@ -128,7 +129,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({
+    return sportingJson({
       courts: updatedCourts,
     });
   } catch (error) {

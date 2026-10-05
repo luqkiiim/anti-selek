@@ -20,7 +20,7 @@ export async function listSessionsForClub({
   viewerId: string;
   viewerIsAdmin: boolean;
 }) {
-  const membership = await prisma.clubMember.findUnique({
+  const membership = await prisma.clubAccess.findUnique({
     where: {
       clubId_userId: {
         clubId,
@@ -29,7 +29,7 @@ export async function listSessionsForClub({
     },
   });
 
-  if (!membership && !viewerIsAdmin) {
+  if (membership?.status !== "ACTIVE" && !viewerIsAdmin) {
     throw new SessionRouteError("Not authorized for this club", 403);
   }
 
@@ -61,7 +61,7 @@ export async function listSessionsForClub({
       courts: true,
       players: {
         include: {
-          user: { select: { id: true, name: true, avatarKey: true, elo: true } },
+          player: { select: { id: true, name: true, avatarKey: true, elo: true } },
         },
       },
     },
@@ -72,7 +72,7 @@ export async function listSessionsForClub({
   }
 
   const userIds = Array.from(
-    new Set(sessions.flatMap((session) => session.players.map((player) => player.userId)))
+    new Set(sessions.flatMap((session) => session.players.map((player) => player.playerId)))
   );
   const clubEloByUserId = await getClubEloByUserId(clubId, userIds);
   const clubIds = Array.from(
@@ -110,7 +110,7 @@ export async function listSessionsForClub({
             : withClubElo(session.players, clubEloByUserId)
         ).map((player) => ({
           ...player,
-          user: serializeAvatarEntity(player.user),
+          player: serializeAvatarEntity(player.player),
         })),
       collabStatus:
         currentClubLink?.role === "PARTNER"

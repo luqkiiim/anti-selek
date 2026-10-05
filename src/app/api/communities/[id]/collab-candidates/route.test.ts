@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   clubFindUnique: vi.fn(),
   clubFindMany: vi.fn(),
-  clubMemberFindUnique: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -17,8 +17,8 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.clubFindUnique,
       findMany: mocks.clubFindMany,
     },
-    clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
+    clubAccess: {
+      findUnique: mocks.clubAccessFindUnique,
     },
   },
 }));
@@ -46,13 +46,13 @@ describe("collab club candidate search route", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.auth.mockResolvedValue({
-      user: { id: "admin-1", isAdmin: false, email: "admin@example.com" },
+      user: { id: "account-operator", isAdmin: false, email: "admin@example.com" },
     });
     mocks.clubFindUnique.mockResolvedValue({
       id: "community-1",
       isTutorial: false,
     });
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
     mocks.clubFindMany.mockResolvedValue([
       {
         id: "community-2",
@@ -83,7 +83,7 @@ describe("collab club candidate search route", () => {
   });
 
   it("requires a host club admin or staff member", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "MEMBER", status: "ACTIVE" });
 
     const response = await getCandidates("pa");
 
@@ -92,12 +92,21 @@ describe("collab club candidate search route", () => {
   });
 
   it("allows staff to search outgoing collab candidates", async () => {
-    mocks.clubMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "STAFF", status: "ACTIVE" });
 
     const response = await getCandidates("partner");
 
     expect(response.status).toBe(200);
     expect(mocks.clubFindMany).toHaveBeenCalled();
+  });
+
+  it("does not grant access from a revoked account grant that still says ADMIN", async () => {
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "REVOKED" });
+
+    const response = await getCandidates("partner");
+
+    expect(response.status).toBe(403);
+    expect(mocks.clubFindMany).not.toHaveBeenCalled();
   });
 
   it("returns an empty result without querying all clubs for short searches", async () => {

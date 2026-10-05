@@ -1,9 +1,9 @@
 import type { Prisma } from "@prisma/client";
 
 // Match the exact identity and the club represented in the original tournament.
-export function clubGuestWhere(clubId: string, userId: string): Prisma.SessionPlayerWhereInput {
+export function clubGuestWhere(clubId: string, playerId: string): Prisma.SessionPlayerWhereInput {
   return {
-    userId,
+    playerId,
     isGuest: true,
     session: { isTest: false, status: "COMPLETED" },
     OR: [

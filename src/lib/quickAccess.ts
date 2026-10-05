@@ -1,5 +1,14 @@
 import type { Session } from "next-auth";
 
+/** Authentication identity only. A quick-access Player is never an account. */
+export function getSessionAccountId(session: Session | null | undefined): string | null {
+  return session?.user?.id && !isQuickAccessSession(session) ? session.user.id : null;
+}
+
+export function getQuickAccessPlayerId(session: Session | null | undefined): string | null {
+  return isQuickAccessSession(session) ? session?.user?.guestPlayerId ?? null : null;
+}
+
 export function normalizeNameLookupKey(value: string): string {
   return value
     .trim()

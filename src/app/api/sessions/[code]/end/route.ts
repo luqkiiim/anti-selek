@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { captureAchievementEligibility } from "@/lib/clubAchievementService";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -26,13 +27,13 @@ export async function POST(
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
 
     if (typeof code !== "string" || code.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:end");
@@ -57,7 +58,7 @@ export async function POST(
       acceptedOnly: true,
     });
     if (!session.user.isAdmin && !operatorMembership) {
-      return NextResponse.json({ error: "Admin or staff only" }, { status: 403 });
+      return sportingJson({ error: "Admin or staff only" }, { status: 403 });
     }
 
     const endedAt = sessionData.endedAt ?? new Date();
@@ -98,7 +99,7 @@ export async function POST(
           courts: { include: { currentMatch: true } },
           players: {
             include: {
-              user: {
+              player: {
                 select: { id: true, name: true, avatarKey: true, elo: true },
               },
             },
@@ -114,7 +115,7 @@ export async function POST(
       prisma,
       updated
     );
-    const playerIds = updated.players.map((p) => p.userId);
+    const playerIds = updated.players.map((p) => p.playerId);
     const players =
       linkedClubIds.length > 1 && updated.players.length > 0
         ? withPlayerClubBadges(
@@ -129,11 +130,11 @@ export async function POST(
             )
           : updated.players;
 
-    return NextResponse.json({
+    return sportingJson({
       ...updated,
       players: players.map((player) => ({
         ...player,
-        user: serializeAvatarEntity(player.user),
+        player: serializeAvatarEntity(player.player),
       })),
       queuedMatch: null,
     });

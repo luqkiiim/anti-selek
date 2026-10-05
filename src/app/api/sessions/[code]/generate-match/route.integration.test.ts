@@ -52,23 +52,23 @@ function getPrismaBinary() {
 }
 
 function getSelectedIds(match: {
-  team1User1Id?: string;
-  team1User2Id?: string;
-  team2User1Id?: string;
-  team2User2Id?: string;
-  team1User1?: { id: string };
-  team1User2?: { id: string };
-  team2User1?: { id: string };
-  team2User2?: { id: string };
+  team1Player1Id?: string;
+  team1Player2Id?: string;
+  team2Player1Id?: string;
+  team2Player2Id?: string;
+  team1Player1?: { id: string };
+  team1Player2?: { id: string };
+  team2Player1?: { id: string };
+  team2Player2?: { id: string };
 }) {
   const selectedIds = [
-    match.team1User1Id ?? match.team1User1?.id,
-    match.team1User2Id ?? match.team1User2?.id,
-    match.team2User1Id ?? match.team2User1?.id,
-    match.team2User2Id ?? match.team2User2?.id,
+    match.team1Player1Id ?? match.team1Player1?.id,
+    match.team1Player2Id ?? match.team1Player2?.id,
+    match.team2Player1Id ?? match.team2Player1?.id,
+    match.team2Player2Id ?? match.team2Player2?.id,
   ];
 
-  if (selectedIds.some((userId) => typeof userId !== "string")) {
+  if (selectedIds.some((playerId) => typeof playerId !== "string")) {
     throw new Error("Expected four selected user ids.");
   }
 
@@ -128,9 +128,7 @@ async function createClubAdmin(prefix: string) {
       email: `${prefix}-admin@example.com`,
       passwordHash: "test-password-hash",
       name: `${prefix} Admin`,
-      isClaimed: true,
       gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
     },
   });
 
@@ -142,13 +140,9 @@ async function createClubAdmin(prefix: string) {
     },
   });
 
-  await prisma.clubMember.create({
-    data: {
-      clubId,
-      userId: adminUserId,
-      role: "ADMIN",
-    },
-  });
+  await prisma.player.create({ data: { id: `player-${adminUserId}`, name: `${prefix} Admin Player`, ownerUserId: adminUserId, gender: PlayerGender.MALE } });
+  await prisma.clubMember.create({ data: { clubId, playerId: `player-${adminUserId}` } });
+  await prisma.clubAccess.create({ data: { clubId, userId: adminUserId, role: "OWNER" } });
 
   mockedAuth.mockResolvedValue({
     user: {
@@ -170,13 +164,12 @@ async function createUsers(
     elo?: number;
   }>
 ) {
-  await prisma.user.createMany({
+  await prisma.user.createMany({ data: players.map(player => ({ id: `account-${prefix}-${player.key}`, email: `${prefix}-${player.key}@example.com`, passwordHash: "test-password-hash", name: `${prefix}-${player.key}` })) });
+  await prisma.player.createMany({
     data: players.map((player) => ({
       id: `${prefix}-${player.key}`,
-      email: `${prefix}-${player.key}@example.com`,
-      passwordHash: "test-password-hash",
       name: `${prefix}-${player.key}`,
-      isClaimed: true,
+      ownerUserId: `account-${prefix}-${player.key}`,
       gender: player.gender ?? PlayerGender.MALE,
       partnerPreference: player.partnerPreference ?? PartnerPreference.OPEN,
       mixedSideOverride: player.mixedSideOverride ?? null,
@@ -202,7 +195,7 @@ async function createSessionWithCourtsAndPlayers({
   autoQueueEnabled?: boolean;
   poolsEnabled?: boolean;
   players: Array<{
-    userId: string;
+    playerId: string;
     gender?: PlayerGender;
     partnerPreference?: PartnerPreference;
     mixedSideOverride?: MixedSide | null;
@@ -233,7 +226,7 @@ async function createSessionWithCourtsAndPlayers({
       poolBName: poolsEnabled ? "Social" : null,
       players: {
         create: players.map((player) => ({
-          userId: player.userId,
+          playerId: player.playerId,
           isGuest: false,
           gender: player.gender ?? PlayerGender.MALE,
           partnerPreference:
@@ -289,20 +282,7 @@ beforeAll(async () => {
   await removeDatabaseFiles();
   await fs.writeFile(tempDatabaseFile, "");
 
-  const prismaBinary = getPrismaBinary();
-  if (process.platform === "win32") {
-    execFileSync("cmd.exe", ["/c", prismaBinary, "db", "push", "--skip-generate"], {
-      cwd: process.cwd(),
-      env: process.env as NodeJS.ProcessEnv,
-      stdio: "inherit",
-    });
-  } else {
-    execFileSync(prismaBinary, ["db", "push", "--skip-generate"], {
-      cwd: process.cwd(),
-      env: process.env as NodeJS.ProcessEnv,
-      stdio: "inherit",
-    });
-  }
+  execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "deploy"], { cwd: process.cwd(), env: process.env as NodeJS.ProcessEnv, stdio: "pipe" });
 
   vi.resetModules();
   (globalThis as { prisma?: PrismaInstance }).prisma = undefined;
@@ -355,7 +335,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds: [courtId],
     });
 
@@ -408,7 +388,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds: [courtId],
     });
 
@@ -453,17 +433,17 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) =>
-        userId === latePlayerId
+      players: playerIds.map((playerId) =>
+        playerId === latePlayerId
           ? {
-              userId,
+              playerId,
               matchesPlayed: 0,
               matchmakingMatchesCredit: 4,
               availableSince: new Date("2026-04-04T00:58:00.000Z"),
               arrivalPriorityAt,
             }
           : {
-              userId,
+              playerId,
               matchesPlayed: 4,
               availableSince: new Date("2026-04-04T00:00:00.000Z"),
             }
@@ -479,9 +459,9 @@ describe("generate match route integration", () => {
 
     const latePlayer = await prisma.sessionPlayer.findUnique({
       where: {
-        sessionId_userId: {
+        sessionId_playerId: {
           sessionId: `${prefix}-session`,
-          userId: latePlayerId,
+          playerId: latePlayerId,
         },
       },
     });
@@ -509,9 +489,9 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({
-        userId,
-        arrivalPriorityAt: userId === latePlayerId ? arrivalPriorityAt : null,
+      players: playerIds.map((playerId) => ({
+        playerId,
+        arrivalPriorityAt: playerId === latePlayerId ? arrivalPriorityAt : null,
       })),
       courtIds: [courtId],
     });
@@ -528,9 +508,9 @@ describe("generate match route integration", () => {
 
     const latePlayer = await prisma.sessionPlayer.findUnique({
       where: {
-        sessionId_userId: {
+        sessionId_playerId: {
           sessionId: `${prefix}-session`,
-          userId: latePlayerId,
+          playerId: latePlayerId,
         },
       },
     });
@@ -555,7 +535,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds: [courtId],
     });
 
@@ -565,7 +545,7 @@ describe("generate match route integration", () => {
     expect(response.status).toBe(200);
     expect(payload.status).toBe(MatchStatus.IN_PROGRESS);
     expect(payload.courtId).toBe(courtId);
-    expect(getSelectedIds(payload).every((userId) => playerIds.includes(userId))).toBe(
+    expect(getSelectedIds(payload).every((playerId) => playerIds.includes(playerId))).toBe(
       true
     );
     expect(payload.queuedMatch).toBeNull();
@@ -615,7 +595,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds: [courtId],
     });
 
@@ -639,9 +619,9 @@ describe("generate match route integration", () => {
 
     expect(new Set([...selectedIds, ...queuedIds]).size).toBe(8);
     expect(
-      [...selectedIds, ...queuedIds].every((userId) => playerIds.includes(userId))
+      [...selectedIds, ...queuedIds].every((playerId) => playerIds.includes(playerId))
     ).toBe(true);
-    expect(queuedIds.every((userId) => !selectedIds.includes(userId))).toBe(true);
+    expect(queuedIds.every((playerId) => !selectedIds.includes(playerId))).toBe(true);
     expect(storedQueuedMatch).not.toBeNull();
     expect(storedQueuedMatch?.matchmakingReasonJson).toEqual(expect.any(String));
   });
@@ -665,12 +645,12 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({
-        userId,
-        matchesPlayed: userId === latePlayerId ? 0 : 4,
-        matchmakingMatchesCredit: userId === latePlayerId ? 4 : 0,
+      players: playerIds.map((playerId) => ({
+        playerId,
+        matchesPlayed: playerId === latePlayerId ? 0 : 4,
+        matchmakingMatchesCredit: playerId === latePlayerId ? 4 : 0,
         arrivalPriorityAt:
-          userId === latePlayerId
+          playerId === latePlayerId
             ? new Date("2026-04-04T00:59:00.000Z")
             : null,
       })),
@@ -682,10 +662,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: playerIds[0],
-        team1User2Id: playerIds[1],
-        team2User1Id: playerIds[2],
-        team2User2Id: playerIds[3],
+        team1Player1Id: playerIds[0],
+        team1Player2Id: playerIds[1],
+        team2Player1Id: playerIds[2],
+        team2Player2Id: playerIds[3],
       },
     });
     await prisma.court.update({
@@ -695,10 +675,10 @@ describe("generate match route integration", () => {
     await prisma.queuedMatch.create({
       data: {
         sessionId,
-        team1User1Id: playerIds[4],
-        team1User2Id: playerIds[5],
-        team2User1Id: playerIds[6],
-        team2User2Id: playerIds[7],
+        team1Player1Id: playerIds[4],
+        team1Player2Id: playerIds[5],
+        team2Player1Id: playerIds[6],
+        team2Player2Id: playerIds[7],
         isAutomatic: true,
         matchmakingReasonJson: createReasonJson({
           selectedIds: [playerIds[4], playerIds[5], playerIds[6], playerIds[7]],
@@ -735,12 +715,12 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({
-        userId,
-        matchesPlayed: userId === latePlayerId ? 0 : 4,
-        matchmakingMatchesCredit: userId === latePlayerId ? 4 : 0,
+      players: playerIds.map((playerId) => ({
+        playerId,
+        matchesPlayed: playerId === latePlayerId ? 0 : 4,
+        matchmakingMatchesCredit: playerId === latePlayerId ? 4 : 0,
         arrivalPriorityAt:
-          userId === latePlayerId
+          playerId === latePlayerId
             ? new Date("2026-04-04T00:59:00.000Z")
             : null,
       })),
@@ -752,10 +732,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: playerIds[0],
-        team1User2Id: playerIds[1],
-        team2User1Id: playerIds[2],
-        team2User2Id: playerIds[3],
+        team1Player1Id: playerIds[0],
+        team1Player2Id: playerIds[1],
+        team2Player1Id: playerIds[2],
+        team2Player2Id: playerIds[3],
       },
     });
     await prisma.court.update({
@@ -765,10 +745,10 @@ describe("generate match route integration", () => {
     await prisma.queuedMatch.create({
       data: {
         sessionId,
-        team1User1Id: manualQueuedIds[0],
-        team1User2Id: manualQueuedIds[1],
-        team2User1Id: manualQueuedIds[2],
-        team2User2Id: manualQueuedIds[3],
+        team1Player1Id: manualQueuedIds[0],
+        team1Player2Id: manualQueuedIds[1],
+        team2Player1Id: manualQueuedIds[2],
+        team2Player2Id: manualQueuedIds[3],
         matchmakingReasonJson: null,
       },
     });
@@ -809,7 +789,7 @@ describe("generate match route integration", () => {
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
       autoQueueEnabled: false,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds,
     });
 
@@ -844,7 +824,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds,
     });
 
@@ -894,8 +874,8 @@ describe("generate match route integration", () => {
       mode: SessionMode.MEXICANO,
       autoQueueEnabled: false,
       poolsEnabled: true,
-      players: playerIds.map((userId, index) => ({
-        userId,
+      players: playerIds.map((playerId, index) => ({
+        playerId,
         pool: index < 4 ? SessionPool.A : SessionPool.B,
       })),
       courtIds,
@@ -951,7 +931,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds,
     });
 
@@ -992,7 +972,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds: [courtId],
     });
 
@@ -1002,10 +982,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: originalQuartet[0],
-        team1User2Id: originalQuartet[1],
-        team2User1Id: originalQuartet[2],
-        team2User2Id: originalQuartet[3],
+        team1Player1Id: originalQuartet[0],
+        team1Player2Id: originalQuartet[1],
+        team2Player1Id: originalQuartet[2],
+        team2Player2Id: originalQuartet[3],
         createdAt: new Date("2026-04-04T00:00:00Z"),
       },
     });
@@ -1028,7 +1008,7 @@ describe("generate match route integration", () => {
     expect(reshuffledIds).not.toEqual([...originalQuartet].sort());
     expect(
       reshuffledIds.some(
-        (userId) => userId === `${prefix}-p5` || userId === `${prefix}-p6`
+        (playerId) => playerId === `${prefix}-p5` || playerId === `${prefix}-p6`
       )
     ).toBe(true);
 
@@ -1059,7 +1039,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId, index) => ({ userId, matchesPlayed: index === 0 ? 2 : 1 })),
+      players: playerIds.map((playerId, index) => ({ playerId, matchesPlayed: index === 0 ? 2 : 1 })),
       courtIds: [courtId],
     });
     const currentMatch = await prisma.match.create({
@@ -1068,10 +1048,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: playerIds[0],
-        team1User2Id: playerIds[1],
-        team2User1Id: playerIds[2],
-        team2User2Id: playerIds[3],
+        team1Player1Id: playerIds[0],
+        team1Player2Id: playerIds[1],
+        team2Player1Id: playerIds[2],
+        team2Player2Id: playerIds[3],
       },
     });
     await prisma.court.update({ where: { id: courtId }, data: { currentMatchId: currentMatch.id } });
@@ -1085,7 +1065,7 @@ describe("generate match route integration", () => {
     });
     const payload = await response.json();
     const restedPlayer = await prisma.sessionPlayer.findUnique({
-      where: { sessionId_userId: { sessionId, userId: playerIds[0] } },
+      where: { sessionId_playerId: { sessionId, playerId: playerIds[0] } },
     });
 
     expect(response.status).toBe(200);
@@ -1108,7 +1088,7 @@ describe("generate match route integration", () => {
     });
     expect(duplicateResponse.status).toBe(409);
     expect((await prisma.sessionPlayer.findUnique({
-      where: { sessionId_userId: { sessionId, userId: playerIds[0] } },
+      where: { sessionId_playerId: { sessionId, playerId: playerIds[0] } },
     }))?.matchmakingMatchesCredit).toBe(1);
   });
 
@@ -1123,14 +1103,14 @@ describe("generate match route integration", () => {
       clubId: staleClubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: stalePlayers.map((userId) => ({ userId })),
+      players: stalePlayers.map((playerId) => ({ playerId })),
       courtIds: [staleCourtId],
     });
     const staleMatch = await prisma.match.create({
       data: {
         id: `${stalePrefix}-current-match`, sessionId: staleSessionId, courtId: staleCourtId,
-        status: MatchStatus.IN_PROGRESS, team1User1Id: stalePlayers[0], team1User2Id: stalePlayers[1],
-        team2User1Id: stalePlayers[2], team2User2Id: stalePlayers[3],
+        status: MatchStatus.IN_PROGRESS, team1Player1Id: stalePlayers[0], team1Player2Id: stalePlayers[1],
+        team2Player1Id: stalePlayers[2], team2Player2Id: stalePlayers[3],
       },
     });
     await prisma.court.update({ where: { id: staleCourtId }, data: { currentMatchId: staleMatch.id } });
@@ -1139,7 +1119,7 @@ describe("generate match route integration", () => {
       restUserId: stalePlayers[0], expectedMatchId: "old-match-id",
     });
     expect(staleResponse.status).toBe(409);
-    expect((await prisma.sessionPlayer.findUnique({ where: { sessionId_userId: { sessionId: staleSessionId, userId: stalePlayers[0] } } }))?.matchmakingMatchesCredit).toBe(0);
+    expect((await prisma.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: staleSessionId, playerId: stalePlayers[0] } } }))?.matchmakingMatchesCredit).toBe(0);
 
     const shortPrefix = `rest-short-${randomUUID().slice(0, 8)}`;
     const { clubId: shortClubId } = await createClubAdmin(shortPrefix);
@@ -1151,14 +1131,14 @@ describe("generate match route integration", () => {
       clubId: shortClubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: shortPlayers.map((userId) => ({ userId })),
+      players: shortPlayers.map((playerId) => ({ playerId })),
       courtIds: [shortCourtId],
     });
     const shortMatch = await prisma.match.create({
       data: {
         id: `${shortPrefix}-current-match`, sessionId: shortSessionId, courtId: shortCourtId,
-        status: MatchStatus.IN_PROGRESS, team1User1Id: shortPlayers[0], team1User2Id: shortPlayers[1],
-        team2User1Id: shortPlayers[2], team2User2Id: shortPlayers[3],
+        status: MatchStatus.IN_PROGRESS, team1Player1Id: shortPlayers[0], team1Player2Id: shortPlayers[1],
+        team2Player1Id: shortPlayers[2], team2Player2Id: shortPlayers[3],
       },
     });
     await prisma.court.update({ where: { id: shortCourtId }, data: { currentMatchId: shortMatch.id } });
@@ -1167,7 +1147,7 @@ describe("generate match route integration", () => {
       restUserId: shortPlayers[0], expectedMatchId: shortMatch.id,
     });
     expect(noReplacementResponse.status).toBe(400);
-    expect((await prisma.sessionPlayer.findUnique({ where: { sessionId_userId: { sessionId: shortSessionId, userId: shortPlayers[0] } } }))?.matchmakingMatchesCredit).toBe(0);
+    expect((await prisma.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: shortSessionId, playerId: shortPlayers[0] } } }))?.matchmakingMatchesCredit).toBe(0);
     expect(await prisma.match.findUnique({ where: { id: shortMatch.id } })).not.toBeNull();
   });
 
@@ -1189,12 +1169,12 @@ describe("generate match route integration", () => {
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
       players: [
-        { userId: playerIds[0], matchesPlayed: 2 },
-        { userId: playerIds[1], matchesPlayed: 2 },
-        { userId: playerIds[2], matchesPlayed: 2 },
-        { userId: playerIds[3], matchesPlayed: 2 },
-        { userId: playerIds[4], matchesPlayed: 0 },
-        { userId: playerIds[5], matchesPlayed: 1 },
+        { playerId: playerIds[0], matchesPlayed: 2 },
+        { playerId: playerIds[1], matchesPlayed: 2 },
+        { playerId: playerIds[2], matchesPlayed: 2 },
+        { playerId: playerIds[3], matchesPlayed: 2 },
+        { playerId: playerIds[4], matchesPlayed: 0 },
+        { playerId: playerIds[5], matchesPlayed: 1 },
       ],
       courtIds: [courtId],
     });
@@ -1205,10 +1185,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: playerIds[0],
-        team1User2Id: playerIds[1],
-        team2User1Id: playerIds[2],
-        team2User2Id: playerIds[3],
+        team1Player1Id: playerIds[0],
+        team1Player2Id: playerIds[1],
+        team2Player1Id: playerIds[2],
+        team2Player2Id: playerIds[3],
         createdAt: new Date("2026-04-04T00:00:00Z"),
       },
     });
@@ -1259,7 +1239,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds: [courtId],
     });
 
@@ -1269,10 +1249,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: playerIds[0],
-        team1User2Id: playerIds[1],
-        team2User1Id: playerIds[2],
-        team2User2Id: playerIds[3],
+        team1Player1Id: playerIds[0],
+        team1Player2Id: playerIds[1],
+        team2Player1Id: playerIds[2],
+        team2Player2Id: playerIds[3],
         createdAt: new Date("2026-04-04T00:00:00Z"),
       },
     });
@@ -1342,7 +1322,7 @@ describe("generate match route integration", () => {
       clubId,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
-      players: playerIds.map((userId) => ({ userId })),
+      players: playerIds.map((playerId) => ({ playerId })),
       courtIds: [courtId],
     });
 
@@ -1352,10 +1332,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: playerIds[0],
-        team1User2Id: playerIds[1],
-        team2User1Id: playerIds[2],
-        team2User2Id: playerIds[3],
+        team1Player1Id: playerIds[0],
+        team1Player2Id: playerIds[1],
+        team2Player1Id: playerIds[2],
+        team2Player2Id: playerIds[3],
         createdAt: new Date("2026-04-04T00:00:00Z"),
       },
     });
@@ -1379,10 +1359,10 @@ describe("generate match route integration", () => {
     await prisma.queuedMatch.create({
       data: {
         sessionId,
-        team1User1Id: playerIds[4],
-        team1User2Id: playerIds[5],
-        team2User1Id: playerIds[6],
-        team2User2Id: playerIds[7],
+        team1Player1Id: playerIds[4],
+        team1Player2Id: playerIds[5],
+        team2Player1Id: playerIds[6],
+        team2Player2Id: playerIds[7],
         matchmakingReasonJson: queuedReasonJson,
       },
     });
@@ -1407,11 +1387,11 @@ describe("generate match route integration", () => {
 
     expect(autoAssignedIds).toEqual(playerIds.slice(4, 8).sort());
     expect(
-      rebuiltQueuedIds.every((userId) => !autoAssignedIds.includes(userId))
+      rebuiltQueuedIds.every((playerId) => !autoAssignedIds.includes(playerId))
     ).toBe(true);
     expect(
-      rebuiltQueuedIds.every((userId) =>
-        [...playerIds.slice(0, 4), ...playerIds.slice(8, 12)].includes(userId)
+      rebuiltQueuedIds.every((playerId) =>
+        [...playerIds.slice(0, 4), ...playerIds.slice(8, 12)].includes(playerId)
       )
     ).toBe(true);
 
@@ -1488,49 +1468,49 @@ describe("generate match route integration", () => {
       type: SessionType.RACE,
       mode: SessionMode.MIXICANO,
       players: [
-        { userId: `${prefix}-M1`, availableSince: waitingSince },
-        { userId: `${prefix}-M2`, availableSince: waitingSince },
-        { userId: `${prefix}-M3`, availableSince: waitingSince },
-        { userId: `${prefix}-M4`, availableSince: waitingSince },
+        { playerId: `${prefix}-M1`, availableSince: waitingSince },
+        { playerId: `${prefix}-M2`, availableSince: waitingSince },
+        { playerId: `${prefix}-M3`, availableSince: waitingSince },
+        { playerId: `${prefix}-M4`, availableSince: waitingSince },
         {
-          userId: `${prefix}-M5`,
+          playerId: `${prefix}-M5`,
           matchesPlayed: 1,
           availableSince: mixedAvailableSince,
         },
         {
-          userId: `${prefix}-M6`,
+          playerId: `${prefix}-M6`,
           matchesPlayed: 1,
           availableSince: mixedAvailableSince,
         },
-        { userId: `${prefix}-M7`, availableSince: waitingSince },
+        { playerId: `${prefix}-M7`, availableSince: waitingSince },
         {
-          userId: `${prefix}-F1`,
+          playerId: `${prefix}-F1`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
           matchesPlayed: 1,
           availableSince: mixedAvailableSince,
         },
         {
-          userId: `${prefix}-F2`,
+          playerId: `${prefix}-F2`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
           matchesPlayed: 1,
           availableSince: mixedAvailableSince,
         },
         {
-          userId: `${prefix}-F3`,
-          gender: PlayerGender.FEMALE,
-          partnerPreference: PartnerPreference.FEMALE_FLEX,
-          availableSince: waitingSince,
-        },
-        {
-          userId: `${prefix}-F4`,
+          playerId: `${prefix}-F3`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
           availableSince: waitingSince,
         },
         {
-          userId: `${prefix}-F5`,
+          playerId: `${prefix}-F4`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+          availableSince: waitingSince,
+        },
+        {
+          playerId: `${prefix}-F5`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
           availableSince: waitingSince,
@@ -1545,10 +1525,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId: openCourtId,
         status: MatchStatus.COMPLETED,
-        team1User1Id: `${prefix}-M5`,
-        team1User2Id: `${prefix}-F1`,
-        team2User1Id: `${prefix}-M6`,
-        team2User2Id: `${prefix}-F2`,
+        team1Player1Id: `${prefix}-M5`,
+        team1Player2Id: `${prefix}-F1`,
+        team2Player1Id: `${prefix}-M6`,
+        team2Player2Id: `${prefix}-F2`,
         team1Score: 21,
         team2Score: 18,
         winnerTeam: 1,
@@ -1563,10 +1543,10 @@ describe("generate match route integration", () => {
         sessionId,
         courtId: busyCourtId,
         status: MatchStatus.IN_PROGRESS,
-        team1User1Id: `${prefix}-M1`,
-        team1User2Id: `${prefix}-M2`,
-        team2User1Id: `${prefix}-M3`,
-        team2User2Id: `${prefix}-M4`,
+        team1Player1Id: `${prefix}-M1`,
+        team1Player2Id: `${prefix}-M2`,
+        team2Player1Id: `${prefix}-M3`,
+        team2Player2Id: `${prefix}-M4`,
         createdAt: new Date("2026-04-04T00:15:00Z"),
       },
     });
@@ -1594,10 +1574,10 @@ describe("generate match route integration", () => {
 
     expect(response.status).toBe(200);
     expect(payload.courtId).toBe(openCourtId);
-    expect(selectedIds.filter((userId) => completedMixedIds.has(userId))).toHaveLength(
+    expect(selectedIds.filter((playerId) => completedMixedIds.has(playerId))).toHaveLength(
       1
     );
-    expect(selectedIds.filter((userId) => waitingIds.has(userId))).toHaveLength(3);
+    expect(selectedIds.filter((playerId) => waitingIds.has(playerId))).toHaveLength(3);
 
     const refreshedOpenCourt = await prisma.court.findUnique({
       where: { id: openCourtId },
@@ -1662,26 +1642,26 @@ describe("generate match route integration", () => {
       mode: SessionMode.MIXICANO,
       players: [
         {
-          userId: `${prefix}-F1`,
+          playerId: `${prefix}-F1`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         },
         {
-          userId: `${prefix}-F2`,
+          playerId: `${prefix}-F2`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         },
         {
-          userId: `${prefix}-F3`,
+          playerId: `${prefix}-F3`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         },
         {
-          userId: `${prefix}-MLOW`,
+          playerId: `${prefix}-MLOW`,
           mixedSideOverride: MixedSide.LOWER,
         },
         {
-          userId: `${prefix}-FUP`,
+          playerId: `${prefix}-FUP`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.OPEN,
           mixedSideOverride: MixedSide.UPPER,
@@ -1738,27 +1718,27 @@ describe("generate match route integration", () => {
       type: SessionType.ELO,
       mode: SessionMode.MIXICANO,
       players: [
-        { userId: `${prefix}-M1` },
-        { userId: `${prefix}-M2` },
-        { userId: `${prefix}-M3` },
-        { userId: `${prefix}-M4` },
+        { playerId: `${prefix}-M1` },
+        { playerId: `${prefix}-M2` },
+        { playerId: `${prefix}-M3` },
+        { playerId: `${prefix}-M4` },
         {
-          userId: `${prefix}-F1`,
+          playerId: `${prefix}-F1`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         },
         {
-          userId: `${prefix}-F2`,
+          playerId: `${prefix}-F2`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         },
         {
-          userId: `${prefix}-F3`,
+          playerId: `${prefix}-F3`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         },
         {
-          userId: `${prefix}-F4`,
+          playerId: `${prefix}-F4`,
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         },
@@ -1769,10 +1749,10 @@ describe("generate match route integration", () => {
     await prisma.queuedMatch.create({
       data: {
         sessionId,
-        team1User1Id: `${prefix}-F1`,
-        team1User2Id: `${prefix}-F2`,
-        team2User1Id: `${prefix}-F3`,
-        team2User2Id: `${prefix}-F4`,
+        team1Player1Id: `${prefix}-F1`,
+        team1Player2Id: `${prefix}-F2`,
+        team2Player1Id: `${prefix}-F3`,
+        team2Player2Id: `${prefix}-F4`,
       },
     });
 

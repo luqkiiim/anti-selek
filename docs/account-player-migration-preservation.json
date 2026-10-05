@@ -1,0 +1,890 @@
+{
+  "reportVersion": 1,
+  "migration": "20261004120000_separate_accounts_players",
+  "notes": [
+    "The Turso rehearsal used a private copy of a read-only consistent snapshot; production Turso was not migrated.",
+    "Per-table hashes cover every original row and column. Raw values and primary-key identifiers are excluded.",
+    "Active authorization copied for legacy club creators is OWNER, preserving their former creator authority; original sporting roster roles are unchanged. Both migrations were re-rehearsed against the saved original snapshots."
+  ],
+  "sources": {
+    "localSqlite": {
+      "sourceMode": "read-only local SQLite backup used for rehearsal",
+      "actualLocalApply": {
+        "command": "npx prisma migrate deploy",
+        "target": "configured local SQLite dev.db",
+        "appliedMigrationCount": 6,
+        "appliedMigrations": [
+          "20260911020000_club_join_requests",
+          "20260912000000_club_achievements",
+          "20260913090000_add_self_gender_changed_at",
+          "20260914090000_add_club_rules",
+          "20261004120000_separate_accounts_players",
+          "20261005120000_preserve_legacy_creator_access"
+        ],
+        "status": "up to date",
+        "preservationVerification": {
+          "preservedTables": 20,
+          "preservedLegacyRows": 949,
+          "players": 70,
+          "accounts": 5,
+          "clubMembers": 70,
+          "foreignKeyErrors": 0,
+          "creatorAccessErrors": 0
+        }
+      },
+      "validation": {
+        "baselineMigrationsOnCopy": 4,
+        "preservedTables": 20,
+        "preservedLegacyRows": 949,
+        "players": 70,
+        "accounts": 5,
+        "clubMembers": 70,
+        "foreignKeyErrors": 0,
+        "creatorAccessErrors": 0,
+        "followUpMigrations": [
+          "20261005120000_preserve_legacy_creator_access"
+        ]
+      },
+      "preservation": {
+        "reportVersion": 1,
+        "migration": "20261004120000_separate_accounts_players",
+        "followUpMigrations": [
+          "20261005120000_preserve_legacy_creator_access"
+        ],
+        "sourceKind": "sqlite",
+        "legacyTables": {
+          "ClaimRequest": {
+            "originalColumns": [
+              "id",
+              "communityId",
+              "requesterUserId",
+              "targetUserId",
+              "status",
+              "note",
+              "reviewedById",
+              "reviewedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "7161c5612832c93e4d4ce277648889a0bd9ae7752820546906c282fb88362c3a"
+          },
+          "ClubNewsLike": {
+            "originalColumns": [
+              "id",
+              "communityId",
+              "sessionId",
+              "newsItemId",
+              "userId",
+              "createdAt"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "ee7543d8f7145e52d656a93d7c75b5e7f41f2ee4dab48ce316be720fb21e1060"
+          },
+          "ClubNotification": {
+            "originalColumns": [
+              "id",
+              "communityId",
+              "sessionId",
+              "recipientUserId",
+              "actorUserId",
+              "type",
+              "newsItemId",
+              "newsType",
+              "title",
+              "detail",
+              "value",
+              "readAt",
+              "createdAt"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "84902e90a5d72557fbeed826d77a09ab2c809d54f3d4b4ac6f1efc0bbc6ca9f1"
+          },
+          "ClubRatingAdjustment": {
+            "originalColumns": [
+              "id",
+              "memberId",
+              "actorId",
+              "actorName",
+              "beforeElo",
+              "afterElo",
+              "reason",
+              "createdAt"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "62fa5a9404452a0b079826a1fb90de012a0f84c3870f6988d545c7c83cb315a4"
+          },
+          "Community": {
+            "originalColumns": [
+              "id",
+              "name",
+              "isPasswordProtected",
+              "passwordHash",
+              "createdById",
+              "createdAt",
+              "updatedAt",
+              "isTutorial",
+              "tutorialOwnerId",
+              "avatarKey"
+            ],
+            "originalRowCount": 5,
+            "stableSha256": "5f562f521b3110ce7ebd510c8aacc31cdb075fce72870fd4073eb4483404ddfb"
+          },
+          "CommunityMember": {
+            "originalColumns": [
+              "id",
+              "communityId",
+              "userId",
+              "role",
+              "createdAt",
+              "elo",
+              "status",
+              "needsMoreRest",
+              "preferredPool"
+            ],
+            "originalRowCount": 70,
+            "stableSha256": "ba7f84bd710e57f7e2eb4d2f83a0a63f3ed8dcd2bc7c6c3f93e091b5bf138b1b"
+          },
+          "Court": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "courtNumber",
+              "currentMatchId",
+              "label"
+            ],
+            "originalRowCount": 40,
+            "stableSha256": "3d33f61281d41121af1e8d68c35a7f9615df7096297a9d20037882c11f52bd87"
+          },
+          "Match": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "courtId",
+              "status",
+              "team1User1Id",
+              "team1User2Id",
+              "team1Score",
+              "team2User1Id",
+              "team2User2Id",
+              "team2Score",
+              "winnerTeam",
+              "createdAt",
+              "completedAt",
+              "team1EloChange",
+              "team2EloChange",
+              "scoreSubmittedByUserId",
+              "matchmakingReasonJson",
+              "team1ClubId",
+              "team2ClubId",
+              "courtGroupType",
+              "poolASeatCount",
+              "poolBSeatCount"
+            ],
+            "originalRowCount": 100,
+            "stableSha256": "e3acda429278c70c0c71f56fb0ee1e3f8046891f8523f5b31eb8ce558234f37f"
+          },
+          "MatchEloAdjustment": {
+            "originalColumns": [
+              "id",
+              "matchId",
+              "communityId",
+              "userId",
+              "delta",
+              "beforeElo",
+              "afterElo",
+              "createdAt"
+            ],
+            "originalRowCount": 360,
+            "stableSha256": "919fae81e0cacce6a7ccbac37d768a7041358f6e3f470f1a6a05a1f0b4160ca9"
+          },
+          "OfflineIdentity": {
+            "originalColumns": [
+              "id",
+              "createdById",
+              "resolvedUserId",
+              "resolvedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "3ae25886bb582f09f47d1265b72b14c259b008af6ac5f92d364c64a96b2b27ec"
+          },
+          "OfflineIdentityLinkRequest": {
+            "originalColumns": [
+              "id",
+              "offlineIdentityId",
+              "sourceCommunityId",
+              "sourceUserId",
+              "targetCommunityId",
+              "targetUserId",
+              "status",
+              "requestedById",
+              "reviewedById",
+              "reviewedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "b8dcc45618560fb0fd8da95fdd1147224000e207c58b0f5ed92c156600bbfac5"
+          },
+          "OfflineIdentityMember": {
+            "originalColumns": [
+              "id",
+              "offlineIdentityId",
+              "communityId",
+              "userId",
+              "addedById",
+              "createdAt"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "1fe04e4fefffaca8c49f2facdac1e7b3d8fbf7217d83d859d42c617ec6ac5494"
+          },
+          "PasswordResetToken": {
+            "originalColumns": [
+              "id",
+              "userId",
+              "tokenHash",
+              "expiresAt",
+              "usedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "2e36c02892c2e6ee0b59dc2fd2c550c3f7343c4abe1269e4bd7266624868a9df"
+          },
+          "QueuedMatch": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "team1User1Id",
+              "team1User2Id",
+              "team2User1Id",
+              "team2User2Id",
+              "createdAt",
+              "targetPool",
+              "matchmakingReasonJson",
+              "team1ClubId",
+              "team2ClubId",
+              "courtGroupType",
+              "poolASeatCount",
+              "poolBSeatCount",
+              "isAutomatic"
+            ],
+            "originalRowCount": 0,
+            "stableSha256": "6ac05c2fac6833a78ba6e0c009fffd9b7cb399d2b427e9c1aa60ead9ae5d07a9"
+          },
+          "RateLimitBucket": {
+            "originalColumns": [
+              "key",
+              "scope",
+              "count",
+              "resetAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 1,
+            "stableSha256": "40c78aa48c29dfa0c6510713e73a58478ad061485a9684fd8c4901e3d4b5e19b"
+          },
+          "Session": {
+            "originalColumns": [
+              "id",
+              "code",
+              "communityId",
+              "name",
+              "type",
+              "mode",
+              "scoringType",
+              "matchmakingStyle",
+              "balanceMetric",
+              "pairingMode",
+              "status",
+              "isTest",
+              "sourceSessionId",
+              "autoQueueEnabled",
+              "respectPlayerRest",
+              "poolsEnabled",
+              "poolAName",
+              "poolBName",
+              "poolACourtAssignments",
+              "poolBCourtAssignments",
+              "poolAMissedTurns",
+              "poolBMissedTurns",
+              "crossoverMissThreshold",
+              "createdAt",
+              "endedAt",
+              "collabFormat",
+              "crossoverFrequency",
+              "poolAssignmentsInitialized"
+            ],
+            "originalRowCount": 20,
+            "stableSha256": "2348629f2c587ec4e60903f096dada28f48df3985d292c2e3acb32734b9c0837"
+          },
+          "SessionCommunity": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "communityId",
+              "role",
+              "status",
+              "requestedById",
+              "reviewedById",
+              "reviewedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 20,
+            "stableSha256": "93d9c15c4f1fb723924a77d0975252000148e8dce9c76fd7d8063e162779189f"
+          },
+          "SessionPlayer": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "userId",
+              "isGuest",
+              "gender",
+              "partnerPreference",
+              "sessionPoints",
+              "lastPartnerId",
+              "isPaused",
+              "matchesPlayed",
+              "matchmakingMatchesCredit",
+              "availableSince",
+              "lastPlayedAt",
+              "pausedAt",
+              "joinedAt",
+              "ladderEntryAt",
+              "inactiveSeconds",
+              "mixedSideOverride",
+              "pool",
+              "arrivalPriorityAt",
+              "needsMoreRest",
+              "representingClubId",
+              "skipNextMatchAt",
+              "skipNextMatchRequestedById",
+              "pendingPool"
+            ],
+            "originalRowCount": 260,
+            "stableSha256": "71bed37c9151deec01195b20bff9a1320d050eb198aedf9e95fce9908677f39e"
+          },
+          "TutorialProgress": {
+            "originalColumns": [
+              "id",
+              "userId",
+              "tutorialKey",
+              "completedStepIdsJson",
+              "dismissedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 3,
+            "stableSha256": "4d9f0a2ecc92f89ca6e8674e6b632bbb8099d107a24ed46946a541b22cdc016c"
+          },
+          "User": {
+            "originalColumns": [
+              "id",
+              "email",
+              "passwordHash",
+              "name",
+              "isClaimed",
+              "elo",
+              "isActive",
+              "createdAt",
+              "updatedAt",
+              "gender",
+              "partnerPreference",
+              "mixedSideOverride",
+              "avatarKey",
+              "selfNameChangedAt"
+            ],
+            "originalRowCount": 70,
+            "stableSha256": "65529dbe128d0a41f0520fbb90f742813cc9779c41dd586e7c4819c3024e2451"
+          }
+        },
+        "legacyClaimedAccountCredentialProfileDigest": {
+          "count": 5,
+          "stableSha256": "7a3f8f3536aa62fe66e0b4c10231a868ab327c0df90d8f14fda6fd581f0420d9"
+        },
+        "legacyClubAuthorizationDigest": {
+          "count": 5,
+          "stableSha256": "c13a6b2638539ba3215b0c9903135a4e87fd1a38ff29531dd00e9883623d97b6"
+        },
+        "creatorAuthorityPreserved": true,
+        "rawOrphanLastPartnerDigest": {
+          "count": 0,
+          "stableSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "accountDeletionRelations": [
+          {
+            "table": "Community",
+            "column": "createdById",
+            "references": "Account",
+            "onDelete": "RESTRICT"
+          },
+          {
+            "table": "ClubRatingAdjustment",
+            "column": "actorId",
+            "references": "Account",
+            "onDelete": "RESTRICT"
+          }
+        ],
+        "rawValuesIncluded": false,
+        "primaryKeysIncluded": false
+      }
+    },
+    "tursoReadOnlySnapshot": {
+      "sourceMode": "private migration rehearsal copy from a read-only consistent Turso snapshot; production was not migrated",
+      "claimPreservationRehearsal": {
+        "sourceMode": "disposable copy of the private migrated Turso rehearsal database",
+        "productionMutated": false,
+        "originalTablesChecked": 21,
+        "originalRowsChecked": 7707,
+        "changedOriginalTables": [],
+        "accountAndPlayerIdsDistinct": true,
+        "accountRowsAdded": 1,
+        "clubAccessRowsAdded": 1,
+        "admissionRowsAdded": 1,
+        "claimedMembershipProjections": 1,
+        "totalMembershipProjections": 1,
+        "playerUpdatedAtPreserved": true,
+        "membershipHistoryColumnsPreserved": true,
+        "approvedRequestDecision": "CONNECT_EXISTING",
+        "accountClubRole": "MEMBER",
+        "accountClubAccessStatus": "ACTIVE",
+        "historyStatsBeforeAndAfter": {
+          "sessionPlayers": 19,
+          "completedMatches": 94,
+          "matchRatingAdjustments": 89,
+          "matchRatingAdjustmentDelta": -135,
+          "queuedMatches": 0,
+          "startingPlayerRating": 1000,
+          "clubMemberships": 1,
+          "rosterRatingTotal": 811,
+          "manualRatingAdjustments": 0,
+          "manualRatingAdjustmentDelta": 0
+        },
+        "sportingHistoryDigestSha256BeforeAndAfter": "db5f552383f3be4701b99c366da068124c12dbf06f9b476a90249d23d21bd85c"
+      },
+      "validation": {
+        "baselineMigrationsOnCopy": 0,
+        "preservedTables": 21,
+        "preservedLegacyRows": 7716,
+        "players": 609,
+        "accounts": 48,
+        "clubMembers": 311,
+        "foreignKeyErrors": 0,
+        "creatorAccessErrors": 0,
+        "followUpMigrations": [
+          "20261005120000_preserve_legacy_creator_access"
+        ]
+      },
+      "preservation": {
+        "reportVersion": 1,
+        "migration": "20261004120000_separate_accounts_players",
+        "followUpMigrations": [
+          "20261005120000_preserve_legacy_creator_access"
+        ],
+        "sourceKind": "read-only Turso snapshot copied to SQLite",
+        "legacyTables": {
+          "ClaimRequest": {
+            "originalColumns": [
+              "id",
+              "communityId",
+              "requesterUserId",
+              "targetUserId",
+              "status",
+              "note",
+              "reviewedById",
+              "reviewedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 3,
+            "stableSha256": "b49ed16eb914be8f30590d1332024dbf97f01bbdc32bd164959188b08f85aa2a"
+          },
+          "ClubJoinRequest": {
+            "originalColumns": [
+              "id",
+              "clubId",
+              "userId",
+              "status",
+              "createdAt",
+              "reviewedAt",
+              "reviewedById"
+            ],
+            "originalRowCount": 11,
+            "stableSha256": "114e8ea996d19719097b46045bf5d6b39c6056a8920fc05d92973099175f38fe"
+          },
+          "ClubNewsLike": {
+            "originalColumns": [
+              "id",
+              "communityId",
+              "sessionId",
+              "newsItemId",
+              "userId",
+              "createdAt"
+            ],
+            "originalRowCount": 55,
+            "stableSha256": "1d516fd1adb336eeaae1b4c216515bb9c45df950665935f2b46b656807a8249a"
+          },
+          "ClubNotification": {
+            "originalColumns": [
+              "id",
+              "communityId",
+              "sessionId",
+              "recipientUserId",
+              "actorUserId",
+              "type",
+              "newsItemId",
+              "newsType",
+              "title",
+              "detail",
+              "value",
+              "readAt",
+              "createdAt"
+            ],
+            "originalRowCount": 53,
+            "stableSha256": "34eaef2bf3191d53849008eacf2949d4eb4302ee8d581d6ae72c9035c58c67cf"
+          },
+          "ClubRatingAdjustment": {
+            "originalColumns": [
+              "id",
+              "memberId",
+              "actorId",
+              "actorName",
+              "beforeElo",
+              "afterElo",
+              "reason",
+              "createdAt"
+            ],
+            "originalRowCount": 2,
+            "stableSha256": "1115222c1f2f80bdf88788c3c2f82924fbb6e838a6ac0854192ae15ed08062d8"
+          },
+          "Community": {
+            "originalColumns": [
+              "id",
+              "name",
+              "isPasswordProtected",
+              "passwordHash",
+              "createdById",
+              "createdAt",
+              "updatedAt",
+              "isTutorial",
+              "tutorialOwnerId",
+              "avatarKey",
+              "allowJoinRequests",
+              "rules"
+            ],
+            "originalRowCount": 31,
+            "stableSha256": "13d9a322adba7791cf05f2d422ddaa69ac89c409c69470596511cb10ece888b0"
+          },
+          "CommunityMember": {
+            "originalColumns": [
+              "id",
+              "communityId",
+              "userId",
+              "role",
+              "createdAt",
+              "elo",
+              "status",
+              "needsMoreRest",
+              "preferredPool",
+              "achievementPreferencesJson"
+            ],
+            "originalRowCount": 311,
+            "stableSha256": "f2e1e4d04fc777c7928daf0515f200385eb979b287e2392bf349b35b4307e41d"
+          },
+          "Court": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "courtNumber",
+              "currentMatchId",
+              "label"
+            ],
+            "originalRowCount": 192,
+            "stableSha256": "b8b2c59b862ad90aa9ae7f41c8935ce13a4d3b21820d91855033f4687f030e70"
+          },
+          "Match": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "courtId",
+              "status",
+              "team1User1Id",
+              "team1User2Id",
+              "team1Score",
+              "team2User1Id",
+              "team2User2Id",
+              "team2Score",
+              "winnerTeam",
+              "createdAt",
+              "completedAt",
+              "team1EloChange",
+              "team2EloChange",
+              "scoreSubmittedByUserId",
+              "matchmakingReasonJson",
+              "team1ClubId",
+              "team2ClubId",
+              "courtGroupType",
+              "poolASeatCount",
+              "poolBSeatCount"
+            ],
+            "originalRowCount": 1199,
+            "stableSha256": "63075d8115f5283e5b23b0e3f5ef8cfb17f2f81865c18572d121cf3989fa328b"
+          },
+          "MatchEloAdjustment": {
+            "originalColumns": [
+              "id",
+              "matchId",
+              "communityId",
+              "userId",
+              "delta",
+              "beforeElo",
+              "afterElo",
+              "createdAt"
+            ],
+            "originalRowCount": 3782,
+            "stableSha256": "e7818d349a5b1773781ce8c2ccaeae27c7054a7ce4c87cff98c7df47130b0a96"
+          },
+          "OfflineIdentity": {
+            "originalColumns": [
+              "id",
+              "createdById",
+              "resolvedUserId",
+              "resolvedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 1,
+            "stableSha256": "f90c949cc6d96066441929dbec798dcbd2d25898a7f5bbcf96f40aa8ed3b2512"
+          },
+          "OfflineIdentityLinkRequest": {
+            "originalColumns": [
+              "id",
+              "offlineIdentityId",
+              "sourceCommunityId",
+              "sourceUserId",
+              "targetCommunityId",
+              "targetUserId",
+              "status",
+              "requestedById",
+              "reviewedById",
+              "reviewedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 1,
+            "stableSha256": "c2d5b85e7cff79182c37d0d9760351b565335ed8e7b55a9d71870bf145cb9b01"
+          },
+          "OfflineIdentityMember": {
+            "originalColumns": [
+              "id",
+              "offlineIdentityId",
+              "communityId",
+              "userId",
+              "addedById",
+              "createdAt"
+            ],
+            "originalRowCount": 2,
+            "stableSha256": "c0637610c62f76fc20c31c271c679367d6620d2958f8f4183b6affc57883fb98"
+          },
+          "PasswordResetToken": {
+            "originalColumns": [
+              "id",
+              "userId",
+              "tokenHash",
+              "expiresAt",
+              "usedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 6,
+            "stableSha256": "3520a64fdb1d4067faf241d8473bb4ffbfe7c385dfa2b1b3546ef96e983cd618"
+          },
+          "QueuedMatch": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "team1User1Id",
+              "team1User2Id",
+              "team2User1Id",
+              "team2User2Id",
+              "createdAt",
+              "targetPool",
+              "matchmakingReasonJson",
+              "team1ClubId",
+              "team2ClubId",
+              "courtGroupType",
+              "poolASeatCount",
+              "poolBSeatCount",
+              "isAutomatic"
+            ],
+            "originalRowCount": 1,
+            "stableSha256": "a6f2c885a3c1e8ee847e0628e84b9c933412f67bb4f28280ca90a0591150c4cd"
+          },
+          "RateLimitBucket": {
+            "originalColumns": [
+              "key",
+              "scope",
+              "count",
+              "resetAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 8,
+            "stableSha256": "2732f86b33fef1cb5395b2ee75f4ef6aa995f23d336d18aea75c979dfafaddd0"
+          },
+          "Session": {
+            "originalColumns": [
+              "id",
+              "code",
+              "communityId",
+              "name",
+              "type",
+              "mode",
+              "status",
+              "isTest",
+              "sourceSessionId",
+              "poolsEnabled",
+              "poolAName",
+              "poolBName",
+              "poolACourtAssignments",
+              "poolBCourtAssignments",
+              "poolAMissedTurns",
+              "poolBMissedTurns",
+              "crossoverMissThreshold",
+              "createdAt",
+              "endedAt",
+              "autoQueueEnabled",
+              "respectPlayerRest",
+              "scoringType",
+              "matchmakingStyle",
+              "balanceMetric",
+              "pairingMode",
+              "collabFormat",
+              "crossoverFrequency",
+              "poolAssignmentsInitialized",
+              "achievementEligibilityJson"
+            ],
+            "originalRowCount": 111,
+            "stableSha256": "722cb5356fa79ce4e5f59bdd2974dfe0795ca6ef30d0b2cda29a189a1d339b7a"
+          },
+          "SessionCommunity": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "communityId",
+              "role",
+              "status",
+              "requestedById",
+              "reviewedById",
+              "reviewedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 108,
+            "stableSha256": "c3bdd6fa38e67f82ddfce2df79ec192146fedb9671f1bfffddb5b7a237dc957c"
+          },
+          "SessionPlayer": {
+            "originalColumns": [
+              "id",
+              "sessionId",
+              "userId",
+              "isGuest",
+              "gender",
+              "partnerPreference",
+              "sessionPoints",
+              "lastPartnerId",
+              "isPaused",
+              "matchesPlayed",
+              "matchmakingMatchesCredit",
+              "availableSince",
+              "lastPlayedAt",
+              "pausedAt",
+              "joinedAt",
+              "ladderEntryAt",
+              "inactiveSeconds",
+              "mixedSideOverride",
+              "pool",
+              "arrivalPriorityAt",
+              "needsMoreRest",
+              "representingClubId",
+              "skipNextMatchAt",
+              "skipNextMatchRequestedById",
+              "pendingPool"
+            ],
+            "originalRowCount": 1225,
+            "stableSha256": "23bf3e0fc4a3d2fd645ce046f214b4e213e766b3a215877cbaab8b646889766d"
+          },
+          "TutorialProgress": {
+            "originalColumns": [
+              "id",
+              "userId",
+              "tutorialKey",
+              "completedStepIdsJson",
+              "dismissedAt",
+              "createdAt",
+              "updatedAt"
+            ],
+            "originalRowCount": 5,
+            "stableSha256": "b8c71cf828b9a458212208e4156433392016b97e7e9ae88be20ff05e1a17787f"
+          },
+          "User": {
+            "originalColumns": [
+              "id",
+              "email",
+              "passwordHash",
+              "name",
+              "isClaimed",
+              "elo",
+              "isActive",
+              "createdAt",
+              "updatedAt",
+              "gender",
+              "partnerPreference",
+              "mixedSideOverride",
+              "avatarKey",
+              "selfNameChangedAt",
+              "selfGenderChangedAt"
+            ],
+            "originalRowCount": 609,
+            "stableSha256": "5fff63607d9233dc6072be07acd6b805e97ccc18a15d45120afa9f63741b1ab7"
+          }
+        },
+        "legacyClaimedAccountCredentialProfileDigest": {
+          "count": 48,
+          "stableSha256": "1218d97e51024203bbb20618fc1f6bd256cd22377f366894b41480ffe3ca5579"
+        },
+        "legacyClubAuthorizationDigest": {
+          "count": 68,
+          "stableSha256": "f3b9968192dc916e5e2561adb80a339491b4cfee6e26cf5278bc088367a4506f"
+        },
+        "creatorAuthorityPreserved": true,
+        "rawOrphanLastPartnerDigest": {
+          "count": 85,
+          "stableSha256": "3e970cd54ee16d6d9a69743a393d6e0e6b01f2a91a5fc5b09d0e1d176b853c40"
+        },
+        "accountDeletionRelations": [
+          {
+            "table": "Community",
+            "column": "createdById",
+            "references": "Account",
+            "onDelete": "RESTRICT"
+          },
+          {
+            "table": "ClubRatingAdjustment",
+            "column": "actorId",
+            "references": "Account",
+            "onDelete": "RESTRICT"
+          }
+        ],
+        "rawValuesIncluded": false,
+        "primaryKeysIncluded": false
+      }
+    }
+  },
+  "followUpMigrations": [
+    "20261005120000_preserve_legacy_creator_access"
+  ]
+}

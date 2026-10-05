@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { isGlobalAdminEmail } from "@/lib/globalAdmin";
-import { logError, safeErrorResponse } from "@/lib/errors";
+import { admissionTransaction, submitClubAdmission } from "@/lib/clubAdmissions";
+import { admissionError } from "@/lib/clubAdmissionApi";
 import { rateLimit } from "@/lib/rateLimit";
 import {
   ClubContractAliasConflictError,
@@ -124,46 +124,15 @@ export async function POST(request: Request) {
         );
       }
     }
-    const shouldBeAdmin =
-      !!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null);
-
-    const membership = await prisma.clubMember.upsert({
-      where: {
-        clubId_userId: {
-          clubId: club.id,
-          userId: session.user.id,
-        },
-      },
-      update: shouldBeAdmin ? { role: "ADMIN" } : {},
-      create: {
-        clubId: club.id,
-        userId: session.user.id,
-        role: shouldBeAdmin ? "ADMIN" : "MEMBER",
-      },
-      select: {
-        role: true,
-        club: {
-          select: {
-            id: true,
-            name: true,
-            isPasswordProtected: true,
-            createdAt: true,
-          },
-        },
-      },
-    });
-
-    return NextResponse.json(withLegacyClubAliases({
-      id: membership.club.id,
-      name: membership.club.name,
-      clubId: membership.club.id,
-      clubName: membership.club.name,
-      role: membership.role,
-      isPasswordProtected: membership.club.isPasswordProtected,
-      createdAt: membership.club.createdAt,
+    const account = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!account?.isActive) return NextResponse.json({ error: "An active account is required" }, { status: 403 });
+    const result = await admissionTransaction(prisma, tx => submitClubAdmission(tx, {
+      clubId: club.id, requesterUserId: account.id,
+      kind: "NEW_PLAYER", proposedPlayerName: account.name, proposedGender: account.gender,
     }));
+    return NextResponse.json(withLegacyClubAliases({ ...result, clubId: club.id, clubName: club.name }));
+
   } catch (error) {
-    logError("Join club error", error);
-    return safeErrorResponse();
+    return admissionError(error);
   }
 }

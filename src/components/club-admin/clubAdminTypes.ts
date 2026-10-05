@@ -24,6 +24,7 @@ export interface ClubAdminClub {
 
 export interface ClubAdminPlayer {
   id: string;
+  ownerUserId?: string | null;
   name: string;
   email: string | null;
   avatarUrl?: string | null;

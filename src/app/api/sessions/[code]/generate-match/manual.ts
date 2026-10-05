@@ -36,7 +36,7 @@ export function validateManualMatchRequest({
 
   const selectedIds = getManualMatchPlayerIds(parsedTeams);
   const selectedPlayers = selectedIds.map((id) =>
-    sessionData.players.find((player) => player.userId === id)
+    sessionData.players.find((player) => player.playerId === id)
   );
 
   if (selectedPlayers.some((player) => !player)) {

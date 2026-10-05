@@ -137,7 +137,7 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    if (existingByEmail?.isClaimed || existingByEmail?.passwordHash) {
+    if (existingByEmail) {
       logAuditEvent({
         action: "auth.sign_up",
         actor: {
@@ -162,28 +162,10 @@ export async function POST(request: Request) {
       );
     }
 
-    let user;
-    if (existingByEmail) {
-      user = await prisma.user.update({
-        where: { id: existingByEmail.id },
-        data: {
-          name: normalizedName,
-          gender: resolvedGender,
-          passwordHash,
-          isClaimed: true,
-        },
-      });
-    } else {
-      user = await prisma.user.create({
-        data: {
-          email: normalizedEmail,
-          passwordHash,
-          name: normalizedName,
-          gender: resolvedGender,
-          isClaimed: true,
-        },
-      });
-    }
+    // Account registration never creates or adopts a sporting Player.
+    const user = await prisma.user.create({
+      data: { email: normalizedEmail, passwordHash, name: normalizedName, gender: resolvedGender },
+    });
 
     logAuditEvent({
       action: "auth.sign_up",
@@ -208,9 +190,9 @@ export async function POST(request: Request) {
       email: user.email,
       name: user.name,
       gender: user.gender,
-      isClaimed: user.isClaimed,
     });
   } catch (error) {
+    if ((error as { code?: string }).code === "P2002") return NextResponse.json({ error: "Email already registered" }, { status: 409 });
     logAuditEvent({
       action: "auth.sign_up",
       actor: normalizedEmail

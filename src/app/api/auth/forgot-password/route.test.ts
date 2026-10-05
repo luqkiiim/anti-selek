@@ -98,7 +98,7 @@ describe("forgot password route", () => {
       id: "user-1",
       email: "player@example.com",
       name: "Player One",
-      isClaimed: true,
+      isActive: true,
     });
 
     const response = await postForgotPassword({ email: "player@example.com" });
@@ -150,7 +150,7 @@ describe("forgot password route", () => {
       id: "user-2",
       email: null,
       name: "Placeholder",
-      isClaimed: false,
+      isActive: false,
     });
 
     const response = await postForgotPassword({ email: "placeholder@example.com" });

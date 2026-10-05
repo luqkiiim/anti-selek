@@ -22,7 +22,7 @@ export async function GET(request: Request, context: Context) {
   try {
     const access = await authorize(request, context);
     if (access.error) return access.error;
-    const member = await prisma.clubMember.findUnique({ where: { clubId_userId: { clubId: access.clubId!, userId: access.userId! } }, select: { elo: true, ratingAdjustments: { orderBy: { createdAt: "desc" }, take: 50 } } });
+    const member = await prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId: access.clubId!, playerId: access.userId! } }, select: { elo: true, ratingAdjustments: { orderBy: { createdAt: "desc" }, take: 50 } } });
     if (!member) return NextResponse.json({ error: "Club player not found" }, { status: 404 });
     return NextResponse.json({ rating: member.elo, history: member.ratingAdjustments });
   } catch (error) { logError("Read rating history", error); return safeErrorResponse(); }
@@ -36,7 +36,7 @@ export async function POST(request: Request, context: Context) {
       return NextResponse.json({ error: "Enter a rating from 0 to 5000 and a reason (up to 300 characters)" }, { status: 400 });
     }
     const result = await prisma.$transaction(async (tx) => {
-      const member = await tx.clubMember.findUnique({ where: { clubId_userId: { clubId: access.clubId!, userId: access.userId! } } });
+      const member = await tx.clubMember.findUnique({ where: { clubId_playerId: { clubId: access.clubId!, playerId: access.userId! } } });
       if (!member) return { status: 404, error: "Club player not found" };
       if (member.elo !== body.expectedRating) return { status: 409, error: "Rating changed since you opened this panel. Reopen it to review the latest rating." };
       if (member.elo === body.rating) return { status: 400, error: "Choose a different rating" };

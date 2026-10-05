@@ -14,6 +14,7 @@
 /coverage
 /playwright-report
 /test-results*
+/private/
 
 # next.js
 /.next/
@@ -41,6 +42,11 @@ yarn-error.log*
 
 # Database
 *.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 prisma/*.db
 prisma/*.db-journal
 

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { rateLimit } from "@/lib/rateLimit";
 import { NextResponse } from "next/server";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 export async function joinRequestAccess(request: Request, clubId?: string) {
   const limited = await rateLimit(request, "api:club-join-requests", {
     limit: 30,
@@ -25,19 +26,8 @@ export async function joinRequestAccess(request: Request, clubId?: string) {
       ),
     } as const;
   if (clubId) {
-    const club = await prisma.club.findUnique({
-      where: { id: clubId },
-      select: {
-        createdById: true,
-        members: { where: { userId: session.user.id }, select: { role: true } },
-      },
-    });
-    if (
-      !club ||
-      (!session.user.isAdmin &&
-        club.createdById !== session.user.id &&
-        !club.members.some((m) => m.role === "ADMIN"))
-    )
+    const access = await getClubAdminAccess(prisma, { clubId, userId: session.user.id, isGlobalAdmin: session.user.isAdmin });
+    if (!access?.canAdmin)
       return {
         response: NextResponse.json(
           { error: "Club admin access required" },
@@ -45,5 +35,5 @@ export async function joinRequestAccess(request: Request, clubId?: string) {
         ),
       } as const;
   }
-  return { userId: session.user.id } as const;
+  return { userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin } as const;
 }

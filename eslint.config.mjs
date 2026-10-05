@@ -11,6 +11,8 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    // Standalone Vite sandbox; src/components/prototype remains linted.
+    "prototype/**",
     "prototypes/**/dist/**",
     "next-env.d.ts",
   ]),

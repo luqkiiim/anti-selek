@@ -67,10 +67,10 @@ async function assertAssignmentsAvailable(
         ],
       },
       OR: [
-        { team1User1Id: { in: [...uniqueSelectedIds] } },
-        { team1User2Id: { in: [...uniqueSelectedIds] } },
-        { team2User1Id: { in: [...uniqueSelectedIds] } },
-        { team2User2Id: { in: [...uniqueSelectedIds] } },
+        { team1Player1Id: { in: [...uniqueSelectedIds] } },
+        { team1Player2Id: { in: [...uniqueSelectedIds] } },
+        { team2Player1Id: { in: [...uniqueSelectedIds] } },
+        { team2Player2Id: { in: [...uniqueSelectedIds] } },
       ],
     },
   });
@@ -118,7 +118,7 @@ async function createMatchAssignment(
     const selectedPlayers = await tx.sessionPlayer.findMany({
       where: {
         sessionId,
-        userId: {
+        playerId: {
           in: [
             assignment.partition.team1[0],
             assignment.partition.team1[1],
@@ -127,14 +127,14 @@ async function createMatchAssignment(
           ],
         },
       },
-      select: { userId: true, pool: true },
+      select: { playerId: true, pool: true },
     });
     const currentSnapshot = classifyCourtGroupSnapshot(
       assignment.partition.team1,
       assignment.partition.team2,
       buildSessionPoolMap(
         selectedPlayers,
-        (player) => player.userId,
+        (player) => player.playerId,
         (player) => player.pool
       )
     );
@@ -169,11 +169,11 @@ async function createMatchAssignment(
       sessionId,
       courtId: assignment.courtId,
       status: MatchStatus.IN_PROGRESS,
-      team1User1Id: assignment.partition.team1[0],
-      team1User2Id: assignment.partition.team1[1],
+      team1Player1Id: assignment.partition.team1[0],
+      team1Player2Id: assignment.partition.team1[1],
       team1ClubId: assignment.team1ClubId ?? null,
-      team2User1Id: assignment.partition.team2[0],
-      team2User2Id: assignment.partition.team2[1],
+      team2Player1Id: assignment.partition.team2[0],
+      team2Player2Id: assignment.partition.team2[1],
       team2ClubId: assignment.team2ClubId ?? null,
       matchmakingReasonJson: reasonJson,
       courtGroupType: groupSnapshot?.courtGroupType ?? null,
@@ -182,10 +182,10 @@ async function createMatchAssignment(
       ...(createdAt ? { createdAt } : {}),
     },
     include: {
-      team1User1: { select: { id: true, name: true } },
-      team1User2: { select: { id: true, name: true } },
-      team2User1: { select: { id: true, name: true } },
-      team2User2: { select: { id: true, name: true } },
+      team1Player1: { select: { id: true, name: true } },
+      team1Player2: { select: { id: true, name: true } },
+      team2Player1: { select: { id: true, name: true } },
+      team2Player2: { select: { id: true, name: true } },
     },
   });
 
@@ -205,7 +205,7 @@ async function createMatchAssignment(
     await tx.sessionPlayer.updateMany({
       where: {
         sessionId,
-        userId: {
+        playerId: {
           in: [
             assignment.partition.team1[0],
             assignment.partition.team1[1],
@@ -359,7 +359,7 @@ export async function replaceCurrentCourtMatchAssignment({
     const restUserIds = Array.from(new Set(creditRestUserIds ?? []));
     if (restUserIds.length > 0) {
       const creditedPlayers = await tx.sessionPlayer.updateMany({
-        where: { sessionId, userId: { in: restUserIds } },
+        where: { sessionId, playerId: { in: restUserIds } },
         data: {
           matchmakingMatchesCredit: { increment: 1 },
           availableSince: new Date(),

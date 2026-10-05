@@ -1,3 +1,4 @@
+import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
@@ -17,34 +18,34 @@ export async function PATCH(
   { params }: { params: Promise<{ code: string; userId: string }> }
 ) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:sessions:code:players:userId:patch", { limit: 15, windowMs: 60_000 });
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:players:playerId:patch", { limit: 15, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return sportingJson({ error: "Invalid request body" }, { status: 400 });
     }
 
     const { name } = body as { name?: unknown };
     if (typeof name !== "string" || name.trim().length < 2) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Guest name must be at least 2 characters" },
         { status: 400 }
       );
     }
 
-    const { code, userId } = await params;
+    const { code, userId: playerId } = await params;
 
-    if (typeof code !== "string" || code.length === 0 || typeof userId !== "string" || userId.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    if (typeof code !== "string" || code.length === 0 || typeof playerId !== "string" || playerId.length === 0) {
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
-    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:players:userId");
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:players:playerId");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sessionData = await prisma.session.findUnique({
@@ -57,10 +58,10 @@ export async function PATCH(
     });
 
     if (!sessionData) {
-      return invalidTargetResponse(request, "api:sessions:code:players:userId");
+      return invalidTargetResponse(request, "api:sessions:code:players:playerId");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Completed tournaments cannot be edited" },
         { status: 400 }
       );
@@ -73,35 +74,35 @@ export async function PATCH(
     });
 
     if (!session.user.isAdmin && !operatorMembership) {
-      return invalidTargetResponse(request, "api:sessions:code:players:userId");
+      return invalidTargetResponse(request, "api:sessions:code:players:playerId");
     }
 
     const existingPlayer = await prisma.sessionPlayer.findUnique({
       where: {
-        sessionId_userId: {
+        sessionId_playerId: {
           sessionId: sessionData.id,
-          userId,
+          playerId,
         },
       },
       select: {
-        userId: true,
+        playerId: true,
         isGuest: true,
       },
     });
 
     if (!existingPlayer) {
-      return invalidTargetResponse(request, "api:sessions:code:players:userId");
+      return invalidTargetResponse(request, "api:sessions:code:players:playerId");
     }
 
     if (!existingPlayer.isGuest) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Only guest names can be edited during a live tournament" },
         { status: 400 }
       );
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
+    const updatedUser = await prisma.player.update({
+      where: { id: playerId },
       data: {
         name: name.trim(),
       },
@@ -111,8 +112,8 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({
-      userId: updatedUser.id,
+    return sportingJson({
+      playerId: updatedUser.id,
       name: updatedUser.name,
     });
   } catch (error) {
@@ -126,21 +127,21 @@ export async function DELETE(
   { params }: { params: Promise<{ code: string; userId: string }> }
 ) {
   try {
-    const rateLimitResponse = await rateLimit(_request, "api:sessions:code:players:userId:delete", { limit: 15, windowMs: 60_000 });
+    const rateLimitResponse = await rateLimit(_request, "api:sessions:code:players:playerId:delete", { limit: 15, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
 
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      return sportingJson({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { code, userId } = await params;
+    const { code, userId: playerId } = await params;
 
-    if (typeof code !== "string" || code.length === 0 || typeof userId !== "string" || userId.length === 0) {
-      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    if (typeof code !== "string" || code.length === 0 || typeof playerId !== "string" || playerId.length === 0) {
+      return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
     }
 
-    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:players:userId");
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:players:playerId");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sessionData = await prisma.session.findUnique({
@@ -153,10 +154,10 @@ export async function DELETE(
     });
 
     if (!sessionData) {
-      return invalidTargetResponse(_request, "api:sessions:code:players:userId");
+      return invalidTargetResponse(_request, "api:sessions:code:players:playerId");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json(
+      return sportingJson(
         { error: "Completed tournaments cannot be edited" },
         { status: 400 }
       );
@@ -169,36 +170,36 @@ export async function DELETE(
     });
 
     if (!session.user.isAdmin && !operatorMembership) {
-      return invalidTargetResponse(_request, "api:sessions:code:players:userId");
+      return invalidTargetResponse(_request, "api:sessions:code:players:playerId");
     }
 
     const existingPlayer = await prisma.sessionPlayer.findUnique({
       where: {
-        sessionId_userId: {
+        sessionId_playerId: {
           sessionId: sessionData.id,
-          userId,
+          playerId,
         },
       },
       select: {
-        userId: true,
+        playerId: true,
         isGuest: true,
-        user: {
+        player: {
           select: { name: true },
         },
       },
     });
 
     if (!existingPlayer) {
-      return invalidTargetResponse(_request, "api:sessions:code:players:userId");
+      return invalidTargetResponse(_request, "api:sessions:code:players:playerId");
     }
 
     const playerMatchWhere = {
       sessionId: sessionData.id,
       OR: [
-        { team1User1Id: userId },
-        { team1User2Id: userId },
-        { team2User1Id: userId },
-        { team2User2Id: userId },
+        { team1Player1Id: playerId },
+        { team1Player2Id: playerId },
+        { team2Player1Id: playerId },
+        { team2Player2Id: playerId },
       ],
     };
 
@@ -218,7 +219,7 @@ export async function DELETE(
     });
 
     if (busyMatch) {
-      return NextResponse.json(
+      return sportingJson(
         {
           error:
             "This player is currently assigned to a match. Undo or finish that match first.",
@@ -235,7 +236,7 @@ export async function DELETE(
     });
 
     if (relatedMatch) {
-      return NextResponse.json(
+      return sportingJson(
         {
           error:
             "This player already has recorded match history in this tournament and cannot be removed.",
@@ -251,18 +252,18 @@ export async function DELETE(
 
       await tx.sessionPlayer.delete({
         where: {
-          sessionId_userId: {
+          sessionId_playerId: {
             sessionId: sessionData.id,
-            userId,
+            playerId,
           },
         },
       });
 
       const deletedGuestUsers = existingPlayer.isGuest
-        ? await deleteEphemeralGuestUsers(tx, [userId])
+        ? await deleteEphemeralGuestUsers(tx, [playerId])
         : 0;
 
-      const queuedMatchAffected = hasQueuedMatchUser(queuedMatch, userId);
+      const queuedMatchAffected = hasQueuedMatchUser(queuedMatch, playerId);
       if (queuedMatchAffected) {
         await tx.queuedMatch.delete({
           where: { sessionId: sessionData.id },
@@ -276,8 +277,8 @@ export async function DELETE(
       }
 
       return {
-        removedUserId: userId,
-        removedName: existingPlayer.user.name,
+        removedUserId: playerId,
+        removedName: existingPlayer.player.name,
         deletedGuestUsers,
         queuedMatchAffected,
       };
@@ -287,7 +288,7 @@ export async function DELETE(
       ? await tryRebuildQueuedMatchForSessionId(sessionData.id)
       : undefined;
 
-    return NextResponse.json({
+    return sportingJson({
       ok: true,
       ...result,
       ...(result.queuedMatchAffected ? { queuedMatch } : {}),

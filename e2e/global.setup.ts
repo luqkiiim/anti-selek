@@ -11,6 +11,7 @@ const adminUserId = "user-admin-e2e";
 const hostClubId = "community-host-e2e";
 const adminControlsClubId = "community-admin-controls-e2e";
 const claimClubId = "community-claim-e2e";
+const newAdmissionClubId = "community-new-admission-e2e";
 const scoreClubId = "community-score-e2e";
 const scoreSessionId = "session-score-e2e";
 const scoreCourtId = "court-score-e2e";
@@ -51,8 +52,7 @@ async function seedDatabase() {
   const passwordHash = await bcrypt.hash("Password123!", 10);
 
   try {
-    await prisma.user.createMany({
-      data: [
+    const legacyPlayers = [
         {
           id: adminUserId,
           email: "admin-e2e@example.com",
@@ -125,36 +125,43 @@ async function seedDatabase() {
           gender: "MALE",
           partnerPreference: "OPEN",
         },
-      ],
-    });
+      ];
+    const accountId = (playerId: string) => `account-${playerId}`;
+    await prisma.user.createMany({ data: legacyPlayers.filter(p => p.isClaimed).map(p => ({ id: accountId(p.id), name: p.name, email: p.email!, passwordHash: p.passwordHash!, gender: p.gender })) });
+    await prisma.player.createMany({ data: legacyPlayers.filter(p => p.id !== claimRequesterId).map(p => ({ id: p.id, name: p.name, gender: p.gender, partnerPreference: p.partnerPreference, ownerUserId: p.isClaimed ? accountId(p.id) : null })) });
 
     await prisma.club.createMany({
       data: [
         {
           id: hostClubId,
           name: "E2E Host Club",
-          createdById: adminUserId,
+          createdById: accountId(adminUserId),
         },
         {
           id: scoreClubId,
           name: "E2E Score Club",
-          createdById: adminUserId,
+          createdById: accountId(adminUserId),
         },
         {
           id: claimClubId,
-          name: "E2E Claim Club",
-          createdById: adminUserId,
+          name: "E2E Claim Club", allowJoinRequests: true,
+          createdById: accountId(adminUserId),
+        },
+        {
+          id: newAdmissionClubId,
+          name: "E2E New Admission Club",
+          allowJoinRequests: true,
+          createdById: accountId(adminUserId),
         },
         {
           id: adminControlsClubId,
           name: "E2E Admin Controls Club",
-          createdById: adminUserId,
+          createdById: accountId(adminUserId),
         },
       ],
     });
 
-    await prisma.clubMember.createMany({
-      data: [
+    const memberships = [
         {
           clubId: hostClubId,
           userId: adminUserId,
@@ -191,6 +198,11 @@ async function seedDatabase() {
           role: "MEMBER",
         },
         {
+          clubId: newAdmissionClubId,
+          userId: adminUserId,
+          role: "ADMIN",
+        },
+        {
           clubId: adminControlsClubId,
           userId: adminUserId,
           role: "ADMIN",
@@ -210,8 +222,9 @@ async function seedDatabase() {
           userId: adminControlPromoteUserId,
           role: "MEMBER",
         },
-      ],
-    });
+      ];
+    await prisma.clubMember.createMany({ data: memberships.filter(m => m.userId !== claimRequesterId).map(({ userId, role: _role, ...row }) => ({ ...row, playerId: userId })) });
+    await prisma.clubAccess.createMany({ data: memberships.filter(m => legacyPlayers.find(p => p.id === m.userId)?.isClaimed).map(m => ({ clubId: m.clubId, userId: accountId(m.userId), role: m.role })) });
 
     await prisma.session.create({
       data: {
@@ -233,25 +246,25 @@ async function seedDatabase() {
         players: {
           create: [
             {
-              userId: adminUserId,
+              playerId: adminUserId,
               isGuest: false,
               gender: "MALE",
               partnerPreference: "OPEN",
             },
             {
-              userId: scorePlayerIds[0],
+              playerId: scorePlayerIds[0],
               isGuest: false,
               gender: "FEMALE",
               partnerPreference: "FEMALE_FLEX",
             },
             {
-              userId: scorePlayerIds[1],
+              playerId: scorePlayerIds[1],
               isGuest: false,
               gender: "MALE",
               partnerPreference: "OPEN",
             },
             {
-              userId: scorePlayerIds[2],
+              playerId: scorePlayerIds[2],
               isGuest: false,
               gender: "FEMALE",
               partnerPreference: "FEMALE_FLEX",
@@ -267,10 +280,10 @@ async function seedDatabase() {
         sessionId: scoreSessionId,
         courtId: scoreCourtId,
         status: "IN_PROGRESS",
-        team1User1Id: adminUserId,
-        team1User2Id: scorePlayerIds[0],
-        team2User1Id: scorePlayerIds[1],
-        team2User2Id: scorePlayerIds[2],
+        team1Player1Id: adminUserId,
+        team1Player2Id: scorePlayerIds[0],
+        team2Player1Id: scorePlayerIds[1],
+        team2Player2Id: scorePlayerIds[2],
       },
     });
 
@@ -293,7 +306,7 @@ export default async function globalSetup() {
     ".bin",
     process.platform === "win32" ? "prisma.cmd" : "prisma"
   );
-  const prismaArgs = ["db", "push", "--skip-generate"];
+  const prismaArgs = ["migrate", "deploy"];
 
   if (process.platform === "win32") {
     execFileSync("cmd.exe", ["/c", prismaCli, ...prismaArgs], {

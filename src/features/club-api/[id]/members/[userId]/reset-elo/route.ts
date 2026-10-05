@@ -47,12 +47,12 @@ export async function POST(
 
     const targetMembership = await prisma.clubMember.findUnique({
       where: {
-        clubId_userId: {
+        clubId_playerId: {
           clubId,
-          userId,
+          playerId: userId,
         },
       },
-      select: { role: true },
+      select: { id: true },
     });
 
     if (!targetMembership) {
@@ -62,22 +62,22 @@ export async function POST(
     const [updatedMembership, updatedUser] = await prisma.$transaction([
       prisma.clubMember.update({
         where: {
-          clubId_userId: {
+          clubId_playerId: {
             clubId,
-            userId,
+            playerId: userId,
           },
         },
         data: { elo: 1000 },
-        select: { role: true, elo: true },
+        select: { elo: true },
       }),
-      prisma.user.findUniqueOrThrow({
+      prisma.player.findUniqueOrThrow({
         where: { id: userId },
         select: {
           id: true,
           name: true,
-          email: true,
+          ownerUserId: true,
           isActive: true,
-          isClaimed: true,
+
           createdAt: true,
         },
       }),
@@ -85,7 +85,7 @@ export async function POST(
 
     return NextResponse.json({
       ...updatedUser,
-      role: updatedMembership.role,
+      role: "MEMBER", email: null, isClaimed: !!updatedUser.ownerUserId,
       elo: updatedMembership.elo,
     });
   } catch (error: unknown) {

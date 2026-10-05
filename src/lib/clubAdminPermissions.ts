@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { ClubRole } from "@/types/enums";
+import { isClubAdminRole } from "@/lib/clubRoles";
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
 
@@ -28,21 +28,21 @@ export async function getClubAdminAccess(
       where: { id: clubId },
       select: { createdById: true },
     }),
-    tx.clubMember.findUnique({
+    tx.clubAccess.findUnique({
       where: {
         clubId_userId: {
           clubId,
           userId,
         },
       },
-      select: { role: true },
+      select: { role: true, status: true },
     }),
   ]);
 
   if (!club) return null;
 
-  const isOwner = club.createdById === userId;
-  const membershipRole = membership?.role ?? null;
+  const isOwner = club.createdById === userId && membership?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(membership.role);
+  const membershipRole = membership?.status === "ACTIVE" ? membership.role : null;
 
   return {
     createdById: club.createdById,
@@ -50,7 +50,7 @@ export async function getClubAdminAccess(
     isOwner,
     membershipRole,
     canAdmin:
-      isGlobalAdmin || isOwner || membershipRole === ClubRole.ADMIN,
+      isGlobalAdmin || isOwner || isClubAdminRole(membershipRole),
   };
 }
 

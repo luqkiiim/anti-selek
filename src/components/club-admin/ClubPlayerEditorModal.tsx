@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PlayerInvitationPanel } from "./PlayerInvitationPanel";
 import { AdjustClubRating } from "@/components/profile/AdjustClubRating";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import { ModalFrame } from "@/components/ui/chrome";
@@ -23,7 +24,7 @@ import {
 interface ClubPlayerEditorModalProps {
   player: ClubAdminPlayer | null;
   clubId: string;
-  currentUserId?: string | null;
+  currentPlayerId?: string | null;
   editorName: string;
   editorRating: string;
   savingName: boolean;
@@ -64,7 +65,7 @@ interface ClubPlayerEditorModalProps {
 export function ClubPlayerEditorModal({
   player,
   clubId,
-  currentUserId,
+  currentPlayerId,
   editorName,
   savingName,
   savingRole,
@@ -92,11 +93,11 @@ export function ClubPlayerEditorModal({
   const playerLevelOptionLabel =
     player.gender === PlayerGender.FEMALE ? "High level" : "Low level";
   const canEditName = !player.isClaimed;
-  const isCurrentUser = player.id === currentUserId;
+  const isCurrentPlayer = player.id === currentPlayerId;
   const canRemovePlayer =
-    !player.isOwner && (player.role !== "ADMIN" || isCurrentUser);
-  const removeButtonLabel = isCurrentUser ? "Leave club" : "Remove player";
-  const removingButtonLabel = isCurrentUser ? "Leaving..." : "Removing...";
+    !player.isOwner && (player.role !== "ADMIN" || isCurrentPlayer);
+  const removeButtonLabel = isCurrentPlayer ? "Leave club" : "Remove player";
+  const removingButtonLabel = isCurrentPlayer ? "Leaving..." : "Removing...";
 
   return (
     <ModalFrame
@@ -132,6 +133,7 @@ export function ClubPlayerEditorModal({
       }
     >
       <div className="space-y-5 px-4 py-4 sm:px-5">
+        <PlayerInvitationPanel key={player.id} clubId={clubId} playerId={player.id} playerName={player.name} rating={player.elo} connected={player.isClaimed} />
         <div className="app-panel-muted space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-3">

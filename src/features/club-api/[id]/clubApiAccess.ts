@@ -10,7 +10,7 @@ import {
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
 } from "@/lib/quickAccess";
-import { ClubRole } from "@/types/enums";
+import { getAccountClubContext } from "@/lib/playerIdentity";
 
 export async function getClubMemberAccessContext({
   clubId,
@@ -60,26 +60,8 @@ export async function getClubMemberAccessContext({
   }
 
   const viewerId = session.user.id;
-  const [membership, club] = await Promise.all([
-    prisma.clubMember.findUnique({
-      where: {
-        clubId_userId: {
-          clubId,
-          userId: viewerId,
-        },
-      },
-      select: { role: true },
-    }),
-    prisma.club.findUnique({
-      where: { id: clubId },
-      select: {
-        id: true,
-        createdById: true,
-        isTutorial: true,
-        tutorialOwnerId: true,
-      },
-    }),
-  ]);
+  const { membership: playerMembership, club, access, role, canAdmin: viewerCanAdminClub, canAccess, isOwner: viewerIsOwner } = await getAccountClubContext(prisma, { clubId, userId: viewerId, isGlobalAdmin: session.user.isAdmin });
+  const membership = access?.status === "ACTIVE" ? { ...access, role } : null;
 
   if (!club) {
     return {
@@ -87,11 +69,6 @@ export async function getClubMemberAccessContext({
     } as const;
   }
 
-  const viewerIsOwner = club.createdById === viewerId;
-  const viewerCanAdminClub =
-    !!session.user.isAdmin ||
-    viewerIsOwner ||
-    membership?.role === ClubRole.ADMIN;
 
   if (club.isTutorial && club.tutorialOwnerId !== viewerId) {
     return {
@@ -99,7 +76,7 @@ export async function getClubMemberAccessContext({
     } as const;
   }
 
-  if (!membership && !session.user.isAdmin && !viewerIsOwner) {
+  if (!canAccess) {
     return {
       response: await invalidTargetResponse(request, rateLimitKey),
     } as const;
@@ -109,6 +86,8 @@ export async function getClubMemberAccessContext({
     context: {
       club,
       membership,
+      playerMembership,
+      viewerPlayerId: playerMembership?.playerId ?? null,
       session,
       viewerCanAdminClub,
       viewerId,

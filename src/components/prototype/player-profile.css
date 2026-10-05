@@ -133,3 +133,41 @@
 .profile-history-row small { overflow-wrap: anywhere; }
 
 .profile-account-button { display: flex; border: 0; padding: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.player-preferences {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 16px;
+  border: 1px solid #eee5ef;
+  border-radius: 17px;
+  background: #fffdfb;
+}
+.player-preferences > p {
+  margin: -5px 0 0;
+  color: #80718b;
+  font-size: 12px;
+}
+.player-preferences .section-heading h2 {
+  font-size: 17px;
+}
+.player-preferences select {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 5px;
+  border: 1px solid #e8ddef;
+  border-radius: 12px;
+  background: #fffdfb;
+  padding: 10px 12px;
+  color: #291440;
+  font: inherit;
+  font-size: 15px;
+}
+.player-preferences-notice {
+  margin: 0 !important;
+  color: #426c4c !important;
+  font-size: 12px !important;
+}
+.player-preferences [role="alert"] {
+  margin: 0;
+}

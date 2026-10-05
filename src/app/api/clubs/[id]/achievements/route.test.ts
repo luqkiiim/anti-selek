@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  clubFindUnique: vi.fn(),
+  clubAccessFindUnique: vi.fn(),
+  memberFindMany: vi.fn(),
   memberFindUnique: vi.fn(),
   canQuickAccessClub: vi.fn(),
   isQuickAccessSession: vi.fn(),
@@ -12,7 +15,16 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/prisma", () => ({ prisma: { clubMember: { findUnique: mocks.memberFindUnique } } }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    club: { findUnique: mocks.clubFindUnique },
+    clubAccess: { findUnique: mocks.clubAccessFindUnique },
+    clubMember: {
+      findMany: mocks.memberFindMany,
+      findUnique: mocks.memberFindUnique,
+    },
+  },
+}));
 vi.mock("@/lib/quickAccess", () => ({
   canQuickAccessClub: mocks.canQuickAccessClub,
   isQuickAccessSession: mocks.isQuickAccessSession,
@@ -69,8 +81,22 @@ function request(path: string, init?: RequestInit) {
 describe("club achievements target reads", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.auth.mockResolvedValue({ user: { id: "viewer-1" } });
-    mocks.memberFindUnique.mockResolvedValue({ id: "member" });
+    mocks.auth.mockResolvedValue({ user: { id: "account-viewer" } });
+    mocks.clubFindUnique.mockResolvedValue({
+      id: "club-1",
+      createdById: "account-owner",
+      isTutorial: false,
+      tutorialOwnerId: null,
+    });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "MEMBER", status: "ACTIVE" });
+    mocks.memberFindMany.mockResolvedValue([
+      {
+        id: "membership-viewer",
+        playerId: "player-viewer",
+        player: { id: "player-viewer", ownerUserId: "account-viewer" },
+      },
+    ]);
+    mocks.memberFindUnique.mockResolvedValue({ id: "membership-target" });
     mocks.canQuickAccessClub.mockReturnValue(true);
     mocks.isQuickAccessSession.mockReturnValue(false);
     mocks.rateLimit.mockResolvedValue(null);
@@ -79,9 +105,7 @@ describe("club achievements target reads", () => {
   });
 
   it("returns only earned public pins for another club member", async () => {
-    mocks.memberFindUnique.mockResolvedValueOnce({ id: "viewer" }).mockResolvedValueOnce({ id: "target" });
-
-    const response = await GET(request("?userId=target"), { params });
+    const response = await GET(request("?userId=player-target"), { params });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -93,20 +117,24 @@ describe("club achievements target reads", () => {
         tiers: [{ tier: 1, earnedAt: "2026-06-01T00:00:00.000Z", sessionCode: "ABC", sessionName: "Friday games" }],
       }],
     });
-    expect(mocks.getCollection).toHaveBeenCalledWith("club-1", "target");
+    expect(mocks.getCollection).toHaveBeenCalledWith("club-1", "player-target");
+    expect(mocks.memberFindUnique).toHaveBeenCalledWith({
+      where: { clubId_playerId: { clubId: "club-1", playerId: "player-target" } },
+      select: { id: true },
+    });
   });
 
   it("rejects a target who is not a member of the club", async () => {
-    mocks.memberFindUnique.mockResolvedValueOnce({ id: "viewer" }).mockResolvedValueOnce(null);
+    mocks.memberFindUnique.mockResolvedValueOnce(null);
 
-    const response = await GET(request("?userId=outsider"), { params });
+    const response = await GET(request("?userId=player-outsider"), { params });
 
     expect(response.status).toBe(404);
     expect(mocks.getCollection).not.toHaveBeenCalled();
   });
 
   it("keeps PATCH self-only when another target is in the query", async () => {
-    const response = await PATCH(request("?userId=target", { method: "PATCH", body: "{}" }), { params });
+    const response = await PATCH(request("?userId=player-target", { method: "PATCH", body: "{}" }), { params });
 
     expect(response.status).toBe(403);
     expect(mocks.memberFindUnique).toHaveBeenCalledTimes(1);
@@ -114,7 +142,7 @@ describe("club achievements target reads", () => {
   });
 
   it("keeps PATCH self-only when another target is in the body", async () => {
-    const response = await PATCH(request("", { method: "PATCH", body: JSON.stringify({ userId: "target" }) }), { params });
+    const response = await PATCH(request("", { method: "PATCH", body: JSON.stringify({ userId: "player-target" }) }), { params });
 
     expect(response.status).toBe(403);
     expect(mocks.savePreferences).not.toHaveBeenCalled();
@@ -135,6 +163,6 @@ describe("club achievements target reads", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(fullCollection);
-    expect(mocks.savePreferences).toHaveBeenCalledWith("club-1", "viewer-1", { showcase: ["on-the-board"] });
+    expect(mocks.savePreferences).toHaveBeenCalledWith("club-1", "player-viewer", { showcase: ["on-the-board"] });
   });
 });
