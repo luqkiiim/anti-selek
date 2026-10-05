@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -22,14 +22,22 @@ let file: string;
 let index = 0;
 const transaction = <T>(fn: Parameters<typeof admissionTransaction<T>>[1]) => admissionTransaction(db, fn);
 const create = (action: "CREATE" | "REPLACE" | "REVOKE" = "CREATE", invitationId?: string, now?: Date) => transaction(tx => managePlayerInvitation(tx, { clubId: "club-a", playerId: "historical-player", userId: "admin", action, invitationId, now }));
-async function ready() {
-  const created = await create();
+async function ready(count = 1, now?: Date) {
+  const created = await create("CREATE", undefined, now);
   const id = created.invitation!.id;
   const secret = "secret" in created ? created.secret! : "";
-  const continuation = await transaction(tx => exchangeInvitationSecret(tx, id, secret));
+  const continuation = await transaction(tx => exchangeInvitationSecret(tx, id, secret, now));
+  for (let i = 1; i < count; i++) await transaction(tx => exchangeInvitationSecret(tx, id, secret, now));
+  expect(await db.playerInvitationContinuation.count({ where: { invitationId: id } })).toBe(count);
   return { id, secret, handle: continuation.handle };
 }
 const redeem = (id: string, handle: string, userId = "account-a", now?: Date) => transaction(tx => redeemPlayerInvitation(tx, id, handle, userId, now));
+async function expectTerminalCleanup(id: string, status: string) {
+  expect(await db.playerInvitationContinuation.count({ where: { invitationId: id } })).toBe(0);
+  expect(await db.playerInvitation.findUnique({ where: { id } })).toMatchObject({ status });
+  const events = await db.playerInvitationEvent.findMany({ where: { invitationId: id } });
+  expect(events.map(event => event.action).sort()).toEqual(["CREATED", status].sort());
+}
 const adminContext = { params: Promise.resolve({ id: "club-a", userId: "historical-player" }) };
 const inviteContext = (id: string) => ({ params: Promise.resolve({ invitationId: id }) });
 function request(url: string, body?: unknown, handle?: { id: string; handle: string }) {
@@ -69,7 +77,8 @@ function sportingSnapshot() {
 }
 it("claims the same sporting identity and preserves every original sporting field/row/timestamp", async () => {
   const before = sportingSnapshot();
-  const invitation = await ready();
+  const invitation = await ready(3);
+  const creationEvent = await db.playerInvitationEvent.findFirstOrThrow({ where: { invitationId: invitation.id } });
   const result = await redeem(invitation.id, invitation.handle);
   expect(result).toMatchObject({ playerId: "historical-player", clubId: "club-a" });
   expect(sportingSnapshot()).toEqual(before);
@@ -77,6 +86,8 @@ it("claims the same sporting identity and preserves every original sporting fiel
   expect(await db.clubMember.findUnique({ where: { id: "original-member" } })).toMatchObject({ ownerUserId: "account-a", elo: 1384 });
   expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } } })).toMatchObject({ role: "MEMBER", status: "ACTIVE" });
   expect(await db.playerInvitationEvent.findMany({ where: { invitationId: invitation.id }, orderBy: { createdAt: "asc" } })).toHaveLength(2);
+  await expectTerminalCleanup(invitation.id, "REDEEMED");
+  expect(await db.playerInvitationEvent.findUnique({ where: { id: creationEvent.id } })).toEqual(creationEvent);
 });
 it.each(["MEMBER", "ADMIN", "OWNER", "STAFF"])("preserves existing active %s access exactly", async role => {
   const grant = await db.clubAccess.create({ data: { clubId: "club-a", userId: "account-a", role } });
@@ -110,25 +121,38 @@ it("refuses guessed IDs, incorrect secrets, and continuation/route mismatches", 
   await expect(invitationContext(db, invite.id, undefined)).rejects.toMatchObject({ code: "CONTINUATION_REQUIRED" });
 });
 it("expires continuations independently and allows reopening the original link", async () => {
-  const invite = await ready();
+  const invite = await ready(3);
   const now = new Date(Date.now() + 31 * 60_000);
   await expect(invitationContext(db, invite.id, invite.handle, now)).rejects.toMatchObject({ code: "CONTINUATION_REQUIRED" });
   const reopened = await transaction(tx => exchangeInvitationSecret(tx, invite.id, invite.secret, now));
+  expect(await db.playerInvitationContinuation.count({ where: { invitationId: invite.id } })).toBe(1);
+  expect(await db.playerInvitationContinuation.findUnique({ where: { handleHash: hashInvitationSecret(invite.handle) } })).toBeNull();
+  await expect(invitationContext(db, invite.id, invite.handle, now)).rejects.toMatchObject({ code: "CONTINUATION_REQUIRED" });
   expect((await invitationContext(db, invite.id, reopened.handle, now)).player.name).toBe("Luqman");
+  expect(await db.playerInvitation.findUnique({ where: { id: invite.id } })).toMatchObject({ status: "ACTIVE" });
+  expect(await db.playerInvitationEvent.count({ where: { invitationId: invite.id } })).toBe(1);
 });
 it("expired invitations cannot redeem and do not block replacement creation", async () => {
-  const old = await create("CREATE", undefined, new Date(Date.now() - INVITATION_TTL_MS - 1000));
-  await expect(exchangeInvitationSecret(db, old.invitation!.id, "secret" in old ? old.secret! : "")).rejects.toMatchObject({ code: "INVITATION_UNAVAILABLE" });
+  const old = await ready(3, new Date(Date.now() - INVITATION_TTL_MS - 1000));
+  await expect(exchangeInvitationSecret(db, old.id, old.secret)).rejects.toMatchObject({ code: "INVITATION_UNAVAILABLE" });
+  await expect(invitationContext(db, old.id, old.handle)).rejects.toMatchObject({ code: "CONTINUATION_REQUIRED" });
   const fresh = await create();
-  expect(fresh.invitation?.id).not.toBe(old.invitation?.id);
-  expect(await db.playerInvitation.findUnique({ where: { id: old.invitation!.id } })).toMatchObject({ status: "EXPIRED" });
+  expect(fresh.invitation?.id).not.toBe(old.id);
+  await expectTerminalCleanup(old.id, "EXPIRED");
+  await expect(redeem(old.id, old.handle)).rejects.toMatchObject({ code: "INVITATION_UNAVAILABLE" });
 });
 it("revokes and replaces atomically; old links and continuations stop working", async () => {
-  const invite = await ready();
+  const invite = await ready(3);
   const replacement = await create("REPLACE", invite.id);
+  await expectTerminalCleanup(invite.id, "REVOKED");
   await expect(redeem(invite.id, invite.handle)).rejects.toMatchObject({ code: "INVITATION_UNAVAILABLE" });
   expect(replacement.invitation?.id).not.toBe(invite.id);
+  const replacementId = replacement.invitation!.id;
+  const replacementSecret = "secret" in replacement ? replacement.secret! : "";
+  for (let i = 0; i < 3; i++) await transaction(tx => exchangeInvitationSecret(tx, replacementId, replacementSecret));
+  expect(await db.playerInvitationContinuation.count({ where: { invitationId: replacementId } })).toBe(3);
   await create("REVOKE", replacement.invitation!.id);
+  await expectTerminalCleanup(replacementId, "REVOKED");
   expect(await db.playerInvitation.count({ where: { status: "ACTIVE" } })).toBe(0);
 });
 it("does not create duplicates or return a stored secret on a later creation attempt", async () => {
@@ -138,7 +162,7 @@ it("does not create duplicates or return a stored secret on a later creation att
   expect(await db.playerInvitation.count()).toBe(1);
 });
 it.each(["archive", "deactivate", "claim"])("permanently invalidates links on %s, even if availability is restored", async action => {
-  const invite = await ready();
+  const invite = await ready(3);
   if (action === "archive") {
     await db.clubMember.update({ where: { id: "original-member" }, data: { archivedAt: new Date() } });
     await db.clubMember.update({ where: { id: "original-member" }, data: { archivedAt: null } });
@@ -148,6 +172,7 @@ it.each(["archive", "deactivate", "claim"])("permanently invalidates links on %s
   } else await db.player.update({ where: { id: "historical-player" }, data: { ownerUserId: "account-b" } });
   await expect(redeem(invite.id, invite.handle)).rejects.toMatchObject({ code: "INVITATION_UNAVAILABLE" });
   expect(await db.playerInvitation.findUnique({ where: { id: invite.id } })).toMatchObject({ status: "REVOKED" });
+  await expectTerminalCleanup(invite.id, "REVOKED");
 });
 it.each(["club-a", "club-b"])("blocks ownership conflicts in %s, including archived identities", async clubId => {
   if (clubId === "club-b") await db.clubMember.create({ data: { clubId, playerId: "historical-player" } });
@@ -182,19 +207,63 @@ it("database protects bindings, terminal states, audit, and the active-invite un
   await redeem(invite.id, invite.handle);
   await expect(db.playerInvitation.update({ where: { id: invite.id }, data: { status: "ACTIVE" } })).rejects.toThrow();
 });
+it("database refuses inserting or retargeting continuations onto a terminal invitation", async () => {
+  const old = await ready(3);
+  await create("REVOKE", old.id);
+  const active = await ready();
+  const continuation = await db.playerInvitationContinuation.findFirstOrThrow({ where: { invitationId: active.id } });
+  await expect(db.playerInvitationContinuation.create({ data: { invitationId: old.id, handleHash: "1".repeat(64), expiresAt: new Date(Date.now() + 60_000) } })).rejects.toThrow();
+  await expect(db.playerInvitationContinuation.update({ where: { id: continuation.id }, data: { invitationId: old.id } })).rejects.toThrow();
+  await expectTerminalCleanup(old.id, "REVOKED");
+  expect(await db.playerInvitationContinuation.findUnique({ where: { id: continuation.id } })).toEqual(continuation);
+  expect((await invitationContext(db, active.id, active.handle)).player.name).toBe("Luqman");
+});
+it.each(["REDEEMED", "REVOKED", "EXPIRED"])("migration removes existing %s continuations without changing audit, invitations or sporting rows", async status => {
+  // Reconstruct the pre-cleanup database, then apply the real upgrade SQL.
+  const sqliteBefore = new DatabaseSync(file);
+  try {
+    sqliteBefore.exec(`
+      DROP TRIGGER PlayerInvitation_terminal_continuation_cleanup;
+      DROP TRIGGER PlayerInvitationContinuation_active_insert;
+      DROP TRIGGER PlayerInvitationContinuation_active_update;
+    `);
+  } finally { sqliteBefore.close(); }
+  const old = await ready(3);
+  await db.playerInvitation.update({ where: { id: old.id }, data: { status, ...(status === "REDEEMED" ? { redeemedByUserId: "account-a", redeemedAt: new Date() } : {}) } });
+  await db.clubMember.create({ data: { id: "other-member", clubId: "club-a", playerId: "p2" } });
+  const active = await db.playerInvitation.create({ data: { clubId: "club-a", playerId: "p2", clubMemberId: "other-member", createdByUserId: "admin", tokenHash: "2".repeat(64), expiresAt: new Date(Date.now() + INVITATION_TTL_MS) } });
+  const activeContinuation = await db.playerInvitationContinuation.create({ data: { invitationId: active.id, handleHash: "3".repeat(64), expiresAt: new Date(Date.now() + 60_000) } });
+  const invitationsBefore = await db.playerInvitation.findMany({ orderBy: { id: "asc" } });
+  const eventsBefore = await db.playerInvitationEvent.findMany({ orderBy: { id: "asc" } });
+  const sportingBefore = sportingSnapshot();
+  const migration = readFileSync(path.join(process.cwd(), "prisma/migrations/20261005190000_cleanup_player_invitation_continuations/migration.sql"), "utf8");
+  const sqliteAfter = new DatabaseSync(file);
+  try {
+    sqliteAfter.exec(`BEGIN;\n${migration}\nCOMMIT;`);
+    expect(sqliteAfter.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally { sqliteAfter.close(); }
+  await expectTerminalCleanup(old.id, status);
+  expect(await db.playerInvitationContinuation.findMany()).toEqual([activeContinuation]);
+  expect(await db.playerInvitation.findMany({ orderBy: { id: "asc" } })).toEqual(invitationsBefore);
+  expect(await db.playerInvitationEvent.findMany({ orderBy: { id: "asc" } })).toEqual(eventsBefore);
+  expect(sportingSnapshot()).toEqual(sportingBefore);
+});
 it("rolls back consumption and ownership when the final access write fails", async () => {
-  const invite = await ready();
+  const invite = await ready(3);
   await db.$executeRawUnsafe(`CREATE TRIGGER test_access_failure BEFORE INSERT ON ClubAccess BEGIN SELECT RAISE(ABORT,'TEST_FAILURE'); END`);
   await expect(redeem(invite.id, invite.handle)).rejects.toThrow();
   expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null });
   expect(await db.playerInvitation.findUnique({ where: { id: invite.id } })).toMatchObject({ status: "ACTIVE", redeemedByUserId: null });
   expect(await db.playerInvitationEvent.count()).toBe(1);
+  expect(await db.playerInvitationContinuation.count({ where: { invitationId: invite.id } })).toBe(3);
+  expect((await invitationContext(db, invite.id, invite.handle)).player.name).toBe("Luqman");
 });
 it("generic admission still works and invalidates the pre-existing invitation", async () => {
-  const invite = await ready();
+  const invite = await ready(3);
   const admission = await transaction(tx => submitClubAdmission(tx, { clubId: "club-a", requesterUserId: "account-a", kind: "EXISTING_PLAYER", requestedPlayerId: "historical-player" }));
   await transaction(tx => reviewClubAdmission(tx, { clubId: "club-a", requestId: admission.id!, reviewerUserId: "admin", action: "APPROVE" }));
   await expect(redeem(invite.id, invite.handle)).rejects.toMatchObject({ code: "INVITATION_UNAVAILABLE" });
+  await expectTerminalCleanup(invite.id, "REVOKED");
 });
 it("simultaneous creation returns one invitation and only one secret", async () => {
   const [a, b] = await Promise.all([create(), create()]);
@@ -203,29 +272,32 @@ it("simultaneous creation returns one invitation and only one secret", async () 
   expect(await db.playerInvitation.count({ where: { status: "ACTIVE" } })).toBe(1);
 }, 30000);
 it("concurrent redemption has exactly one winner and consistent ownership/audit", async () => {
-  const invite = await ready();
+  const invite = await ready(3);
   const outcomes = await Promise.allSettled([redeem(invite.id, invite.handle, "account-a"), redeem(invite.id, invite.handle, "account-b")]);
   expect(outcomes.filter(value => value.status === "fulfilled")).toHaveLength(1);
   const record = await db.playerInvitation.findUniqueOrThrow({ where: { id: invite.id } });
   expect((await db.player.findUniqueOrThrow({ where: { id: "historical-player" } })).ownerUserId).toBe(record.redeemedByUserId);
   expect(await db.playerInvitationEvent.count({ where: { action: "REDEEMED" } })).toBe(1);
+  await expectTerminalCleanup(invite.id, "REDEEMED");
 }, 30000);
 it("revoke versus redeem commits exactly one terminal outcome", async () => {
-  const invite = await ready();
+  const invite = await ready(3);
   const outcomes = await Promise.allSettled([create("REVOKE", invite.id), redeem(invite.id, invite.handle)]);
   expect(outcomes.filter(value => value.status === "fulfilled")).toHaveLength(1);
   const record = await db.playerInvitation.findUniqueOrThrow({ where: { id: invite.id } });
   expect((await db.player.findUniqueOrThrow({ where: { id: "historical-player" } })).ownerUserId).toBe(record.status === "REDEEMED" ? "account-a" : null);
+  await expectTerminalCleanup(invite.id, record.status);
 }, 30000);
 it("the same transaction and invalidation triggers work through the libSQL adapter", async () => {
   await db.$disconnect();
   const client = createClient({ url: `file:${file}` });
   const adapter = new PrismaLibSQL(client as unknown as ConstructorParameters<typeof PrismaLibSQL>[0]);
   db = new PrismaClient({ adapter } as unknown as ConstructorParameters<typeof PrismaClient>[0]);
-  const invite = await ready(); const before = sportingSnapshot();
+  const invite = await ready(3); const before = sportingSnapshot();
   await redeem(invite.id, invite.handle);
   expect(sportingSnapshot()).toEqual(before);
   expect(await db.playerInvitation.findUnique({ where: { id: invite.id } })).toMatchObject({ status: "REDEEMED" });
+  await expectTerminalCleanup(invite.id, "REDEEMED");
 });
 it("HTTP exchange sets a short-lived secure HttpOnly invitation-specific cookie, without returning capabilities", async () => {
   const invite = await ready();

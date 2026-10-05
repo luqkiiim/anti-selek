@@ -82,9 +82,11 @@ export async function exchangeInvitationSecret(db: Db, id: string, secret: strin
 }
 async function continuationInvitation(db: Db, id: string, handle: string | undefined, now: Date) {
   if (!handle || !/^[A-Za-z0-9_-]{43}$/.test(handle)) throw new PlayerInvitationError("Reopen the original invitation link to continue.", "CONTINUATION_REQUIRED", 401);
+  // Terminal invitations have no continuation rows. Keep their existing unavailable response.
+  const invite = await db.playerInvitation.findUnique({ where: { id } });
+  if (invite && invite.status !== "ACTIVE") unavailable();
   const continuation = await db.playerInvitationContinuation.findUnique({ where: { handleHash: hashInvitationSecret(handle) } });
   if (!continuation || continuation.invitationId !== id || continuation.expiresAt <= now) throw new PlayerInvitationError("Your invitation session expired. Reopen the original invitation link.", "CONTINUATION_REQUIRED", 401);
-  const invite = await db.playerInvitation.findUnique({ where: { id } });
   if (!invite) unavailable();
   return invite;
 }
