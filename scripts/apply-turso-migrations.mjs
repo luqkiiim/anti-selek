@@ -5,16 +5,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@libsql/client";
 import { MANAGED_MARKER, managedMigrationSql } from "./account-player-preservation.mjs";
+import { assertLocalTursoEndpoint } from "./turso-local-target-guard.mjs";
 
 const MIGRATION_TABLE = "_turso_sql_migrations";
 
 function shouldRunMigrations() {
-  return (
-    process.argv.includes("--force") ||
-    (process.env.VERCEL === "1" &&
-      process.env.VERCEL_ENV === "production" &&
-      process.env.RUN_DB_MIGRATIONS === "1")
-  );
+  return process.argv.includes("--force");
 }
 
 function getBaselineThroughName() {
@@ -38,9 +34,12 @@ function escapeSqlString(value) {
 }
 
 async function main() {
+  if (process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production") {
+    throw new Error("Refusing database migrations from a Vercel production build; production cutover requires a separately approved process.");
+  }
   if (!shouldRunMigrations()) {
     console.log(
-      "Skipping Turso SQL migrations; use --force locally or set RUN_DB_MIGRATIONS=1 on production Vercel builds."
+      "Skipping development Turso SQL migrations; use --force only for an explicitly selected local file or registered development database."
     );
     return;
   }
@@ -53,6 +52,8 @@ async function main() {
       "Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN for Turso migration run."
     );
   }
+
+  assertLocalTursoEndpoint(url);
 
   const rootDir = path.dirname(fileURLToPath(import.meta.url));
   const migrationsRoot = path.resolve(rootDir, "..", "prisma", "migrations");

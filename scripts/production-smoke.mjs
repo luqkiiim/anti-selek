@@ -3,6 +3,7 @@ import "dotenv/config";
 import { createClient } from "@libsql/client";
 import bcrypt from "bcryptjs";
 import { chromium } from "@playwright/test";
+import { assertLocalTursoEndpoint } from "./turso-local-target-guard.mjs";
 
 const DEFAULT_BASE_URL = "https://antiselek.com";
 const DEFAULT_ALLOWED_HOSTS = ["antiselek.com", "www.antiselek.com"];
@@ -27,6 +28,9 @@ const allowMutation = process.env.PRODUCTION_SMOKE_MUTATE === "1";
 const allowNonProductionTarget =
   process.env.ALLOW_NON_PROD_SMOKE_TARGET === "1";
 const preflightOnly = process.argv.includes("--preflight");
+const reviewedProductionAccess =
+  process.argv.includes("--reviewed-production-access") &&
+  process.env.PRODUCTION_SMOKE_REVIEWED_ACCESS === "1";
 const legacyCommunityContractSunsetDate =
   process.env.LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE ?? "";
 const legacyDeprecationMessage =
@@ -48,6 +52,25 @@ function log(message) {
 
 function failPreflight(message) {
   throw new Error(`Production smoke preflight failed: ${message}`);
+}
+
+function configuredAllowedHosts() {
+  return (
+    process.env.PRODUCTION_SMOKE_ALLOWED_HOSTS?.split(",") ??
+    DEFAULT_ALLOWED_HOSTS
+  )
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function assertProductionSmokeAccess() {
+  const targetHost = new URL(baseURL).hostname.toLowerCase();
+  const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+  if (!loopbackHosts.has(targetHost) && !reviewedProductionAccess) {
+    throw new Error(
+      "Refusing full external smoke access. Provide --reviewed-production-access and PRODUCTION_SMOKE_REVIEWED_ACCESS=1 after the target and smoke have been reviewed."
+    );
+  }
 }
 
 async function assertFetchOk(pathname, label) {
@@ -448,12 +471,7 @@ async function createAuthenticatedContext(browser) {
 
 function validateSmokeConfiguration() {
   const targetHost = new URL(baseURL).hostname.toLowerCase();
-  const allowedHosts = (
-    process.env.PRODUCTION_SMOKE_ALLOWED_HOSTS?.split(",") ??
-    DEFAULT_ALLOWED_HOSTS
-  )
-    .map((host) => host.trim().toLowerCase())
-    .filter(Boolean);
+  const allowedHosts = configuredAllowedHosts();
   const usesCredentials = !!smokeEmail || !!smokePassword || allowMutation;
 
   if (
@@ -695,6 +713,10 @@ async function runProductionSmokePreflight() {
     );
     log("preflight complete");
     return;
+  }
+
+  if (!reviewedProductionAccess) {
+    assertLocalTursoEndpoint(process.env.TURSO_DATABASE_URL);
   }
 
   const db = createTursoSmokeClient();
@@ -956,6 +978,7 @@ async function smokeSignedInSurface(
 }
 
 async function main() {
+  if (!preflightOnly) assertProductionSmokeAccess();
   log(`base URL: ${baseURL}`);
   await runProductionSmokePreflight();
   if (preflightOnly) {

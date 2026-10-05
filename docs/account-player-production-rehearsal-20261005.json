@@ -1,0 +1,150 @@
+{
+  "reportVersion": 1,
+  "verifiedOn": "2026-10-05",
+  "method": "node scripts/rehearse-account-player-migration.mjs --source production",
+  "sourceKind": "production",
+  "result": "passed",
+  "productionSourceWrites": 0,
+  "productionMigrationsApplied": 0,
+  "source": {
+    "originalTableCount": 21,
+    "originalRowCount": 7718,
+    "players": 609,
+    "accounts": 48,
+    "clubMembers": 311,
+    "legacyAuthorizationGrants": 68,
+    "rawOrphanLastPartnerReferencesRetained": 85
+  },
+  "rehearsal": {
+    "baselineMigrationsAppliedToLocalCopy": 0,
+    "foreignKeyErrors": 0,
+    "creatorAccessErrors": 0,
+    "integrityErrors": 0,
+    "creatorAuthorityPreserved": true
+  },
+  "privacy": {
+    "rawValuesIncluded": false,
+    "primaryKeysIncluded": false
+  },
+  "preservationDigests": {
+    "claimedAccountCredentialProfiles": {
+      "count": 48,
+      "stableSha256": "1218d97e51024203bbb20618fc1f6bd256cd22377f366894b41480ffe3ca5579"
+    },
+    "legacyClubAuthorizations": {
+      "count": 68,
+      "stableSha256": "f3b9968192dc916e5e2561adb80a339491b4cfee6e26cf5278bc088367a4506f"
+    },
+    "rawOrphanLastPartnerReferences": {
+      "count": 85,
+      "stableSha256": "3e970cd54ee16d6d9a69743a393d6e0e6b01f2a91a5fc5b09d0e1d176b853c40"
+    },
+    "tables": {
+      "ClaimRequest": {
+        "originalColumnCount": 10,
+        "originalRowCount": 3,
+        "stableSha256": "b49ed16eb914be8f30590d1332024dbf97f01bbdc32bd164959188b08f85aa2a"
+      },
+      "ClubJoinRequest": {
+        "originalColumnCount": 7,
+        "originalRowCount": 11,
+        "stableSha256": "114e8ea996d19719097b46045bf5d6b39c6056a8920fc05d92973099175f38fe"
+      },
+      "ClubNewsLike": {
+        "originalColumnCount": 6,
+        "originalRowCount": 55,
+        "stableSha256": "1d516fd1adb336eeaae1b4c216515bb9c45df950665935f2b46b656807a8249a"
+      },
+      "ClubNotification": {
+        "originalColumnCount": 13,
+        "originalRowCount": 53,
+        "stableSha256": "34eaef2bf3191d53849008eacf2949d4eb4302ee8d581d6ae72c9035c58c67cf"
+      },
+      "ClubRatingAdjustment": {
+        "originalColumnCount": 8,
+        "originalRowCount": 2,
+        "stableSha256": "1115222c1f2f80bdf88788c3c2f82924fbb6e838a6ac0854192ae15ed08062d8"
+      },
+      "Community": {
+        "originalColumnCount": 12,
+        "originalRowCount": 31,
+        "stableSha256": "13d9a322adba7791cf05f2d422ddaa69ac89c409c69470596511cb10ece888b0"
+      },
+      "CommunityMember": {
+        "originalColumnCount": 10,
+        "originalRowCount": 311,
+        "stableSha256": "f2e1e4d04fc777c7928daf0515f200385eb979b287e2392bf349b35b4307e41d"
+      },
+      "Court": {
+        "originalColumnCount": 5,
+        "originalRowCount": 192,
+        "stableSha256": "b8b2c59b862ad90aa9ae7f41c8935ce13a4d3b21820d91855033f4687f030e70"
+      },
+      "Match": {
+        "originalColumnCount": 22,
+        "originalRowCount": 1199,
+        "stableSha256": "63075d8115f5283e5b23b0e3f5ef8cfb17f2f81865c18572d121cf3989fa328b"
+      },
+      "MatchEloAdjustment": {
+        "originalColumnCount": 8,
+        "originalRowCount": 3782,
+        "stableSha256": "e7818d349a5b1773781ce8c2ccaeae27c7054a7ce4c87cff98c7df47130b0a96"
+      },
+      "OfflineIdentity": {
+        "originalColumnCount": 6,
+        "originalRowCount": 1,
+        "stableSha256": "f90c949cc6d96066441929dbec798dcbd2d25898a7f5bbcf96f40aa8ed3b2512"
+      },
+      "OfflineIdentityLinkRequest": {
+        "originalColumnCount": 12,
+        "originalRowCount": 1,
+        "stableSha256": "c2d5b85e7cff79182c37d0d9760351b565335ed8e7b55a9d71870bf145cb9b01"
+      },
+      "OfflineIdentityMember": {
+        "originalColumnCount": 6,
+        "originalRowCount": 2,
+        "stableSha256": "c0637610c62f76fc20c31c271c679367d6620d2958f8f4183b6affc57883fb98"
+      },
+      "PasswordResetToken": {
+        "originalColumnCount": 7,
+        "originalRowCount": 6,
+        "stableSha256": "3520a64fdb1d4067faf241d8473bb4ffbfe7c385dfa2b1b3546ef96e983cd618"
+      },
+      "QueuedMatch": {
+        "originalColumnCount": 15,
+        "originalRowCount": 1,
+        "stableSha256": "a6f2c885a3c1e8ee847e0628e84b9c933412f67bb4f28280ca90a0591150c4cd"
+      },
+      "RateLimitBucket": {
+        "originalColumnCount": 6,
+        "originalRowCount": 10,
+        "stableSha256": "511e3bfcae750640ee405e0d25b9e8b1ba707f1e8cc0f50809816fa3ede2853f"
+      },
+      "Session": {
+        "originalColumnCount": 29,
+        "originalRowCount": 111,
+        "stableSha256": "722cb5356fa79ce4e5f59bdd2974dfe0795ca6ef30d0b2cda29a189a1d339b7a"
+      },
+      "SessionCommunity": {
+        "originalColumnCount": 10,
+        "originalRowCount": 108,
+        "stableSha256": "c3bdd6fa38e67f82ddfce2df79ec192146fedb9671f1bfffddb5b7a237dc957c"
+      },
+      "SessionPlayer": {
+        "originalColumnCount": 25,
+        "originalRowCount": 1225,
+        "stableSha256": "23bf3e0fc4a3d2fd645ce046f214b4e213e766b3a215877cbaab8b646889766d"
+      },
+      "TutorialProgress": {
+        "originalColumnCount": 7,
+        "originalRowCount": 5,
+        "stableSha256": "b8c71cf828b9a458212208e4156433392016b97e7e9ae88be20ff05e1a17787f"
+      },
+      "User": {
+        "originalColumnCount": 15,
+        "originalRowCount": 609,
+        "stableSha256": "5fff63607d9233dc6072be07acd6b805e97ccc18a15d45120afa9f63741b1ab7"
+      }
+    }
+  }
+}

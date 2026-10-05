@@ -56,7 +56,93 @@ function rehearseWithLocalLibsql(filename: string) {
   });
 }
 
+function runMigrationWithRemoteTarget() {
+  return spawnSync(process.execPath, [path.resolve("scripts/apply-turso-migrations.mjs"), "--force"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      TURSO_DATABASE_URL: "libsql://unregistered-production.invalid",
+      TURSO_AUTH_TOKEN: "test-token",
+      PRODUCTION_REHEARSAL_TURSO_URL: "libsql://separate-production.invalid",
+      PRODUCTION_REHEARSAL_TURSO_TOKEN: "read-only-test-token",
+      VERCEL: "",
+      VERCEL_ENV: "",
+    },
+  });
+}
+
+function expectRehearsalPreflightFailure(sourcePath: string, outputPath: string, expectedMessage: string, expectedTables: string[]) {
+  const rehearsal = spawnSync(process.execPath, [
+    path.resolve("scripts/rehearse-account-player-migration.mjs"),
+    "--source", "sqlite", "--database", sourcePath, "--output", outputPath,
+  ], { cwd: process.cwd(), encoding: "utf8", env: { ...process.env, TURSO_DATABASE_URL: "", TURSO_AUTH_TOKEN: "", USE_TURSO: "false" } });
+  expect(rehearsal.status).not.toBe(0);
+  expect(rehearsal.stderr).toContain(expectedMessage);
+  expect(fs.existsSync(path.join(outputPath, "before-manifest.json"))).toBe(false);
+  expect(fs.existsSync(path.join(outputPath, "rehearsal.db"))).toBe(false);
+
+  const source = new DatabaseSync(sourcePath, { readOnly: true });
+  try {
+    const tables = source.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name);
+    expect(tables).toEqual(expectedTables);
+  } finally { source.close(); }
+}
+
 describe("account/Player migration preservation", () => {
+  it("refuses an unregistered standard Turso target before connecting even when rehearsal credentials exist", () => {
+    const runner = runMigrationWithRemoteTarget();
+    expect(runner.status).not.toBe(0);
+    expect(runner.stderr).toContain("Refusing remote Turso access");
+    expect(runner.stderr).not.toContain("separate-production.invalid");
+  });
+
+  it("rejects Vercel production migration even when the old automatic flag is set", () => {
+    const runner = spawnSync(process.execPath, [path.resolve("scripts/apply-turso-migrations.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+        RUN_DB_MIGRATIONS: "1",
+        TURSO_DATABASE_URL: "libsql://unregistered-production.invalid",
+        TURSO_AUTH_TOKEN: "test-token",
+      },
+    });
+    expect(runner.status).not.toBe(0);
+    expect(runner.stderr).toContain("Refusing database migrations from a Vercel production build");
+  });
+
+  it("keeps production SQL out of the default build and exposes a read-only rehearsal command", () => {
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
+    expect(packageJson.scripts.build).not.toContain("apply-turso-migrations");
+    expect(packageJson.scripts["db:rehearse:production"]).toContain("--source production");
+  });
+
+  it("rejects an empty source before writing a manifest or rehearsal copy", () => {
+    const directory = migrationTempDirectory("anti-selek-empty-rehearsal-source-");
+    const sourcePath = path.join(directory, "empty.db");
+    const outputPath = path.join(directory, "output");
+    const source = new DatabaseSync(sourcePath);
+    source.close();
+    try {
+      expectRehearsalPreflightFailure(sourcePath, outputPath, "no application tables; expected the unmigrated legacy schema", []);
+    } finally { fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+  });
+
+  it("rejects an unrelated schema with a clear missing-legacy-tables diagnostic", () => {
+    const directory = migrationTempDirectory("anti-selek-nonlegacy-rehearsal-source-");
+    const sourcePath = path.join(directory, "unrelated.db");
+    const outputPath = path.join(directory, "output");
+    const source = new DatabaseSync(sourcePath);
+    source.exec('CREATE TABLE "notes" ("id" INTEGER PRIMARY KEY, "body" TEXT NOT NULL);');
+    source.close();
+    try {
+      expectRehearsalPreflightFailure(sourcePath, outputPath, "not a supported unmigrated legacy schema (missing required legacy tables", ["notes"]);
+    } finally { fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+  });
+
   it("keeps every old ID/value including timing, ratings, queues, partner IDs, notifications and score actors", () => {
     const db = fixture();
     try {

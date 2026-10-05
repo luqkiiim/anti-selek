@@ -56,7 +56,9 @@ Before applying migrations to the configured local SQLite database, a private ba
 
 A separate synthetic historical SQLite fixture exercised a non-empty migration rehearsal. Both migrations preserved 24 original rows across 21 tables and produced 5 Players, 2 Accounts and 4 ClubMembers. The fixture's one orphan `lastPartnerId` remained unchanged; foreign-key and creator-access checks reported zero errors. This fixture is synthetic and is not represented as a production snapshot.
 
-No fresh production Turso snapshot was read or migrated in this run. Credentials were not configured, so the production rehearsal remains pending user setup. The production database has not been migrated or written.
+The configured `.env.local` points to a separate development Turso database, not production, and `.env` and `.env.local` remain byte-for-byte unchanged. A read-only rehearsal first confirmed that endpoint had zero application tables. A subsequent development initialization attempt applied 18 older migrations and stopped at `20260403075615_add_test_sessions` because the existing migration chain expects a missing `crossoverMissThreshold` column. No rebaseline or further development endpoint writes were made after that failure; the development migration chain needs its own repair. The rehearsal now rejects empty and non-legacy sources before writing a manifest or copy. `USE_TURSO=false` remains as configured, so the application currently selects SQLite.
+
+A fresh production snapshot was read through the dedicated read-only credential file on 5 October 2026. The snapshot and preservation rehearsal passed: 21 tables and 7,718 original rows were checked, including 609 sporting Players, 48 credentialed Accounts, 311 ClubMembers, 68 legacy authorization grants and 85 raw orphan `lastPartnerId` references. The local copy required no baseline migrations and had zero foreign-key, integrity or creator-access errors; creator authority was preserved. The source was not written and no production migration or deployment was performed. The tracked [safe production rehearsal report](account-player-production-rehearsal-20261005.json) contains per-table digests and aggregate checks only; it contains no raw values or primary keys. The source snapshot and manifests remain in the ignored, protected local `private/` directory.
 
 ## Regression coverage
 
@@ -68,20 +70,31 @@ Browser tests cover registration through new-Player approval and existing-profil
 
 Integration review also covers current Account credentials when the Account and historical Player IDs differ, active OWNER avatar management and revoked-owner denial, immutable admission history blocking club deletion, and the read-only production-smoke identity preflight. The UI review capture fixtures now seed separate Account and Player records and clean them up in foreign-key order.
 
+The rehearsal CLI now rejects empty and unrelated SQLite sources before generating a manifest or migration copy. The regressions verify the source remains unchanged and no manifest/rehearsal database is created. Production credentials are parsed from `private/production-rehearsal.env` into an isolated object; they are never exported to `TURSO_*` or `DATABASE_URL`. Normal remote app and migration access is restricted to the locally registered development endpoint. Full external smoke runs require both a reviewed CLI flag and environment opt-in.
+
 Validation on 5 October 2026:
 
 | Check | Result |
 | --- | --- |
-| `npx vitest run src --maxWorkers=2` | 237 files passed, 3 skipped; 1,652 tests passed, 5 skipped; includes v3 |
-| `npx playwright test e2e/player-admissions.spec.ts` | 2 browser flows passed |
-| `npx tsc --noEmit --pretty false` | Passed |
-| ESLint on 231 changed JavaScript/TypeScript files | 0 errors, 38 warnings |
-| `npx eslint --format json .` | 34 errors / 59 warnings; all 34 errors match the main baseline in six unchanged files |
-| `env DATABASE_URL='file:./dev.db' TURSO_DATABASE_URL= TURSO_AUTH_TOKEN= USE_TURSO=false RUN_DB_MIGRATIONS=0 VERCEL= node scripts/run-next-build.mjs` | Passed; explicit SQLite build bypasses the Turso migration hook |
+| `npx vitest run src --maxWorkers=2` | 238 files passed, 3 skipped; 1,662 tests passed, 5 skipped; includes v3. Five added guard regressions were run in the focused command below. |
+| `npx vitest run src/lib/accountPlayerMigration.test.ts src/lib/productionSmokeIdentity.test.ts src/lib/productionRehearsalSafety.test.ts --maxWorkers=2` | 3 files passed; 24 tests passed, including the final JWT scope/expiry, typoed loader path, endpoint pin, and smoke bypass regressions |
+| `npx vitest run src/lib/accountPlayerMigration.test.ts --maxWorkers=2` | Passed; 1 file, 9 tests, including empty and unrelated-schema rejection |
+| `USE_TURSO=false CI=1 npx playwright test e2e/player-admissions.spec.ts` | 2 browser flows passed on the isolated Playwright SQLite server/database; the port 3000 development app and remote development database were not used |
+| `npx tsc --noEmit --pretty false` | Passed after final production safety changes |
+| ESLint on the earlier 231 Phase 1 changed JavaScript/TypeScript files | 0 errors, 38 warnings |
+| ESLint on final safety files (`next.config.ts`, target/credential/migration/smoke scripts, Prisma runtime and safety tests) | Passed with 0 errors and 0 warnings |
+| `node --check` on preservation, migration, rehearsal, smoke and guard scripts | Passed |
+| `npx eslint --format json .` | 34 errors / 59 warnings; the 34 errors match `origin/main` in six unchanged files: Prototype.tsx (18), BottomSheet.tsx (2), Carousel.tsx (1), FlowStack.tsx (11), Keyboard.tsx (1), and useSessionStandingsImage.test.tsx (1) |
+| `npm run build` after removing `.next` | Passed as a clean build with configured `USE_TURSO=false`; Prisma initialized in local SQLite mode, the package build invoked `run-next-build.mjs` directly, and no migrations ran |
+| Next server NFT privacy scan | Passed; all 110 `.nft.json` traces contained zero `private/`, `.env`, or `.env.local` paths, and bundled server runtime retained the `process.cwd()` development pin check |
 | `npx prisma validate` | Passed |
 | Local migration ledger checksums, FK/integrity and creator authority | Passed for both identity migrations on configured SQLite and synthetic fixture |
 | `node scripts/verify-benchmark-fixtures.mjs` | Passed; all 19 frozen gzip fixtures and summaries verified |
 | `git diff --check` | Passed |
+| Scoped production credential and target guard tests | Passed within the 24-test targeted run; isolated RO tokens accepted, writer/DDL and expiry bypasses rejected, matching dev URL accepted, unregistered target refused even with Vercel variables |
+| Standard Turso migration guard tests | Passed; production target refused before connection even when separate rehearsal credentials are present, and Vercel production migration is rejected |
+| Production smoke access gate | Passed; external HTTP is refused before fetch without both reviewed opt-ins, even if the allowed-host list is overridden; local file preflight remains available |
+| `npm run db:rehearse:production` read-only source snapshot | Passed; current safe report is [account-player-production-rehearsal-20261005.json](account-player-production-rehearsal-20261005.json) |
 
 The full source suite includes the v3 matchmaking tests. Legacy sporting DTO field names remain at explicit compatibility boundaries; the final audit found no remaining Account-ID-equals-Player-ID dependency in the inspected authentication, admission, sporting or profile paths.
 
@@ -92,11 +105,11 @@ Do not apply this schema while the old application can still accept writes. Its 
 1. Before the approved window, hold automatic production deployments and ensure `RUN_DB_MIGRATIONS` is unset or `0`; the production build hook must not apply SQL before the write freeze.
 2. Use a read-only credential for a preliminary fresh snapshot and private rehearsal. Compare every original row and column, credentials, permissions, raw orphan references and foreign keys against a private manifest. A read-only rehearsal token must never be used for migration.
 3. At the approved window, freeze legacy application writes, take a final consistent snapshot, rehearse that exact snapshot, and save its private `before-manifest.json`. Keep writes frozen through migration, deployment and verification.
-4. Only after explicit approval, use a separately provisioned, short-lived writable credential to run `npm run db:migrate:turso`. Supply it to the migration process environment; the standalone runner loads `.env`, not Next.js's `.env.local`. Never use the read-only rehearsal token for migration. The managed transaction includes the migration ledger write and preservation guards.
-5. Take a post-migration read-only snapshot and compare it against the final frozen-window manifest with `verifyLegacyPreservation` from `scripts/account-player-preservation.mjs`. Require every original row/column fingerprint, credential copy, permission and foreign-key check to pass. Then activate the matching application deployment and inspect fresh Vercel runtime logs for 500s or missing-table errors.
+4. The production writer procedure is not part of this change. Design and review a separate writer runbook and command, with a separately provisioned short-lived writable credential, before the approved cutover. Do not use `npm run db:migrate:turso`, change `.env.local`, or replace the local development fingerprint with a production fingerprint. The read-only rehearsal token must never be used for migration.
+5. Take a post-migration read-only snapshot and compare it against the final frozen-window manifest with `verifyLegacyPreservation` from `scripts/account-player-preservation.mjs`. Require every original row/column fingerprint, credential copy, permission and foreign-key check to pass. Only then activate the matching application deployment and inspect fresh Vercel runtime logs for 500s or missing-table errors.
 6. Smoke-test login, safe profile discovery, admin approval, preserved history, guest access and score submission before enabling writes. If any validation fails, keep writes frozen and restore the frozen backup and compatible prior application together; never run only the old application against the new schema.
 
-At this integration checkpoint the production migration is held: no fresh Turso snapshot was available, and no production migration, deployment or runtime smoke test was performed. Production preservation rehearsal and runtime verification remain required before cutover.
+The production snapshot and preservation rehearsal are complete, but production migration, deployment and runtime smoke remain held. The read-only credential file is not a production writer mechanism. The default build has no migration hook, and the runner rejects Vercel production migrations. `npm run db:migrate:turso` is limited to SQLite files or the locally registered development endpoint. Changing `.env.local` alone is rejected by the endpoint pin; replacing that pin with a production fingerprint would defeat the safeguard and is expressly prohibited. Do not deploy automatically before a coordinated cutover. A separately reviewed writer process and explicit production-cutover approval are required. The read-only token was cleared locally after a failed test diagnostic exposed it; server-side invalidation/rotation is outstanding. See [production rehearsal credential status](production-rehearsal.md#credential-status) before any future rehearsal.
 
 ## Deliberately deferred
 

@@ -121,7 +121,47 @@ function runPreflight(databasePath: string, password: string) {
   );
 }
 
+function runUnreviewedExternalSmoke(baseUrl = "https://antiselek.com") {
+  return spawnSync(
+    process.execPath,
+    [path.resolve("scripts/production-smoke.mjs")],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PRODUCTION_BASE_URL: baseUrl,
+        PRODUCTION_SMOKE_ALLOWED_HOSTS: "staging.example.invalid",
+        ALLOW_NON_PROD_SMOKE_TARGET: "1",
+        PRODUCTION_SMOKE_REVIEWED_ACCESS: "",
+        TURSO_DATABASE_URL: "",
+        TURSO_AUTH_TOKEN: "",
+      },
+    },
+  );
+}
+
 describe("production smoke Account and Player preflight", () => {
+  it("requires the reviewed access flag and environment opt-in before any external HTTP request", () => {
+    const result = runUnreviewedExternalSmoke();
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Refusing full external smoke access");
+    expect(result.stdout).not.toContain("[production-smoke] base URL:");
+  });
+
+  it("does not let the allowed-host override bypass the external smoke gate", () => {
+    const result = runUnreviewedExternalSmoke("https://staging.example.invalid");
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Refusing full external smoke access");
+    expect(result.stdout).not.toContain("[production-smoke] base URL:");
+  });
+
+  it("allows an IPv6 loopback smoke target without production opt-in", () => {
+    const result = runUnreviewedExternalSmoke("http://[::1]:9");
+    expect(result.stdout).toContain("[production-smoke] base URL: http://[::1]:9");
+    expect(result.stderr).not.toContain("Refusing full external smoke access");
+  });
+
   it("checks the changed Account credential, active ClubAccess, and owned Player with distinct IDs", async () => {
     const { directory, databasePath } = await createPreflightDatabase();
     try {

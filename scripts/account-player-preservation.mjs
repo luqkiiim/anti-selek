@@ -10,6 +10,42 @@ export function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
 }
 
+export function validateLegacySource(db) {
+  const names = db.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '\\_%' ESCAPE '\\' ORDER BY name").all().map((row) => row.name);
+  if (names.length === 0) {
+    throw new Error("Source database has no application tables; expected the unmigrated legacy schema. No migration was applied.");
+  }
+  const tables = new Set(names);
+  const separatedTables = ["Account", "ClubAccess", "ClubAdmissionEvent"].filter((name) => tables.has(name));
+  if (separatedTables.length > 0) {
+    throw new Error(`Source already contains account/Player identity tables (${separatedTables.join(", ")}); expected the unmigrated legacy schema. No migration was applied.`);
+  }
+
+  const requiredColumns = {
+    User: ["id", "isClaimed", "email", "passwordHash"],
+    Community: ["id", "createdById"],
+    CommunityMember: ["id", "communityId", "userId", "role", "createdAt"],
+    SessionPlayer: ["id", "lastPartnerId"],
+  };
+  const missingTables = [];
+  const missingColumns = [];
+  for (const [table, required] of Object.entries(requiredColumns)) {
+    if (!tables.has(table)) {
+      missingTables.push(table);
+      continue;
+    }
+    const present = new Set(db.prepare(`PRAGMA table_info(${quoteIdentifier(table)})`).all().map((column) => column.name));
+    for (const column of required) if (!present.has(column)) missingColumns.push(`${table}.${column}`);
+  }
+  if (missingTables.length || missingColumns.length) {
+    const details = [
+      missingTables.length ? `missing required legacy tables: ${missingTables.join(", ")}` : null,
+      missingColumns.length ? `missing required legacy columns: ${missingColumns.join(", ")}` : null,
+    ].filter(Boolean).join("; ");
+    throw new Error(`Source database is not a supported unmigrated legacy schema (${details}). No migration was applied.`);
+  }
+}
+
 function fingerprint(value) {
   return createHash("sha256").update(JSON.stringify(value, (_key, item) =>
     typeof item === "bigint" ? { bigint: String(item) } :

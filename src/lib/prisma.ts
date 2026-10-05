@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
 import { parseBooleanEnv, resolvePrismaRuntimeMode } from "./prismaRuntime";
+import { assertLocalTursoEndpoint } from "../../scripts/turso-local-target-guard.mjs";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
@@ -26,6 +27,11 @@ function getPrisma() {
 
   // 1. TURSO MODE
   if (runtimeMode === "turso") {
+    // Fail before adapter construction and outside its fallback catch. A local
+    // checkout may connect only to its pinned development database.
+    assertLocalTursoEndpoint(tursoUrl as string, {
+      allowDeployedVercelRuntime: true,
+    });
     console.log("Initializing Prisma with LibSQL adapter (Turso Mode)...");
     try {
       const libsql = createClient({

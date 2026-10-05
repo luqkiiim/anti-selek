@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
     qualities: [75, 90],
   },
   serverExternalPackages: ["sharp"],
+  // Private snapshots, manifests, and credentials are local operator data.
+  outputFileTracingExcludes: {
+    "/*": ["./private/**/*"],
+  },
 };
 
 export default nextConfig;
