@@ -1,5 +1,4 @@
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   buildAvatarObjectKey,
@@ -19,6 +18,7 @@ import {
   readAliasedSearchParam,
 } from "@/lib/clubContractAliases";
 import { prisma } from "@/lib/prisma";
+import { isClubAdminRole } from "@/lib/clubRoles";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import {
   checkInvalidTargetRateLimit,
@@ -92,7 +92,7 @@ async function canManageAvatar({
     }),
   ]);
 
-  return requesterMembership?.status === "ACTIVE" && requesterMembership.role === "ADMIN" && !!targetMembership;
+  return requesterMembership?.status === "ACTIVE" && isClubAdminRole(requesterMembership.role) && !!targetMembership;
 }
 
 export async function POST(

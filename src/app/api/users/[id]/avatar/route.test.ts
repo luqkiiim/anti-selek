@@ -119,6 +119,37 @@ describe("user avatar route", () => {
     expect(mocks.clubMemberFindUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { clubId_playerId: { clubId: "club-1", playerId: "player-guest" } } }));
   });
 
+  it("allows an active OWNER Account to manage a different Player avatar", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "account-owner", isAdmin: false, isQuickAccess: false } });
+    mocks.playerFindUnique.mockResolvedValue({ id: "historical-player-789", ownerUserId: null, avatarKey: null, name: "Historical Player" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "OWNER", status: "ACTIVE" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ id: "club-player-789" });
+
+    const response = await POST(
+      createAvatarRequest({ url: "http://localhost/api/users/historical-player-789/avatar?clubId=club-1" }),
+      { params: Promise.resolve({ id: "historical-player-789" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.clubAccessFindUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { clubId_userId: { clubId: "club-1", userId: "account-owner" } } }));
+    expect(mocks.clubMemberFindUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { clubId_playerId: { clubId: "club-1", playerId: "historical-player-789" } } }));
+  });
+
+  it("does not allow a revoked OWNER grant to manage a Player avatar", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "account-owner", isAdmin: false, isQuickAccess: false } });
+    mocks.playerFindUnique.mockResolvedValue({ id: "historical-player-789", ownerUserId: null, avatarKey: null, name: "Historical Player" });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "OWNER", status: "REVOKED" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ id: "club-player-789" });
+
+    const response = await POST(
+      createAvatarRequest({ url: "http://localhost/api/users/historical-player-789/avatar?clubId=club-1" }),
+      { params: Promise.resolve({ id: "historical-player-789" }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
+  });
+
   it("clears a managed Player avatar key", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "account-admin", isAdmin: true, isQuickAccess: false } });
     mocks.playerFindUnique.mockResolvedValue({ id: "player-9", ownerUserId: null, avatarKey: "https://blob.vercel-storage.com/avatars/player-9/avatar.jpg", name: "Managed Player" });

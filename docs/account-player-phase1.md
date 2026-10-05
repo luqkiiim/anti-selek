@@ -34,9 +34,11 @@ Account avatar changes use `/api/user/me/avatar`. Player avatars use the sportin
 
 `account-player-migration-preservation.json` contains safe per-table digests covering every original row and column, plus credentials, permissions and raw orphan references. Private backups/manifests contain protected source data and are kept outside the repository.
 
-Both identity migrations were applied to configured local SQLite with `npx prisma migrate deploy`. A consistent read-only Turso snapshot was rehearsed on a private SQLite copy, and the configured SQL runner applied both migrations with their ledger entries against local libSQL. Every original row and column was rechecked after the creator-authority correction, including the actual local database. Production Turso has not been migrated.
+### Earlier Phase 1 checkpoint (historical)
 
-| Check | Configured local SQLite | Read-only Turso snapshot rehearsal |
+The original Phase 1 checkpoint recorded the following counts from its local database and a read-only Turso snapshot rehearsal. They describe that earlier checkpoint only; they are not evidence about the current configured local database or a fresh production snapshot.
+
+| Check | Earlier local SQLite | Earlier Turso snapshot rehearsal |
 | --- | ---: | ---: |
 | Original sporting Players preserved | 70 | 609 |
 | Accounts copied from registered identities | 5 | 48 |
@@ -46,7 +48,15 @@ Both identity migrations were applied to configured local SQLite with `npx prism
 | New foreign-key errors | 0 | 0 |
 | Raw orphan lastPartner values retained | 0 | 85 |
 
-A separate claim rehearsal used an earlier disposable Turso snapshot with 7,707 original rows. The account ID differed from the claimed Player ID. All original columns in all 21 tables stayed unchanged, including the Player's raw timestamp representation. The Player's 19 session participations, 94 completed matches and 89 match-rating adjustments produced the same history/statistics digest after approval. Only the new account, admission, access and ownership fields were added. The later migration rehearsal saw nine additional production rows because the live application remained writable between snapshots.
+A separate historical claim rehearsal used a disposable Turso snapshot with 7,707 rows. The account ID differed from the claimed Player ID. That report recorded unchanged original columns across 21 tables, including the Player's raw timestamp representation, and unchanged history/statistics digests for 19 session participations, 94 completed matches and 89 match-rating adjustments. These historical results have not been independently repeated in this integration run.
+
+### Independent integration verification (5 October 2026)
+
+Before applying migrations to the configured local SQLite database, a private backup and preservation manifest were saved outside the repository. `npx prisma migrate deploy` applied both identity migrations locally. The database had 21 tables and one original row; that row was preserved. It had no Players, Accounts or ClubMembers before migration. The migration ledger contained 52 entries with zero checksum mismatches; SQLite integrity, foreign-key and creator-access checks reported zero errors, and the raw orphan reference check passed.
+
+A separate synthetic historical SQLite fixture exercised a non-empty migration rehearsal. Both migrations preserved 24 original rows across 21 tables and produced 5 Players, 2 Accounts and 4 ClubMembers. The fixture's one orphan `lastPartnerId` remained unchanged; foreign-key and creator-access checks reported zero errors. This fixture is synthetic and is not represented as a production snapshot.
+
+No fresh production Turso snapshot was read or migrated in this run. Credentials were not configured, so the production rehearsal remains pending user setup. The production database has not been migrated or written.
 
 ## Regression coverage
 
@@ -56,34 +66,37 @@ Authentication regressions cover separate Account and guest Player IDs, pre-sepa
 
 Browser tests cover registration through new-Player approval and existing-profile claim through visible historical statistics. Registration and pending requests allocate no Player, ClubMember or ClubAccess. A sign-in bootstrap regression prevents credential submission while the initial authentication session request is still loading, avoiding a CSRF-cookie race during fast form submission.
 
-The local production build bypasses the `npm run build` Turso migration hook and explicitly selects SQLite. A successful local build does not imply a production migration or deployment. The six existing React hook lint errors in the legacy session page were reproduced against its unchanged HEAD version; they are not part of this identity change.
+Integration review also covers current Account credentials when the Account and historical Player IDs differ, active OWNER avatar management and revoked-owner denial, immutable admission history blocking club deletion, and the read-only production-smoke identity preflight. The UI review capture fixtures now seed separate Account and Player records and clean them up in foreign-key order.
 
-Final validation on 5 October 2026:
+Validation on 5 October 2026:
 
 | Check | Result |
 | --- | --- |
-| `npx vitest run src --exclude 'src/lib/matchmaking/v3/**' --maxWorkers=2` | 213 files / 1,313 tests passed |
+| `npx vitest run src --maxWorkers=2` | 237 files passed, 3 skipped; 1,652 tests passed, 5 skipped; includes v3 |
 | `npx playwright test e2e/player-admissions.spec.ts` | 2 browser flows passed |
 | `npx tsc --noEmit --pretty false` | Passed |
-| ESLint on affected JavaScript/TypeScript files | Passed, excluding the six existing legacy session-page hook errors |
-| Direct production build with explicit SQLite environment | Passed |
+| ESLint on 231 changed JavaScript/TypeScript files | 0 errors, 38 warnings |
+| `npx eslint --format json .` | 34 errors / 59 warnings; all 34 errors match the main baseline in six unchanged files |
+| `env DATABASE_URL='file:./dev.db' TURSO_DATABASE_URL= TURSO_AUTH_TOKEN= USE_TURSO=false RUN_DB_MIGRATIONS=0 VERCEL= node scripts/run-next-build.mjs` | Passed; explicit SQLite build bypasses the Turso migration hook |
 | `npx prisma validate` | Passed |
-| Local migration ledger checksums, FK/integrity and creator authority | Passed for both identity migrations |
+| Local migration ledger checksums, FK/integrity and creator authority | Passed for both identity migrations on configured SQLite and synthetic fixture |
+| `node scripts/verify-benchmark-fixtures.mjs` | Passed; all 19 frozen gzip fixtures and summaries verified |
 | `git diff --check` | Passed |
 
-The independent v3 matchmaking suite was excluded from this run; identity work does not change its algorithm. Other Social/Mixed, generation, queue and rating regressions are included. Legacy sporting DTO field names remain at explicit compatibility boundaries; the final audit found no remaining Account-ID-equals-Player-ID dependency in the inspected authentication, admission, sporting or profile paths.
+The full source suite includes the v3 matchmaking tests. Legacy sporting DTO field names remain at explicit compatibility boundaries; the final audit found no remaining Account-ID-equals-Player-ID dependency in the inspected authentication, admission, sporting or profile paths.
 
 ## Production cutover
 
-Do not apply this schema while the old application can still accept writes. Its registration and claim behavior uses the previous identity contract. Production SQL must be coordinated with a deployment that uses this schema, with writes held during the transition. A build or push alone does not prove migration completion.
+Do not apply this schema while the old application can still accept writes. Its registration and claim behavior uses the previous identity contract. Production SQL must be coordinated with a deployment that uses this schema, with writes held during the transition. A build or push alone does not prove migration completion. Obtain explicit approval for a production cutover before taking production action.
 
-1. Freeze legacy application writes and take a fresh consistent backup.
-2. Rehearse that snapshot and inspect the preservation report.
-3. Run `npm run db:migrate:turso` with the configured credentials. The managed transaction includes the migration ledger write and preservation guards.
-4. Take a post-migration read-only snapshot and compare it against the saved private `before-manifest.json` with `verifyLegacyPreservation` from `scripts/account-player-preservation.mjs`. Require every original row/column fingerprint, credential copy, permission and foreign-key check to pass. Then activate the matching application deployment and inspect fresh Vercel runtime logs for 500s or missing-table errors.
-5. Smoke-test login, safe profile discovery, admin approval, preserved history, guest access and score submission before enabling writes.
+1. Before the approved window, hold automatic production deployments and ensure `RUN_DB_MIGRATIONS` is unset or `0`; the production build hook must not apply SQL before the write freeze.
+2. Use a read-only credential for a preliminary fresh snapshot and private rehearsal. Compare every original row and column, credentials, permissions, raw orphan references and foreign keys against a private manifest. A read-only rehearsal token must never be used for migration.
+3. At the approved window, freeze legacy application writes, take a final consistent snapshot, rehearse that exact snapshot, and save its private `before-manifest.json`. Keep writes frozen through migration, deployment and verification.
+4. Only after explicit approval, use a separately provisioned, short-lived writable credential to run `npm run db:migrate:turso`. Supply it to the migration process environment; the standalone runner loads `.env`, not Next.js's `.env.local`. Never use the read-only rehearsal token for migration. The managed transaction includes the migration ledger write and preservation guards.
+5. Take a post-migration read-only snapshot and compare it against the final frozen-window manifest with `verifyLegacyPreservation` from `scripts/account-player-preservation.mjs`. Require every original row/column fingerprint, credential copy, permission and foreign-key check to pass. Then activate the matching application deployment and inspect fresh Vercel runtime logs for 500s or missing-table errors.
+6. Smoke-test login, safe profile discovery, admin approval, preserved history, guest access and score submission before enabling writes. If any validation fails, keep writes frozen and restore the frozen backup and compatible prior application together; never run only the old application against the new schema.
 
-At this implementation checkpoint the production migration is held: Turso credentials are available, but deployment API access and a safe coordinated cutover have not been established. Production runtime verification remains required.
+At this integration checkpoint the production migration is held: no fresh Turso snapshot was available, and no production migration, deployment or runtime smoke test was performed. Production preservation rehearsal and runtime verification remain required before cutover.
 
 ## Deliberately deferred
 

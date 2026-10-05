@@ -21,7 +21,8 @@ const skipSetup = process.env.UI_REVIEW_SKIP_SETUP === "1";
 const skipServerStart = process.env.UI_REVIEW_SKIP_SERVER === "1";
 
 const ids = {
-  adminUserId: "user-ui-review-admin",
+  adminAccountId: "account-ui-review-admin",
+  adminPlayerId: "player-ui-review-admin",
   hostClubId: "community-ui-review-host",
   scoreClubId: "community-ui-review-score",
   scoreSessionId: "session-ui-review-active",
@@ -32,27 +33,27 @@ const ids = {
 };
 
 const hostPlayerIds = [
-  "user-ui-review-host-1",
-  "user-ui-review-host-2",
-  "user-ui-review-host-3",
-  "user-ui-review-host-4",
-  "user-ui-review-host-5",
-  "user-ui-review-host-6",
-  "user-ui-review-host-7",
+  "player-ui-review-host-1",
+  "player-ui-review-host-2",
+  "player-ui-review-host-3",
+  "player-ui-review-host-4",
+  "player-ui-review-host-5",
+  "player-ui-review-host-6",
+  "player-ui-review-host-7",
 ];
 
 const scorePlayerIds = [
-  "user-ui-review-score-1",
-  "user-ui-review-score-2",
-  "user-ui-review-score-3",
-  "user-ui-review-score-4",
-  "user-ui-review-score-5",
-  "user-ui-review-score-6",
-  "user-ui-review-score-7",
-  "user-ui-review-score-8",
-  "user-ui-review-score-9",
-  "user-ui-review-score-10",
-  "user-ui-review-score-11",
+  "player-ui-review-score-1",
+  "player-ui-review-score-2",
+  "player-ui-review-score-3",
+  "player-ui-review-score-4",
+  "player-ui-review-score-5",
+  "player-ui-review-score-6",
+  "player-ui-review-score-7",
+  "player-ui-review-score-8",
+  "player-ui-review-score-9",
+  "player-ui-review-score-10",
+  "player-ui-review-score-11",
 ];
 
 async function waitForServer(url, timeoutMs = 120_000) {
@@ -164,43 +165,38 @@ async function prepareReviewDatabase() {
         id: { in: [ids.hostClubId, ids.scoreClubId] },
       },
     });
-    await prisma.user.deleteMany({
-      where: {
-        id: {
-          in: [ids.adminUserId, ...hostPlayerIds, ...scorePlayerIds],
-        },
-      },
+    await prisma.player.deleteMany({
+      where: { id: { in: [ids.adminPlayerId, ...hostPlayerIds, ...scorePlayerIds] } },
     });
+    await prisma.user.deleteMany({ where: { id: ids.adminAccountId } });
 
     await prisma.user.create({
       data: {
-        id: ids.adminUserId,
+        id: ids.adminAccountId,
         email: "ui-review-admin@example.com",
         name: "UI Review Admin",
         passwordHash,
-        isClaimed: true,
-        gender: "MALE",
-        partnerPreference: "OPEN",
       },
     });
 
-    await prisma.user.createMany({
+    await prisma.player.createMany({
       data: [
+        {
+          id: ids.adminPlayerId,
+          ownerUserId: ids.adminAccountId,
+          name: "UI Review Admin",
+          gender: "MALE",
+          partnerPreference: "OPEN",
+        },
         ...hostPlayerIds.map((id, index) => ({
           id,
-          email: `ui-review-host-${index + 1}@example.com`,
           name: `Host Player ${index + 1}`,
-          passwordHash,
-          isClaimed: true,
           gender: index % 2 === 0 ? "MALE" : "FEMALE",
           partnerPreference: index % 2 === 0 ? "OPEN" : "FEMALE_FLEX",
         })),
         ...scorePlayerIds.map((id, index) => ({
           id,
-          email: `ui-review-score-${index + 1}@example.com`,
           name: `Score Player ${index + 1}`,
-          passwordHash,
-          isClaimed: true,
           gender: "MALE",
           partnerPreference: "OPEN",
         })),
@@ -212,37 +208,42 @@ async function prepareReviewDatabase() {
         {
           id: ids.hostClubId,
           name: "UI Review Host Club",
-          createdById: ids.adminUserId,
+          createdById: ids.adminAccountId,
         },
         {
           id: ids.scoreClubId,
           name: "UI Review Score Club",
-          createdById: ids.adminUserId,
+          createdById: ids.adminAccountId,
+        },
+      ],
+    });
+
+    await prisma.clubAccess.createMany({
+      data: [
+        {
+          clubId: ids.hostClubId,
+          userId: ids.adminAccountId,
+          role: "ADMIN",
+        },
+        {
+          clubId: ids.scoreClubId,
+          userId: ids.adminAccountId,
+          role: "ADMIN",
         },
       ],
     });
 
     await prisma.clubMember.createMany({
       data: [
-        {
+        { clubId: ids.hostClubId, playerId: ids.adminPlayerId, ownerUserId: ids.adminAccountId },
+        ...hostPlayerIds.map((playerId) => ({
           clubId: ids.hostClubId,
-          userId: ids.adminUserId,
-          role: "ADMIN",
-        },
-        ...hostPlayerIds.map((userId) => ({
-          clubId: ids.hostClubId,
-          userId,
-          role: "MEMBER",
+          playerId,
         })),
-        {
+        { clubId: ids.scoreClubId, playerId: ids.adminPlayerId, ownerUserId: ids.adminAccountId },
+        ...scorePlayerIds.map((playerId) => ({
           clubId: ids.scoreClubId,
-          userId: ids.adminUserId,
-          role: "ADMIN",
-        },
-        ...scorePlayerIds.map((userId) => ({
-          clubId: ids.scoreClubId,
-          userId,
-          role: "MEMBER",
+          playerId,
         })),
       ],
     });
@@ -265,13 +266,13 @@ async function prepareReviewDatabase() {
         players: {
           create: [
             {
-              userId: ids.adminUserId,
+              playerId: ids.adminPlayerId,
               isGuest: false,
               gender: "MALE",
               partnerPreference: "OPEN",
             },
-            ...hostPlayerIds.slice(0, 5).map((userId, index) => ({
-              userId,
+            ...hostPlayerIds.slice(0, 5).map((playerId, index) => ({
+              playerId,
               isGuest: false,
               gender: index % 2 === 0 ? "MALE" : "FEMALE",
               partnerPreference:
@@ -306,13 +307,13 @@ async function prepareReviewDatabase() {
           players: {
             create: [
               {
-                userId: ids.adminUserId,
+                playerId: ids.adminPlayerId,
                 isGuest: false,
                 gender: "MALE",
                 partnerPreference: "OPEN",
               },
-              ...scorePlayerIds.map((userId) => ({
-                userId,
+              ...scorePlayerIds.map((playerId) => ({
+                playerId,
                 isGuest: false,
                 gender: "MALE",
                 partnerPreference: "OPEN",
@@ -328,10 +329,10 @@ async function prepareReviewDatabase() {
           sessionId,
           courtId,
           status: "IN_PROGRESS",
-          team1User1Id: ids.adminUserId,
-          team1User2Id: scorePlayerIds[0],
-          team2User1Id: scorePlayerIds[1],
-          team2User2Id: scorePlayerIds[2],
+          team1Player1Id: ids.adminPlayerId,
+          team1Player2Id: scorePlayerIds[0],
+          team2Player1Id: scorePlayerIds[1],
+          team2Player2Id: scorePlayerIds[2],
         },
       });
 
@@ -343,10 +344,10 @@ async function prepareReviewDatabase() {
       await prisma.queuedMatch.create({
         data: {
           sessionId,
-          team1User1Id: scorePlayerIds[3],
-          team1User2Id: scorePlayerIds[4],
-          team2User1Id: scorePlayerIds[5],
-          team2User2Id: scorePlayerIds[6],
+          team1Player1Id: scorePlayerIds[3],
+          team1Player2Id: scorePlayerIds[4],
+          team2Player1Id: scorePlayerIds[5],
+          team2Player2Id: scorePlayerIds[6],
         },
       });
     }
@@ -370,11 +371,13 @@ async function prepareReviewDatabase() {
 
 function startReviewServer() {
   console.log("Starting local review server...");
+  const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
   return spawn(
-    "cmd.exe",
-    ["/c", "npm.cmd", "run", "dev", "--", "--hostname", "127.0.0.1", "--port", port],
+    npmExecutable,
+    ["run", "dev", "--", "--hostname", "127.0.0.1", "--port", port],
     {
       cwd,
+      shell: process.platform === "win32",
       env: {
         ...process.env,
         DATABASE_URL: reviewDbUrl,

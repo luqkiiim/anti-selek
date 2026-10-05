@@ -539,15 +539,18 @@ async function verifySmokeAccountAndTargets(db) {
   const normalizedEmail = smokeEmail.trim().toLowerCase();
   const user = await getSingleRow(
     db,
-    `SELECT "id", "passwordHash", "isClaimed" FROM "User" WHERE lower("email") = ?`,
+    `SELECT "id", "passwordHash", "isActive" FROM "Account" WHERE lower("email") = ?`,
     [normalizedEmail],
-    "smoke user lookup"
+    "smoke account lookup"
   );
   if (!user) {
-    failPreflight("smoke user was not found in Turso.");
+    failPreflight("smoke account was not found in Turso.");
+  }
+  if (!user.isActive) {
+    failPreflight("smoke account is disabled.");
   }
   if (!user.passwordHash) {
-    failPreflight("smoke user exists but has no password hash.");
+    failPreflight("smoke account exists but has no password hash.");
   }
 
   const passwordMatches = await bcrypt.compare(
@@ -555,9 +558,9 @@ async function verifySmokeAccountAndTargets(db) {
     String(user.passwordHash)
   );
   if (!passwordMatches) {
-    failPreflight("smoke user password does not match PRODUCTION_SMOKE_PASSWORD.");
+    failPreflight("smoke account password does not match PRODUCTION_SMOKE_PASSWORD.");
   }
-  log("preflight smoke user verified");
+  log("preflight smoke account verified");
 
   const club = await getSingleRow(
     db,
@@ -569,16 +572,29 @@ async function verifySmokeAccountAndTargets(db) {
     failPreflight("smoke club was not found in Turso.");
   }
 
-  const membership = await getSingleRow(
+  const access = await getSingleRow(
     db,
-    `SELECT "id" FROM "CommunityMember" WHERE "communityId" = ? AND "userId" = ?`,
+    `SELECT "id" FROM "ClubAccess" WHERE "clubId" = ? AND "userId" = ? AND "status" = 'ACTIVE'`,
     [smokeClubId, user.id],
-    "smoke club membership lookup"
+    "smoke club access lookup"
   );
-  if (!membership) {
-    failPreflight("smoke user is not a member of the smoke club.");
+  if (!access) {
+    failPreflight("smoke account does not have active access to the smoke club.");
   }
-  log("preflight smoke club membership verified");
+  log("preflight smoke club access verified");
+
+  const ownedPlayer = await getSingleRow(
+    db,
+    `SELECT p."id" FROM "User" AS p
+     JOIN "CommunityMember" AS m ON m."userId" = p."id"
+     WHERE m."communityId" = ? AND m."archivedAt" IS NULL AND p."ownerUserId" = ?`,
+    [smokeClubId, user.id],
+    "smoke owned Player lookup"
+  );
+  if (!ownedPlayer) {
+    failPreflight("smoke account has no active roster Player in the smoke club.");
+  }
+  log("preflight owned Player resolution verified");
 
   const session = await getSingleRow(
     db,

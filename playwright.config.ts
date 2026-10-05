@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 import { e2eBaseURL, e2eEnv } from "./e2e/env";
 
+const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -27,7 +29,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm.cmd run dev -- --hostname 127.0.0.1 --port 3005",
+    command: `${npmCommand} run dev -- --hostname 127.0.0.1 --port 3005`,
     url: `${e2eBaseURL}/signin`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

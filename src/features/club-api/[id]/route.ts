@@ -15,7 +15,6 @@ import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { deleteTutorialPlayground, getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import { canQuickAccessClub, getQuickAccessDeniedMessage, isQuickAccessSession, normalizeNameLookupKey } from "@/lib/quickAccess";
-import { ClubRole } from "@/types/enums";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -356,6 +355,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Invalid confirmation text" }, { status: 400 });
     }
 
+    const admissionHistory = await prisma.clubAdmissionRequest.findFirst({
+      where: { clubId: id },
+      select: { id: true },
+    });
+    if (admissionHistory) {
+      return NextResponse.json(
+        { error: "This club has admission history that must be retained and cannot be deleted." },
+        { status: 409 },
+      );
+    }
+
     if (existing.isTutorial) {
       if (existing.tutorialOwnerId !== session.user.id) {
         return invalidTargetResponse(request, "api:communities:id");
@@ -386,6 +396,16 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (["P2003", "P2004", "P2014"].includes(String(code))) {
+      return NextResponse.json(
+        { error: "This club has linked history that must be retained and cannot be deleted." },
+        { status: 409 },
+      );
+    }
     logError("Delete club error", error);
     return safeErrorResponse();
   }
