@@ -146,11 +146,19 @@ export function validateCutoverCredentials(entries, approval, now = Date.now(), 
   tokenExpiry(readerToken, now); validateReadOnlyTursoToken(readerToken, now);
   return { url, writerToken, readerToken };
 }
+export const ACCEPTED_EXPOSURE_STATEMENT = "Approve the cutover and accept the unresolved token exposure";
+export function validateCutoverPrerequisites(approval) {
+  const gates = ["previewIsolationVerified", "rollbackRestoreVerified", "deploymentHoldVerified", "writesFrozen", "laptopAWritesStopped", "functionsDrained"];
+  const rotated = approval.version === 1 && ["rotationVerified", "compromisedCredentialRejected", "vercelProductionCredentialsVerified", "laptopAProductionCredentialsVerified"].every(key => approval[key] === true);
+  // An owner-approved exception records the incident as unresolved. It must not
+  // fabricate rotation/rejection evidence or relax endpoint/credential guards.
+  const accepted = approval.version === 2 && approval.rotationVerified === false && approval.compromisedCredentialRejected === false && approval.credentialExposureAccepted === true && approval.credentialExposureAcceptance === ACCEPTED_EXPOSURE_STATEMENT && approval.vercelProductionConfigurationVerified === true && approval.laptopAProductionAccessDisabled === true;
+  requireCutover((rotated || accepted) && gates.every(key => approval[key] === true), "CUTOVER_PREREQUISITES_UNVERIFIED");
+}
 export function loadCutoverAuthorization(root, argv, env = process.env, now = Date.now()) {
   requireCutover(argv.includes("--production-cutover") && env.VERCEL !== "1" && env.NODE_ENV !== "test", "EXPLICIT_LOCAL_PRODUCTION_CUTOVER_REQUIRED");
   const approval = JSON.parse(fs.readFileSync(protectedPath(root, path.join(root, "private/production-cutover-approval.json"))));
-  const gates = ["rotationVerified", "compromisedCredentialRejected", "vercelProductionCredentialsVerified", "laptopAProductionCredentialsVerified", "previewIsolationVerified", "rollbackRestoreVerified", "deploymentHoldVerified", "writesFrozen", "laptopAWritesStopped", "functionsDrained"];
-  requireCutover(approval.version === 1 && gates.every(key => approval[key] === true), "CUTOVER_PREREQUISITES_UNVERIFIED");
+  validateCutoverPrerequisites(approval);
   const checked = Date.parse(approval.freezeCheckedAt);
   requireCutover(Number.isFinite(checked) && checked <= now && now - checked < 3600_000, "FRESH_WRITE_FREEZE_REQUIRED");
   requireCutover(Array.isArray(approval.blockedLegacyUrls) && approval.blockedLegacyUrls.length > 0 && approval.blockedLegacyUrls.every(value => { try { const url = new URL(value); return url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash && url.pathname === "/"; } catch { return false; } }), "LEGACY_DEPLOYMENT_FREEZE_PROOF_REQUIRED");

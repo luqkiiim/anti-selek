@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { legacyManifest } from "../../scripts/account-player-preservation.mjs";
-import { APPROVED_FEATURE_COMMIT, CUTOVER_MIGRATIONS, atomicMigrationSql, committedMigrationBundle, loadCutoverAuthorization, manifestDigest, migrationState, protectedPath, rehearseSnapshot, sha256, validateCutoverCredentials, verifyCompleteCutover } from "../../scripts/phase1-cutover.mjs";
+import { ACCEPTED_EXPOSURE_STATEMENT, APPROVED_FEATURE_COMMIT, CUTOVER_MIGRATIONS, atomicMigrationSql, committedMigrationBundle, loadCutoverAuthorization, manifestDigest, migrationState, protectedPath, rehearseSnapshot, sha256, validateCutoverCredentials, validateCutoverPrerequisites, verifyCompleteCutover } from "../../scripts/phase1-cutover.mjs";
 import { tursoEndpointFingerprint } from "../../scripts/turso-local-target-guard.mjs";
 
 const root = process.cwd();
@@ -146,6 +146,21 @@ describe("committed Phase 1 production cutover preparation", () => {
 });
 
 describe("production cutover authorization boundaries", () => {
+  const frozen = { previewIsolationVerified: true, rollbackRestoreVerified: true, deploymentHoldVerified: true, writesFrozen: true, laptopAWritesStopped: true, functionsDrained: true };
+  const acceptedExposure = { ...frozen, version: 2, rotationVerified: false, compromisedCredentialRejected: false, credentialExposureAccepted: true, credentialExposureAcceptance: ACCEPTED_EXPOSURE_STATEMENT, vercelProductionConfigurationVerified: true, laptopAProductionAccessDisabled: true };
+  it("retains the verified rotation path and separately records explicit acceptance of an unresolved incident", () => {
+    expect(() => validateCutoverPrerequisites({ ...frozen, version: 1, rotationVerified: true, compromisedCredentialRejected: true, vercelProductionCredentialsVerified: true, laptopAProductionCredentialsVerified: true })).not.toThrow();
+    expect(() => validateCutoverPrerequisites(acceptedExposure)).not.toThrow();
+    expect(() => validateCutoverPrerequisites({ ...acceptedExposure, version: 1 })).toThrow("CUTOVER_PREREQUISITES_UNVERIFIED");
+  });
+  it.each(["previewIsolationVerified", "rollbackRestoreVerified", "deploymentHoldVerified", "writesFrozen", "laptopAWritesStopped", "functionsDrained", "credentialExposureAccepted", "vercelProductionConfigurationVerified", "laptopAProductionAccessDisabled"])("an accepted incident cannot bypass %s", key => {
+    expect(() => validateCutoverPrerequisites({ ...acceptedExposure, [key]: false })).toThrow("CUTOVER_PREREQUISITES_UNVERIFIED");
+  });
+  it("requires the exact owner acceptance and refuses fabricated rotation evidence", () => {
+    expect(() => validateCutoverPrerequisites({ ...acceptedExposure, credentialExposureAcceptance: "assume no exposure" })).toThrow("CUTOVER_PREREQUISITES_UNVERIFIED");
+    expect(() => validateCutoverPrerequisites({ ...acceptedExposure, rotationVerified: true })).toThrow("CUTOVER_PREREQUISITES_UNVERIFIED");
+    expect(() => validateCutoverPrerequisites({ ...acceptedExposure, compromisedCredentialRejected: true })).toThrow("CUTOVER_PREREQUISITES_UNVERIFIED");
+  });
   it("requires separate approved short-lived reader/writer credentials without modifying application environment", () => {
     const before = { ...process.env };
     const { entries, approval } = credentials();

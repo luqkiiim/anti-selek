@@ -1,10 +1,10 @@
 # Phase 1 production cutover procedure
 
-**Preparation only. Production migration and merging `main` remain held.** The operator must obtain explicit cutover approval after credential rotation and every prerequisite below has been verified. An authenticated CLI, a historical rehearsal, or a prepared writer does not authorize production mutation.
+**Cutover approved, subject to the remaining technical prerequisites.** On 6 October 2026 the repository owner explicitly approved the cutover and accepted the unresolved token exposure, requesting that rotation be deferred. The observed exposure remains an unresolved incident; it must never be recorded as nonexistent or successfully revoked. The old exposed credential must not be reused. All backup, recovery, isolation, freeze, preservation and deployment checks below still apply.
 
 ## Credential rotation comes first
 
-Keep `.env.local`, the registered development target, Preview credentials, and the disabled production rehearsal mechanism unchanged. Do not reuse the compromised rehearsal token. No writer credential may be created until server-side invalidation covering that credential has completed.
+Keep `.env.local`, the registered development target, Preview credentials, and the disabled production rehearsal mechanism unchanged. Do not reuse the compromised rehearsal token. The normal rotation path requires server-side invalidation before replacement writers are minted. The owner's explicit exception permits new, separately scoped short-lived cutover reader/writer credentials without rotation; it does not invalidate existing credentials or resolve the incident. Do not perform group invalidation or modify other projects under this exception.
 
 Identify whether the exposed credential is database-scoped or a legacy group token before choosing invalidation. There is a material discrepancy: [Turso's documentation](https://docs.turso.tech/cli/db/tokens/invalidate) describes group-wide impact, while the [official v1.0.33 CLI implementation](https://github.com/tursodatabase/turso-cli/blob/v1.0.33/internal/cmd/db_invalidatetokens.go) rotates database credentials and explicitly says group tokens remain valid. Do not assume a database-only rotation invalidates an older group token, or assume a group-only rotation invalidates newer database credentials. If the original credential's scope cannot be established, require verified invalidation of both relevant scopes and coordinate every affected consumer first.
 
@@ -21,6 +21,12 @@ Prepare this sequence without exposing secret values:
 7. Verify server-side rejection of old credentials without writing data. Do not retrieve/reuse the exposed token to perform a probe: use the relevant invalidation acknowledgement and, where available, an old non-exposed credential of the same scope/key generation for a read-only rejection check. Record any limitation instead of claiming a direct compromised-token probe occurred. Verify replacement application connectivity and Preview isolation. Reopen the legacy application only after credential rotation succeeds.
 
 Turso CLI login-session invalidation is a separate operation. `turso auth logout --all` invalidates account CLI sessions; it does **not** complete database/group token rotation. Complete CLI sign-in outside Codex's browser because the authentication callback can contain a credential in its URL.
+
+## Legacy application rebuild and rollback builds
+
+The deployed legacy revision `63038aa975713c8ac39e5521fabf4cad0a6dbca1` has a migration-bearing `npm run build`: `node scripts/apply-turso-migrations.mjs && node scripts/run-next-build.mjs`. Its committed `vercel.json` selects that script. A blind legacy redeploy is therefore unsuitable for credential-only rotation or rollback.
+
+For an explicitly authorized legacy rebuild, export only the committed legacy source into protected `private/`, verify every application file against Git, and change only the deployment copy's `vercel.json` build command to `node scripts/run-next-build.mjs`. This reviewed wrapper only starts `next build`. Retain the safe upload exclusions and `npm ci` install command; the legacy `postinstall` only runs `prisma generate`. The source export/upload dry-run is preparation, not a deployment. Do not rely on a dashboard build override, because the committed [file configuration takes precedence](https://vercel.com/docs/project-configuration/vercel-json#buildcommand). Revalidate the build input and logs before activation. No legacy rebuild is needed merely to enact the owner's rotation deferral.
 
 ## Narrow writer and private artifacts
 
@@ -41,10 +47,11 @@ Live access requires all of these independently verified prerequisites:
 - a clean checkout at the approved exact commit, unchanged remote `main`, and compatible ancestry;
 - protected `private/production-cutover.env` with exactly `PRODUCTION_CUTOVER_TURSO_URL`, `PRODUCTION_CUTOVER_WRITER_TOKEN`, and `PRODUCTION_CUTOVER_READER_TOKEN`;
 - the checked-in production endpoint pin, separate approved token fingerprints, database writer permissions and genuinely read-only reader permissions;
-- protected `private/production-cutover-approval.json` version 1, including `approvedCommit`, `expectedMainCommit`, `productionEndpointSha256`, `writerTokenSha256`, `readerTokenSha256`, `freezeCheckedAt`, and `blockedLegacyUrls`;
-- all receipt gates explicitly true: `rotationVerified`, `compromisedCredentialRejected`, `vercelProductionCredentialsVerified`, `laptopAProductionCredentialsVerified`, `previewIsolationVerified`, `rollbackRestoreVerified`, `deploymentHoldVerified`, `writesFrozen`, `laptopAWritesStopped`, and `functionsDrained`.
+- protected `private/production-cutover-approval.json`, including `approvedCommit`, `expectedMainCommit`, `productionEndpointSha256`, `writerTokenSha256`, `readerTokenSha256`, `freezeCheckedAt`, and `blockedLegacyUrls`;
+- common receipt gates explicitly true: `previewIsolationVerified`, `rollbackRestoreVerified`, `deploymentHoldVerified`, `writesFrozen`, `laptopAWritesStopped`, and `functionsDrained`;
+- either version 1 with verified `rotationVerified`, `compromisedCredentialRejected`, `vercelProductionCredentialsVerified`, and `laptopAProductionCredentialsVerified`, or the explicitly authorized version 2 exception: `rotationVerified=false`, `compromisedCredentialRejected=false`, `credentialExposureAccepted=true`, `credentialExposureAcceptance="Approve the cutover and accept the unresolved token exposure"`, `vercelProductionConfigurationVerified=true`, and `laptopAProductionAccessDisabled=true`.
 
-The receipt is an operator attestation, not automatic evidence. Set a gate only after its external condition is verified and recorded. Laptop A's credential gate may mean fresh access is verified **or** production access is retired and old credentials are invalidated. Merely knowing where credentials are stored is insufficient. No approval receipt or writer credential is created by the repository tooling. File permissions must be `600`, directories `700`, inside ignored `private/`, with no credential symlinks. Snapshots, detailed manifests and logs remain private and excluded from deployment uploads.
+The receipt is an operator attestation, not automatic evidence. Set a gate only after its external condition is verified and recorded. Version 1 requires Laptop A's fresh access to be verified or its production access retired and old credentials invalidated. Version 2 records the owner's instruction to keep Laptop A disconnected, without claiming its old token was invalidated. Record the owner acceptance and the basis of the disconnected-client attestation privately. No approval receipt or writer credential is created by the repository tooling. File permissions must be `600`, directories `700`, inside ignored `private/`, with no credential symlinks. Snapshots, detailed manifests and logs remain private and excluded from deployment uploads.
 
 ## Historical offline rehearsal
 
@@ -60,7 +67,7 @@ It writes only a new snapshot copy, manifest and aggregate report. A historical 
 
 ## Approved cutover sequence
 
-1. Re-fetch `origin`, verify exact feature/main revisions, rerun source tests, TypeScript, Prisma validation, lint, build and preservation tests. Verify the live Production deployment matches the expected legacy commit. Verify rotation is resolved and the old rehearsal file remains unusable.
+1. Re-fetch `origin`, verify exact feature/main revisions, rerun source tests, TypeScript, Prisma validation, lint, build and preservation tests. Verify the live Production deployment matches the expected legacy commit. Verify either completed rotation or the explicit version 2 owner acceptance, and that the old rehearsal file remains unusable.
 2. Confirm an account-authorized backup restore/import path and database quota are available. Rehearse restoring a protected snapshot into an isolated disposable recovery database and compare its legacy manifest. Record that drill before setting `rollbackRestoreVerified`; an untested recovery plan blocks the writer.
 3. Hold automatic Production Git deployments with a verified project-specific hold, and cancel/drain any pending Production deployments. Save the prior setting for restoration. Do not change Preview credentials or merge `main` during this stage.
 4. Freeze **every legacy deployment** that could reach production, including immutable deployment URLs, production aliases/custom domains, old Preview hosts and any direct clients. Use Vercel's project firewall to deny all requests to those hosts, not just HTTP mutation methods: old GET/auth flows can also write. Retain the existing unsafe-Preview firewall rule. Stop Laptop A/direct scripts and drain already running functions before recording the freeze. A denied homepage alone is not proof that an incomplete host inventory is safe.
