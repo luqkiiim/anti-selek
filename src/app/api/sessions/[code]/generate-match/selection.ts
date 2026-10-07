@@ -58,6 +58,9 @@ import {
   type V3BatchDebug,
   type V3SingleCourtSelection,
 } from "@/lib/matchmaking/v3";
+import type {
+  ActiveMatchmakerV3Player,
+} from "@/lib/matchmaking/v3/types";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import {
@@ -68,7 +71,15 @@ import {
   findBestRotationBatchSelection,
   usesRotationMatchmaking,
   summarizeSocialBatch,
+  type RotationBatchOptions,
 } from "@/lib/matchmaking/v3/socialBatch";
+import {
+  runSocialCandidateWithProductionFallback,
+  resolveSocialCandidatePolicy,
+  withSocialCandidateDecision,
+  type SocialCandidateDecision,
+  type SocialCandidatePolicy,
+} from "./socialCandidateAcceptance";
 import {
   CourtGroupType,
   MixedSide,
@@ -122,6 +133,7 @@ interface PoolAwareSelection extends CourtGroupSnapshot {
   missedPool?: SessionPool | null;
   competitiveTargetRatio: number;
   matchmakingReasonJson?: string | null;
+  socialPolicyDecision?: SocialCandidateDecision;
 }
 
 type MatchSelectionBase = {
@@ -137,6 +149,7 @@ type MatchSelectionBase = {
   poolBSeatCount?: number | null;
   competitiveTargetRatio?: number;
   matchmakingReasonJson?: string | null;
+  socialPolicyDecision?: SocialCandidateDecision;
 };
 
 const MAX_POOL_SELECTION_OPTIONS_PER_PLAN = 64;
@@ -201,32 +214,123 @@ function withMatchmakingReason<
       };
 
   if (!isV3Selection(selection)) {
-    return {
+    return withSocialCandidateDecision({
       ...selection,
       ...groupSnapshot,
       matchmakingReasonJson: null,
+    }, selection.socialPolicyDecision);
+  }
+
+  const reasonJson = buildV3MatchmakingReasonJson(selection, {
+    sessionType: getMatchmakerSessionType(sessionData),
+    sessionMode: getMatchmakerSessionMode(sessionData),
+    targetPool:
+      "targetPool" in selection ? selection.targetPool ?? null : null,
+    missedPool:
+      "missedPool" in selection ? selection.missedPool ?? null : null,
+    courtGroupType: groupSnapshot.courtGroupType,
+    poolASeatCount: groupSnapshot.poolASeatCount ?? undefined,
+    poolBSeatCount: groupSnapshot.poolBSeatCount ?? undefined,
+    competitiveTargetRatio:
+      "competitiveTargetRatio" in selection
+        ? selection.competitiveTargetRatio
+        : undefined,
+    respectPlayerRest: sessionData.respectPlayerRest,
+  });
+
+  return withSocialCandidateDecision({
+    ...selection,
+    ...groupSnapshot,
+    matchmakingReasonJson: reasonJson,
+  }, selection.socialPolicyDecision);
+}
+
+function runRotationSelectionWithSocialCandidate<T extends MatchmakerV3Player>(
+  players: T[],
+  options: RotationBatchOptions<T>,
+  socialPriorityPolicy?: SocialCandidatePolicy,
+  candidateOptions: RotationBatchOptions<T> = options,
+) {
+  const resolvedPolicy = resolveSocialCandidatePolicy(options.sessionType, socialPriorityPolicy);
+  if (resolvedPolicy) {
+    return runSocialCandidateWithProductionFallback({
+      candidatePlayers: players,
+      options,
+      candidateOptions,
+    });
+  }
+  return { result: findBestRotationBatchSelection(players, options), decision: undefined };
+}
+
+function runSingleCourtSelectionWithSocialCandidate<T extends MatchmakerV3Player>(
+  players: T[],
+  options: Omit<RotationBatchOptions<T>, "courtCount"> & {
+    excludedQuartetKey?: string;
+    targetPool?: string;
+    minimumTargetPoolPlayers?: number;
+  },
+  socialPriorityPolicy?: SocialCandidatePolicy,
+  candidateOptions?: Omit<RotationBatchOptions<T>, "courtCount"> & {
+    excludedQuartetKey?: string;
+    targetPool?: string;
+    minimumTargetPoolPlayers?: number;
+  },
+) {
+  const resolvedPolicy = resolveSocialCandidatePolicy(options.sessionType, socialPriorityPolicy);
+  if (!resolvedPolicy) {
+    return {
+      ...findBestSingleCourtSelectionV3(players, options),
+      socialPolicyDecision: undefined,
     };
   }
 
+  const {
+    excludedQuartetKey,
+    targetPool,
+    minimumTargetPoolPlayers,
+    ...rotationOptions
+  } = options;
+  const excludedQuartetKeys = new Set(rotationOptions.excludedQuartetKeys);
+  if (excludedQuartetKey) excludedQuartetKeys.add(excludedQuartetKey);
+  const baseConstraints = rotationOptions.selectionConstraints;
+  const selectionConstraints = targetPool || baseConstraints
+    ? {
+        ...baseConstraints,
+        isQuartetAllowed: (quartet: [ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>]) =>
+          (!targetPool || quartet.filter((player) => player.pool === targetPool).length >= (minimumTargetPoolPlayers ?? 1)) &&
+          (baseConstraints?.isQuartetAllowed?.(quartet) ?? true),
+      }
+    : undefined;
+  const adaptedOptions = {
+    ...rotationOptions,
+    courtCount: 1,
+    excludedQuartetKeys,
+    selectionConstraints,
+  };
+  const adaptedCandidateOptions = candidateOptions
+    ? {
+        ...candidateOptions,
+        courtCount: 1,
+        excludedQuartetKeys: new Set([
+          ...(candidateOptions.excludedQuartetKeys ?? []),
+          ...(candidateOptions.excludedQuartetKey ? [candidateOptions.excludedQuartetKey] : []),
+        ]),
+        selectionConstraints,
+      }
+    : adaptedOptions;
+  const safeRun = runRotationSelectionWithSocialCandidate(
+    players,
+    adaptedOptions,
+    resolvedPolicy,
+    adaptedCandidateOptions
+  );
+  const selection = safeRun.result.selection?.selections[0] ?? null;
   return {
-    ...selection,
-    ...groupSnapshot,
-    matchmakingReasonJson: buildV3MatchmakingReasonJson(selection, {
-      sessionType: getMatchmakerSessionType(sessionData),
-      sessionMode: getMatchmakerSessionMode(sessionData),
-      targetPool:
-        "targetPool" in selection ? selection.targetPool ?? null : null,
-      missedPool:
-        "missedPool" in selection ? selection.missedPool ?? null : null,
-      courtGroupType: groupSnapshot.courtGroupType,
-      poolASeatCount: groupSnapshot.poolASeatCount ?? undefined,
-      poolBSeatCount: groupSnapshot.poolBSeatCount ?? undefined,
-      competitiveTargetRatio:
-        "competitiveTargetRatio" in selection
-          ? selection.competitiveTargetRatio
-          : undefined,
-      respectPlayerRest: sessionData.respectPlayerRest,
-    }),
+    selection: selection && safeRun.decision
+      ? { ...selection, socialPolicyDecision: safeRun.decision }
+      : selection,
+    debug: { searchLimitReached: safeRun.result.debug.searchLimitReached },
+    socialPolicyDecision: safeRun.decision,
   };
 }
 
@@ -277,6 +381,13 @@ function buildCompletedMatches(sessionData: GenerateMatchSession) {
     }));
 }
 
+function buildCompletedSocialMatches(sessionData: GenerateMatchSession) {
+  return buildSocialSessionHistory({
+    matches: sessionData.matches.filter((match) => match.status === MatchStatus.COMPLETED),
+    queuedMatch: null,
+  });
+}
+
 function getRotationPlayerGroupOpportunityConstraints(sessionData: GenerateMatchSession) {
   const counts = getPoolActiveCounts(sessionData);
   return buildPlayerGroupCourtPlans({
@@ -299,14 +410,19 @@ function getRotationSelectionOptions(
 ) {
   if (!usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) return {};
   const socialHistoryMatches = buildSocialSessionHistory(sessionData);
+  const structuralOpportunityConstraints = sessionData.poolsEnabled
+    ? getRotationPlayerGroupOpportunityConstraints(sessionData)
+    : undefined;
+  const socialVarietyContext = buildSocialVarietyContext(players, socialHistoryMatches, {
+    sessionMode: getMatchmakerSessionMode(sessionData),
+    opportunityConstraints: structuralOpportunityConstraints,
+  });
   return {
     socialHistoryMatches,
-    socialVarietyContext: buildSocialVarietyContext(players, socialHistoryMatches, {
-      sessionMode: getMatchmakerSessionMode(sessionData),
-      ...(sessionData.poolsEnabled
-        ? { opportunityConstraints: getRotationPlayerGroupOpportunityConstraints(sessionData) }
-        : {}),
-    }),
+    socialVarietyContext,
+    ...(getMatchmakerSessionType(sessionData) === SessionType.SOCIAL_MIX
+      ? { socialStructuralOpportunityConstraints: structuralOpportunityConstraints ?? [] }
+      : {}),
   };
 }
 
@@ -1539,6 +1655,7 @@ function selectRotationPlayerGroupBatch({
   excludedPartitionKey,
   lockedPlayerIds,
   randomFn,
+  socialPriorityPolicy,
 }: {
   sessionData: GenerateMatchSession;
   rankedCandidates: RankedCandidates;
@@ -1550,6 +1667,7 @@ function selectRotationPlayerGroupBatch({
   excludedPartitionKey?: string;
   lockedPlayerIds?: ReadonlySet<string>;
   randomFn?: () => number;
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
   const activeCounts = getPoolActiveCounts(sessionData);
   const waitingCounts = getPoolWaitingCounts(sessionData, rankedCandidates);
@@ -1588,7 +1706,7 @@ function selectRotationPlayerGroupBatch({
         courts: compositions.map((composition) => getPlayerGroupSelectionConstraints(composition)),
       };
     });
-    const result = findBestRotationBatchSelection(players, {
+    const selectionOptions: RotationBatchOptions<typeof players[number]> = {
       sessionType: getMatchmakerSessionType(sessionData),
       courtCount,
       sessionMode: getMatchmakerSessionMode(sessionData),
@@ -1600,7 +1718,21 @@ function selectRotationPlayerGroupBatch({
       excludedPartitionKey,
       lockedPlayerIds,
       randomFn,
-    });
+    };
+    const candidateOptions = socialPriorityPolicy
+      ? {
+          ...selectionOptions,
+          completedMatches: buildCompletedSocialMatches(sessionData),
+          socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+        }
+      : selectionOptions;
+    const safeRun = runRotationSelectionWithSocialCandidate(
+      players,
+      selectionOptions,
+      socialPriorityPolicy,
+      candidateOptions
+    );
+    const result = safeRun.result;
     if (result.selection && result.scheduleIndex !== null) {
       const profile = profiles[result.scheduleIndex];
       const plan = levelPlans[result.scheduleIndex];
@@ -1610,6 +1742,7 @@ function selectRotationPlayerGroupBatch({
         selections: result.selection.selections.map((selection, index) =>
           withMatchmakingReason({
             ...selection,
+            ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
             ...profile.compositions[index],
             targetPool: getCompositionTargetPool(profile.compositions[index]),
             missedPool: null,
@@ -1618,6 +1751,7 @@ function selectRotationPlayerGroupBatch({
         ),
         poolSchedulingState: sessionData,
         competitiveTargetRatio: plan.competitiveTargetRatio,
+        ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
       };
     }
     if (result.debug.searchLimitReached) {
@@ -1636,12 +1770,14 @@ function selectPoolEnabledSingleCourtMatch({
   sessionData,
   reshuffleSource,
   requiredCourtGroupType,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   reshuffleSource: ReshuffleSource | null;
   requiredCourtGroupType?: CourtGroupType | string | null;
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }): PoolAwareSelection {
   if (usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) {
     const select = (excludedQuartetKeys?: ReadonlySet<string>, excludedPartitionKey?: string) => {
@@ -1649,6 +1785,7 @@ function selectPoolEnabledSingleCourtMatch({
         return selectRotationPlayerGroupBatch({
           sessionData, rankedCandidates, playersById, requestedMatchCount: 1,
           requiredCourtGroupType, excludedQuartetKeys, excludedPartitionKey,
+          socialPriorityPolicy,
         }).selections[0] ?? null;
       } catch (error) {
         if (error instanceof GenerateMatchError && error.status === 400 &&
@@ -1767,6 +1904,7 @@ export function selectSingleCourtMatch({
   sessionData,
   reshuffleSource,
   requiredCourtGroupType,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -1774,7 +1912,13 @@ export function selectSingleCourtMatch({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
   requiredCourtGroupType?: CourtGroupType | string | null;
+  /** Session type is authoritative; this only permits internal policy overrides. */
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getMatchmakerSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   if (isInterclubSession(sessionData)) {
     return withNoPlayerGroupSnapshot(
       selectInterclubSingleCourtMatch({
@@ -1782,6 +1926,7 @@ export function selectSingleCourtMatch({
         playersById,
         sessionData,
         reshuffleSource,
+        socialPriorityPolicy: resolvedSocialPriorityPolicy,
       })
     );
   }
@@ -1793,6 +1938,7 @@ export function selectSingleCourtMatch({
       sessionData,
       reshuffleSource,
       requiredCourtGroupType,
+      socialPriorityPolicy: resolvedSocialPriorityPolicy,
     });
   }
 
@@ -1800,6 +1946,21 @@ export function selectSingleCourtMatch({
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
+  const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
+  const v3SelectionOptions = {
+    sessionMode: getMatchmakerSessionMode(sessionData),
+    sessionType: getMatchmakerSessionType(sessionData),
+    respectPlayerRest: sessionData.respectPlayerRest,
+    completedMatches,
+    ...getRotationSelectionOptions(sessionData, v3Players),
+  };
+  const candidateV3Options = resolvedSocialPriorityPolicy
+    ? {
+        ...v3SelectionOptions,
+        completedMatches: buildCompletedSocialMatches(sessionData),
+        socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+      }
+    : v3SelectionOptions;
   const initialResult = usesCompetitiveGrouping
       ? findBestSingleCourtSelectionLadder(
           buildLadderPlayers(sessionData, playersById, rankedCandidates),
@@ -1808,17 +1969,11 @@ export function selectSingleCourtMatch({
             respectPlayerRest: sessionData.respectPlayerRest,
           }
         )
-    : findBestSingleCourtSelectionV3(
-        buildV3Players(sessionData, playersById, rankedCandidates),
-        {
-          sessionMode: getMatchmakerSessionMode(sessionData),
-          sessionType: getMatchmakerSessionType(sessionData),
-          respectPlayerRest: sessionData.respectPlayerRest,
-          completedMatches,
-          ...getRotationSelectionOptions(
-            sessionData, buildV3Players(sessionData, playersById, rankedCandidates)
-          ),
-        }
+    : runSingleCourtSelectionWithSocialCandidate(
+        v3Players,
+        v3SelectionOptions,
+        resolvedSocialPriorityPolicy,
+        candidateV3Options
       );
 
   if (!initialResult.selection) {
@@ -1890,7 +2045,6 @@ export function selectSingleCourtMatch({
     return withMatchmakingReason(alternativePartition.selection, sessionData);
   }
 
-  const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
   const previousQuartetKey = getV3QuartetKey(reshuffleSource.ids);
   const previousPartitionKey = getExactPartitionKey(reshuffleSource.partition);
   const selectedQuartetKey = getV3QuartetKey(initialResult.selection.ids);
@@ -1902,14 +2056,20 @@ export function selectSingleCourtMatch({
     return withMatchmakingReason(initialResult.selection, sessionData);
   }
 
-  const alternativeQuartet = findBestSingleCourtSelectionV3(v3Players, {
+  const alternativeQuartetOptions = {
     sessionMode: getMatchmakerSessionMode(sessionData),
     sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
     ...getRotationSelectionOptions(sessionData, v3Players),
     excludedQuartetKey: previousQuartetKey,
-  });
+  };
+  const alternativeQuartet = runSingleCourtSelectionWithSocialCandidate(v3Players, alternativeQuartetOptions, resolvedSocialPriorityPolicy,
+    resolvedSocialPriorityPolicy ? {
+      ...alternativeQuartetOptions,
+      completedMatches: buildCompletedSocialMatches(sessionData),
+      socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+    } : undefined);
 
   if (alternativeQuartet.selection) {
     return withMatchmakingReason(alternativeQuartet.selection, sessionData);
@@ -1919,14 +2079,20 @@ export function selectSingleCourtMatch({
     return withMatchmakingReason(initialResult.selection, sessionData);
   }
 
-  const alternativePartition = findBestSingleCourtSelectionV3(v3Players, {
+  const alternativePartitionOptions = {
     sessionMode: getMatchmakerSessionMode(sessionData),
     sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
     ...getRotationSelectionOptions(sessionData, v3Players),
     excludedPartitionKey: previousPartitionKey,
-  });
+  };
+  const alternativePartition = runSingleCourtSelectionWithSocialCandidate(v3Players, alternativePartitionOptions, resolvedSocialPriorityPolicy,
+    resolvedSocialPriorityPolicy ? {
+      ...alternativePartitionOptions,
+      completedMatches: buildCompletedSocialMatches(sessionData),
+      socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+    } : undefined);
 
   if (!alternativePartition.selection) {
     throw new GenerateMatchError(
@@ -2076,6 +2242,7 @@ export function selectReplacementMatch({
   retainedUserIds,
   excludedUserIds = [],
   requiredCourtGroupType,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2083,7 +2250,13 @@ export function selectReplacementMatch({
   retainedUserIds: [string, string, string];
   excludedUserIds?: string[];
   requiredCourtGroupType?: CourtGroupType | string | null;
+  /** Session type is authoritative; this only permits internal policy overrides. */
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getMatchmakerSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   if (isInterclubSession(sessionData)) {
     return withNoPlayerGroupSnapshot(
       selectInterclubReplacementMatch({
@@ -2092,6 +2265,7 @@ export function selectReplacementMatch({
         sessionData,
         retainedUserIds,
         excludedUserIds,
+        socialPriorityPolicy: resolvedSocialPriorityPolicy,
       })
     );
   }
@@ -2119,6 +2293,7 @@ export function selectReplacementMatch({
           sessionData, rankedCandidates: eligibleCandidates, playersById,
           requestedMatchCount: 1, requiredCourtGroupType,
           lockedPlayerIds: retainedUserIdSet,
+          socialPriorityPolicy: resolvedSocialPriorityPolicy,
         }).selections[0];
       } catch (error) {
         if (!(error instanceof GenerateMatchError) || error.status !== 400 ||
@@ -2126,7 +2301,7 @@ export function selectReplacementMatch({
       }
     } else {
       const players = buildV3Players(sessionData, playersById, eligibleCandidates);
-      const result = findBestRotationBatchSelection(players, {
+      const rotationOptions: RotationBatchOptions<(typeof players)[number]> = {
         sessionType: getMatchmakerSessionType(sessionData),
         courtCount: 1,
         sessionMode: getMatchmakerSessionMode(sessionData),
@@ -2134,9 +2309,26 @@ export function selectReplacementMatch({
         completedMatches: buildCompletedMatches(sessionData),
         ...getRotationSelectionOptions(sessionData, players),
         lockedPlayerIds: retainedUserIdSet,
-      });
+      };
+      const candidateOptions = resolvedSocialPriorityPolicy
+        ? {
+            ...rotationOptions,
+            completedMatches: buildCompletedSocialMatches(sessionData),
+            socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+          }
+        : rotationOptions;
+      const safeRun = runRotationSelectionWithSocialCandidate(
+        players,
+        rotationOptions,
+        resolvedSocialPriorityPolicy,
+        candidateOptions
+      );
+      const result = safeRun.result;
       if (result.selection) {
-        return withMatchmakingReason(result.selection.selections[0], sessionData);
+        return withMatchmakingReason({
+          ...result.selection.selections[0],
+          ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
+        }, sessionData);
       }
       if (result.debug.searchLimitReached) {
         throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
@@ -2219,6 +2411,7 @@ export function selectSingleCourtMatchRespectingSkips({
   rotationHistory,
   reshuffleSource,
   requiredCourtGroupType,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2226,7 +2419,12 @@ export function selectSingleCourtMatchRespectingSkips({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
   requiredCourtGroupType?: CourtGroupType | string | null;
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getMatchmakerSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
   const excludedSkipUserIds = new Set<string>();
   const consumedSkipUserIds: string[] = [];
@@ -2250,6 +2448,7 @@ export function selectSingleCourtMatchRespectingSkips({
         rotationHistory,
         reshuffleSource,
         requiredCourtGroupType,
+        socialPriorityPolicy: resolvedSocialPriorityPolicy,
       });
     } catch (error) {
       if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
@@ -2285,6 +2484,7 @@ export function selectReplacementMatchRespectingSkips({
   retainedUserIds,
   excludedUserIds = [],
   requiredCourtGroupType,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2292,7 +2492,12 @@ export function selectReplacementMatchRespectingSkips({
   retainedUserIds: [string, string, string];
   excludedUserIds?: string[];
   requiredCourtGroupType?: CourtGroupType | string | null;
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getMatchmakerSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
   const retainedUserIdSet = new Set(retainedUserIds);
   const excludedSkipUserIds = new Set<string>();
@@ -2308,6 +2513,7 @@ export function selectReplacementMatchRespectingSkips({
         retainedUserIds,
         excludedUserIds: [...excludedUserIds, ...excludedSkipUserIds],
         requiredCourtGroupType,
+        socialPriorityPolicy: resolvedSocialPriorityPolicy,
       });
     } catch (error) {
       if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
@@ -2506,6 +2712,7 @@ export function selectBatchMatches({
   requestedMatchCount,
   requestedCourtIds,
   randomFn,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2514,7 +2721,13 @@ export function selectBatchMatches({
   requestedMatchCount: number;
   requestedCourtIds?: string[];
   randomFn?: () => number;
+  /** Session type is authoritative; this only permits internal policy overrides. */
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getMatchmakerSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   if (isInterclubSession(sessionData)) {
     const result = selectInterclubBatchMatches({
       rankedCandidates,
@@ -2522,6 +2735,7 @@ export function selectBatchMatches({
       sessionData,
       requestedMatchCount,
       randomFn,
+      socialPriorityPolicy: resolvedSocialPriorityPolicy,
     });
 
     return {
@@ -2534,7 +2748,7 @@ export function selectBatchMatches({
     if (usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) {
       return selectRotationPlayerGroupBatch({
         sessionData, rankedCandidates, playersById, requestedMatchCount,
-        requestedCourtIds, randomFn,
+        requestedCourtIds, randomFn, socialPriorityPolicy: resolvedSocialPriorityPolicy,
       });
     }
     const activeCounts = getPoolActiveCounts(sessionData);
@@ -2681,20 +2895,32 @@ export function selectBatchMatches({
     };
   }
 
-  const result = findBestBatchSelectionV3(
-    buildV3Players(sessionData, playersById, rankedCandidates),
-    {
+  const players = buildV3Players(sessionData, playersById, rankedCandidates);
+  const rotationOptions: RotationBatchOptions<(typeof players)[number]> = {
       courtCount: requestedMatchCount,
       sessionMode: getMatchmakerSessionMode(sessionData),
       sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
-      ...getRotationSelectionOptions(
-        sessionData, buildV3Players(sessionData, playersById, rankedCandidates)
-      ),
+      ...getRotationSelectionOptions(sessionData, players),
       randomFn,
-    }
-  );
+    };
+  const safeRun = resolvedSocialPriorityPolicy
+    ? runRotationSelectionWithSocialCandidate(
+        players,
+        rotationOptions,
+        resolvedSocialPriorityPolicy,
+        {
+          ...rotationOptions,
+          completedMatches: buildCompletedSocialMatches(sessionData),
+          socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+        }
+      )
+    : {
+        result: findBestBatchSelectionV3(players, rotationOptions),
+        decision: undefined,
+      };
+  const result = safeRun.result;
 
   if (!result.selection) {
     throw new GenerateMatchError(
@@ -2711,8 +2937,12 @@ export function selectBatchMatches({
   return {
     ...result.selection,
     selections: result.selection.selections.map((selection) =>
-      withMatchmakingReason(selection, sessionData)
+      withMatchmakingReason({
+        ...selection,
+        ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
+      }, sessionData)
     ),
+    ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
   };
 }
 
@@ -2724,6 +2954,7 @@ export function selectBatchMatchesRespectingSkips({
   requestedMatchCount,
   requestedCourtIds,
   randomFn,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2732,7 +2963,12 @@ export function selectBatchMatchesRespectingSkips({
   requestedMatchCount: number;
   requestedCourtIds?: string[];
   randomFn?: () => number;
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getMatchmakerSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
   const excludedSkipUserIds = new Set<string>();
   const consumedSkipUserIds: string[] = [];
@@ -2760,6 +2996,7 @@ export function selectBatchMatchesRespectingSkips({
         requestedMatchCount,
         requestedCourtIds,
         randomFn,
+        socialPriorityPolicy: resolvedSocialPriorityPolicy,
       });
     } catch (error) {
       if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {

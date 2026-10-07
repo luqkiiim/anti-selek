@@ -15,6 +15,7 @@ import {
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import { getSocialIdealRestGap } from "@/lib/matchmaking/v3/scoring";
 import * as socialHistory from "@/lib/matchmaking/socialSessionHistory";
+import * as socialBatch from "@/lib/matchmaking/v3/socialBatch";
 import {
   buildSocialVarietyContext,
   getSocialVarietyGains,
@@ -189,6 +190,13 @@ function interclubSession(players: GenerateMatchSession["players"], overrides: P
     players,
     sessionClubs: ["host", "partner"].map((clubId) => ({ clubId, status: "ACCEPTED", role: clubId === "host" ? "HOST" : "PARTNER", club: { id: clubId, name: clubId } })) as GenerateMatchSession["sessionClubs"],
     ...overrides,
+  });
+}
+
+function completedOnlyHistory(data: GenerateMatchSession) {
+  return buildSocialSessionHistory({
+    matches: data.matches.filter((entry) => entry.status === MatchStatus.COMPLETED),
+    queuedMatch: null,
   });
 }
 
@@ -444,15 +452,36 @@ describe("Social generation route adapters", () => {
     const data = interclubSession(players, {
       matches: [completed, active],
     });
-    const context = buildSocialVarietyContext(contextPlayers(data), buildSocialSessionHistory(data), {
+    const committedHistory = buildSocialSessionHistory(data);
+    const candidateHistory = completedOnlyHistory(data);
+    expect(committedHistory.map((entry) => entry.id)).toEqual(["manual-interclub", "active-interclub"]);
+    expect(candidateHistory.map((entry) => entry.id)).toEqual(["manual-interclub"]);
+    const context = buildSocialVarietyContext(contextPlayers(data), candidateHistory, {
       sessionMode: SessionMode.MIXICANO,
       opportunityConstraints: [interclubConstraints()],
+      includePausedPlayers: true,
+    });
+    const committedContext = buildSocialVarietyContext(contextPlayers(data), committedHistory, {
+      sessionMode: SessionMode.MIXICANO,
+      opportunityConstraints: [interclubConstraints()],
+      includePausedPlayers: true,
     });
     expect(context.playersByUserId.get("host-1")!.partners.opportunities.has("host-5")).toBe(true);
     expect(context.playersByUserId.get("host-1")!.partners.opportunities.has("partner-1")).toBe(false);
+    expect(context.playersByUserId.get("host-5")!.courtmates.counts.get("host-6") ?? 0).toBe(0);
+    expect(committedContext.playersByUserId.get("host-5")!.courtmates.counts.get("host-6")).toBe(1);
     const state = await inputs(data);
+    const matcherSpy = vi.spyOn(socialBatch, "findBestRotationBatchSelection");
     const result = selectBatchMatches({ ...state, requestedMatchCount: 2, randomFn: () => 0.25 });
     expect(result.selections).toHaveLength(2);
+    const candidateOptions = matcherSpy.mock.calls
+      .map(([, options]) => options)
+      .filter((options) => options.socialPriorityPolicy === "courtmate-beneficial-rescue");
+    expect(candidateOptions.length).toBeGreaterThan(0);
+    expect(candidateOptions[0].socialStructuralOpportunityConstraints).toHaveLength(1);
+    expect(candidateOptions[0].completedMatches).toEqual([
+      expect.objectContaining({ id: "manual-interclub" }),
+    ]);
     for (const selection of result.selections) {
       expect(JSON.parse(selection.matchmakingReasonJson ?? "{}").socialStarvation).toMatchObject({
         idealRestGap: 2,
@@ -486,7 +515,7 @@ describe("Social generation route adapters", () => {
     expectHistoryScore(selection, context);
   });
 
-  it("keeps an unrelated manual queue in the history used for an Interclub active replacement", async () => {
+  it("keeps a manual queue committed for legacy handling but out of Interclub candidate score history", async () => {
     const players = ["host", "partner"].flatMap((club) =>
       Array.from({ length: 8 }, (_, index) => player(`${club}-${index + 1}`, index % 2 === 0 ? PlayerGender.MALE : PlayerGender.FEMALE, { representingClubId: club }))
     );
@@ -498,17 +527,31 @@ describe("Social generation route adapters", () => {
     });
     const historySpy = vi.spyOn(socialHistory, "buildSocialSessionHistory");
     const state = await inputs(data);
+    const matcherSpy = vi.spyOn(socialBatch, "findBestRotationBatchSelection");
     const selection = selectReplacementMatch({ ...state, retainedUserIds: ["host-1", "host-2", "partner-1"], excludedUserIds: ["partner-2"] });
     expect(selection.ids).not.toContain("partner-2");
     expect(selection.ids.every((id) => !state.busyPlayerIds.has(id))).toBe(true);
+    expect(["host-7", "host-8", "partner-7", "partner-8"].every((id) => state.busyPlayerIds.has(id))).toBe(true);
+    expect(selection.ids.some((id) => ["host-7", "host-8", "partner-7", "partner-8"].includes(id))).toBe(false);
     const replacementHistory = historySpy.mock.results
       .filter((result) => result.type === "return")
       .map((result) => result.value as ReturnType<typeof buildSocialSessionHistory>);
     expect(replacementHistory).not.toHaveLength(0);
-    expect(replacementHistory.every((history) => history.some((entry) => entry.id === "unrelated-queue"))).toBe(true);
-    const context = buildSocialVarietyContext(contextPlayers(data), buildSocialSessionHistory(data), {
-      sessionMode: SessionMode.MIXICANO, opportunityConstraints: [interclubConstraints()],
+    expect(replacementHistory.some((history) => history.some((entry) => entry.id === "unrelated-queue"))).toBe(true);
+    expect(replacementHistory.some((history) => !history.some((entry) => entry.id === "unrelated-queue"))).toBe(true);
+    const candidateOptions = matcherSpy.mock.calls
+      .map(([, options]) => options)
+      .filter((options) => options.socialPriorityPolicy === "courtmate-beneficial-rescue");
+    expect(candidateOptions.length).toBeGreaterThan(0);
+    expect(candidateOptions[0].socialStructuralOpportunityConstraints).toHaveLength(1);
+    expect(candidateOptions[0].completedMatches).toEqual([]);
+    expect(candidateOptions[0].socialHistoryMatches?.some((entry) => entry.id === "unrelated-queue")).toBe(false);
+    const context = buildSocialVarietyContext(contextPlayers(data), completedOnlyHistory(data), {
+      sessionMode: SessionMode.MIXICANO,
+      opportunityConstraints: [interclubConstraints()],
+      includePausedPlayers: true,
     });
+    expect(context.playersByUserId.get("host-7")!.courtmates.opportunities.has("partner-7")).toBe(true);
     expectHistoryScore(selection, context);
   });
 });

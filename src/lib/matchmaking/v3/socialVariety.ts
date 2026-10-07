@@ -89,7 +89,7 @@ export interface SocialVarietyCoverageScorer {
   toNormalizedScore(gainUnits: bigint): number;
 }
 
-export type SocialCoverageGainMetric = "legacy-four-facet" | "social-horizon-321";
+export type SocialCoverageGainMetric = "legacy-four-facet" | "social-horizon-321" | "rolling-equal" | "social-horizon-3211";
 
 type FacetMaps = Record<SocialFacet, Map<string, number>>;
 type FacetOpportunities = Record<SocialFacet, Set<string>>;
@@ -733,6 +733,30 @@ export function buildSocialVarietyContext<T extends MatchmakerV3Player>(
     });
   }
   return { sessionMode, effectiveSideByUserId: sides, playersByUserId };
+}
+
+/**
+ * Build candidate-policy context from completed history and the caller's
+ * structural legal-opportunity rules. Busy and paused players stay in the
+ * vocabulary; history counts are rebuilt from `matches` rather than copied
+ * from any queue-inclusive context used by legacy production scoring.
+ */
+export function buildSocialStructuralVarietyContext<T extends MatchmakerV3Player>(
+  players: readonly T[],
+  matches: readonly SocialHistoryMatch[],
+  {
+    sessionMode,
+    opportunityConstraints,
+  }: {
+    sessionMode: SessionMode;
+    opportunityConstraints?: Array<V3SelectionConstraints<ActiveMatchmakerV3Player<T>>>;
+  }
+): SocialVarietyContext {
+  return buildSocialVarietyContext(players, matches, {
+    sessionMode,
+    opportunityConstraints,
+    includePausedPlayers: true,
+  });
 }
 
 function getEntropyGain(histogram: SocialVarietyHistogram, additions: Map<string, number>) {

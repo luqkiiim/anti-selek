@@ -1,17 +1,66 @@
 # Matchmaking v3
 
-Social maximizes fair, organic rotation variety. Balanced maximizes the same
-variety inside an explicit balance envelope. Both use `socialBatch.ts` for
-single courts, global batches, player groups, interclub, reshuffles and player
-replacement. Level Match uses the separate ladder matcher.
+Social uses `courtmate-beneficial-rescue` through the hardened API acceptance
+boundary. The Interclub structural-context repair and changed-default validation
+are recorded in the [default-switch report](../../../../docs/social-default-switch-results.md).
+Balanced Points and Elo retain their existing variety policy inside
+an explicit balance envelope. Both use `socialBatch.ts` as shared search
+infrastructure for single courts, global batches, player groups, Interclub,
+reshuffles and player replacement. Level Match uses the separate ladder matcher.
 
-## Priority policies
+## Shared stronger priorities
 
 Legality, busy/paused availability, mandatory retained players and hard format
 constraints are enforced before ranking. Shared priorities are effective match
 counts, arrival priority, applicable structural schedule rank, then starvation.
 
-After those priorities tie, Social certifies the smallest immediate-replay
+## Production Social default
+
+The effective session format selects the production policy explicitly. Social
+generation, immediate asynchronous refill, batches, reshuffles, retained-player
+replacement, grouped selection, Interclub and automatic queue creation/rebuild
+use the same hardened beneficial-rescue boundary. Points and Elo do not inherit
+this policy, even if an internal caller supplies a Social policy argument. The
+low-level matcher's omitted-policy behavior stays available for Balanced,
+historical benchmarks and the explicit Social production fallback.
+
+Inside the strongest fairness/arrival, schedule and starvation class, Social
+certifies maximum new courtmate gain `Gmax` and the best signed rolling
+match-type gain `TmaxAtGmax` at that maximum. Full-Gmax layouts remain admitted.
+A layout with `Gmax - 1` is admitted only when its signed gain satisfies
+`chosenDeltaT > TmaxAtGmax`; a larger deficit is never admitted. Admitted layouts
+rank by signed T, higher raw courtmate gain, courtmate equity, replay/rest,
+partner breadth, opponent breadth, entropy/repeat quality and the existing late
+tie-breakers. The objective, weights and T definition are unchanged by default
+wiring. There is no debt, match-type quota, MIXED percentage target or elapsed-time
+rest objective. Conditional joint refill remains experimental and disabled.
+
+The acceptance boundary requires policy echo, fairness, schedule, starvation,
+Gmax/Tmax, full-priority and variety certificates, a valid selected schedule,
+legal eligible disjoint quartets and recomputed selected G/T. Search limits,
+failures, invalid deficit arithmetic and non-beneficial concessions reject the
+candidate. A rejected candidate is discarded; the existing production Social
+matcher is rerun with replayed initial random draws and must prove its hard
+fairness/schedule/starvation contract and applicable replay/coverage gates.
+Fallback metadata and server telemetry identify `production-fallback`, never
+`candidate-exact`. If neither attempt proves the required hard contract, no
+selection is returned.
+
+The primary G/T inputs use the full structural roster, completed history,
+saved match-type snapshots and the caller's explicit legal-opportunity rules.
+Search and acceptance recomputation share this definition. Busy/paused players
+stay ineligible while their structural vocabulary remains available.
+A structural schedule's format/group
+constraints remain stronger than variety. See the
+[default-switch report](../../../../docs/social-default-switch-results.md) and
+[hardening report](../../../../docs/social-production-hardening-results.md) for
+certificate checks and the measured larger-roster fallback boundaries.
+
+## Balanced and legacy Social fallback
+
+This section describes the unchanged Balanced policy and the explicitly labelled
+legacy Social fallback. After the stronger priorities tie, the fallback
+certifies the smallest immediate-replay
 count available in that rotation class. Balanced first establishes its fixed
 balance envelope inside the same stronger class, then certifies the minimum
 replay count only among candidates inside that envelope. Across the entire
@@ -29,7 +78,7 @@ sessions, match type. The completed-match rest vector is a soft tie-break after
 entropy. `restTurns === 0` counts as an immediate replay. The soft vector
 maximizes the ascending sorted rest turns lexicographically: maximize the
 lowest rest, then the next-lowest, and so on. Total rest is not an objective.
-Social compares combined entropy exactly; Balanced uses its fixed 1e-12 bucket
+The legacy Social fallback compares combined entropy exactly; Balanced uses its fixed 1e-12 bucket
 on the combined score. `respectPlayerRest: false` disables replay and
 first-exposure gates and soft cadence preference, while starvation protection
 remains enabled. Structural opportunity coverage continues to report feasible
@@ -46,7 +95,7 @@ history supplies the baseline. Thus a best+1 batch can reopen an OWN_SIDE/MIXED
 first exposure, but only while it adds coverage beyond every exact-best-replay
 batch. Once no new exposure is available, the extra replay closes again.
 
-The resulting Social order is legality and availability, match-count fairness,
+The resulting fallback order is legality and availability, match-count fairness,
 arrival, structural schedule rank, starvation, certified global replay
 minimum, first-exposure coverage admission, combined entropy, soft cadence,
 actual worst/total balance gaps and applicable point-difference gaps, Social's
@@ -59,11 +108,13 @@ seeded/deterministic final tie.
 
 ## Shared variety and starvation
 
-`socialVariety.ts` is the single definition of variety. It measures changes in
+`socialVariety.ts` defines shared entropy gains. It measures changes in
 normalized lifetime Shannon entropy for courtmates, partners, opponents and,
 with Mixed pairing, MIXED versus OWN_SIDE experiences. Feasible facets have
 equal scale; a facet with fewer than two opportunities contributes zero.
-Negative gains are valid. There are no Mixed percentages, debt or obligations.
+Negative gains are valid. Production Social's earlier G/T and equity layers are
+defined by `socialCourtmatePriority.ts` and `socialRollingVariety.ts`; entropy
+remains a later quality layer. There are no Mixed percentages, debt or obligations.
 
 Opportunities use the full unpaused roster, including busy and queued players,
 and obey pairing, player-group and club restrictions. Temporary rest and court
@@ -92,10 +143,12 @@ across players. Empty structural facets are omitted with weight renormalization.
 roster; busy/paused availability, rest, and Balanced envelopes do not reduce
 its denominators. Rest quality remains measured in completed-match events.
 
-This KPI does not replace the internal equal-facet coverage admission rule.
-The matcher defaults to `legacy-four-facet`; `social-horizon-321` is an
-explicit benchmark-only opt-in and is not enabled by production callers.
-Verify the current policy against the official KPI with:
+The commands in this section reproduce historical low-level replay/coverage
+policies, including the unchanged Balanced and Social fallback behavior. They
+do not implicitly exercise the new API Social default. This KPI does not replace
+the legacy equal-facet coverage admission rule. The low-level coverage metric
+defaults to `legacy-four-facet`; `social-horizon-321` remains an explicit
+benchmark-only opt-in. Verify that legacy policy against the KPI with:
 
 ```sh
 node scripts/run-social-horizon-benchmark.mjs --only-policy current --target-matches 21 --coverage-gain-metric legacy-equal --out-dir <path>

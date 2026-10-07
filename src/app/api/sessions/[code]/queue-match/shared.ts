@@ -7,6 +7,7 @@ import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPr
 import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
 import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
+import { getEffectiveSessionType } from "@/lib/sessionSettings";
 import type { CourtGroupType } from "@/types/enums";
 import {
   buildMatchmakingState,
@@ -15,6 +16,7 @@ import {
   selectReplacementMatchRespectingSkips,
   selectSingleCourtMatchRespectingSkips,
 } from "../generate-match/selection";
+import { resolveSocialCandidatePolicy } from "../generate-match/socialCandidateAcceptance";
 import {
   GenerateMatchError,
   loadSessionRecord,
@@ -284,6 +286,9 @@ export async function selectAutomaticMatchForSession(
     sessionData,
     rotationHistory,
     reshuffleSource: null,
+    socialPriorityPolicy: resolveSocialCandidatePolicy(
+      getEffectiveSessionType(sessionData),
+    ),
   });
 
   return {
@@ -491,6 +496,9 @@ export async function reshuffleQueuedMatchForSession(
     rotationHistory,
     reshuffleSource: getQueuedReshuffleSource(sessionData),
     requiredCourtGroupType: sessionData.queuedMatch.courtGroupType,
+    socialPriorityPolicy: resolveSocialCandidatePolicy(
+      getEffectiveSessionType(reshuffleSessionData),
+    ),
   });
   const queuedMatch = await updateQueuedMatchRecord({
     sessionId: sessionData.id,
@@ -583,6 +591,9 @@ export async function replaceQueuedMatchPlayerForSession(
     retainedUserIds: retainedUserIds as [string, string, string],
     excludedUserIds: currentQueuedUserIds,
     requiredCourtGroupType: sessionData.queuedMatch.courtGroupType,
+    socialPriorityPolicy: resolveSocialCandidatePolicy(
+      getEffectiveSessionType(replacementSessionData),
+    ),
     });
 
   const queuedMatch = await updateQueuedMatchRecord({

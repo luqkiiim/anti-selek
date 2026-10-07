@@ -7,6 +7,8 @@ import { analyzeStaticBalancedRelationshipFeasibility } from "./benchmarkBalance
 import type { StaticBalanceFeasibilityReport } from "./benchmarkBalanceFeasibility";
 import { scoreSocialHorizon321 } from "./socialHorizonCoverageScoring";
 import type { SocialHorizon321Score } from "./socialHorizonCoverageScoring";
+import { scoreSocialVariety3211 } from "./socialRollingVariety";
+import type { RollingCoverageGainMetric, SocialVariety3211Score } from "./socialRollingVariety";
 import * as rotationApi from "./socialBatch";
 import type { RotationBatchOptions } from "./socialBatch";
 import type { MatchmakerV3Player, SocialHistoryMatch, SocialVarietySnapshot, V3DoublesPartition } from "./types";
@@ -25,6 +27,8 @@ export interface BenchmarkCheckpoint {
   varietyCoverageScore: number | null;
   /** Weighted C/O/P horizon score; absent only in older saved benchmark artifacts. */
   socialHorizon321?: SocialHorizon321Score;
+  /** Completed-only structural 3/2/1 relationship plus rolling-type score. */
+  socialVariety3211?: SocialVariety3211Score;
   partnerCoverage: number | null;
   opponentCoverage: number | null;
   courtmateCoverage: number | null;
@@ -42,6 +46,12 @@ export interface BenchmarkCheckpoint {
   starvation: StarvationSummary;
   replayEnvelope: ReplayEnvelopeSummary;
   coverageGate: CoverageGateSummary;
+  /** Present only for the opt-in Social courtmate-priority experiment. */
+  socialPriority?: SocialPrioritySummary;
+  /** Present only for the opt-in one-pair courtmate-rescue experiment. */
+  socialCourtmateRescue?: SocialCourtmateRescueSummary;
+  /** Present only for the opt-in strictly beneficial match-type rescue experiment. */
+  socialCourtmateBeneficialRescue?: SocialCourtmateBeneficialRescueSummary;
   typePriorityOverrides: {
     policyApplied: boolean;
     refillDecisions: number | null;
@@ -63,6 +73,180 @@ export interface BenchmarkCheckpoint {
   maximumObservedAvailableRestTurns: number;
   ongoingAvailableFiveTurnWaits: Array<{ userId: string; restTurns: number; initiatingReplay: ReplayInitiationTrace | null }>;
   inProgressFiveTurnAssignments: Array<{ userId: string; assignmentId: string; restTurns: number; initiatingReplay: ReplayInitiationTrace | null }>;
+}
+
+export interface SocialPrioritySummary {
+  policyApplied: true;
+  /** Includes the opening two-court batch and each subsequent one-court refill. */
+  objectiveDecisions: number;
+  objectiveCertifiedDecisions: number;
+  objectiveUncertifiedDecisions: number;
+  rankingDiscrepancies: number;
+  fairnessCertificateFailures: number;
+  starvationSafetyFailures: number;
+  searchLimitDecisions: number;
+  incompleteCounterfactualDecisions: number;
+  /** Started no-starvation wrapper audits; a match may still be unfinished at a checkpoint. */
+  counterfactualAuditDecisions: number;
+  counterfactualCertifiedDecisions: number;
+  counterfactualUncertifiedDecisions: number;
+  counterfactualRankingDiscrepancies: number;
+  counterfactualFairnessCertificateFailures: number;
+  counterfactualSearchLimitDecisions: number;
+  counterfactualIncompleteDecisions: number;
+  /** The production minimum-replay and coverage gates are intentionally inactive. */
+  coverageGateStatus: "DISABLED";
+  replayEnvelopeStatus: "DISABLED";
+}
+
+export interface SocialCourtmateRescueTypeWindowWitness {
+  userId: string;
+  feasibleTypes: CompletedMatchType[];
+  recentTypesBefore: Array<CompletedMatchType | null>;
+  recentTypesAfter: Array<CompletedMatchType | null>;
+  beforeT: number;
+  afterT: number;
+  deltaT: number;
+  missingTypesBefore: CompletedMatchType[];
+  missingTypesAfter: CompletedMatchType[];
+  restoredTypes: CompletedMatchType[];
+  expiredTypes: CompletedMatchType[];
+}
+
+export interface SocialCourtmateRescueDecisionWitness {
+  started: true;
+  /** All assignments in the real decision have completed; counterfactuals use null. */
+  completed: boolean | null;
+  completedAfterMatchNumber: number | null;
+  auditCompleted: boolean;
+  counterfactual: boolean;
+  respectStarvation: boolean;
+  label: string;
+  afterCompletedMatches: number;
+  courtCount: 1 | 2;
+  selectedCourts: Array<{ ids: string[]; partition: V3DoublesPartition }>;
+  independentCandidateCount: number;
+  admittedCandidateCount: number;
+  fairnessCertified: boolean;
+  starvationCertified: boolean;
+  gMaxCertified: boolean;
+  policyCertified: boolean;
+  rankingMatches: boolean;
+  courtmateCoverageProfileMatches: boolean;
+  searchLimitReached: boolean;
+  courtMateGainMaximum: number | null;
+  chosenCourtmateGain: number | null;
+  chosenCourtmateGainDeficit: number | null;
+  bestRollingMatchTypeGainAtGmax: number | null;
+  chosenRollingMatchTypeGain: number | null;
+  incrementalTGainVsBestFullGainCandidate: number | null;
+  rollingTypeGainDenominator: string;
+  selectedCourtmateCoverageProfile: Array<{ userId: string; covered: number; possible: number }>;
+  engineCourtmateCoverageProfile: Array<{ userId: string; covered: number; possible: number }> | null;
+  bestGmaxCourts: Array<{ ids: string[]; partition: V3DoublesPartition }> | null;
+  bestGmaxFullTypePlayerCount: number | null;
+  chosenFullTypePlayerCount: number | null;
+  fullTypePlayerCountDeltaVsGmax: number | null;
+  zeroTBenefitSacrifice: boolean;
+  /** Included for one-pair sacrifices so each restored or expired type is reviewable. */
+  perPlayerTypeWindows: SocialCourtmateRescueTypeWindowWitness[];
+}
+
+export interface SocialCourtmateRescueSummary {
+  policyApplied: true;
+  coverageGateStatus: "DISABLED";
+  replayEnvelopeStatus: "DISABLED";
+  /** Optimizer calls audited, including the opening two-court decision. */
+  startedDecisions: number;
+  /** Started real decisions whose full assigned batch has completed by this checkpoint. */
+  completedDecisions: number;
+  auditCompletedDecisions: number;
+  certifiedDecisions: number;
+  uncertifiedDecisions: number;
+  rankingDiscrepancies: number;
+  fairnessCertificateFailures: number;
+  starvationSafetyFailures: number;
+  gMaxCertificationFailures: number;
+  admissionFailures: number;
+  searchLimitDecisions: number;
+  incompleteAuditDecisions: number;
+  /** Completed real decisions only; a pending assignment never contributes. */
+  completedChosenCourtmatePairSacrifice: number;
+  completedOnePairSacrifices: number;
+  completedOnePairSacrificesWithPositiveTBenefit: number;
+  completedOnePairSacrificesWithZeroTBenefit: number;
+  completedOnePairSacrificesWithNegativeTBenefit: number;
+  completedSignedRollingTGain: number;
+  completedBestGmaxSignedRollingTGain: number;
+  completedIncrementalTGainVsBestFullGain: number;
+  completedTGainDenominator: string;
+  /** Started no-starvation counterfactual oracle audits in their own fairness class. */
+  counterfactualStartedDecisions: number;
+  counterfactualAuditCompletedDecisions: number;
+  counterfactualCertifiedDecisions: number;
+  counterfactualUncertifiedDecisions: number;
+  counterfactualRankingDiscrepancies: number;
+  counterfactualFairnessCertificateFailures: number;
+  counterfactualGMaxCertificationFailures: number;
+  counterfactualAdmissionFailures: number;
+  counterfactualSearchLimitDecisions: number;
+  counterfactualIncompleteAuditDecisions: number;
+  witnesses: SocialCourtmateRescueDecisionWitness[];
+  counterfactualWitnesses: SocialCourtmateRescueDecisionWitness[];
+}
+
+export interface SocialCourtmateBeneficialRescueDecisionWitness extends SocialCourtmateRescueDecisionWitness {
+  /** The strict courtmate-first winner among every independently enumerated Gmax candidate. */
+  strictWinnerRollingMatchTypeGainAtGmax: number;
+  strictWinnerAtGmaxCourts: Array<{ ids: string[]; partition: V3DoublesPartition }>;
+  strictWinnerAtGmaxFullTypePlayerCount: number;
+  /** Chosen ΔT minus strict-winner ΔT only when the chosen batch retains Gmax; otherwise zero. */
+  fullGmaxTBenefitVsStrict: number;
+}
+
+export interface SocialCourtmateBeneficialRescueSummary extends SocialCourtmateRescueSummary {
+  completedAtGmaxDecisions: number;
+  completedAtGmaxWithPositiveSignedTGain: number;
+  completedAtGmaxWithStrictOrderingBenefit: number;
+  completedAtGmaxIncrementalTVsStrictWinner: number;
+  completedAtGmaxExtraBothTypePlayerWindowsVsStrictWinner: number;
+  witnesses: SocialCourtmateBeneficialRescueDecisionWitness[];
+  counterfactualWitnesses: SocialCourtmateBeneficialRescueDecisionWitness[];
+}
+
+interface MutableSocialCourtmateRescueCounters {
+  startedDecisions: number;
+  auditCompletedDecisions: number;
+  certifiedDecisions: number;
+  uncertifiedDecisions: number;
+  rankingDiscrepancies: number;
+  fairnessCertificateFailures: number;
+  starvationSafetyFailures: number;
+  gMaxCertificationFailures: number;
+  admissionFailures: number;
+  searchLimitDecisions: number;
+  incompleteAuditDecisions: number;
+  counterfactualStartedDecisions: number;
+  counterfactualAuditCompletedDecisions: number;
+  counterfactualCertifiedDecisions: number;
+  counterfactualUncertifiedDecisions: number;
+  counterfactualRankingDiscrepancies: number;
+  counterfactualFairnessCertificateFailures: number;
+  counterfactualGMaxCertificationFailures: number;
+  counterfactualAdmissionFailures: number;
+  counterfactualSearchLimitDecisions: number;
+  counterfactualIncompleteAuditDecisions: number;
+  rollingTypeGainDenominator: string;
+  witnesses: SocialCourtmateRescueDecisionWitness[];
+  counterfactualWitnesses: SocialCourtmateRescueDecisionWitness[];
+}
+
+interface MutableSocialCourtmateBeneficialRescueCounters extends Omit<
+  MutableSocialCourtmateRescueCounters,
+  "witnesses" | "counterfactualWitnesses"
+> {
+  witnesses: SocialCourtmateBeneficialRescueDecisionWitness[];
+  counterfactualWitnesses: SocialCourtmateBeneficialRescueDecisionWitness[];
 }
 
 export interface StarvationSummary {
@@ -499,7 +683,11 @@ export interface SocialHorizonCoverageReport {
   generatedAt: string;
   enginePolicy: BenchmarkReport["enginePolicy"];
   targetMatches: number;
-  matcherCoverageGainMetric: "legacy-equal" | "social-horizon-321";
+  matcherCoverageGainMetric: "legacy-equal" | "social-horizon-321" | RollingCoverageGainMetric;
+  /** Omitted for legacy production runs; opt-in experiment only supports Social. */
+  socialPriorityPolicy?: "courtmate-first" | "courtmate-near-best" | "courtmate-beneficial-rescue";
+  /** Omitted when the default three-format roster was used. */
+  sessionTypes?: SessionType[];
   seeds: number[];
   metric: {
     id: "social-horizon-321";
@@ -519,7 +707,7 @@ export function assertBenchmarkReportReadyForRendering(report: Pick<BenchmarkRep
   }
 }
 
-interface BenchmarkPlayer extends MatchmakerV3Player {
+export interface BenchmarkPlayer extends MatchmakerV3Player {
   restTurns: number;
   gender: string;
   partnerPreference: string;
@@ -561,6 +749,8 @@ interface DecisionMeta {
   overduePlayerCount: number;
   counterfactualComplete: boolean;
   counterfactualChanged: boolean | null;
+  socialCourtmateRescueWitness?: SocialCourtmateRescueDecisionWitness;
+  socialCourtmateBeneficialRescueWitness?: SocialCourtmateBeneficialRescueDecisionWitness;
 }
 
 interface CounterfactualSelectionProof {
@@ -568,6 +758,7 @@ interface CounterfactualSelectionProof {
   fairnessCertified: boolean;
   starvationCertified: boolean;
   varietyOptimal: boolean;
+  priorityCertified?: boolean;
   balanceCertified: boolean | undefined;
   bestImmediateReplayCount: number | null;
   allowedImmediateReplayCount: number | null;
@@ -579,7 +770,16 @@ interface CounterfactualSelectionProof {
   coverageGateCertified?: boolean | null;
   coverageGateStatus?: "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION" | "DISABLED" | null;
   chosenReplayCoverageEligible?: boolean | null;
-  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321" | null;
+  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321" | RollingCoverageGainMetric | null;
+  socialPriorityPolicy?: "courtmate-first" | "courtmate-near-best" | "courtmate-beneficial-rescue" | null;
+  courtmateGainMaximumCertified?: boolean;
+  courtmateGainMaximum?: number | null;
+  chosenCourtmateGainDeficit?: number | null;
+  bestRollingMatchTypeGainAtGmax?: number | null;
+  chosenNewCourtmatePairCount?: number | null;
+  chosenRollingMatchTypeGain?: number | null;
+  chosenPostBatchCourtmateCoverage?: Array<{ userId: string; covered: number; possible: number }> | null;
+  searchLimitReached?: boolean;
 }
 
 interface WaitEpisodeMeta {
@@ -833,11 +1033,18 @@ function canonicalSum(values: number[]) {
 }
 
 type CoverageGateFacet = "courtmates" | "partners" | "opponents" | "matchType";
-type BenchmarkCoverageGainMetric = "legacy-equal" | "social-horizon-321";
+type BenchmarkCoverageGainMetric = "legacy-equal" | "social-horizon-321" | RollingCoverageGainMetric;
 interface IndependentCoverageGain {
   numerator: bigint;
   denominator: bigint;
   normalized: number;
+}
+
+function getCompletedSocialMatchType(match: SocialHistoryMatch): "MIXED" | "OWN_SIDE" {
+  const courtType = match.socialVariety?.courtType;
+  if (courtType === "MIXED") return "MIXED";
+  if (courtType === "UPPER" || courtType === "LOWER") return "OWN_SIDE";
+  throw new Error(`Completed benchmark match ${match.id ?? "(unknown)"} has no completed match-type snapshot.`);
 }
 
 function greatestCommonDivisor(left: bigint, right: bigint) {
@@ -854,6 +1061,824 @@ function leastCommonMultiple(left: bigint, right: bigint) {
     : (left / greatestCommonDivisor(left, right)) * right;
 }
 
+type CompletedMatchType = "MIXED" | "OWN_SIDE";
+type CompletedTypeHistory = Map<string, CompletedMatchType[]>;
+
+function buildCompletedTypeHistory(completedHistory: readonly SocialHistoryMatch[]): CompletedTypeHistory {
+  const completedTypesByPlayer: CompletedTypeHistory = new Map();
+  for (const match of completedHistory) {
+    const matchType = getCompletedSocialMatchType(match);
+    for (const userId of [...match.team1, ...match.team2]) {
+      let types = completedTypesByPlayer.get(userId);
+      if (!types) {
+        types = [];
+        completedTypesByPlayer.set(userId, types);
+      }
+      types.push(matchType);
+    }
+  }
+  return completedTypesByPlayer;
+}
+
+export interface SocialPriorityObjective {
+  newCourtmatePairs: number;
+  ascendingCoverageProfile: Array<{ userId: string; covered: number; possible: number }>;
+  /** Exact common-denominator sum of each assigned player's signed rolling-six T change. */
+  signedRollingTypeDelta: bigint;
+  immediateReplayCount: number;
+  softCadenceVector: number[];
+  newPartnerPairs: number;
+  newOpponentPairs: number;
+  relationshipEntropyGain: number;
+  sharedCourtRepeatPenalty: number;
+  sharedCourtEncounterFrequencyPenalty: number;
+  partnerRepeatPenalty: number;
+  opponentRepeatPenalty: number;
+  exactRematchPenalty: number;
+  maxBalanceGap: number;
+  totalBalanceGap: number;
+}
+
+export interface IndependentSocialPriorityAudit {
+  complete: boolean;
+  candidateCount: number;
+  admittedCandidateCount: number;
+  bestObjective: SocialPriorityObjective | null;
+  selectedObjective: SocialPriorityObjective | null;
+  selectedFairnessCertified: boolean;
+  selectedStarvationCertified: boolean;
+  courtmateGainMaximum: number | null;
+  courtmateGainMaximumCertified: boolean;
+  bestRollingMatchTypeGainAtGmax: bigint | null;
+  bestGmaxChoices: IndependentCourtChoice[] | null;
+  /** Strict courtmate-first winner over all Gmax choices; populated by the beneficial-rescue oracle. */
+  strictBestGmaxChoices: IndependentCourtChoice[] | null;
+  strictBestGmaxObjective: SocialPriorityObjective | null;
+  bestAdmittedChoices: IndependentCourtChoice[] | null;
+  rollingTypeDenominator: bigint;
+}
+
+export interface IndependentCourtChoice {
+  ids: string[];
+  partition: V3DoublesPartition;
+  balanceGap: number;
+  key: string;
+  newCourtmatePairs: number;
+}
+
+interface IndependentCourtGroup {
+  players: BenchmarkPlayer[];
+  fairness: number[];
+  starvation: number[];
+  /** Each entry is one unordered two-court split. */
+  divisions: Array<[IndependentCourtChoice[], IndependentCourtChoice[]]>;
+}
+
+function compareSocialPriorityObjectives(
+  left: SocialPriorityObjective,
+  right: SocialPriorityObjective,
+  policy: "courtmate-first" | "courtmate-near-best" | "courtmate-beneficial-rescue" = "courtmate-first"
+) {
+  if (policy === "courtmate-first" && left.newCourtmatePairs !== right.newCourtmatePairs) {
+    return right.newCourtmatePairs - left.newCourtmatePairs;
+  }
+  if (policy === "courtmate-near-best" && left.signedRollingTypeDelta !== right.signedRollingTypeDelta) {
+    return left.signedRollingTypeDelta > right.signedRollingTypeDelta ? -1 : 1;
+  }
+  if (policy === "courtmate-beneficial-rescue") {
+    if (left.signedRollingTypeDelta !== right.signedRollingTypeDelta) {
+      return left.signedRollingTypeDelta > right.signedRollingTypeDelta ? -1 : 1;
+    }
+    if (left.newCourtmatePairs !== right.newCourtmatePairs) return right.newCourtmatePairs - left.newCourtmatePairs;
+  }
+  for (let index = 0; index < Math.max(left.ascendingCoverageProfile.length, right.ascendingCoverageProfile.length); index += 1) {
+    const leftEntry = left.ascendingCoverageProfile[index];
+    const rightEntry = right.ascendingCoverageProfile[index];
+    if (!leftEntry || !rightEntry) return leftEntry ? -1 : rightEntry ? 1 : 0;
+    const leftCross = BigInt(leftEntry.covered) * BigInt(rightEntry.possible);
+    const rightCross = BigInt(rightEntry.covered) * BigInt(leftEntry.possible);
+    if (leftCross !== rightCross) return leftCross > rightCross ? -1 : 1;
+  }
+  if ((policy === "courtmate-first" || policy === "courtmate-beneficial-rescue") &&
+      left.signedRollingTypeDelta !== right.signedRollingTypeDelta) {
+    return left.signedRollingTypeDelta > right.signedRollingTypeDelta ? -1 : 1;
+  }
+  if (left.immediateReplayCount !== right.immediateReplayCount) return left.immediateReplayCount - right.immediateReplayCount;
+  const cadenceOrder = compareNumberVectors(left.softCadenceVector, right.softCadenceVector);
+  if (cadenceOrder) return cadenceOrder;
+  if (left.newPartnerPairs !== right.newPartnerPairs) return right.newPartnerPairs - left.newPartnerPairs;
+  if (left.newOpponentPairs !== right.newOpponentPairs) return right.newOpponentPairs - left.newOpponentPairs;
+  if (left.relationshipEntropyGain !== right.relationshipEntropyGain) return right.relationshipEntropyGain - left.relationshipEntropyGain;
+  return left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+    left.sharedCourtEncounterFrequencyPenalty - right.sharedCourtEncounterFrequencyPenalty ||
+    left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+    left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+    left.exactRematchPenalty - right.exactRematchPenalty ||
+    left.maxBalanceGap - right.maxBalanceGap ||
+    left.totalBalanceGap - right.totalBalanceGap;
+}
+
+/** Exact signed-unit guard used by the independent beneficial-rescue audit. */
+export function isCourtmateBeneficialRescueAdmitted(
+  gain: number,
+  gMax: number | null,
+  signedT: bigint,
+  tMaxAtGmax: bigint | null
+) {
+  if (gMax === null) return false;
+  return gain === gMax || (gain === gMax - 1 && tMaxAtGmax !== null && signedT > tMaxAtGmax);
+}
+
+function forEachCombination<T>(items: readonly T[], count: number, visit: (chosen: T[]) => void) {
+  const chosen: T[] = [];
+  const walk = (start: number) => {
+    if (chosen.length === count) {
+      visit([...chosen]);
+      return;
+    }
+    const remaining = count - chosen.length;
+    for (let index = start; index <= items.length - remaining; index += 1) {
+      chosen.push(items[index]);
+      walk(index + 1);
+      chosen.pop();
+    }
+  };
+  walk(0);
+}
+
+function completedRelationshipPairs(completedHistory: readonly SocialHistoryMatch[]) {
+  const courtmates = new Set<string>();
+  const courtmateEncounterCounts = new Map<string, number>();
+  const partners = new Set<string>();
+  const opponents = new Set<string>();
+  const datedHistory = completedHistory.flatMap((match) => {
+    const completedAt = (match as SocialHistoryMatch & { completedAt?: unknown }).completedAt;
+    return completedAt instanceof Date ? [{ match, completedAt }] : [];
+  }).sort((left, right) => left.completedAt.getTime() - right.completedAt.getTime());
+  const partnerRepeatWeights = new Map<string, number>();
+  const opponentRepeatWeights = new Map<string, number>();
+  const exactRematchWeights = new Map<string, number>();
+  for (const match of completedHistory) {
+    for (const relationship of getPartitionRelationships(match)) {
+      const [facet, key] = relationship.split(":", 2);
+      if (facet === "courtmates") {
+        courtmates.add(key);
+        courtmateEncounterCounts.set(key, (courtmateEncounterCounts.get(key) ?? 0) + 1);
+      }
+      else if (facet === "partners") partners.add(key);
+      else if (facet === "opponents") opponents.add(key);
+    }
+  }
+  const datedPartnerHistory = datedHistory.slice(-8);
+  for (const [index, { match }] of datedPartnerHistory.entries()) {
+    const weight = 0.85 ** (datedPartnerHistory.length - index - 1);
+    for (const team of [match.team1, match.team2]) {
+      const key = pairKey(team[0], team[1]);
+      partnerRepeatWeights.set(key, (partnerRepeatWeights.get(key) ?? 0) + weight);
+    }
+  }
+  const datedOpponentHistory = datedHistory.slice(-8);
+  for (const [index, { match }] of datedOpponentHistory.entries()) {
+    const weight = 0.85 ** (datedOpponentHistory.length - index - 1);
+    for (const left of match.team1) for (const right of match.team2) {
+      const key = pairKey(left, right);
+      opponentRepeatWeights.set(key, (opponentRepeatWeights.get(key) ?? 0) + weight);
+    }
+  }
+  const exactMatchesByPartition = new Map<string, SocialHistoryMatch[]>();
+  for (const { match } of datedHistory) {
+    const teamKeys = [pairKey(match.team1[0], match.team1[1]), pairKey(match.team2[0], match.team2[1])]
+      .sort();
+    const key = teamKeys.join("||");
+    const matches = exactMatchesByPartition.get(key) ?? [];
+    matches.push(match);
+    exactMatchesByPartition.set(key, matches);
+  }
+  for (const [key, matches] of exactMatchesByPartition) {
+    const recent = matches.slice(-6);
+    exactRematchWeights.set(key, recent.reduce((sum, _match, index) =>
+      sum + 0.85 ** (recent.length - index - 1), 0));
+  }
+  return {
+    courtmates, courtmateEncounterCounts, partners, opponents,
+    partnerRepeatWeights, opponentRepeatWeights, exactRematchWeights,
+  };
+}
+
+/**
+ * Exhaustive audit for the experimental Social objective. It receives only
+ * completed matches for history and uses the full roster context for structural
+ * opportunities; reservations never contribute to this counterfactual.
+ */
+function auditCourtmatePrioritySelection(
+  players: BenchmarkPlayer[],
+  completedHistory: readonly SocialHistoryMatch[],
+  selected: readonly { ids: string[]; partition: V3DoublesPartition }[],
+  courtCount: 1 | 2,
+  respectStarvation = true,
+  policy: "courtmate-first" | "courtmate-near-best" | "courtmate-beneficial-rescue" = "courtmate-first"
+): IndependentSocialPriorityAudit {
+  const available = players.filter((player) => !player.isBusy && !player.isPaused);
+  const playersById = new Map(players.map((player) => [player.userId, player]));
+  const quartetChoices = new Map<string, IndependentCourtChoice[]>();
+  forEachCombination(available, 4, (quartet) => {
+    const ids = quartet.map((player) => player.userId).sort((left, right) => left.localeCompare(right));
+    for (const partition of getDoublesPartitions(ids as [string, string, string, string])) {
+      if (!isMixedModeLegal(partition, playersById)) continue;
+      const choice: IndependentCourtChoice = {
+        ids,
+        partition,
+        balanceGap: independentBalanceGap(partition, playersById),
+        key: exactCandidateKey(ids, partition),
+        newCourtmatePairs: 0,
+      };
+      const list = quartetChoices.get(ids.join("|")) ?? [];
+      list.push(choice);
+      quartetChoices.set(ids.join("|"), list);
+    }
+  });
+
+  const groups: IndependentCourtGroup[] = [];
+  if (courtCount === 1) {
+    for (const choices of quartetChoices.values()) {
+      const chosenPlayers = choices[0].ids.map((id) => playersById.get(id)!);
+      groups.push({
+        players: chosenPlayers,
+        fairness: getFairnessVector(chosenPlayers),
+        starvation: getStarvationVector(chosenPlayers, available),
+        divisions: [[choices, []]],
+      });
+    }
+  } else {
+    forEachCombination(available, 8, (rosterGroup) => {
+      const sortedPlayers = [...rosterGroup].sort((left, right) => left.userId.localeCompare(right.userId));
+      const rosterIds = sortedPlayers.map((player) => player.userId);
+      const group: IndependentCourtGroup = {
+        players: sortedPlayers,
+        fairness: getFairnessVector(sortedPlayers),
+        starvation: getStarvationVector(sortedPlayers, available),
+        divisions: [],
+      };
+      const anchor = rosterIds[0];
+      forEachCombination(rosterIds, 4, (firstCourt) => {
+        if (!firstCourt.includes(anchor)) return;
+        const firstKey = firstCourt.join("|");
+        const firstSet = new Set(firstCourt);
+        const secondCourt = rosterIds.filter((id) => !firstSet.has(id));
+        const firstChoices = quartetChoices.get(firstKey);
+        const secondChoices = quartetChoices.get(secondCourt.join("|"));
+        if (firstChoices?.length && secondChoices?.length) {
+          group.divisions.push([firstChoices, secondChoices]);
+        }
+      });
+      if (group.divisions.length) groups.push(group);
+    });
+  }
+
+  if (!groups.length) return {
+    complete: true, candidateCount: 0, admittedCandidateCount: 0, bestObjective: null, selectedObjective: null,
+    selectedFairnessCertified: false, selectedStarvationCertified: false, courtmateGainMaximum: null,
+    courtmateGainMaximumCertified: false, bestRollingMatchTypeGainAtGmax: null, bestGmaxChoices: null,
+    strictBestGmaxChoices: null, strictBestGmaxObjective: null,
+    bestAdmittedChoices: null,
+    rollingTypeDenominator: BigInt(1),
+  };
+  let bestFairness: number[] | null = null;
+  let bestStarvation: number[] | null = null;
+  for (const group of groups) {
+    const fairnessOrder = bestFairness ? compareNumberVectors(group.fairness, bestFairness) : -1;
+    if (fairnessOrder < 0 || (fairnessOrder === 0 && bestStarvation && compareNumberVectors(group.starvation, bestStarvation) < 0)) {
+      bestFairness = group.fairness;
+      bestStarvation = group.starvation;
+    }
+  }
+  const strongestGroups = groups.filter((group) => bestFairness && bestStarvation &&
+    compareNumberVectors(group.fairness, bestFairness) === 0 &&
+    (!respectStarvation || compareNumberVectors(group.starvation, bestStarvation) === 0));
+  const fullRosterContext = buildSocialVarietyContext(players, completedHistory, {
+    sessionMode: SessionMode.MIXICANO,
+    includePausedPlayers: true,
+  });
+  const completedPairs = completedRelationshipPairs(completedHistory);
+  const completedTypesByPlayer = buildCompletedTypeHistory(completedHistory);
+  let rollingTypeDenominator = BigInt(1);
+  for (const playerContext of fullRosterContext.playersByUserId.values()) {
+    const feasibleTypeCount = playerContext.matchType.opportunities.size;
+    if (feasibleTypeCount > 0) rollingTypeDenominator = leastCommonMultiple(rollingTypeDenominator, BigInt(feasibleTypeCount));
+  }
+  const isStructurallyFeasiblePair = (facet: (typeof RELATION_FACETS)[number], left: string, right: string) => {
+    const leftOpportunities = fullRosterContext.playersByUserId.get(left)?.[facet].opportunities;
+    const rightOpportunities = fullRosterContext.playersByUserId.get(right)?.[facet].opportunities;
+    return Boolean(leftOpportunities?.has(right) && rightOpportunities?.has(left));
+  };
+  const coveredCourtmatesByPlayer = new Map<string, Set<string>>();
+  for (const [userId, history] of fullRosterContext.playersByUserId) {
+    const covered = new Set<string>();
+    for (const peer of history.courtmates.opportunities) {
+      if ((history.courtmates.counts.get(peer) ?? 0) > 0) covered.add(peer);
+    }
+    coveredCourtmatesByPlayer.set(userId, covered);
+  }
+  for (const choices of quartetChoices.values()) {
+    for (const choice of choices) {
+      let newPairCount = 0;
+      for (let left = 0; left < choice.ids.length; left += 1) {
+        for (let right = left + 1; right < choice.ids.length; right += 1) {
+          const first = choice.ids[left];
+          const second = choice.ids[right];
+          const key = pairKey(first, second);
+          if (isStructurallyFeasiblePair("courtmates", first, second) && !completedPairs.courtmates.has(key)) {
+            newPairCount += 1;
+          }
+        }
+      }
+      choice.newCourtmatePairs = newPairCount;
+    }
+  }
+  let candidateCount = 0;
+  let admittedCandidateCount = 0;
+  let bestObjective: SocialPriorityObjective | null = null;
+  let bestAdmittedChoices: IndependentCourtChoice[] | null = null;
+  let courtmateGainMaximum: number | null = null;
+  let bestRollingMatchTypeGainAtGmax: bigint | null = null;
+  let bestGmaxObjective: SocialPriorityObjective | null = null;
+  let bestGmaxChoices: IndependentCourtChoice[] | null = null;
+  let strictBestGmaxObjective: SocialPriorityObjective | null = null;
+  let strictBestGmaxChoices: IndependentCourtChoice[] | null = null;
+  const scoreSelections = (choices: IndependentCourtChoice[]) => {
+    const selectedIds = new Set(choices.flatMap((choice) => choice.ids));
+    const selectedPlayers = [...selectedIds].map((id) => playersById.get(id)!);
+    const candidateCourtPairs = new Set<string>();
+    const candidatePartnerPairs = new Set<string>();
+    const candidateOpponentPairs = new Set<string>();
+    const recentTypesByPlayer = new Map<string, Array<CompletedMatchType | null>>();
+    for (const choice of choices) {
+      const ids = [...choice.partition.team1, ...choice.partition.team2];
+      for (let left = 0; left < ids.length; left += 1) {
+        for (let right = left + 1; right < ids.length; right += 1) {
+          const key = pairKey(ids[left], ids[right]);
+          if (isStructurallyFeasiblePair("courtmates", ids[left], ids[right]) && !completedPairs.courtmates.has(key)) {
+            candidateCourtPairs.add(key);
+          }
+        }
+      }
+      const relationships = getPartitionRelationships(choice.partition);
+      for (const relationship of relationships) {
+        const [facet, key] = relationship.split(":", 2);
+        const [left, right] = key.split("|");
+        if (facet === "partners" && isStructurallyFeasiblePair("partners", left, right) && !completedPairs.partners.has(key)) {
+          candidatePartnerPairs.add(key);
+        }
+        if (facet === "opponents" && isStructurallyFeasiblePair("opponents", left, right) && !completedPairs.opponents.has(key)) {
+          candidateOpponentPairs.add(key);
+        }
+      }
+      const type = getSocialVarietySnapshot(choice.partition, fullRosterContext).courtType;
+      const matchType = type === "MIXED" ? "MIXED" : type === "UPPER" || type === "LOWER" ? "OWN_SIDE" : null;
+      for (const id of ids) {
+        const history = recentTypesByPlayer.get(id) ?? (completedTypesByPlayer.get(id) ?? []).slice(-6);
+        recentTypesByPlayer.set(id, [...history, matchType]);
+      }
+    }
+
+    const ascendingCoverageProfile = [...fullRosterContext.playersByUserId].flatMap(([userId, playerContext]) => {
+      const feasiblePeers = playerContext.courtmates.opportunities;
+      if (!feasiblePeers.size) return [];
+      const covered = coveredCourtmatesByPlayer.get(userId) ?? new Set<string>();
+      const additions = [...candidateCourtPairs].flatMap((key) => {
+        const [left, right] = key.split("|");
+        if (left === userId && feasiblePeers.has(right)) return [right];
+        if (right === userId && feasiblePeers.has(left)) return [left];
+        return [];
+      });
+      const after = new Set([...covered, ...additions]);
+      return [{ userId, covered: Math.min(feasiblePeers.size, after.size), possible: feasiblePeers.size }];
+    }).sort((left, right) => {
+      const leftCross = BigInt(left.covered) * BigInt(right.possible);
+      const rightCross = BigInt(right.covered) * BigInt(left.possible);
+      return leftCross === rightCross ? left.userId.localeCompare(right.userId) : leftCross < rightCross ? -1 : 1;
+    });
+    let signedRollingTypeDelta = BigInt(0);
+    for (const [userId, recentAfterCandidate] of recentTypesByPlayer) {
+      const feasible = fullRosterContext.playersByUserId.get(userId)?.matchType.opportunities;
+      if (!feasible?.size) continue;
+      const recentBefore = (completedTypesByPlayer.get(userId) ?? []).slice(-6);
+      const before = new Set(recentBefore.filter((type) => feasible.has(type)));
+      const after = new Set(recentAfterCandidate.slice(-6).filter((type): type is CompletedMatchType => type !== null && feasible.has(type)));
+      signedRollingTypeDelta += BigInt(after.size - before.size) *
+        (rollingTypeDenominator / BigInt(feasible.size));
+    }
+    const relationshipGains = { courtmates: [] as number[], partners: [] as number[], opponents: [] as number[] };
+    let sharedCourtRepeatPenalty = 0;
+    let sharedCourtEncounterFrequencyPenalty = 0;
+    let partnerRepeatPenalty = 0;
+    let opponentRepeatPenalty = 0;
+    let exactRematchPenalty = 0;
+    const balanceGaps: number[] = [];
+    for (const choice of choices) {
+      balanceGaps.push(choice.balanceGap);
+      const gains = getSocialVarietyGains(choice.partition, fullRosterContext);
+      relationshipGains.courtmates.push(gains.courtmates);
+      relationshipGains.partners.push(gains.partners);
+      relationshipGains.opponents.push(gains.opponents);
+      const relationships = getPartitionRelationships(choice.partition);
+      for (const relationship of relationships) {
+        const [facet, key] = relationship.split(":", 2);
+        if (facet === "courtmates") {
+          sharedCourtRepeatPenalty += Number(completedPairs.courtmates.has(key));
+          sharedCourtEncounterFrequencyPenalty += completedPairs.courtmateEncounterCounts.get(key) ?? 0;
+        }
+      }
+      for (const team of [choice.partition.team1, choice.partition.team2]) {
+        partnerRepeatPenalty += completedPairs.partnerRepeatWeights.get(pairKey(team[0], team[1])) ?? 0;
+      }
+      for (const left of choice.partition.team1) for (const right of choice.partition.team2) {
+        const repeatWeight = completedPairs.opponentRepeatWeights.get(pairKey(left, right)) ?? 0;
+        opponentRepeatPenalty += repeatWeight * repeatWeight;
+      }
+      const exactKey = [pairKey(choice.partition.team1[0], choice.partition.team1[1]),
+        pairKey(choice.partition.team2[0], choice.partition.team2[1])].sort().join("||");
+      exactRematchPenalty += completedPairs.exactRematchWeights.get(exactKey) ?? 0;
+    }
+    const relationshipEntropyGain = canonicalSum([
+      canonicalSum(relationshipGains.courtmates),
+      canonicalSum(relationshipGains.partners),
+      canonicalSum(relationshipGains.opponents),
+    ]);
+    return {
+      newCourtmatePairs: candidateCourtPairs.size,
+      ascendingCoverageProfile,
+      signedRollingTypeDelta,
+      immediateReplayCount: selectedPlayers.filter((player) => player.restTurns === 0).length,
+      softCadenceVector: getSoftRestVector(selectedPlayers),
+      newPartnerPairs: candidatePartnerPairs.size,
+      newOpponentPairs: candidateOpponentPairs.size,
+      relationshipEntropyGain,
+      sharedCourtRepeatPenalty,
+      sharedCourtEncounterFrequencyPenalty,
+      partnerRepeatPenalty,
+      opponentRepeatPenalty,
+      exactRematchPenalty,
+      maxBalanceGap: Math.max(0, ...balanceGaps),
+      totalBalanceGap: canonicalSum(balanceGaps),
+    } satisfies SocialPriorityObjective;
+  };
+
+  if (policy === "courtmate-near-best" || policy === "courtmate-beneficial-rescue") {
+    // Gmax is computed independently from match-type scoring: each chosen
+    // court contributes the six unordered pairs among its four players, less
+    // structurally infeasible or already completed pairs.
+    for (const group of strongestGroups) {
+      for (const [firstChoices, secondChoices] of group.divisions) {
+        if (courtCount === 1) {
+          for (const first of firstChoices) {
+            candidateCount += 1;
+            courtmateGainMaximum = Math.max(courtmateGainMaximum ?? Number.NEGATIVE_INFINITY, first.newCourtmatePairs);
+          }
+          continue;
+        }
+        for (const first of firstChoices) for (const second of secondChoices) {
+          candidateCount += 1;
+          const gain = first.newCourtmatePairs + second.newCourtmatePairs;
+          courtmateGainMaximum = Math.max(courtmateGainMaximum ?? Number.NEGATIVE_INFINITY, gain);
+        }
+      }
+    }
+  }
+
+  if (policy === "courtmate-beneficial-rescue") {
+    // This frontier pass independently finds both TmaxAtGmax and the strict
+    // courtmate-first Gmax reference used only for the new policy diagnosis.
+    for (const group of strongestGroups) {
+      for (const [firstChoices, secondChoices] of group.divisions) {
+        if (courtCount === 1) {
+          for (const first of firstChoices) {
+            if (first.newCourtmatePairs !== courtmateGainMaximum) continue;
+            const objective = scoreSelections([first]);
+            if (bestRollingMatchTypeGainAtGmax === null ||
+                objective.signedRollingTypeDelta > bestRollingMatchTypeGainAtGmax) {
+              bestRollingMatchTypeGainAtGmax = objective.signedRollingTypeDelta;
+            }
+            if (!bestGmaxObjective || compareSocialPriorityObjectives(
+              objective, bestGmaxObjective, "courtmate-near-best"
+            ) < 0) {
+              bestGmaxObjective = objective;
+              bestGmaxChoices = [first];
+            }
+            if (!strictBestGmaxObjective || compareSocialPriorityObjectives(
+              objective, strictBestGmaxObjective, "courtmate-first"
+            ) < 0) {
+              strictBestGmaxObjective = objective;
+              strictBestGmaxChoices = [first];
+            }
+          }
+          continue;
+        }
+        for (const first of firstChoices) for (const second of secondChoices) {
+          if (first.newCourtmatePairs + second.newCourtmatePairs !== courtmateGainMaximum) continue;
+          const choices = [first, second];
+          const objective = scoreSelections(choices);
+          if (bestRollingMatchTypeGainAtGmax === null ||
+              objective.signedRollingTypeDelta > bestRollingMatchTypeGainAtGmax) {
+            bestRollingMatchTypeGainAtGmax = objective.signedRollingTypeDelta;
+          }
+          if (!bestGmaxObjective || compareSocialPriorityObjectives(
+            objective, bestGmaxObjective, "courtmate-near-best"
+          ) < 0) {
+            bestGmaxObjective = objective;
+            bestGmaxChoices = choices;
+          }
+          if (!strictBestGmaxObjective || compareSocialPriorityObjectives(
+            objective, strictBestGmaxObjective, "courtmate-first"
+          ) < 0) {
+            strictBestGmaxObjective = objective;
+            strictBestGmaxChoices = choices;
+          }
+        }
+      }
+    }
+  }
+
+  for (const group of strongestGroups) {
+    for (const [firstChoices, secondChoices] of group.divisions) {
+      if (courtCount === 1) {
+        for (const first of firstChoices) {
+          if (policy === "courtmate-first") candidateCount += 1;
+          const gain = first.newCourtmatePairs;
+          if (policy === "courtmate-near-best" && gain < (courtmateGainMaximum ?? 0) - 1) continue;
+          const objective = scoreSelections([first]);
+          if (policy === "courtmate-beneficial-rescue" && !isCourtmateBeneficialRescueAdmitted(
+            gain, courtmateGainMaximum, objective.signedRollingTypeDelta, bestRollingMatchTypeGainAtGmax
+          )) continue;
+          admittedCandidateCount += 1;
+          if (!bestObjective || compareSocialPriorityObjectives(objective, bestObjective, policy) < 0) {
+            bestObjective = objective;
+            bestAdmittedChoices = [first];
+          }
+          if (policy === "courtmate-near-best" && gain === courtmateGainMaximum &&
+              (!bestGmaxObjective || compareSocialPriorityObjectives(objective, bestGmaxObjective, "courtmate-near-best") < 0)) {
+            bestGmaxObjective = objective;
+            bestGmaxChoices = [first];
+            bestRollingMatchTypeGainAtGmax = objective.signedRollingTypeDelta;
+          }
+        }
+        continue;
+      }
+      for (const first of firstChoices) for (const second of secondChoices) {
+        if (policy === "courtmate-first") candidateCount += 1;
+        const gain = first.newCourtmatePairs + second.newCourtmatePairs;
+        if (policy === "courtmate-near-best" && gain < (courtmateGainMaximum ?? 0) - 1) continue;
+        const objective = scoreSelections([first, second]);
+        if (policy === "courtmate-beneficial-rescue" && !isCourtmateBeneficialRescueAdmitted(
+          gain, courtmateGainMaximum, objective.signedRollingTypeDelta, bestRollingMatchTypeGainAtGmax
+        )) continue;
+        admittedCandidateCount += 1;
+        if (!bestObjective || compareSocialPriorityObjectives(objective, bestObjective, policy) < 0) {
+          bestObjective = objective;
+          bestAdmittedChoices = [first, second];
+        }
+        if (policy === "courtmate-near-best" && gain === courtmateGainMaximum &&
+            (!bestGmaxObjective || compareSocialPriorityObjectives(objective, bestGmaxObjective, "courtmate-near-best") < 0)) {
+          bestGmaxObjective = objective;
+          bestGmaxChoices = [first, second];
+          bestRollingMatchTypeGainAtGmax = objective.signedRollingTypeDelta;
+        }
+      }
+    }
+  }
+
+  const selectedChoices = selected.flatMap((selection) => {
+    const key = [...selection.ids].sort((left, right) => left.localeCompare(right)).join("|");
+    return quartetChoices.get(key)?.filter((choice) => exactCandidateKey(selection.ids, selection.partition) === choice.key) ?? [];
+  });
+  const selectedObjective = selectedChoices.length === courtCount ? scoreSelections(selectedChoices) : null;
+  const selectedPlayers = selected.flatMap((selection) => selection.ids).map((id) => playersById.get(id)!).filter(Boolean);
+  const selectedFairness = getFairnessVector(selectedPlayers);
+  const selectedStarvation = getStarvationVector(selectedPlayers, available);
+  return {
+    complete: true,
+    candidateCount,
+    admittedCandidateCount,
+    bestObjective,
+    selectedObjective,
+    selectedFairnessCertified: Boolean(bestFairness && compareNumberVectors(selectedFairness, bestFairness) === 0),
+    selectedStarvationCertified: !respectStarvation || Boolean(bestFairness && bestStarvation &&
+      compareNumberVectors(selectedFairness, bestFairness) === 0 &&
+      compareNumberVectors(selectedStarvation, bestStarvation) === 0),
+    courtmateGainMaximum,
+    courtmateGainMaximumCertified: (policy === "courtmate-near-best" || policy === "courtmate-beneficial-rescue") &&
+      courtmateGainMaximum !== null && candidateCount > 0,
+    bestRollingMatchTypeGainAtGmax,
+    bestGmaxChoices,
+    strictBestGmaxChoices,
+    strictBestGmaxObjective,
+    bestAdmittedChoices,
+    rollingTypeDenominator,
+  };
+}
+
+function getRescueTypeWindowWitness(
+  choices: readonly IndependentCourtChoice[],
+  completedHistory: readonly SocialHistoryMatch[],
+  context: ReturnType<typeof buildSocialVarietyContext>
+): { players: SocialCourtmateRescueTypeWindowWitness[]; fullTypePlayerCount: number } {
+  const completedTypesByPlayer = buildCompletedTypeHistory(completedHistory);
+  const appendedTypeByPlayer = new Map<string, CompletedMatchType>();
+  for (const choice of choices) {
+    const courtType = getSocialVarietySnapshot(choice.partition, context).courtType;
+    const matchType = courtType === "MIXED" ? "MIXED" : courtType === "UPPER" || courtType === "LOWER" ? "OWN_SIDE" : null;
+    if (matchType) for (const id of choice.ids) appendedTypeByPlayer.set(id, matchType);
+  }
+  const players: SocialCourtmateRescueTypeWindowWitness[] = [];
+  let fullTypePlayerCount = 0;
+  for (const [userId, playerContext] of context.playersByUserId) {
+    const feasibleTypes = (["MIXED", "OWN_SIDE"] as const).filter((type) => playerContext.matchType.opportunities.has(type));
+    if (!feasibleTypes.length) continue;
+    const recentTypesBefore = (completedTypesByPlayer.get(userId) ?? []).slice(-6);
+    const appended = appendedTypeByPlayer.get(userId);
+    const recentTypesAfter = (appended ? [...recentTypesBefore, appended] : recentTypesBefore).slice(-6);
+    const coveredBefore = new Set(recentTypesBefore.filter((type) => feasibleTypes.includes(type))).size;
+    const coveredAfter = new Set(recentTypesAfter.filter((type): type is CompletedMatchType =>
+      type !== null && feasibleTypes.includes(type)
+    )).size;
+    const missingTypesBefore = feasibleTypes.filter((type) => !recentTypesBefore.includes(type));
+    const missingTypesAfter = feasibleTypes.filter((type) => !recentTypesAfter.includes(type));
+    const restoredTypes = missingTypesBefore.filter((type) => !missingTypesAfter.includes(type));
+    const expiredTypes = missingTypesAfter.filter((type) => !missingTypesBefore.includes(type));
+    const beforeT = coveredBefore / feasibleTypes.length;
+    const afterT = coveredAfter / feasibleTypes.length;
+    if (afterT === 1) fullTypePlayerCount += 1;
+    players.push({
+      userId,
+      feasibleTypes: [...feasibleTypes],
+      recentTypesBefore,
+      recentTypesAfter,
+      beforeT,
+      afterT,
+      deltaT: afterT - beforeT,
+      missingTypesBefore,
+      missingTypesAfter,
+      restoredTypes,
+      expiredTypes,
+    });
+  }
+  return { players, fullTypePlayerCount };
+}
+
+/**
+ * Independent exhaustive oracle for this benchmark's SOCIAL_MIX roster and
+ * event model. It uses completed-only history and the currently available
+ * roster, and certifies the modeled fairness/starvation classes; it does not
+ * claim coverage of arbitrary production calendar or schedule constraints.
+ */
+export function auditSocialCourtmateNearBestSelection(
+  players: BenchmarkPlayer[],
+  completedHistory: readonly SocialHistoryMatch[],
+  selected: readonly { ids: string[]; partition: V3DoublesPartition }[],
+  courtCount: 1 | 2,
+  respectStarvation = true
+): IndependentSocialPriorityAudit {
+  return auditCourtmatePrioritySelection(players, completedHistory, selected, courtCount, respectStarvation, "courtmate-near-best");
+}
+
+/**
+ * Independent exhaustive oracle for the benchmark's beneficial-rescue policy.
+ * This certifies the benchmark's fairness/starvation class and unconstrained
+ * Social search only; it does not certify arbitrary production schedules.
+ */
+export function auditSocialCourtmateBeneficialRescueSelection(
+  players: BenchmarkPlayer[],
+  completedHistory: readonly SocialHistoryMatch[],
+  selected: readonly { ids: string[]; partition: V3DoublesPartition }[],
+  courtCount: 1 | 2,
+  respectStarvation = true
+): IndependentSocialPriorityAudit {
+  return auditCourtmatePrioritySelection(
+    players, completedHistory, selected, courtCount, respectStarvation, "courtmate-beneficial-rescue"
+  );
+}
+
+/**
+ * Independent signed rolling-type oracle. Relationship exposures use the
+ * accumulated structural context, while type windows are rebuilt only from
+ * the explicit completed history supplied by the simulation.
+ */
+function getIndependentRollingCoverageGain(
+  partition: V3DoublesPartition,
+  context: ReturnType<typeof buildSocialVarietyContext>,
+  completedHistory: readonly SocialHistoryMatch[],
+  coverageGainMetric: RollingCoverageGainMetric,
+  completedTypesByPlayer: CompletedTypeHistory = buildCompletedTypeHistory(completedHistory),
+  typeContext: ReturnType<typeof buildSocialVarietyContext> = context
+): IndependentCoverageGain {
+  const relationshipFacets = ["courtmates", "partners", "opponents"] as const;
+  type RelationshipFacet = typeof relationshipFacets[number];
+  type Facet = RelationshipFacet | "matchType";
+  const horizonCaps: Record<RelationshipFacet, number> = { courtmates: 13, opponents: 12, partners: 6 };
+  const horizonWeights: Record<RelationshipFacet, number> = { courtmates: 3, opponents: 2, partners: 1 };
+  const weightedHorizon = coverageGainMetric === "social-horizon-3211";
+  const players = [...context.playersByUserId].map(([userId, histograms]) => {
+    const feasibleMatchTypes = [...(typeContext.playersByUserId.get(userId)?.matchType.opportunities ?? [])];
+    const feasibleFacets: Facet[] = relationshipFacets.flatMap((facet) =>
+      histograms[facet].opportunities.size > 0 ? [facet] : []
+    );
+    if (feasibleMatchTypes.length > 0) feasibleFacets.push("matchType");
+    const activeWeight = feasibleFacets.reduce((sum, facet) =>
+      sum + (weightedHorizon && facet !== "matchType" ? horizonWeights[facet] : 1), 0
+    );
+    return { userId, feasibleFacets, feasibleMatchTypes, activeWeight };
+  }).filter((player) => player.activeWeight > 0);
+  const eligiblePlayerCount = players.length;
+  const denominatorByFacet = new Map<string, bigint>();
+  let denominator = BigInt(1);
+  for (const player of players) {
+    const histograms = context.playersByUserId.get(player.userId)!;
+    for (const facet of player.feasibleFacets) {
+      const opportunities = facet === "matchType"
+        ? player.feasibleMatchTypes.length
+        : weightedHorizon
+          ? Math.min(histograms[facet].opportunities.size, horizonCaps[facet])
+          : histograms[facet].opportunities.size;
+      const activeFacetWeight = weightedHorizon ? player.activeWeight : player.feasibleFacets.length;
+      const facetDenominator = BigInt(eligiblePlayerCount) * BigInt(activeFacetWeight) * BigInt(opportunities);
+      denominatorByFacet.set(`${player.userId}:${facet}`, facetDenominator);
+      denominator = leastCommonMultiple(denominator, facetDenominator);
+    }
+  }
+
+  const candidateExposures = new Map<string, Map<RelationshipFacet, Set<string>>>();
+  const addRelationship = (userId: string, facet: RelationshipFacet, peerId: string) => {
+    let facets = candidateExposures.get(userId);
+    if (!facets) {
+      facets = new Map();
+      candidateExposures.set(userId, facets);
+    }
+    let peers = facets.get(facet);
+    if (!peers) {
+      peers = new Set();
+      facets.set(facet, peers);
+    }
+    peers.add(peerId);
+  };
+  const teams = [partition.team1, partition.team2] as const;
+  for (let teamIndex = 0; teamIndex < teams.length; teamIndex += 1) {
+    const ownTeam = teams[teamIndex];
+    const opposingTeam = teams[1 - teamIndex];
+    for (const userId of ownTeam) {
+      const partnerId = ownTeam.find((peerId) => peerId !== userId)!;
+      addRelationship(userId, "partners", partnerId);
+      addRelationship(userId, "courtmates", partnerId);
+      for (const opponentId of opposingTeam) {
+        addRelationship(userId, "opponents", opponentId);
+        addRelationship(userId, "courtmates", opponentId);
+      }
+    }
+  }
+
+  const candidateCourtType = getSocialVarietySnapshot(partition, typeContext).courtType;
+  const candidateMatchType = candidateCourtType === "MIXED"
+    ? "MIXED"
+    : candidateCourtType === "UPPER" || candidateCourtType === "LOWER" ? "OWN_SIDE" : null;
+  const typeDeltaByPlayer = new Map<string, number>();
+  if (candidateMatchType) {
+    for (const player of players) {
+      if (!partition.team1.includes(player.userId) && !partition.team2.includes(player.userId)) continue;
+      if (!player.feasibleMatchTypes.includes(candidateMatchType)) continue;
+      const recent = (completedTypesByPlayer.get(player.userId) ?? []).slice(-6);
+      const coveredBefore = new Set(recent.filter((type) => player.feasibleMatchTypes.includes(type))).size;
+      const coveredAfter = new Set([...recent, candidateMatchType].slice(-6)
+        .filter((type) => player.feasibleMatchTypes.includes(type))).size;
+      typeDeltaByPlayer.set(player.userId, coveredAfter - coveredBefore);
+    }
+  }
+
+  let numerator = BigInt(0);
+  for (const player of players) {
+    const histograms = context.playersByUserId.get(player.userId)!;
+    for (const facet of player.feasibleFacets) {
+      const facetDenominator = denominatorByFacet.get(`${player.userId}:${facet}`)!;
+      const weight = weightedHorizon && facet !== "matchType" ? horizonWeights[facet] : 1;
+      const unitsPerExposure = BigInt(weight) * (denominator / facetDenominator);
+      if (facet === "matchType") {
+        numerator += BigInt(typeDeltaByPlayer.get(player.userId) ?? 0) * unitsPerExposure;
+        continue;
+      }
+      const opportunities = histograms[facet].opportunities;
+      const newPeers = [...(candidateExposures.get(player.userId)?.get(facet) ?? [])]
+        .filter((peerId) => opportunities.has(peerId) && (histograms[facet].counts.get(peerId) ?? 0) === 0);
+      const facetCapacity = weightedHorizon
+        ? Math.max(0, Math.min(opportunities.size, horizonCaps[facet]) -
+          [...opportunities].filter((peerId) => (histograms[facet].counts.get(peerId) ?? 0) > 0).length)
+        : newPeers.length;
+      numerator += BigInt(Math.min(newPeers.length, facetCapacity)) * unitsPerExposure;
+    }
+  }
+  const normalized = denominator > BigInt(0)
+    ? Number((numerator * BigInt(1_000_000_000_000_000)) / denominator) / 1_000_000_000_000_000
+    : 0;
+  return { numerator, denominator, normalized };
+}
+
 /**
  * Recomputes the coverage gate independently from the candidate-selection
  * policy. The opportunity vocabulary and accumulated first-exposure counts
@@ -863,8 +1888,14 @@ function leastCommonMultiple(left: bigint, right: bigint) {
 function getIndependentImmediateCoverageGain(
   partition: V3DoublesPartition,
   context: ReturnType<typeof buildSocialVarietyContext>,
-  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
+  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal",
+  completedHistory: readonly SocialHistoryMatch[] = [],
+  completedTypesByPlayer?: CompletedTypeHistory,
+  rollingTypeContext: ReturnType<typeof buildSocialVarietyContext> = context
 ): IndependentCoverageGain {
+  if (coverageGainMetric === "rolling-equal" || coverageGainMetric === "social-horizon-3211") {
+    return getIndependentRollingCoverageGain(partition, context, completedHistory, coverageGainMetric, completedTypesByPlayer, rollingTypeContext);
+  }
   if (coverageGainMetric === "social-horizon-321") {
     const horizonFacets = ["courtmates", "opponents", "partners"] as const;
     type HorizonFacet = typeof horizonFacets[number];
@@ -1012,13 +2043,24 @@ export function measureIndependentCoverageGainForBenchmark(
   partition: V3DoublesPartition,
   players: readonly MatchmakerV3Player[],
   history: readonly SocialHistoryMatch[],
-  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
+  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal",
+  completedHistory: readonly SocialHistoryMatch[] = history
 ) {
   const context = buildSocialVarietyContext(players, history, {
     sessionMode: SessionMode.MIXICANO,
-    includePausedPlayers: coverageGainMetric === "social-horizon-321",
+    includePausedPlayers: coverageGainMetric === "social-horizon-321" || coverageGainMetric === "social-horizon-3211",
   });
-  const result = getIndependentImmediateCoverageGain(partition, context, coverageGainMetric);
+  const rollingTypeContext = coverageGainMetric === "rolling-equal"
+    ? buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO, includePausedPlayers: true })
+    : context;
+  const result = getIndependentImmediateCoverageGain(
+    partition,
+    context,
+    coverageGainMetric,
+    completedHistory,
+    undefined,
+    rollingTypeContext
+  );
   return {
     numerator: result.numerator.toString(),
     denominator: result.denominator.toString(),
@@ -1093,6 +2135,7 @@ function auditRotationClass(
   players: BenchmarkPlayer[],
   sessionType: SessionType,
   socialHistory: SocialHistoryMatch[],
+  completedHistory: readonly SocialHistoryMatch[],
   respectStarvation = true,
   coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
 ): RotationAudit {
@@ -1158,12 +2201,21 @@ function auditRotationClass(
   const context = buildSocialVarietyContext(players, socialHistory, {
     sessionMode: SessionMode.MIXICANO,
   });
-  const coverageContext = coverageGainMetric === "social-horizon-321"
+  const coverageContext = coverageGainMetric === "social-horizon-321" || coverageGainMetric === "social-horizon-3211"
     ? buildSocialVarietyContext(players, socialHistory, {
       sessionMode: SessionMode.MIXICANO,
       includePausedPlayers: true,
     })
     : context;
+  const rollingTypeContext = coverageGainMetric === "rolling-equal"
+    ? buildSocialVarietyContext(players, socialHistory, {
+      sessionMode: SessionMode.MIXICANO,
+      includePausedPlayers: true,
+    })
+    : coverageContext;
+  const completedTypesByPlayer = coverageGainMetric === "rolling-equal" || coverageGainMetric === "social-horizon-3211"
+    ? buildCompletedTypeHistory(completedHistory)
+    : undefined;
   for (const candidate of balanceEnvelope) {
     const gains = getSocialVarietyGains(candidate.partition, context);
     candidate.rawMatchTypeGain = gains.matchType;
@@ -1178,7 +2230,14 @@ function auditRotationClass(
       candidate.rawRelationshipGain,
     ]);
     candidate.effectiveCombinedEntropyGain = getEffectiveEntropyGain(candidate.rawCombinedEntropyGain, sessionType);
-    const coverageGain = getIndependentImmediateCoverageGain(candidate.partition, coverageContext, coverageGainMetric);
+    const coverageGain = getIndependentImmediateCoverageGain(
+      candidate.partition,
+      coverageContext,
+      coverageGainMetric,
+      completedHistory,
+      completedTypesByPlayer,
+      rollingTypeContext
+    );
     candidate.immediateCoverageGain = coverageGain.normalized;
     candidate.immediateCoverageGainNumerator = coverageGain.numerator;
     candidate.immediateCoverageGainDenominator = coverageGain.denominator;
@@ -1424,7 +2483,10 @@ function certifyReplaySelection(
     throw new Error(`${description}: engine certified combined entropy/soft cadence, but the independent frontier disagreed.`);
   }
   const expectedCoverageGain = candidate.immediateCoverageGain;
-  const expectedEngineCoverageMetric = coverageGainMetric === "social-horizon-321" ? "social-horizon-321" : "legacy-four-facet";
+  const expectedEngineCoverageMetric = coverageGainMetric === "social-horizon-321" ||
+    coverageGainMetric === "rolling-equal" || coverageGainMetric === "social-horizon-3211"
+    ? coverageGainMetric
+    : "legacy-four-facet";
   const coverageMetricMatches = proof.coverageGainMetric === expectedEngineCoverageMetric;
   const coverageValuesMatch = proof.bestMinimumReplayCoverageGain === audit.bestMinimumReplayCoverageGain &&
     proof.chosenImmediateCoverageGain === expectedCoverageGain &&
@@ -1488,6 +2550,116 @@ function mean(values: number[]) {
 
 function summarizeGaps(values: number[]) {
   return { max: values.length ? Math.max(...values) : 0, mean: mean(values), p95: percentile95(values), count: values.length };
+}
+
+function summarizeSocialCourtmateRescue(
+  counters: MutableSocialCourtmateRescueCounters
+): SocialCourtmateRescueSummary {
+  const completedWitnesses = counters.witnesses.filter((witness) => witness.completed === true);
+  const sacrifices = completedWitnesses.filter((witness) => witness.chosenCourtmateGainDeficit !== null &&
+    witness.chosenCourtmateGainDeficit > 0);
+  const completedChosenT = completedWitnesses.reduce((sum, witness) => sum + (witness.chosenRollingMatchTypeGain ?? 0), 0);
+  const completedGmaxT = completedWitnesses.reduce((sum, witness) => sum + (witness.bestRollingMatchTypeGainAtGmax ?? 0), 0);
+  const completedIncrementalT = completedWitnesses.reduce((sum, witness) =>
+    sum + (witness.incrementalTGainVsBestFullGainCandidate ?? 0), 0
+  );
+  const onePair = sacrifices.filter((witness) => witness.chosenCourtmateGainDeficit === 1);
+  const benefit = (witness: SocialCourtmateRescueDecisionWitness) => witness.incrementalTGainVsBestFullGainCandidate ?? 0;
+  return {
+    policyApplied: true,
+    coverageGateStatus: "DISABLED",
+    replayEnvelopeStatus: "DISABLED",
+    startedDecisions: counters.startedDecisions,
+    completedDecisions: completedWitnesses.length,
+    auditCompletedDecisions: counters.auditCompletedDecisions,
+    certifiedDecisions: counters.certifiedDecisions,
+    uncertifiedDecisions: counters.uncertifiedDecisions,
+    rankingDiscrepancies: counters.rankingDiscrepancies,
+    fairnessCertificateFailures: counters.fairnessCertificateFailures,
+    starvationSafetyFailures: counters.starvationSafetyFailures,
+    gMaxCertificationFailures: counters.gMaxCertificationFailures,
+    admissionFailures: counters.admissionFailures,
+    searchLimitDecisions: counters.searchLimitDecisions,
+    incompleteAuditDecisions: counters.incompleteAuditDecisions,
+    completedChosenCourtmatePairSacrifice: sacrifices.reduce((sum, witness) => sum + (witness.chosenCourtmateGainDeficit ?? 0), 0),
+    completedOnePairSacrifices: onePair.length,
+    completedOnePairSacrificesWithPositiveTBenefit: onePair.filter((witness) => benefit(witness) > 0).length,
+    completedOnePairSacrificesWithZeroTBenefit: onePair.filter((witness) => benefit(witness) === 0).length,
+    completedOnePairSacrificesWithNegativeTBenefit: onePair.filter((witness) => benefit(witness) < 0).length,
+    // These are sums of per-decision signed deltas, not endpoint T-coverage KPIs.
+    completedSignedRollingTGain: completedChosenT,
+    completedBestGmaxSignedRollingTGain: completedGmaxT,
+    completedIncrementalTGainVsBestFullGain: completedIncrementalT,
+    completedTGainDenominator: counters.rollingTypeGainDenominator,
+    counterfactualStartedDecisions: counters.counterfactualStartedDecisions,
+    counterfactualAuditCompletedDecisions: counters.counterfactualAuditCompletedDecisions,
+    counterfactualCertifiedDecisions: counters.counterfactualCertifiedDecisions,
+    counterfactualUncertifiedDecisions: counters.counterfactualUncertifiedDecisions,
+    counterfactualRankingDiscrepancies: counters.counterfactualRankingDiscrepancies,
+    counterfactualFairnessCertificateFailures: counters.counterfactualFairnessCertificateFailures,
+    counterfactualGMaxCertificationFailures: counters.counterfactualGMaxCertificationFailures,
+    counterfactualAdmissionFailures: counters.counterfactualAdmissionFailures,
+    counterfactualSearchLimitDecisions: counters.counterfactualSearchLimitDecisions,
+    counterfactualIncompleteAuditDecisions: counters.counterfactualIncompleteAuditDecisions,
+    witnesses: counters.witnesses.map((witness) => ({ ...witness })),
+    counterfactualWitnesses: counters.counterfactualWitnesses.map((witness) => ({ ...witness })),
+  };
+}
+
+function cloneBeneficialRescueWitness(
+  witness: SocialCourtmateBeneficialRescueDecisionWitness
+): SocialCourtmateBeneficialRescueDecisionWitness {
+  const copyCourt = (court: { ids: string[]; partition: V3DoublesPartition }) => ({
+    ids: [...court.ids],
+    partition: {
+      team1: [...court.partition.team1] as [string, string],
+      team2: [...court.partition.team2] as [string, string],
+    },
+  });
+  return {
+    ...witness,
+    selectedCourts: witness.selectedCourts.map(copyCourt),
+    selectedCourtmateCoverageProfile: witness.selectedCourtmateCoverageProfile.map((row) => ({ ...row })),
+    engineCourtmateCoverageProfile: witness.engineCourtmateCoverageProfile?.map((row) => ({ ...row })) ?? null,
+    bestGmaxCourts: witness.bestGmaxCourts?.map(copyCourt) ?? null,
+    strictWinnerAtGmaxCourts: witness.strictWinnerAtGmaxCourts.map(copyCourt),
+    perPlayerTypeWindows: witness.perPlayerTypeWindows.map((player) => ({
+      ...player,
+      feasibleTypes: [...player.feasibleTypes],
+      recentTypesBefore: [...player.recentTypesBefore],
+      recentTypesAfter: [...player.recentTypesAfter],
+      missingTypesBefore: [...player.missingTypesBefore],
+      missingTypesAfter: [...player.missingTypesAfter],
+      restoredTypes: [...player.restoredTypes],
+      expiredTypes: [...player.expiredTypes],
+    })),
+  };
+}
+
+function summarizeSocialCourtmateBeneficialRescue(
+  counters: MutableSocialCourtmateBeneficialRescueCounters
+): SocialCourtmateBeneficialRescueSummary {
+  const base = summarizeSocialCourtmateRescue(counters);
+  const completedAtGmax = counters.witnesses.filter((witness) => witness.completed === true &&
+    witness.chosenCourtmateGainDeficit === 0);
+  return {
+    ...base,
+    completedAtGmaxDecisions: completedAtGmax.length,
+    completedAtGmaxWithPositiveSignedTGain: completedAtGmax.filter((witness) =>
+      (witness.chosenRollingMatchTypeGain ?? 0) > 0
+    ).length,
+    completedAtGmaxWithStrictOrderingBenefit: completedAtGmax.filter((witness) =>
+      witness.fullGmaxTBenefitVsStrict > 0
+    ).length,
+    completedAtGmaxIncrementalTVsStrictWinner: completedAtGmax.reduce((sum, witness) =>
+      sum + witness.fullGmaxTBenefitVsStrict, 0
+    ),
+    completedAtGmaxExtraBothTypePlayerWindowsVsStrictWinner: completedAtGmax.reduce((sum, witness) =>
+      sum + (witness.chosenFullTypePlayerCount ?? 0) - witness.strictWinnerAtGmaxFullTypePlayerCount, 0
+    ),
+    witnesses: counters.witnesses.map(cloneBeneficialRescueWitness),
+    counterfactualWitnesses: counters.counterfactualWitnesses.map(cloneBeneficialRescueWitness),
+  };
 }
 
 function getEntropy(histogram: { opportunities: ReadonlySet<string>; total: number; countLogCountSum: number }) {
@@ -1570,6 +2742,27 @@ function getCheckpoint(
     fivePlusEpisodesLinkedAcceptedPlusOneReplay: number;
     fivePlusEpisodesLinkedOtherRestZeroReplay: number;
     fivePlusEpisodesWithoutLinkedRestZeroReplay: number;
+    socialPriorityPolicyApplied: boolean;
+    socialPriorityStrictPolicyApplied: boolean;
+    socialPriorityObjectiveDecisions: number;
+    socialPriorityObjectiveCertifiedDecisions: number;
+    socialPriorityObjectiveUncertifiedDecisions: number;
+    socialPriorityRankingDiscrepancies: number;
+    socialPriorityFairnessCertificateFailures: number;
+    socialPriorityStarvationSafetyFailures: number;
+    socialPrioritySearchLimitDecisions: number;
+    socialPriorityIncompleteCounterfactualDecisions: number;
+    socialPriorityCounterfactualAuditDecisions: number;
+    socialPriorityCounterfactualCertifiedDecisions: number;
+    socialPriorityCounterfactualUncertifiedDecisions: number;
+    socialPriorityCounterfactualRankingDiscrepancies: number;
+    socialPriorityCounterfactualFairnessCertificateFailures: number;
+    socialPriorityCounterfactualSearchLimitDecisions: number;
+    socialPriorityCounterfactualIncompleteDecisions: number;
+    socialCourtmateRescuePolicyApplied: boolean;
+    socialCourtmateRescue: MutableSocialCourtmateRescueCounters;
+    socialCourtmateBeneficialRescuePolicyApplied: boolean;
+    socialCourtmateBeneficialRescue: MutableSocialCourtmateBeneficialRescueCounters;
   },
   completedMatches: number
 ): BenchmarkCheckpoint {
@@ -1607,6 +2800,7 @@ function getCheckpoint(
     }, { MIXED: 0, OWN_SIDE: 0 }),
     varietyCoverageScore: coverage.score,
     socialHorizon321: scoreSocialHorizon321(fullRosterContext),
+    socialVariety3211: scoreSocialVariety3211(fullRosterContext, completed),
     partnerCoverage: coverage.partnerScore,
     opponentCoverage: coverage.opponentScore,
     courtmateCoverage: coverage.courtmateScore,
@@ -1647,7 +2841,7 @@ function getCheckpoint(
     },
     replayEnvelope: {
       policyApplied: counters.replayEnvelopePolicyApplied,
-      productionRefillDecisions: counters.refillDecisionCount,
+      productionRefillDecisions: counters.socialPriorityPolicyApplied ? 0 : counters.refillDecisionCount,
       productionReplayEnvelopeCertifiedDecisions: counters.productionReplayEnvelopeCertified,
       productionCertifiedDecisions: counters.productionReplayCertified,
       productionUncertifiedDecisions: counters.productionReplayUncertified,
@@ -1669,7 +2863,7 @@ function getCheckpoint(
     },
     coverageGate: {
       policyApplied: counters.coverageGatePolicyApplied,
-      refillDecisions: counters.refillDecisionCount,
+      refillDecisions: counters.socialPriorityPolicyApplied ? 0 : counters.refillDecisionCount,
       certifiedDecisions: counters.coverageGateCertified,
       uncertifiedDecisions: counters.coverageGateUncertified,
       noStarvationRefillDecisions: counters.noStarvationReplayRefillDecisions,
@@ -1693,6 +2887,34 @@ function getCheckpoint(
       fivePlusEpisodesLinkedAcceptedPlusOneReplay: counters.fivePlusEpisodesLinkedAcceptedPlusOneReplay,
       witnesses: [...counters.coverageGateWitnesses],
     },
+    ...(counters.socialPriorityStrictPolicyApplied ? {
+      socialPriority: {
+        policyApplied: true as const,
+        objectiveDecisions: counters.socialPriorityObjectiveDecisions,
+        objectiveCertifiedDecisions: counters.socialPriorityObjectiveCertifiedDecisions,
+        objectiveUncertifiedDecisions: counters.socialPriorityObjectiveUncertifiedDecisions,
+        rankingDiscrepancies: counters.socialPriorityRankingDiscrepancies,
+        fairnessCertificateFailures: counters.socialPriorityFairnessCertificateFailures,
+        starvationSafetyFailures: counters.socialPriorityStarvationSafetyFailures,
+        searchLimitDecisions: counters.socialPrioritySearchLimitDecisions,
+        incompleteCounterfactualDecisions: counters.socialPriorityIncompleteCounterfactualDecisions,
+        counterfactualAuditDecisions: counters.socialPriorityCounterfactualAuditDecisions,
+        counterfactualCertifiedDecisions: counters.socialPriorityCounterfactualCertifiedDecisions,
+        counterfactualUncertifiedDecisions: counters.socialPriorityCounterfactualUncertifiedDecisions,
+        counterfactualRankingDiscrepancies: counters.socialPriorityCounterfactualRankingDiscrepancies,
+        counterfactualFairnessCertificateFailures: counters.socialPriorityCounterfactualFairnessCertificateFailures,
+        counterfactualSearchLimitDecisions: counters.socialPriorityCounterfactualSearchLimitDecisions,
+        counterfactualIncompleteDecisions: counters.socialPriorityCounterfactualIncompleteDecisions,
+        coverageGateStatus: "DISABLED" as const,
+        replayEnvelopeStatus: "DISABLED" as const,
+      },
+    } : {}),
+    ...(counters.socialCourtmateRescuePolicyApplied ? {
+      socialCourtmateRescue: summarizeSocialCourtmateRescue(counters.socialCourtmateRescue),
+    } : {}),
+    ...(counters.socialCourtmateBeneficialRescuePolicyApplied ? {
+      socialCourtmateBeneficialRescue: summarizeSocialCourtmateBeneficialRescue(counters.socialCourtmateBeneficialRescue),
+    } : {}),
     optimizer: {
       callsStarted: counters.optimizerCallCount,
       callsCompleted: counters.completedOptimizerDecisions,
@@ -2056,8 +3278,19 @@ function createSessionResult(
   targetMatches = 400,
   enginePolicy: "current" | "strict" | "baseline" | "type-first" | "replay-envelope" = "current",
   captureCompletedHistory = false,
-  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal"
+  coverageGainMetric: BenchmarkCoverageGainMetric = "legacy-equal",
+  socialPriorityPolicy: "production" | "courtmate-first" | "courtmate-near-best" | "courtmate-beneficial-rescue" = "production"
 ): BenchmarkSessionResult {
+  const socialPriorityEnabled = socialPriorityPolicy !== "production";
+  const socialPriorityStrictEnabled = socialPriorityPolicy === "courtmate-first";
+  const socialCourtmateRescueEnabled = socialPriorityPolicy === "courtmate-near-best";
+  const socialCourtmateBeneficialRescueEnabled = socialPriorityPolicy === "courtmate-beneficial-rescue";
+  if (socialPriorityEnabled && sessionType !== SessionType.SOCIAL_MIX) {
+    throw new Error("The courtmate priority experiments are only available for Social/Mixed sessions.");
+  }
+  if (socialPriorityEnabled && enginePolicy !== "current") {
+    throw new Error("The courtmate priority experiments require the current rotation matcher architecture.");
+  }
   const startTime = performance.now();
   const players = createRoster(sessionType, profile);
   const latentRankStrengths = players.map((_player, index) => PLAYER_COUNT - index - 1);
@@ -2072,6 +3305,58 @@ function createSessionResult(
   const assignmentRestGaps: number[] = [];
   const fiveGapEpisodes: FiveGapEpisode[] = [];
   const thresholdsByPlayer = new Map(players.map((player) => [player.userId, { plusOne: 0, plusTwo: 0 }]));
+  const socialCourtmateRescue: MutableSocialCourtmateRescueCounters = {
+    startedDecisions: 0,
+    auditCompletedDecisions: 0,
+    certifiedDecisions: 0,
+    uncertifiedDecisions: 0,
+    rankingDiscrepancies: 0,
+    fairnessCertificateFailures: 0,
+    starvationSafetyFailures: 0,
+    gMaxCertificationFailures: 0,
+    admissionFailures: 0,
+    searchLimitDecisions: 0,
+    incompleteAuditDecisions: 0,
+    counterfactualStartedDecisions: 0,
+    counterfactualAuditCompletedDecisions: 0,
+    counterfactualCertifiedDecisions: 0,
+    counterfactualUncertifiedDecisions: 0,
+    counterfactualRankingDiscrepancies: 0,
+    counterfactualFairnessCertificateFailures: 0,
+    counterfactualGMaxCertificationFailures: 0,
+    counterfactualAdmissionFailures: 0,
+    counterfactualSearchLimitDecisions: 0,
+    counterfactualIncompleteAuditDecisions: 0,
+    rollingTypeGainDenominator: "1",
+    witnesses: [],
+    counterfactualWitnesses: [],
+  };
+  const socialCourtmateBeneficialRescue: MutableSocialCourtmateBeneficialRescueCounters = {
+    startedDecisions: 0,
+    auditCompletedDecisions: 0,
+    certifiedDecisions: 0,
+    uncertifiedDecisions: 0,
+    rankingDiscrepancies: 0,
+    fairnessCertificateFailures: 0,
+    starvationSafetyFailures: 0,
+    gMaxCertificationFailures: 0,
+    admissionFailures: 0,
+    searchLimitDecisions: 0,
+    incompleteAuditDecisions: 0,
+    counterfactualStartedDecisions: 0,
+    counterfactualAuditCompletedDecisions: 0,
+    counterfactualCertifiedDecisions: 0,
+    counterfactualUncertifiedDecisions: 0,
+    counterfactualRankingDiscrepancies: 0,
+    counterfactualFairnessCertificateFailures: 0,
+    counterfactualGMaxCertificationFailures: 0,
+    counterfactualAdmissionFailures: 0,
+    counterfactualSearchLimitDecisions: 0,
+    counterfactualIncompleteAuditDecisions: 0,
+    rollingTypeGainDenominator: "1",
+    witnesses: [],
+    counterfactualWitnesses: [],
+  };
   const counters = {
     backToBackCount: 0,
     eligibleAssignments: 0,
@@ -2102,7 +3387,7 @@ function createSessionResult(
     selectedRelationshipGainTotal: 0,
     typePriorityOverrideCount: 0,
     typePriorityPolicyApplied: false,
-    replayEnvelopePolicyApplied: enginePolicy === "current" || enginePolicy === "replay-envelope",
+    replayEnvelopePolicyApplied: !socialPriorityEnabled && (enginePolicy === "current" || enginePolicy === "replay-envelope"),
     productionReplayCertified: 0,
     productionReplayUncertified: 0,
     productionReplayEnvelopeCertified: 0,
@@ -2114,7 +3399,7 @@ function createSessionResult(
     acceptedPlusOneDecisions: 0,
     betterEntropyBeyondAllowanceDecisions: 0,
     betterEntropyBeyondAllowanceCandidateCount: 0,
-    coverageGatePolicyApplied: enginePolicy === "current",
+    coverageGatePolicyApplied: enginePolicy === "current" && !socialPriorityEnabled,
     coverageGateCertified: 0,
     coverageGateUncertified: 0,
     noStarvationCoverageGateCertified: 0,
@@ -2139,6 +3424,27 @@ function createSessionResult(
     fivePlusEpisodesLinkedAcceptedPlusOneReplay: 0,
     fivePlusEpisodesLinkedOtherRestZeroReplay: 0,
     fivePlusEpisodesWithoutLinkedRestZeroReplay: 0,
+    socialPriorityPolicyApplied: socialPriorityEnabled,
+    socialPriorityStrictPolicyApplied: socialPriorityStrictEnabled,
+    socialPriorityObjectiveDecisions: 0,
+    socialPriorityObjectiveCertifiedDecisions: 0,
+    socialPriorityObjectiveUncertifiedDecisions: 0,
+    socialPriorityRankingDiscrepancies: 0,
+    socialPriorityFairnessCertificateFailures: 0,
+    socialPriorityStarvationSafetyFailures: 0,
+    socialPrioritySearchLimitDecisions: 0,
+    socialPriorityIncompleteCounterfactualDecisions: 0,
+    socialPriorityCounterfactualAuditDecisions: 0,
+    socialPriorityCounterfactualCertifiedDecisions: 0,
+    socialPriorityCounterfactualUncertifiedDecisions: 0,
+    socialPriorityCounterfactualRankingDiscrepancies: 0,
+    socialPriorityCounterfactualFairnessCertificateFailures: 0,
+    socialPriorityCounterfactualSearchLimitDecisions: 0,
+    socialPriorityCounterfactualIncompleteDecisions: 0,
+    socialCourtmateRescuePolicyApplied: socialCourtmateRescueEnabled,
+    socialCourtmateRescue,
+    socialCourtmateBeneficialRescuePolicyApplied: socialCourtmateBeneficialRescueEnabled,
+    socialCourtmateBeneficialRescue,
   };
   const opportunities = createStructuralOpportunityCounts(players);
   const observed: RelationshipCounts = { courtmates: new Map(), partners: new Map(), opponents: new Map() };
@@ -2198,7 +3504,9 @@ function createSessionResult(
       sessionType,
       respectPlayerRest: true,
       completedMatches: completed,
-      ...(coverageGainMetric === "social-horizon-321" ? { coverageGainMetric } : {}),
+      ...(socialPriorityEnabled ? { socialPriorityPolicy } : {}),
+      ...(coverageGainMetric === "social-horizon-321" || coverageGainMetric === "rolling-equal" ||
+          coverageGainMetric === "social-horizon-3211" ? { coverageGainMetric } : {}),
       socialHistoryMatches: [...completed, ...[...active.values()].map((assignment) => ({
         id: `active-${assignment.decisionId}-${assignment.court}`,
         ...assignment.partition,
@@ -2220,6 +3528,15 @@ function createSessionResult(
         coverageGateStatus?: CounterfactualSelectionProof["coverageGateStatus"];
         chosenReplayCoverageEligible?: boolean | null;
         coverageGainMetric?: CounterfactualSelectionProof["coverageGainMetric"];
+        socialPriorityPolicy?: "courtmate-first" | "courtmate-near-best" | "courtmate-beneficial-rescue";
+        priorityCertified?: boolean;
+        courtmateGainMaximumCertified?: boolean;
+        courtmateGainMaximum?: number | null;
+        chosenCourtmateGainDeficit?: number | null;
+        bestRollingMatchTypeGainAtGmax?: number | null;
+        chosenNewCourtmatePairCount?: number | null;
+        chosenRollingMatchTypeGain?: number | null;
+        chosenPostBatchCourtmateCoverage?: Array<{ userId: string; covered: number; possible: number }> | null;
       };
       const debug = candidate.debug as unknown as {
         bestImmediateReplayCount?: number | null;
@@ -2233,6 +3550,15 @@ function createSessionResult(
         coverageGateStatus?: CounterfactualSelectionProof["coverageGateStatus"];
         chosenReplayCoverageEligible?: boolean | null;
         coverageGainMetric?: CounterfactualSelectionProof["coverageGainMetric"];
+        socialPriorityPolicy?: "courtmate-first" | "courtmate-near-best" | "courtmate-beneficial-rescue";
+        priorityCertified?: boolean;
+        courtmateGainMaximumCertified?: boolean;
+        courtmateGainMaximum?: number | null;
+        chosenCourtmateGainDeficit?: number | null;
+        bestRollingMatchTypeGainAtGmax?: number | null;
+        chosenNewCourtmatePairCount?: number | null;
+        chosenRollingMatchTypeGain?: number | null;
+        chosenPostBatchCourtmateCoverage?: Array<{ userId: string; covered: number; possible: number }> | null;
       };
       return {
         selections: candidate.selection?.selections.map((selection) => ({
@@ -2241,6 +3567,7 @@ function createSessionResult(
         fairnessCertified: candidate.fairnessCertified,
         starvationCertified: candidate.starvationCertified,
         varietyOptimal: candidate.varietyOptimal,
+        priorityCertified: resultReplay.priorityCertified ?? debug.priorityCertified,
         balanceCertified: candidate.balanceCertified,
         bestImmediateReplayCount: resultReplay.bestImmediateReplayCount ?? debug.bestImmediateReplayCount ?? null,
         allowedImmediateReplayCount: resultReplay.allowedImmediateReplayCount ?? debug.allowedImmediateReplayCount ?? null,
@@ -2253,6 +3580,15 @@ function createSessionResult(
         coverageGateStatus: resultReplay.coverageGateStatus ?? debug.coverageGateStatus ?? null,
         chosenReplayCoverageEligible: resultReplay.chosenReplayCoverageEligible ?? debug.chosenReplayCoverageEligible ?? null,
         coverageGainMetric: resultReplay.coverageGainMetric ?? debug.coverageGainMetric ?? null,
+        socialPriorityPolicy: resultReplay.socialPriorityPolicy ?? debug.socialPriorityPolicy ?? null,
+        courtmateGainMaximumCertified: resultReplay.courtmateGainMaximumCertified ?? debug.courtmateGainMaximumCertified,
+        courtmateGainMaximum: resultReplay.courtmateGainMaximum ?? debug.courtmateGainMaximum,
+        chosenCourtmateGainDeficit: resultReplay.chosenCourtmateGainDeficit ?? debug.chosenCourtmateGainDeficit,
+        bestRollingMatchTypeGainAtGmax: resultReplay.bestRollingMatchTypeGainAtGmax ?? debug.bestRollingMatchTypeGainAtGmax,
+        chosenNewCourtmatePairCount: resultReplay.chosenNewCourtmatePairCount ?? debug.chosenNewCourtmatePairCount,
+        chosenRollingMatchTypeGain: resultReplay.chosenRollingMatchTypeGain ?? debug.chosenRollingMatchTypeGain,
+        chosenPostBatchCourtmateCoverage: resultReplay.chosenPostBatchCourtmateCoverage ?? debug.chosenPostBatchCourtmateCoverage,
+        searchLimitReached: candidate.debug.searchLimitReached,
       };
     };
     const recordResultDiagnostics = (result: OptimizerResult) => {
@@ -2311,12 +3647,408 @@ function createSessionResult(
     };
   };
 
+  const recordSocialPriorityDecision = (
+    proof: CounterfactualSelectionProof,
+    searchLimitReached: boolean,
+    courtCount: 1 | 2,
+    label: string,
+    respectStarvation = true,
+    counterfactualAudit = false
+  ): boolean => {
+    if (!socialPriorityStrictEnabled) return false;
+    if (counterfactualAudit) {
+      counters.socialPriorityCounterfactualAuditDecisions += 1;
+      if (searchLimitReached) counters.socialPriorityCounterfactualSearchLimitDecisions += 1;
+    } else {
+      counters.socialPriorityObjectiveDecisions += 1;
+      if (searchLimitReached) counters.socialPrioritySearchLimitDecisions += 1;
+    }
+    if (!proof.fairnessCertified) {
+      if (counterfactualAudit) counters.socialPriorityCounterfactualFairnessCertificateFailures += 1;
+      else counters.socialPriorityFairnessCertificateFailures += 1;
+    }
+    if (respectStarvation && !proof.starvationCertified) counters.socialPriorityStarvationSafetyFailures += 1;
+    const independent = auditCourtmatePrioritySelection(players, completed, proof.selections, courtCount, respectStarvation);
+    const rankingMatches = independent.complete && independent.candidateCount > 0 &&
+      independent.bestObjective !== null && independent.selectedObjective !== null &&
+      compareSocialPriorityObjectives(independent.selectedObjective, independent.bestObjective) === 0;
+    if (!rankingMatches) {
+      if (counterfactualAudit) counters.socialPriorityCounterfactualRankingDiscrepancies += 1;
+      else counters.socialPriorityRankingDiscrepancies += 1;
+    }
+    if (!independent.selectedFairnessCertified) {
+      if (counterfactualAudit) counters.socialPriorityCounterfactualFairnessCertificateFailures += 1;
+      else counters.socialPriorityFairnessCertificateFailures += 1;
+    }
+    if (respectStarvation && !independent.selectedStarvationCertified) counters.socialPriorityStarvationSafetyFailures += 1;
+    const policyEchoed = proof.socialPriorityPolicy === "courtmate-first";
+    const certified = policyEchoed && proof.varietyOptimal && proof.priorityCertified === true && !searchLimitReached && independent.complete &&
+      independent.candidateCount > 0 && independent.selectedFairnessCertified && rankingMatches &&
+      (!respectStarvation || (proof.starvationCertified && independent.selectedStarvationCertified));
+    if (counterfactualAudit) {
+      if (certified) counters.socialPriorityCounterfactualCertifiedDecisions += 1;
+      else counters.socialPriorityCounterfactualUncertifiedDecisions += 1;
+    } else if (certified) counters.socialPriorityObjectiveCertifiedDecisions += 1;
+    else counters.socialPriorityObjectiveUncertifiedDecisions += 1;
+    if (!policyEchoed) {
+      throw new Error(`${sessionType}/${profile}/seed ${seed}: matcher did not echo courtmate-first policy for ${label}.`);
+    }
+    return certified;
+  };
+
+  const recordSocialCourtmateRescueDecision = (
+    proof: CounterfactualSelectionProof | null,
+    searchLimitReached: boolean,
+    courtCount: 1 | 2,
+    label: string,
+    afterCompletedMatches: number,
+    respectStarvation = true,
+    counterfactualAudit = false
+  ): { certified: boolean; witness: SocialCourtmateRescueDecisionWitness } => {
+    const rescue = counters.socialCourtmateRescue;
+    if (counterfactualAudit) {
+      rescue.counterfactualStartedDecisions += 1;
+      if (searchLimitReached) rescue.counterfactualSearchLimitDecisions += 1;
+    } else {
+      rescue.startedDecisions += 1;
+      if (searchLimitReached) rescue.searchLimitDecisions += 1;
+    }
+    const selections = proof?.selections ?? [];
+    const independent = auditCourtmatePrioritySelection(
+      players,
+      completed,
+      selections,
+      courtCount,
+      respectStarvation,
+      "courtmate-near-best"
+    );
+    const selectedObjective = independent.selectedObjective;
+    const bestObjective = independent.bestObjective;
+    const selectedGain = selectedObjective?.newCourtmatePairs ?? null;
+    const selectedDeficit = independent.courtmateGainMaximum !== null && selectedGain !== null
+      ? independent.courtmateGainMaximum - selectedGain
+      : null;
+    const selectedRollingTypeGain = selectedObjective
+      ? Number(selectedObjective.signedRollingTypeDelta) / Number(independent.rollingTypeDenominator)
+      : null;
+    const maxRollingTypeGainAtGmax = independent.bestRollingMatchTypeGainAtGmax !== null
+      ? Number(independent.bestRollingMatchTypeGainAtGmax) / Number(independent.rollingTypeDenominator)
+      : null;
+    const incrementalTGainVsBestFullGainCandidate = selectedRollingTypeGain !== null && maxRollingTypeGainAtGmax !== null
+      ? selectedRollingTypeGain - maxRollingTypeGainAtGmax
+      : null;
+    const close = (left: number | null | undefined, right: number | null | undefined) =>
+      left !== null && left !== undefined && right !== null && right !== undefined && Math.abs(left - right) < 1e-9;
+    const rankingMatches = independent.complete && independent.candidateCount > 0 && bestObjective !== null &&
+      selectedObjective !== null && compareSocialPriorityObjectives(
+        selectedObjective,
+        bestObjective,
+        "courtmate-near-best"
+      ) === 0;
+    const engineProfile = proof?.chosenPostBatchCourtmateCoverage ?? null;
+    const independentProfile = selectedObjective?.ascendingCoverageProfile ?? [];
+    const courtmateCoverageProfileMatches = Boolean(engineProfile && engineProfile.length === independentProfile.length &&
+      engineProfile.every((entry, index) => entry.userId === independentProfile[index]?.userId &&
+        entry.covered === independentProfile[index]?.covered && entry.possible === independentProfile[index]?.possible));
+    const selectedInEnvelope = selectedDeficit !== null && selectedDeficit >= 0 && selectedDeficit <= 1;
+    const policyEchoed = proof?.socialPriorityPolicy === "courtmate-near-best";
+    const gMaxCertified = independent.courtmateGainMaximumCertified &&
+      proof?.courtmateGainMaximumCertified === true &&
+      close(proof.courtmateGainMaximum, independent.courtmateGainMaximum) &&
+      close(proof.bestRollingMatchTypeGainAtGmax, maxRollingTypeGainAtGmax);
+    const admissionCertified = selectedInEnvelope &&
+      close(proof?.chosenCourtmateGainDeficit, selectedDeficit) &&
+      close(proof?.chosenNewCourtmatePairCount, selectedGain) &&
+      close(proof?.chosenRollingMatchTypeGain, selectedRollingTypeGain);
+    const fairnessCertified = Boolean(proof?.fairnessCertified && independent.selectedFairnessCertified);
+    const starvationCertified = !respectStarvation || Boolean(proof?.starvationCertified && independent.selectedStarvationCertified);
+    const certified = Boolean(policyEchoed && proof?.varietyOptimal && proof.priorityCertified === true &&
+      !searchLimitReached && independent.complete && independent.candidateCount > 0 &&
+      independent.admittedCandidateCount > 0 && fairnessCertified && starvationCertified &&
+      gMaxCertified && admissionCertified && rankingMatches && courtmateCoverageProfileMatches);
+    if (counterfactualAudit) {
+      if (independent.complete) rescue.counterfactualAuditCompletedDecisions += 1;
+      if (!rankingMatches || !courtmateCoverageProfileMatches) rescue.counterfactualRankingDiscrepancies += 1;
+      if (!fairnessCertified) rescue.counterfactualFairnessCertificateFailures += 1;
+      if (!gMaxCertified) rescue.counterfactualGMaxCertificationFailures += 1;
+      if (!admissionCertified) rescue.counterfactualAdmissionFailures += 1;
+      if (certified) rescue.counterfactualCertifiedDecisions += 1;
+      else rescue.counterfactualUncertifiedDecisions += 1;
+      if (!independent.complete) rescue.counterfactualIncompleteAuditDecisions += 1;
+    } else {
+      if (independent.complete) rescue.auditCompletedDecisions += 1;
+      if (!rankingMatches || !courtmateCoverageProfileMatches) rescue.rankingDiscrepancies += 1;
+      if (!fairnessCertified) rescue.fairnessCertificateFailures += 1;
+      if (respectStarvation && !starvationCertified) rescue.starvationSafetyFailures += 1;
+      if (!gMaxCertified) rescue.gMaxCertificationFailures += 1;
+      if (!admissionCertified) rescue.admissionFailures += 1;
+      if (certified) rescue.certifiedDecisions += 1;
+      else rescue.uncertifiedDecisions += 1;
+      if (!independent.complete) rescue.incompleteAuditDecisions += 1;
+    }
+    if (independent.complete) {
+      rescue.rollingTypeGainDenominator = independent.rollingTypeDenominator.toString();
+    }
+    const fullRosterContext = buildSocialVarietyContext(players, completed, {
+      sessionMode: SessionMode.MIXICANO,
+      includePausedPlayers: true,
+    });
+    const selectedChoices: IndependentCourtChoice[] = selections.map((selection) => ({
+      ids: [...selection.ids],
+      partition: selection.partition,
+      balanceGap: selection.balanceGap ?? 0,
+      key: exactCandidateKey(selection.ids, selection.partition),
+      newCourtmatePairs: 0,
+    }));
+    const selectedTypeState = selectedObjective ? getRescueTypeWindowWitness(selectedChoices, completed, fullRosterContext) : null;
+    const bestGmaxChoices = independent.bestGmaxChoices;
+    const bestGmaxTypeState = bestGmaxChoices
+      ? getRescueTypeWindowWitness(bestGmaxChoices, completed, fullRosterContext)
+      : null;
+    const selectedBestType = bestGmaxChoices?.map((choice) => ({ ids: [...choice.ids], partition: choice.partition })) ?? null;
+    const witness: SocialCourtmateRescueDecisionWitness = {
+      started: true,
+      completed: counterfactualAudit ? null : false,
+      completedAfterMatchNumber: null,
+      auditCompleted: independent.complete,
+      counterfactual: counterfactualAudit,
+      respectStarvation,
+      label,
+      afterCompletedMatches,
+      courtCount,
+      selectedCourts: selections.map((selection) => ({ ids: [...selection.ids].sort(), partition: selection.partition })),
+      independentCandidateCount: independent.candidateCount,
+      admittedCandidateCount: independent.admittedCandidateCount,
+      fairnessCertified,
+      starvationCertified,
+      gMaxCertified,
+      policyCertified: certified,
+      rankingMatches,
+      courtmateCoverageProfileMatches,
+      searchLimitReached,
+      courtMateGainMaximum: independent.courtmateGainMaximum,
+      chosenCourtmateGain: selectedGain,
+      chosenCourtmateGainDeficit: selectedDeficit,
+      bestRollingMatchTypeGainAtGmax: maxRollingTypeGainAtGmax,
+      chosenRollingMatchTypeGain: selectedRollingTypeGain,
+      incrementalTGainVsBestFullGainCandidate,
+      rollingTypeGainDenominator: independent.rollingTypeDenominator.toString(),
+      selectedCourtmateCoverageProfile: selectedObjective?.ascendingCoverageProfile.map((row) => ({ ...row })) ?? [],
+      engineCourtmateCoverageProfile: engineProfile ? engineProfile.map((row) => ({ ...row })) : null,
+      bestGmaxCourts: selectedBestType,
+      bestGmaxFullTypePlayerCount: bestGmaxTypeState?.fullTypePlayerCount ?? null,
+      chosenFullTypePlayerCount: selectedTypeState?.fullTypePlayerCount ?? null,
+      fullTypePlayerCountDeltaVsGmax: selectedTypeState && bestGmaxTypeState
+        ? selectedTypeState.fullTypePlayerCount - bestGmaxTypeState.fullTypePlayerCount
+        : null,
+      zeroTBenefitSacrifice: selectedDeficit === 1 && incrementalTGainVsBestFullGainCandidate === 0,
+      perPlayerTypeWindows: selectedDeficit === 1 ? selectedTypeState?.players ?? [] : [],
+    };
+    if (counterfactualAudit) rescue.counterfactualWitnesses.push(witness);
+    else rescue.witnesses.push(witness);
+    return { certified, witness };
+  };
+
+  const recordSocialCourtmateBeneficialRescueDecision = (
+    proof: CounterfactualSelectionProof | null,
+    searchLimitReached: boolean,
+    courtCount: 1 | 2,
+    label: string,
+    afterCompletedMatches: number,
+    respectStarvation = true,
+    counterfactualAudit = false,
+    expectedPolicy: "courtmate-beneficial-rescue" = "courtmate-beneficial-rescue"
+  ): { certified: boolean; witness: SocialCourtmateBeneficialRescueDecisionWitness } => {
+    const rescue = counters.socialCourtmateBeneficialRescue;
+    if (counterfactualAudit) {
+      rescue.counterfactualStartedDecisions += 1;
+      if (searchLimitReached) rescue.counterfactualSearchLimitDecisions += 1;
+    } else {
+      rescue.startedDecisions += 1;
+      if (searchLimitReached) rescue.searchLimitDecisions += 1;
+    }
+    const selections = proof?.selections ?? [];
+    const independent = auditCourtmatePrioritySelection(
+      players, completed, selections, courtCount, respectStarvation, expectedPolicy
+    );
+    const selectedObjective = independent.selectedObjective;
+    const bestObjective = independent.bestObjective;
+    const selectedGain = selectedObjective?.newCourtmatePairs ?? null;
+    const selectedDeficit = independent.courtmateGainMaximum !== null && selectedGain !== null
+      ? independent.courtmateGainMaximum - selectedGain
+      : null;
+    const selectedRollingTypeGain = selectedObjective
+      ? Number(selectedObjective.signedRollingTypeDelta) / Number(independent.rollingTypeDenominator)
+      : null;
+    const maxRollingTypeGainAtGmax = independent.bestRollingMatchTypeGainAtGmax !== null
+      ? Number(independent.bestRollingMatchTypeGainAtGmax) / Number(independent.rollingTypeDenominator)
+      : null;
+    const strictWinnerRollingTypeGain = independent.strictBestGmaxObjective
+      ? Number(independent.strictBestGmaxObjective.signedRollingTypeDelta) / Number(independent.rollingTypeDenominator)
+      : 0;
+    const incrementalTGainVsBestFullGainCandidate = selectedRollingTypeGain !== null && maxRollingTypeGainAtGmax !== null
+      ? selectedRollingTypeGain - maxRollingTypeGainAtGmax
+      : null;
+    const close = (left: number | null | undefined, right: number | null | undefined) =>
+      left !== null && left !== undefined && right !== null && right !== undefined && Math.abs(left - right) < 1e-9;
+    const rankingMatches = independent.complete && independent.candidateCount > 0 && bestObjective !== null &&
+      selectedObjective !== null && compareSocialPriorityObjectives(
+        selectedObjective, bestObjective, expectedPolicy
+      ) === 0;
+    const engineProfile = proof?.chosenPostBatchCourtmateCoverage ?? null;
+    const independentProfile = selectedObjective?.ascendingCoverageProfile ?? [];
+    const courtmateCoverageProfileMatches = Boolean(engineProfile && engineProfile.length === independentProfile.length &&
+      engineProfile.every((entry, index) => entry.userId === independentProfile[index]?.userId &&
+        entry.covered === independentProfile[index]?.covered && entry.possible === independentProfile[index]?.possible));
+    const selectedAdmitted = selectedDeficit === 0 || (selectedDeficit === 1 &&
+      selectedObjective !== null && independent.bestRollingMatchTypeGainAtGmax !== null &&
+      selectedObjective.signedRollingTypeDelta > independent.bestRollingMatchTypeGainAtGmax);
+    const policyEchoed = proof?.socialPriorityPolicy === expectedPolicy;
+    const gMaxCertified = independent.courtmateGainMaximumCertified &&
+      proof?.courtmateGainMaximumCertified === true &&
+      close(proof.courtmateGainMaximum, independent.courtmateGainMaximum) &&
+      close(proof.bestRollingMatchTypeGainAtGmax, maxRollingTypeGainAtGmax);
+    const admissionCertified = selectedAdmitted &&
+      close(proof?.chosenCourtmateGainDeficit, selectedDeficit) &&
+      close(proof?.chosenNewCourtmatePairCount, selectedGain) &&
+      close(proof?.chosenRollingMatchTypeGain, selectedRollingTypeGain);
+    const fairnessCertified = Boolean(proof?.fairnessCertified && independent.selectedFairnessCertified);
+    const starvationCertified = !respectStarvation || Boolean(proof?.starvationCertified && independent.selectedStarvationCertified);
+    const certified = Boolean(policyEchoed && proof?.varietyOptimal && proof.priorityCertified === true &&
+      !searchLimitReached && independent.complete && independent.candidateCount > 0 &&
+      independent.admittedCandidateCount > 0 && fairnessCertified && starvationCertified &&
+      gMaxCertified && admissionCertified && rankingMatches && courtmateCoverageProfileMatches);
+    if (counterfactualAudit) {
+      if (independent.complete) rescue.counterfactualAuditCompletedDecisions += 1;
+      if (!rankingMatches || !courtmateCoverageProfileMatches) rescue.counterfactualRankingDiscrepancies += 1;
+      if (!fairnessCertified) rescue.counterfactualFairnessCertificateFailures += 1;
+      if (!gMaxCertified) rescue.counterfactualGMaxCertificationFailures += 1;
+      if (!admissionCertified) rescue.counterfactualAdmissionFailures += 1;
+      if (certified) rescue.counterfactualCertifiedDecisions += 1;
+      else rescue.counterfactualUncertifiedDecisions += 1;
+      if (!independent.complete) rescue.counterfactualIncompleteAuditDecisions += 1;
+    } else {
+      if (independent.complete) rescue.auditCompletedDecisions += 1;
+      if (!rankingMatches || !courtmateCoverageProfileMatches) rescue.rankingDiscrepancies += 1;
+      if (!fairnessCertified) rescue.fairnessCertificateFailures += 1;
+      if (respectStarvation && !starvationCertified) rescue.starvationSafetyFailures += 1;
+      if (!gMaxCertified) rescue.gMaxCertificationFailures += 1;
+      if (!admissionCertified) rescue.admissionFailures += 1;
+      if (certified) rescue.certifiedDecisions += 1;
+      else rescue.uncertifiedDecisions += 1;
+      if (!independent.complete) rescue.incompleteAuditDecisions += 1;
+    }
+    if (independent.complete) rescue.rollingTypeGainDenominator = independent.rollingTypeDenominator.toString();
+    if (proof && !policyEchoed) {
+      throw new Error(`${sessionType}/${profile}/seed ${seed}: matcher did not echo ${expectedPolicy} policy for ${label}.`);
+    }
+    const fullRosterContext = buildSocialVarietyContext(players, completed, {
+      sessionMode: SessionMode.MIXICANO,
+      includePausedPlayers: true,
+    });
+    const selectedChoices: IndependentCourtChoice[] = selections.map((selection) => ({
+      ids: [...selection.ids],
+      partition: selection.partition,
+      balanceGap: selection.balanceGap ?? 0,
+      key: exactCandidateKey(selection.ids, selection.partition),
+      newCourtmatePairs: 0,
+    }));
+    const selectedTypeState = selectedObjective
+      ? getRescueTypeWindowWitness(selectedChoices, completed, fullRosterContext)
+      : null;
+    const bestGmaxChoices = independent.bestGmaxChoices;
+    const bestGmaxTypeState = bestGmaxChoices
+      ? getRescueTypeWindowWitness(bestGmaxChoices, completed, fullRosterContext)
+      : null;
+    const strictBestGmaxChoices = independent.strictBestGmaxChoices;
+    const strictBestGmaxTypeState = strictBestGmaxChoices
+      ? getRescueTypeWindowWitness(strictBestGmaxChoices, completed, fullRosterContext)
+      : null;
+    const chosenAtGmax = selectedDeficit === 0;
+    const fullGmaxTBenefitVsStrict = chosenAtGmax && selectedRollingTypeGain !== null
+      ? selectedRollingTypeGain - strictWinnerRollingTypeGain
+      : 0;
+    const witness: SocialCourtmateBeneficialRescueDecisionWitness = {
+      started: true,
+      completed: counterfactualAudit ? null : false,
+      completedAfterMatchNumber: null,
+      auditCompleted: independent.complete,
+      counterfactual: counterfactualAudit,
+      respectStarvation,
+      label,
+      afterCompletedMatches,
+      courtCount,
+      selectedCourts: selections.map((selection) => ({ ids: [...selection.ids].sort(), partition: selection.partition })),
+      independentCandidateCount: independent.candidateCount,
+      admittedCandidateCount: independent.admittedCandidateCount,
+      fairnessCertified,
+      starvationCertified,
+      gMaxCertified,
+      policyCertified: certified,
+      rankingMatches,
+      courtmateCoverageProfileMatches,
+      searchLimitReached,
+      courtMateGainMaximum: independent.courtmateGainMaximum,
+      chosenCourtmateGain: selectedGain,
+      chosenCourtmateGainDeficit: selectedDeficit,
+      bestRollingMatchTypeGainAtGmax: maxRollingTypeGainAtGmax,
+      chosenRollingMatchTypeGain: selectedRollingTypeGain,
+      incrementalTGainVsBestFullGainCandidate,
+      rollingTypeGainDenominator: independent.rollingTypeDenominator.toString(),
+      selectedCourtmateCoverageProfile: selectedObjective?.ascendingCoverageProfile.map((row) => ({ ...row })) ?? [],
+      engineCourtmateCoverageProfile: engineProfile ? engineProfile.map((row) => ({ ...row })) : null,
+      bestGmaxCourts: bestGmaxChoices?.map((choice) => ({ ids: [...choice.ids], partition: choice.partition })) ?? null,
+      bestGmaxFullTypePlayerCount: bestGmaxTypeState?.fullTypePlayerCount ?? null,
+      chosenFullTypePlayerCount: selectedTypeState?.fullTypePlayerCount ?? null,
+      fullTypePlayerCountDeltaVsGmax: selectedTypeState && bestGmaxTypeState
+        ? selectedTypeState.fullTypePlayerCount - bestGmaxTypeState.fullTypePlayerCount
+        : null,
+      zeroTBenefitSacrifice: selectedDeficit === 1 && incrementalTGainVsBestFullGainCandidate === 0,
+      perPlayerTypeWindows: selectedDeficit === 1 ? selectedTypeState?.players ?? [] : [],
+      strictWinnerRollingMatchTypeGainAtGmax: strictWinnerRollingTypeGain,
+      strictWinnerAtGmaxCourts: strictBestGmaxChoices?.map((choice) => ({
+        ids: [...choice.ids], partition: choice.partition,
+      })) ?? [],
+      strictWinnerAtGmaxFullTypePlayerCount: strictBestGmaxTypeState?.fullTypePlayerCount ?? 0,
+      fullGmaxTBenefitVsStrict,
+    };
+    if (counterfactualAudit) rescue.counterfactualWitnesses.push(witness);
+    else rescue.witnesses.push(witness);
+    return { certified, witness };
+  };
+
   const opening = callOptimizer(COURT_COUNT);
   if (!opening.result.selection || opening.result.selection.selections.length !== COURT_COUNT) {
     throw new Error(`${sessionType}/${profile}/seed ${seed}: opening two-court batch failed (${opening.result.debug.failureReason})`);
   }
   openingDecisionId = nextDecisionId++;
   opening.meta.pendingAssignments = opening.result.selection.selections.length;
+  if (socialPriorityStrictEnabled) {
+    recordSocialPriorityDecision(
+      opening.productionProof,
+      opening.result.debug.searchLimitReached,
+      2,
+      "opening two-court batch"
+    );
+  }
+  if (socialCourtmateRescueEnabled) {
+    opening.meta.socialCourtmateRescueWitness = recordSocialCourtmateRescueDecision(
+      opening.productionProof,
+      opening.result.debug.searchLimitReached,
+      2,
+      "opening two-court batch",
+      0
+    ).witness;
+  }
+  if (socialCourtmateBeneficialRescueEnabled) {
+    opening.meta.socialCourtmateBeneficialRescueWitness = recordSocialCourtmateBeneficialRescueDecision(
+      opening.productionProof,
+      opening.result.debug.searchLimitReached,
+      2,
+      "opening two-court batch",
+      0
+    ).witness;
+  }
   decisions.set(openingDecisionId, opening.meta);
   for (const [courtIndex, selection] of opening.result.selection.selections.entries()) {
     const court = courtIndex as 0 | 1;
@@ -2350,6 +4082,14 @@ function createSessionResult(
     const decision = decisions.get(finished.decisionId)!;
     decision.pendingAssignments -= 1;
     if (decision.pendingAssignments === 0) {
+      if (decision.socialCourtmateRescueWitness) {
+        decision.socialCourtmateRescueWitness.completed = true;
+        decision.socialCourtmateRescueWitness.completedAfterMatchNumber = eventIndex + 1;
+      }
+      if (decision.socialCourtmateBeneficialRescueWitness) {
+        decision.socialCourtmateBeneficialRescueWitness.completed = true;
+        decision.socialCourtmateBeneficialRescueWitness.completedAfterMatchNumber = eventIndex + 1;
+      }
       decisions.delete(finished.decisionId);
       counters.completedOptimizerDecisions += 1;
       if (decision.overdueAvailable > 0) {
@@ -2467,9 +4207,9 @@ function createSessionResult(
       socialVariety: assignment.socialVariety,
     }))];
     const refillAudit = eventIndex + 1 < targetMatches
-      ? auditRotationClass(players, sessionType, refillHistory, true, coverageGainMetric)
+      ? auditRotationClass(players, sessionType, refillHistory, completed, true, coverageGainMetric)
       : null;
-    if (eventIndex + 1 === 21 || eventIndex + 1 === 400 || eventIndex + 1 === targetMatches) {
+    if (eventIndex + 1 === 21 || eventIndex + 1 === 100 || eventIndex + 1 === 400 || eventIndex + 1 === targetMatches) {
       const completedRestValues = [...completedRestGaps];
       const assignmentRestValues = [...assignmentRestGaps];
       const ongoingAvailableFiveTurnWaits = players
@@ -2552,6 +4292,93 @@ function createSessionResult(
     if (!refill.result.selection || refill.result.selection.selections.length !== 1) {
       throw new Error(`${sessionType}/${profile}/seed ${seed}: refill failed after completion ${eventIndex + 1} (${refill.result.debug.failureReason})`);
     }
+    if (socialPriorityStrictEnabled && refill.meta.overdueAvailable > 0) {
+      const engineCounterfactualComplete = refill.meta.counterfactualComplete;
+      const counterfactualProof = refill.withoutStarvation;
+      const objectiveCounterfactualCertified = counterfactualProof
+        ? recordSocialPriorityDecision(
+            counterfactualProof,
+            counterfactualProof.searchLimitReached ?? false,
+            1,
+            `no-starvation counterfactual after completion ${eventIndex + 1}`,
+            false,
+            true
+          )
+        : (() => {
+            counters.socialPriorityCounterfactualAuditDecisions += 1;
+            counters.socialPriorityCounterfactualUncertifiedDecisions += 1;
+            return false;
+          })();
+      refill.meta.counterfactualComplete = engineCounterfactualComplete && objectiveCounterfactualCertified;
+      if (!refill.meta.counterfactualComplete) {
+        counters.socialPriorityCounterfactualIncompleteDecisions += 1;
+        counters.socialPriorityIncompleteCounterfactualDecisions += 1;
+      }
+    }
+    if (socialCourtmateRescueEnabled && refill.meta.overdueAvailable > 0) {
+      const engineCounterfactualComplete = refill.meta.counterfactualComplete;
+      const counterfactualProof = refill.withoutStarvation;
+      const objectiveCounterfactualCertified = recordSocialCourtmateRescueDecision(
+        counterfactualProof,
+        counterfactualProof?.searchLimitReached ?? false,
+        1,
+        `no-starvation counterfactual after completion ${eventIndex + 1}`,
+        eventIndex + 1,
+        false,
+        true
+      ).certified;
+      refill.meta.counterfactualComplete = engineCounterfactualComplete && objectiveCounterfactualCertified;
+      if (!refill.meta.counterfactualComplete) {
+        counters.socialCourtmateRescue.counterfactualIncompleteAuditDecisions += 1;
+        counters.socialPriorityIncompleteCounterfactualDecisions += 1;
+      }
+    }
+    if (socialCourtmateBeneficialRescueEnabled && refill.meta.overdueAvailable > 0) {
+      const engineCounterfactualComplete = refill.meta.counterfactualComplete;
+      const counterfactualProof = refill.withoutStarvation;
+      const objectiveCounterfactualCertified = recordSocialCourtmateBeneficialRescueDecision(
+        counterfactualProof,
+        counterfactualProof?.searchLimitReached ?? false,
+        1,
+        `no-starvation counterfactual after completion ${eventIndex + 1}`,
+        eventIndex + 1,
+        false,
+        true
+      ).certified;
+      refill.meta.counterfactualComplete = engineCounterfactualComplete && objectiveCounterfactualCertified;
+      if (!refill.meta.counterfactualComplete) {
+        counters.socialCourtmateBeneficialRescue.counterfactualIncompleteAuditDecisions += 1;
+        counters.socialPriorityIncompleteCounterfactualDecisions += 1;
+      }
+    }
+    if (socialPriorityStrictEnabled) {
+      recordSocialPriorityDecision(
+        refill.productionProof,
+        refill.result.debug.searchLimitReached,
+        1,
+        `refill after completion ${eventIndex + 1}`
+      );
+    }
+    let rescueDecisionWitness: SocialCourtmateRescueDecisionWitness | undefined;
+    if (socialCourtmateRescueEnabled) {
+      rescueDecisionWitness = recordSocialCourtmateRescueDecision(
+        refill.productionProof,
+        refill.result.debug.searchLimitReached,
+        1,
+        `refill after completion ${eventIndex + 1}`,
+        eventIndex + 1
+      ).witness;
+      refill.meta.socialCourtmateRescueWitness = rescueDecisionWitness;
+    }
+    if (socialCourtmateBeneficialRescueEnabled) {
+      refill.meta.socialCourtmateBeneficialRescueWitness = recordSocialCourtmateBeneficialRescueDecision(
+        refill.productionProof,
+        refill.result.debug.searchLimitReached,
+        1,
+        `refill after completion ${eventIndex + 1}`,
+        eventIndex + 1
+      ).witness;
+    }
     counters.refillDecisionCount += 1;
     const selection = refill.result.selection.selections[0];
     const selectedSet = new Set(selection.ids);
@@ -2591,7 +4418,7 @@ function createSessionResult(
       counters.noStarvationReplayRefillDecisions += 1;
       if (refill.meta.overdueAvailable > 0) counters.noStarvationCounterfactualDecisions += 1;
       noStarvationAudit = refill.meta.overdueAvailable > 0
-        ? auditRotationClass(players, sessionType, refillHistory, false, coverageGainMetric)
+        ? auditRotationClass(players, sessionType, refillHistory, completed, false, coverageGainMetric)
         : refillAudit;
       noStarvationReplayAudit = certifyReplaySelection(
         refill.withoutStarvation,
@@ -2651,7 +4478,7 @@ function createSessionResult(
         }
       }
     }
-    if (enginePolicy === "current") {
+    if (enginePolicy === "current" && !socialPriorityEnabled) {
       productionReplayAudit = certifyReplaySelection(
         refill.productionProof,
         refillAudit,
@@ -2673,7 +4500,7 @@ function createSessionResult(
       if (refill.meta.overdueAvailable > 0) counters.noStarvationCounterfactualDecisions += 1;
       const noStarvationProof = refill.withoutStarvation;
       noStarvationAudit = refill.meta.overdueAvailable > 0
-        ? auditRotationClass(players, sessionType, refillHistory, false, coverageGainMetric)
+        ? auditRotationClass(players, sessionType, refillHistory, completed, false, coverageGainMetric)
         : refillAudit;
       noStarvationReplayAudit = certifyReplaySelection(
         noStarvationProof,
@@ -3167,25 +4994,40 @@ export function runSocialHorizonCoverageBenchmark({
   },
   targetMatches = 21,
   coverageGainMetric = "legacy-equal",
+  socialPriorityPolicy = "production",
+  sessionTypes = FORMAT_ORDER,
 }: {
   seeds: number[];
   enginePolicy?: BenchmarkReport["enginePolicy"];
   sourceRevision?: string;
   sourceProvenance?: BenchmarkReport["sourceProvenance"];
-  targetMatches?: 21 | 400;
-  coverageGainMetric?: "legacy-equal" | "social-horizon-321";
+  targetMatches?: 21 | 100 | 400;
+  coverageGainMetric?: "legacy-equal" | "social-horizon-321" | RollingCoverageGainMetric;
+  socialPriorityPolicy?: "production" | "courtmate-first" | "courtmate-near-best" | "courtmate-beneficial-rescue";
+  sessionTypes?: readonly SessionType[];
 }): SocialHorizonCoverageReport {
   if (seeds.length === 0 || seeds.some((seed) => !Number.isSafeInteger(seed)) || new Set(seeds).size !== seeds.length) {
     throw new Error("Social horizon benchmark seeds must be a non-empty list of unique safe integers.");
   }
-  if (targetMatches !== 21 && targetMatches !== 400) {
-    throw new Error("Social horizon benchmark target must be exactly 21 or 400 completed matches.");
+  if (targetMatches !== 21 && targetMatches !== 100 && targetMatches !== 400) {
+    throw new Error("Social horizon benchmark target must be exactly 21, 100, or 400 completed matches.");
   }
-  if (coverageGainMetric === "social-horizon-321" && enginePolicy !== "current") {
-    throw new Error("The social-horizon-321 matcher coverage gain is only available with the current engine policy.");
+  if (!sessionTypes.length || sessionTypes.some((sessionType) => !FORMAT_ORDER.includes(sessionType as (typeof FORMAT_ORDER)[number])) ||
+      new Set(sessionTypes).size !== sessionTypes.length) {
+    throw new Error("Social horizon benchmark session types must be a non-empty list of unique supported formats.");
   }
-  const sessions = seeds.flatMap((seed) => FORMAT_ORDER.map((sessionType) =>
-    createSessionResult("narrow", sessionType, seed, targetMatches, enginePolicy, true, coverageGainMetric)
+  if (socialPriorityPolicy !== "production" && sessionTypes.some((sessionType) => sessionType !== SessionType.SOCIAL_MIX)) {
+    throw new Error("The courtmate priority experiments can only run Social/Mixed sessions.");
+  }
+  if (socialPriorityPolicy !== "production" && enginePolicy !== "current") {
+    throw new Error("The courtmate priority experiments require the current rotation matcher architecture.");
+  }
+  if ((coverageGainMetric === "social-horizon-321" || coverageGainMetric === "rolling-equal" ||
+      coverageGainMetric === "social-horizon-3211") && enginePolicy !== "current") {
+    throw new Error("Experimental social coverage gains are only available with the current engine policy.");
+  }
+  const sessions = seeds.flatMap((seed) => sessionTypes.map((sessionType) =>
+    createSessionResult("narrow", sessionType, seed, targetMatches, enginePolicy, true, coverageGainMetric, socialPriorityPolicy)
   ));
   return {
     schemaVersion: "social-horizon-321-v1",
@@ -3195,6 +5037,9 @@ export function runSocialHorizonCoverageBenchmark({
     enginePolicy,
     targetMatches,
     matcherCoverageGainMetric: coverageGainMetric,
+    ...(socialPriorityPolicy !== "production" ? { socialPriorityPolicy } : {}),
+    ...(sessionTypes.length !== FORMAT_ORDER.length || sessionTypes.some((sessionType, index) => sessionType !== FORMAT_ORDER[index])
+      ? { sessionTypes: [...sessionTypes] } : {}),
     seeds: [...seeds],
     metric: {
       id: "social-horizon-321",

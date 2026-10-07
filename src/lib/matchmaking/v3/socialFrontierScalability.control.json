@@ -1,0 +1,2641 @@
+{
+  "controlSource": "benchmarks/fixtures/social-frontier-control/src/lib/matchmaking/v3/socialBatch.ts",
+  "controlSha256": "40538cb672c3a8cef256192b114dffb28bc853f8c1aa28790af40775f79b64e6",
+  "records": {
+    "rescue_positive": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 3,
+      "chosenCourtmateGainDeficit": 1,
+      "bestRollingMatchTypeGainAtGmax": 0,
+      "chosenRollingMatchTypeGain": 2,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P0",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P1",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P6",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P7",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P2",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P3",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P4",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P5",
+          "covered": 7,
+          "possible": 7
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ],
+            "team1": [
+              "P0",
+              "P2"
+            ],
+            "team2": [
+              "P1",
+              "P3"
+            ],
+            "balanceGap": 17,
+            "pointDiffGap": 2.5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.47337287838416475,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "UPPER",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P2": "UPPER",
+                "P1": "UPPER",
+                "P3": "UPPER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": -0.022426945032318304,
+              "partners": 0.509128226819081,
+              "opponents": 0.009857843735305533,
+              "matchType": 0.6708073834468918
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 6,
+            "sharedCourtEncounterFrequencyPenalty": 13,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 3.105444296061007,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P4",
+              "P5",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P4",
+              "P7"
+            ],
+            "team2": [
+              "P5",
+              "P6"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.928701712733298,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "LOWER",
+              "effectiveSideByUserId": {
+                "P4": "LOWER",
+                "P7": "LOWER",
+                "P5": "LOWER",
+                "P6": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.3490237140756476,
+              "partners": 0.682958958773573,
+              "opponents": 0.47762645285834393,
+              "matchType": 3.1325248615550825
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 4,
+            "sharedCourtEncounterFrequencyPenalty": 7,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 3.292462324323671,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 17,
+        "totalBalanceGap": 17,
+        "maxPointDiffGap": 2.5,
+        "totalPointDiffGap": 2.5,
+        "totalSharedCourtRepeatPenalty": 10,
+        "totalSharedCourtEncounterFrequencyPenalty": 20,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 6.397906620384678,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 0.3265967690433293,
+          "partners": 1.192087185592654,
+          "opponents": 0.48748429659364945,
+          "matchType": 3.8033322450019744
+        },
+        "totalRelationshipEntropyGain": 2.006168251229633,
+        "totalPairingRandomScore": 0.16068857772291836,
+        "sidePairingLayoutKeys": [
+          "P0+P2|P4+P7",
+          "P1+P3|P5+P6"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_tied": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 5,
+      "chosenCourtmateGainDeficit": 0,
+      "bestRollingMatchTypeGainAtGmax": 0,
+      "chosenRollingMatchTypeGain": 0,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P6",
+          "covered": 5,
+          "possible": 7
+        },
+        {
+          "userId": "P0",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P1",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P4",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P7",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P2",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P3",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P5",
+          "covered": 7,
+          "possible": 7
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P5",
+              "P7"
+            ],
+            "team1": [
+              "P0",
+              "P7"
+            ],
+            "team2": [
+              "P1",
+              "P5"
+            ],
+            "balanceGap": 8.5,
+            "pointDiffGap": 6,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.7955834303972272,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P7": "LOWER",
+                "P1": "UPPER",
+                "P5": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.5855249644913365,
+              "partners": 0.9813107279446944,
+              "opponents": 1.1000464569807018,
+              "matchType": -0.16340833189102077
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 3,
+            "sharedCourtEncounterFrequencyPenalty": 3,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P2",
+              "P3",
+              "P4",
+              "P6"
+            ],
+            "team1": [
+              "P2",
+              "P6"
+            ],
+            "team2": [
+              "P3",
+              "P4"
+            ],
+            "balanceGap": 8.5,
+            "pointDiffGap": 3.5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.03163146926826599,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P2": "UPPER",
+                "P6": "LOWER",
+                "P3": "UPPER",
+                "P4": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.3277879135111361,
+              "partners": 0.860253714378509,
+              "opponents": 0.5337304595294887,
+              "matchType": -0.21403541919071328
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 4,
+            "sharedCourtEncounterFrequencyPenalty": 6,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 1.099649515625,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 8.5,
+        "totalBalanceGap": 17,
+        "maxPointDiffGap": 6,
+        "totalPointDiffGap": 9.5,
+        "totalSharedCourtRepeatPenalty": 7,
+        "totalSharedCourtEncounterFrequencyPenalty": 9,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 1.099649515625,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 0.9133128780024726,
+          "partners": 1.8415644423232034,
+          "opponents": 1.6337769165101905,
+          "matchType": -0.37744375108173406
+        },
+        "totalRelationshipEntropyGain": 4.388654236835867,
+        "totalPairingRandomScore": 0.7836309677883123,
+        "sidePairingLayoutKeys": [
+          "P0+P7|P2+P6",
+          "P1+P5|P3+P4"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_negative": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 1,
+      "chosenCourtmateGainDeficit": 1,
+      "bestRollingMatchTypeGainAtGmax": -1.5,
+      "chosenRollingMatchTypeGain": 0,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P2",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P4",
+          "covered": 6,
+          "possible": 7
+        },
+        {
+          "userId": "P0",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P1",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P3",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P5",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P6",
+          "covered": 7,
+          "possible": 7
+        },
+        {
+          "userId": "P7",
+          "covered": 7,
+          "possible": 7
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ],
+            "team1": [
+              "P0",
+              "P3"
+            ],
+            "team2": [
+              "P1",
+              "P2"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 9.5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.3405361257820707,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "UPPER",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P3": "UPPER",
+                "P1": "UPPER",
+                "P2": "UPPER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": -0.018578042251616418,
+              "partners": 0.5275378835823532,
+              "opponents": 0.06884313805185867,
+              "matchType": 0.7118101153399382
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 6,
+            "sharedCourtEncounterFrequencyPenalty": 15,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0.6749042684415536,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P4",
+              "P5",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P4",
+              "P6"
+            ],
+            "team2": [
+              "P5",
+              "P7"
+            ],
+            "balanceGap": 17,
+            "pointDiffGap": 7,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.2776080182002876,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "LOWER",
+              "effectiveSideByUserId": {
+                "P4": "LOWER",
+                "P6": "LOWER",
+                "P5": "LOWER",
+                "P7": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.012024771313746596,
+              "partners": 0.5441186617661584,
+              "opponents": 0.08169717279166987,
+              "matchType": 0.808708563378187
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 6,
+            "sharedCourtEncounterFrequencyPenalty": 15,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 1.1372322821752343,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 17,
+        "totalBalanceGap": 17,
+        "maxPointDiffGap": 9.5,
+        "totalPointDiffGap": 16.5,
+        "totalSharedCourtRepeatPenalty": 12,
+        "totalSharedCourtEncounterFrequencyPenalty": 30,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 1.812136550616788,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": -0.006553270937869822,
+          "partners": 1.0716565453485116,
+          "opponents": 0.15054031084352854,
+          "matchType": 1.5205186787181253
+        },
+        "totalRelationshipEntropyGain": 1.2156435852541703,
+        "totalPairingRandomScore": 0.3072908693708691,
+        "sidePairingLayoutKeys": [
+          "P0+P3|P4+P6",
+          "P1+P2|P5+P7"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_locks_arrival": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 12,
+      "chosenCourtmateGainDeficit": 0,
+      "bestRollingMatchTypeGainAtGmax": 4,
+      "chosenRollingMatchTypeGain": 4,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P4",
+          "covered": 0,
+          "possible": 9
+        },
+        {
+          "userId": "P8",
+          "covered": 0,
+          "possible": 9
+        },
+        {
+          "userId": "P0",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P1",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P2",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P3",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P5",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P6",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P7",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P9",
+          "covered": 3,
+          "possible": 9
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P3",
+              "P5",
+              "P9"
+            ],
+            "team1": [
+              "P0",
+              "P9"
+            ],
+            "team2": [
+              "P3",
+              "P5"
+            ],
+            "balanceGap": 8.5,
+            "pointDiffGap": 6,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.10924378179694615,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P9": "LOWER",
+                "P3": "UPPER",
+                "P5": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.9999999999999996,
+              "partners": 0,
+              "opponents": 1.2618595071429148,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P1",
+              "P2",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P1",
+              "P7"
+            ],
+            "team2": [
+              "P2",
+              "P6"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.41478833309719065,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P1": "UPPER",
+                "P7": "LOWER",
+                "P2": "UPPER",
+                "P6": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.9999999999999996,
+              "partners": 0,
+              "opponents": 1.2618595071429148,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 8.5,
+        "totalBalanceGap": 8.5,
+        "maxPointDiffGap": 6,
+        "totalPointDiffGap": 6,
+        "totalSharedCourtRepeatPenalty": 0,
+        "totalSharedCourtEncounterFrequencyPenalty": 0,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 3.999999999999999,
+          "partners": 0,
+          "opponents": 2.5237190142858297,
+          "matchType": 0
+        },
+        "totalRelationshipEntropyGain": 6.523719014285829,
+        "totalPairingRandomScore": 0.18103957576235746,
+        "sidePairingLayoutKeys": [
+          "P0+P9|P1+P7",
+          "P2+P6|P3+P5"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_overdue": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 12,
+      "chosenCourtmateGainDeficit": 0,
+      "bestRollingMatchTypeGainAtGmax": 4,
+      "chosenRollingMatchTypeGain": 4,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P4",
+          "covered": 0,
+          "possible": 9
+        },
+        {
+          "userId": "P5",
+          "covered": 0,
+          "possible": 9
+        },
+        {
+          "userId": "P0",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P1",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P2",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P3",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P6",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P7",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P8",
+          "covered": 3,
+          "possible": 9
+        },
+        {
+          "userId": "P9",
+          "covered": 3,
+          "possible": 9
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P3",
+              "P6",
+              "P9"
+            ],
+            "team1": [
+              "P0",
+              "P9"
+            ],
+            "team2": [
+              "P3",
+              "P6"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.10533743796528723,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P9": "LOWER",
+                "P3": "UPPER",
+                "P6": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.9999999999999996,
+              "partners": 0,
+              "opponents": 1.2618595071429148,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 2,
+              "selectedOverdueCount": 2,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P1",
+              "P2",
+              "P7",
+              "P8"
+            ],
+            "team1": [
+              "P1",
+              "P8"
+            ],
+            "team2": [
+              "P2",
+              "P7"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.6137120899776258,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P1": "UPPER",
+                "P8": "LOWER",
+                "P2": "UPPER",
+                "P7": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.9999999999999996,
+              "partners": 0,
+              "opponents": 1.2618595071429148,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 2,
+              "selectedOverdueCount": 2,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 17,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            6,
+            5,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 0,
+        "totalBalanceGap": 0,
+        "maxPointDiffGap": 0,
+        "totalPointDiffGap": 0,
+        "totalSharedCourtRepeatPenalty": 0,
+        "totalSharedCourtEncounterFrequencyPenalty": 0,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 3.999999999999999,
+          "partners": 0,
+          "opponents": 2.5237190142858297,
+          "matchType": 0
+        },
+        "totalRelationshipEntropyGain": 6.523719014285829,
+        "totalPairingRandomScore": 0.10763924245434796,
+        "sidePairingLayoutKeys": [
+          "P0+P9|P1+P8",
+          "P2+P7|P3+P6"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_distinct_schedule": {
+      "scheduleIndex": 1,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 0,
+      "chosenCourtmateGainDeficit": 0,
+      "bestRollingMatchTypeGainAtGmax": 0,
+      "chosenRollingMatchTypeGain": 0,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P0",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P1",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P2",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P3",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P4",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P5",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P6",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P7",
+          "covered": 3,
+          "possible": 7
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P4",
+              "P5"
+            ],
+            "team1": [
+              "P0",
+              "P5"
+            ],
+            "team2": [
+              "P1",
+              "P4"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.04852451641311043,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P5": "LOWER",
+                "P1": "UPPER",
+                "P4": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0,
+              "partners": 1.4248287484320887,
+              "opponents": 0.7124143742160444,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 6,
+            "sharedCourtEncounterFrequencyPenalty": 6,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 1.4449999999999998,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P2",
+              "P3",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P2",
+              "P7"
+            ],
+            "team2": [
+              "P3",
+              "P6"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 9.5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.0017566389873988552,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P2": "UPPER",
+                "P7": "LOWER",
+                "P3": "UPPER",
+                "P6": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0,
+              "partners": 1.4248287484320887,
+              "opponents": 0.7124143742160444,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 6,
+            "sharedCourtEncounterFrequencyPenalty": 6,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 2,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 0,
+        "totalBalanceGap": 0,
+        "maxPointDiffGap": 9.5,
+        "totalPointDiffGap": 9.5,
+        "totalSharedCourtRepeatPenalty": 12,
+        "totalSharedCourtEncounterFrequencyPenalty": 12,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 3.445,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 0,
+          "partners": 2.8496574968641775,
+          "opponents": 1.4248287484320887,
+          "matchType": 0
+        },
+        "totalRelationshipEntropyGain": 4.274486245296266,
+        "totalPairingRandomScore": 0.204416036187768,
+        "sidePairingLayoutKeys": [
+          "P0+P5|P2+P7",
+          "P1+P4|P3+P6"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_side_balanced_zero_salt": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 12,
+      "chosenCourtmateGainDeficit": 0,
+      "bestRollingMatchTypeGainAtGmax": 4,
+      "chosenRollingMatchTypeGain": 4,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P0",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P1",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P2",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P3",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P4",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P5",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P6",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P7",
+          "covered": 3,
+          "possible": 7
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P4",
+              "P5"
+            ],
+            "team1": [
+              "P0",
+              "P5"
+            ],
+            "team2": [
+              "P1",
+              "P4"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 0,
+            "pairingRandomScore": 0,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P5": "LOWER",
+                "P1": "UPPER",
+                "P4": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 2.2583001362143182,
+              "partners": 0,
+              "opponents": 1.4248287484320887,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P2",
+              "P3",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P2",
+              "P7"
+            ],
+            "team2": [
+              "P3",
+              "P6"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 9.5,
+            "randomScore": 0,
+            "pairingRandomScore": 0,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P2": "UPPER",
+                "P7": "LOWER",
+                "P3": "UPPER",
+                "P6": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 2.2583001362143182,
+              "partners": 0,
+              "opponents": 1.4248287484320887,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 0,
+        "totalBalanceGap": 0,
+        "maxPointDiffGap": 9.5,
+        "totalPointDiffGap": 9.5,
+        "totalSharedCourtRepeatPenalty": 0,
+        "totalSharedCourtEncounterFrequencyPenalty": 0,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 4.5166002724286365,
+          "partners": 0,
+          "opponents": 2.8496574968641775,
+          "matchType": 0
+        },
+        "totalRelationshipEntropyGain": 7.3662577692928135,
+        "totalPairingRandomScore": 0,
+        "sidePairingLayoutKeys": [
+          "P0+P5|P2+P7",
+          "P1+P4|P3+P6"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_side_balanced_nonzero_salt": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 12,
+      "chosenCourtmateGainDeficit": 0,
+      "bestRollingMatchTypeGainAtGmax": 4,
+      "chosenRollingMatchTypeGain": 4,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P0",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P1",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P2",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P3",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P4",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P5",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P6",
+          "covered": 3,
+          "possible": 7
+        },
+        {
+          "userId": "P7",
+          "covered": 3,
+          "possible": 7
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P2",
+              "P4",
+              "P6"
+            ],
+            "team1": [
+              "P0",
+              "P6"
+            ],
+            "team2": [
+              "P2",
+              "P4"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 9.5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.6524199949699501,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P6": "LOWER",
+                "P2": "UPPER",
+                "P4": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 2.2583001362143182,
+              "partners": 0,
+              "opponents": 1.4248287484320887,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P1",
+              "P3",
+              "P5",
+              "P7"
+            ],
+            "team1": [
+              "P1",
+              "P7"
+            ],
+            "team2": [
+              "P3",
+              "P5"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.5580147620192764,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P1": "UPPER",
+                "P7": "LOWER",
+                "P3": "UPPER",
+                "P5": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 2.2583001362143182,
+              "partners": 0,
+              "opponents": 1.4248287484320887,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 0,
+        "totalBalanceGap": 0,
+        "maxPointDiffGap": 9.5,
+        "totalPointDiffGap": 9.5,
+        "totalSharedCourtRepeatPenalty": 0,
+        "totalSharedCourtEncounterFrequencyPenalty": 0,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 4.5166002724286365,
+          "partners": 0,
+          "opponents": 2.8496574968641775,
+          "matchType": 0
+        },
+        "totalRelationshipEntropyGain": 7.3662577692928135,
+        "totalPairingRandomScore": 0.17881545475190866,
+        "sidePairingLayoutKeys": [
+          "P0+P6|P1+P7",
+          "P2+P4|P3+P5"
+        ],
+        "sidePairingRandomScores": [
+          0.25325015239726056,
+          0.41964311046051866
+        ]
+      }
+    },
+    "social_default": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ],
+            "team1": [
+              "P0",
+              "P1"
+            ],
+            "team2": [
+              "P2",
+              "P3"
+            ],
+            "balanceGap": 34,
+            "pointDiffGap": 4.5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.25665852922402754,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "UPPER",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P1": "UPPER",
+                "P2": "UPPER",
+                "P3": "UPPER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.9498858322880592,
+              "partners": 1.4248287484320887,
+              "opponents": 1.4248287484320887,
+              "matchType": 4
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 2,
+            "sharedCourtEncounterFrequencyPenalty": 2,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P4",
+              "P5",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P4",
+              "P5"
+            ],
+            "team2": [
+              "P6",
+              "P7"
+            ],
+            "balanceGap": 34,
+            "pointDiffGap": 5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.4251157933438932,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "LOWER",
+              "effectiveSideByUserId": {
+                "P4": "LOWER",
+                "P5": "LOWER",
+                "P6": "LOWER",
+                "P7": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.9498858322880592,
+              "partners": 1.4248287484320887,
+              "opponents": 1.4248287484320887,
+              "matchType": 4
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 2,
+            "sharedCourtEncounterFrequencyPenalty": 2,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 34,
+        "totalBalanceGap": 68,
+        "maxPointDiffGap": 5,
+        "totalPointDiffGap": 9.5,
+        "totalSharedCourtRepeatPenalty": 4,
+        "totalSharedCourtEncounterFrequencyPenalty": 4,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 1.8997716645761185,
+          "partners": 2.8496574968641775,
+          "opponents": 2.8496574968641775,
+          "matchType": 8
+        },
+        "totalRelationshipEntropyGain": 7.599086658304474,
+        "totalPairingRandomScore": 0.5171474512939219,
+        "sidePairingLayoutKeys": [
+          "P0+P1|P4+P5",
+          "P2+P3|P6+P7"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "points_default": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "balanceCertified": true,
+      "varietyOptimal": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ],
+            "team1": [
+              "P0",
+              "P3"
+            ],
+            "team2": [
+              "P1",
+              "P2"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 9.5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.3405361257820707,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "UPPER",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P3": "UPPER",
+                "P1": "UPPER",
+                "P2": "UPPER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.9498858322880592,
+              "partners": 1.4248287484320887,
+              "opponents": 0.7124143742160444,
+              "matchType": 4
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P4",
+              "P5",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P4",
+              "P7"
+            ],
+            "team2": [
+              "P5",
+              "P6"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.928701712733298,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "LOWER",
+              "effectiveSideByUserId": {
+                "P4": "LOWER",
+                "P7": "LOWER",
+                "P5": "LOWER",
+                "P6": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.9498858322880592,
+              "partners": 1.4248287484320887,
+              "opponents": 0.7124143742160444,
+              "matchType": 4
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 0,
+        "totalBalanceGap": 0,
+        "maxPointDiffGap": 9.5,
+        "totalPointDiffGap": 9.5,
+        "totalSharedCourtRepeatPenalty": 0,
+        "totalSharedCourtEncounterFrequencyPenalty": 0,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 1.8997716645761185,
+          "partners": 2.8496574968641775,
+          "opponents": 1.4248287484320887,
+          "matchType": 8
+        },
+        "totalRelationshipEntropyGain": 6.174257909872384,
+        "totalPairingRandomScore": 0.7502006643335802,
+        "sidePairingLayoutKeys": [
+          "P0+P3|P4+P7",
+          "P1+P2|P5+P6"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "elo_default": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "balanceCertified": true,
+      "varietyOptimal": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ],
+            "team1": [
+              "P0",
+              "P3"
+            ],
+            "team2": [
+              "P1",
+              "P2"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 9.5,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.3405361257820707,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "UPPER",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P3": "UPPER",
+                "P1": "UPPER",
+                "P2": "UPPER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.9498858322880592,
+              "partners": 1.4248287484320887,
+              "opponents": 0.7124143742160444,
+              "matchType": 4
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P4",
+              "P5",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P4",
+              "P7"
+            ],
+            "team2": [
+              "P5",
+              "P6"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.928701712733298,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "LOWER",
+              "effectiveSideByUserId": {
+                "P4": "LOWER",
+                "P7": "LOWER",
+                "P5": "LOWER",
+                "P6": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 0.9498858322880592,
+              "partners": 1.4248287484320887,
+              "opponents": 0.7124143742160444,
+              "matchType": 4
+            },
+            "socialStarvation": {
+              "idealRestGap": 1,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 8,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 0,
+        "totalBalanceGap": 0,
+        "maxPointDiffGap": 9.5,
+        "totalPointDiffGap": 9.5,
+        "totalSharedCourtRepeatPenalty": 0,
+        "totalSharedCourtEncounterFrequencyPenalty": 0,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 1.8997716645761185,
+          "partners": 2.8496574968641775,
+          "opponents": 1.4248287484320887,
+          "matchType": 8
+        },
+        "totalRelationshipEntropyGain": 6.174257909872384,
+        "totalPairingRandomScore": 0.7502006643335802,
+        "sidePairingLayoutKeys": [
+          "P0+P3|P4+P7",
+          "P1+P2|P5+P6"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_three_court_zero_salt": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 18,
+      "chosenCourtmateGainDeficit": 0,
+      "bestRollingMatchTypeGainAtGmax": 6,
+      "chosenRollingMatchTypeGain": 6,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P0",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P1",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P10",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P11",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P2",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P3",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P4",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P5",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P6",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P7",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P8",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P9",
+          "covered": 3,
+          "possible": 11
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P0",
+              "P6"
+            ],
+            "team2": [
+              "P1",
+              "P7"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 0,
+            "pairingRandomScore": 0,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P6": "LOWER",
+                "P1": "UPPER",
+                "P7": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.8326276399653045,
+              "partners": 0,
+              "opponents": 1.1562593052715513,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P10",
+              "P11",
+              "P4",
+              "P5"
+            ],
+            "team1": [
+              "P10",
+              "P4"
+            ],
+            "team2": [
+              "P11",
+              "P5"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 0,
+            "pairingRandomScore": 0,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P4": "UPPER",
+                "P10": "LOWER",
+                "P5": "UPPER",
+                "P11": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.8326276399653045,
+              "partners": 0,
+              "opponents": 1.1562593052715513,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P2",
+              "P3",
+              "P8",
+              "P9"
+            ],
+            "team1": [
+              "P2",
+              "P8"
+            ],
+            "team2": [
+              "P3",
+              "P9"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 0,
+            "pairingRandomScore": 0,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P2": "UPPER",
+                "P8": "LOWER",
+                "P3": "UPPER",
+                "P9": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.8326276399653045,
+              "partners": 0,
+              "opponents": 1.1562593052715513,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 12,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 0,
+        "totalBalanceGap": 0,
+        "maxPointDiffGap": 0,
+        "totalPointDiffGap": 0,
+        "totalSharedCourtRepeatPenalty": 0,
+        "totalSharedCourtEncounterFrequencyPenalty": 0,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 5.497882919895914,
+          "partners": 0,
+          "opponents": 3.4687779158146537,
+          "matchType": 0
+        },
+        "totalRelationshipEntropyGain": 8.966660835710567,
+        "totalPairingRandomScore": 0,
+        "sidePairingLayoutKeys": [
+          "P0+P6|P10+P4|P2+P8",
+          "P1+P7|P11+P5|P3+P9"
+        ],
+        "sidePairingRandomScores": [
+          0,
+          0
+        ]
+      }
+    },
+    "rescue_three_court_nonzero_salt": {
+      "scheduleIndex": 0,
+      "fairnessCertified": true,
+      "starvationCertified": true,
+      "replayCertified": true,
+      "coverageGateCertified": true,
+      "varietyOptimal": true,
+      "priorityCertified": true,
+      "searchLimitReached": false,
+      "failureReason": null,
+      "courtmateGainMaximumCertified": true,
+      "courtmateGainMaximum": 18,
+      "chosenCourtmateGainDeficit": 0,
+      "bestRollingMatchTypeGainAtGmax": 6,
+      "chosenRollingMatchTypeGain": 6,
+      "chosenPostBatchCourtmateCoverage": [
+        {
+          "userId": "P0",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P1",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P10",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P11",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P2",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P3",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P4",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P5",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P6",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P7",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P8",
+          "covered": 3,
+          "possible": 11
+        },
+        {
+          "userId": "P9",
+          "covered": 3,
+          "possible": 11
+        }
+      ],
+      "selection": {
+        "courts": [
+          {
+            "ids": [
+              "P0",
+              "P1",
+              "P8",
+              "P9"
+            ],
+            "team1": [
+              "P0",
+              "P8"
+            ],
+            "team2": [
+              "P1",
+              "P9"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.11724670397053628,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P0": "UPPER",
+                "P8": "LOWER",
+                "P1": "UPPER",
+                "P9": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.8326276399653045,
+              "partners": 0,
+              "opponents": 1.1562593052715513,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P10",
+              "P11",
+              "P2",
+              "P3"
+            ],
+            "team1": [
+              "P11",
+              "P2"
+            ],
+            "team2": [
+              "P10",
+              "P3"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.1955351464439964,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P2": "UPPER",
+                "P11": "LOWER",
+                "P3": "UPPER",
+                "P10": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.8326276399653045,
+              "partners": 0,
+              "opponents": 1.1562593052715513,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          },
+          {
+            "ids": [
+              "P4",
+              "P5",
+              "P6",
+              "P7"
+            ],
+            "team1": [
+              "P4",
+              "P6"
+            ],
+            "team2": [
+              "P5",
+              "P7"
+            ],
+            "balanceGap": 0,
+            "pointDiffGap": 0,
+            "randomScore": 1.484,
+            "pairingRandomScore": 0.2776080182002876,
+            "socialVariety": {
+              "version": 1,
+              "basis": "EFFECTIVE_MIXED_SIDE",
+              "courtType": "MIXED",
+              "effectiveSideByUserId": {
+                "P4": "UPPER",
+                "P6": "LOWER",
+                "P5": "UPPER",
+                "P7": "LOWER"
+              }
+            },
+            "socialVarietyGains": {
+              "courtmates": 1.8326276399653045,
+              "partners": 0,
+              "opponents": 1.1562593052715513,
+              "matchType": 0
+            },
+            "socialStarvation": {
+              "idealRestGap": 2,
+              "availableOverdueCount": 0,
+              "selectedOverdueCount": 0,
+              "leftOutOverdueCount": 0,
+              "highestLeftOutRestTurns": 0,
+              "totalLeftOutRestTurns": 0
+            },
+            "sharedCourtRepeatPenalty": 0,
+            "sharedCourtEncounterFrequencyPenalty": 0,
+            "partnerRepeatPenalty": 0,
+            "opponentRepeatPenalty": 0,
+            "exactRematchPenalty": 0
+          }
+        ],
+        "restSummary": {
+          "totalRestTurns": 12,
+          "minimumRestTurns": 1,
+          "restTurnVector": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        },
+        "maxBalanceGap": 0,
+        "totalBalanceGap": 0,
+        "maxPointDiffGap": 0,
+        "totalPointDiffGap": 0,
+        "totalSharedCourtRepeatPenalty": 0,
+        "totalSharedCourtEncounterFrequencyPenalty": 0,
+        "totalPartnerRepeatPenalty": 0,
+        "totalOpponentRepeatPenalty": 0,
+        "totalExactRematchPenalty": 0,
+        "totalSocialVarietyGains": {
+          "courtmates": 5.497882919895914,
+          "partners": 0,
+          "opponents": 3.4687779158146537,
+          "matchType": 0
+        },
+        "totalRelationshipEntropyGain": 8.966660835710567,
+        "totalPairingRandomScore": 0.553443313472309,
+        "sidePairingLayoutKeys": [
+          "P0+P8|P11+P2|P4+P6",
+          "P1+P9|P10+P3|P5+P7"
+        ],
+        "sidePairingRandomScores": [
+          0.007105279017031491,
+          0.10484474247899948
+        ]
+      }
+    }
+  }
+}

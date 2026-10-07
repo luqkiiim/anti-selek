@@ -11,7 +11,15 @@ import {
 import { buildFairnessBands } from "@/lib/matchmaking/v3/fairness";
 import { findBestBatchSelectionV3 } from "@/lib/matchmaking/v3/batch";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
-import { findBestSingleCourtSelectionV3 } from "@/lib/matchmaking/v3/singleCourt";
+import { findBestSingleCourtSelectionV3, type V3SingleCourtOptions } from "@/lib/matchmaking/v3/singleCourt";
+import type { RotationBatchOptions } from "@/lib/matchmaking/v3/socialBatch";
+import {
+  runSocialCandidateWithProductionFallback,
+  resolveSocialCandidatePolicy,
+  withSocialCandidateDecision,
+  type SocialCandidateDecision,
+  type SocialCandidatePolicy,
+} from "./socialCandidateAcceptance";
 import type {
   ActiveMatchmakerV3Player,
   MatchmakerV3Player,
@@ -63,7 +71,12 @@ interface InterclubSelection {
   team1ClubId: string;
   team2ClubId: string;
   matchmakingReasonJson: string;
+  socialPolicyDecision?: SocialCandidateDecision;
 }
+
+type InterclubCandidateSelection = V3SingleCourtSelection<ActiveInterclubPlayer> & {
+  socialPolicyDecision?: SocialCandidateDecision;
+};
 
 type InterclubReadinessSession = SessionInterclubSource & {
   poolsEnabled: boolean;
@@ -207,6 +220,105 @@ function buildCompletedInterclubMatches(
       team2: [match.team2User1Id, match.team2User2Id] as [string, string],
       completedAt: match.completedAt ?? null,
     }));
+}
+
+function buildCompletedInterclubSocialHistory(sessionData: GenerateMatchSession) {
+  return buildSocialSessionHistory({
+    matches: sessionData.matches.filter((match) => match.status === MatchStatus.COMPLETED),
+    queuedMatch: null,
+  });
+}
+
+function buildInterclubCandidateStructuralRoster({
+  sessionData,
+  rankedCandidates,
+  playersById,
+  clubIds,
+}: {
+  sessionData: GenerateMatchSession;
+  rankedCandidates: readonly RankedInterclubCandidate[];
+  playersById: Map<string, PartitionCandidate>;
+  clubIds: [string, string];
+}): InterclubMatchmakerPlayer[] {
+  const availableIds = new Set(rankedCandidates.map((candidate) => candidate.userId));
+  const structuralCandidates: RankedInterclubCandidate[] = [
+    ...rankedCandidates,
+    ...sessionData.players
+      .filter((player) => !availableIds.has(player.userId))
+      .map((player) => ({
+        userId: player.userId,
+        matchesPlayed: player.matchesPlayed,
+        matchmakingBaseline:
+          player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
+        restTurns: 0,
+        arrivalPriorityAt: player.arrivalPriorityAt,
+      })),
+  ];
+  const orderedCandidates = structuralCandidates.filter((candidate) => {
+    const player = sessionData.players.find((item) => item.userId === candidate.userId);
+    const clubId = player?.representingClubId;
+    return Boolean(clubId && clubIds.includes(clubId));
+  });
+  const activeRoster = buildInterclubMatchmakerPlayers({
+    sessionData,
+    rankedCandidates: orderedCandidates,
+    playersById,
+    clubIds,
+  });
+  return activeRoster.map((player) => ({
+    ...player,
+    isBusy: !player.isPaused && !availableIds.has(player.userId),
+  }));
+}
+
+function runInterclubSingleCourtSelection({
+  availablePlayers,
+  structuralPlayers,
+  options,
+  completedSocialHistory,
+  socialPriorityPolicy,
+}: {
+  availablePlayers: InterclubMatchmakerPlayer[];
+  structuralPlayers: InterclubMatchmakerPlayer[];
+  options: V3SingleCourtOptions<InterclubMatchmakerPlayer>;
+  completedSocialHistory?: ReturnType<typeof buildCompletedInterclubSocialHistory>;
+  socialPriorityPolicy?: SocialCandidatePolicy;
+}) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    options.sessionType,
+    socialPriorityPolicy,
+  );
+  if (!resolvedSocialPriorityPolicy) {
+    return findBestSingleCourtSelectionV3(availablePlayers, options);
+  }
+
+  const {
+    excludedQuartetKey,
+    ...rotationOptions
+  } = options;
+  const excludedQuartetKeys = new Set(rotationOptions.excludedQuartetKeys);
+  if (excludedQuartetKey) excludedQuartetKeys.add(excludedQuartetKey);
+  const fallbackOptions: RotationBatchOptions<InterclubMatchmakerPlayer> = {
+    ...rotationOptions,
+    courtCount: 1,
+    excludedQuartetKeys,
+  };
+  const candidateOptions: RotationBatchOptions<InterclubMatchmakerPlayer> = {
+    ...fallbackOptions,
+    completedMatches: completedSocialHistory ?? fallbackOptions.completedMatches,
+    socialHistoryMatches: completedSocialHistory ?? fallbackOptions.socialHistoryMatches,
+  };
+  const safeRun = runSocialCandidateWithProductionFallback({
+    candidatePlayers: structuralPlayers,
+    productionPlayers: availablePlayers,
+    options: fallbackOptions,
+    candidateOptions,
+  });
+  return {
+    selection: safeRun.result.selection?.selections[0] ?? null,
+    debug: safeRun.result.debug,
+    socialPolicyDecision: safeRun.decision,
+  };
 }
 
 function getCandidatesByClubId({
@@ -589,12 +701,16 @@ function getInterclubRotationOptions(
     isBusy: !player.isPaused && !availableIds.has(player.userId),
   }));
   const socialHistoryMatches = buildSocialSessionHistory(sessionData);
+  const structuralOpportunityConstraints = [getInterclubSelectionConstraints(clubIds)];
   return {
     rotationPlayerCount: sessionData.players.filter((player) => !player.isPaused).length,
     socialHistoryMatches,
+    ...(getEffectiveSessionType(sessionData) === SessionType.SOCIAL_MIX
+      ? { socialStructuralOpportunityConstraints: structuralOpportunityConstraints }
+      : {}),
     socialVarietyContext: buildSocialVarietyContext(players, socialHistoryMatches, {
       sessionMode: getEffectiveSessionMode(sessionData) as SessionMode,
-      opportunityConstraints: [getInterclubSelectionConstraints(clubIds)],
+      opportunityConstraints: structuralOpportunityConstraints,
     }),
   };
 }
@@ -608,7 +724,8 @@ function toManualMatchTeams(partition: V3DoublesPartition): ManualMatchTeams {
 
 function toInterclubSelection(
   selection: V3SingleCourtSelection<ActiveInterclubPlayer>,
-  clubIds: [string, string]
+  clubIds: [string, string],
+  socialPolicyDecision?: SocialCandidateDecision,
 ): InterclubSelection {
   const sortTeam = (team: [string, string]): [string, string] =>
     [...team].sort((left, right) => left.localeCompare(right)) as [
@@ -620,6 +737,21 @@ function toInterclubSelection(
     team2: sortTeam(selection.partition.team2),
   };
 
+  const matchmakingReasonJson = buildInterclubReasonJson({
+    team1ClubId: clubIds[0],
+    team2ClubId: clubIds[1],
+    balanceGap: selection.balanceGap,
+    pointDiffGap: selection.pointDiffGap,
+    socialVariety: selection.socialVariety,
+    socialVarietyGain: selection.socialVarietyGain,
+    socialVarietyGains: selection.socialVarietyGains,
+    socialStarvation: selection.socialStarvation,
+    balanceGuardrail: selection.balanceGuardrail,
+    finalTieBreak: selection.finalTieBreak,
+    fairnessVector: selection.fairnessVector,
+    schedulingRank: selection.schedulingRank,
+  });
+  const withDecision = withSocialCandidateDecision({ matchmakingReasonJson }, socialPolicyDecision);
   return {
     ids: [
       partition.team1[0],
@@ -630,20 +762,8 @@ function toInterclubSelection(
     partition: toManualMatchTeams(partition),
     team1ClubId: clubIds[0],
     team2ClubId: clubIds[1],
-    matchmakingReasonJson: buildInterclubReasonJson({
-      team1ClubId: clubIds[0],
-      team2ClubId: clubIds[1],
-      balanceGap: selection.balanceGap,
-      pointDiffGap: selection.pointDiffGap,
-      socialVariety: selection.socialVariety,
-      socialVarietyGain: selection.socialVarietyGain,
-      socialVarietyGains: selection.socialVarietyGains,
-      socialStarvation: selection.socialStarvation,
-      balanceGuardrail: selection.balanceGuardrail,
-      finalTieBreak: selection.finalTieBreak,
-      fairnessVector: selection.fairnessVector,
-      schedulingRank: selection.schedulingRank,
-    }),
+    matchmakingReasonJson: withDecision.matchmakingReasonJson ?? matchmakingReasonJson,
+    ...(socialPolicyDecision ? { socialPolicyDecision } : {}),
   };
 }
 
@@ -699,13 +819,15 @@ function findInterclubSingleCourtSelection({
   sessionData,
   excludedQuartetKey,
   excludedPartitionKey,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: readonly RankedInterclubCandidate[];
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   excludedQuartetKey?: string;
   excludedPartitionKey?: string;
-}) {
+  socialPriorityPolicy?: SocialCandidatePolicy;
+}): InterclubCandidateSelection | null {
   const context = buildInterclubSelectionContext({
     rankedCandidates,
     playersById,
@@ -716,7 +838,7 @@ function findInterclubSingleCourtSelection({
     return null;
   }
 
-  const result = findBestSingleCourtSelectionV3(context.players, {
+  const options: V3SingleCourtOptions<InterclubMatchmakerPlayer> = {
     sessionMode: context.sessionMode,
     sessionType: context.sessionType,
     completedMatches: context.completedMatches,
@@ -726,11 +848,33 @@ function findInterclubSingleCourtSelection({
     selectionConstraints: context.selectionConstraints,
     excludedQuartetKey,
     excludedPartitionKey,
+  };
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    context.sessionType,
+    socialPriorityPolicy,
+  );
+  const result = runInterclubSingleCourtSelection({
+    availablePlayers: context.players,
+    structuralPlayers: resolvedSocialPriorityPolicy
+      ? buildInterclubCandidateStructuralRoster({
+          sessionData,
+          rankedCandidates,
+          playersById,
+          clubIds: context.clubIds,
+        })
+      : context.players,
+    options,
+    ...(resolvedSocialPriorityPolicy
+      ? { completedSocialHistory: buildCompletedInterclubSocialHistory(sessionData) }
+      : {}),
+    socialPriorityPolicy: resolvedSocialPriorityPolicy,
   });
   if (usesRotationMatchmaking(context.sessionType) && !result.selection && result.debug.searchLimitReached) {
     throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
   }
-  return result.selection;
+  return result.selection && "socialPolicyDecision" in result && result.socialPolicyDecision
+    ? { ...result.selection, socialPolicyDecision: result.socialPolicyDecision }
+    : result.selection;
 }
 
 export function selectInterclubSingleCourtMatch({
@@ -738,12 +882,18 @@ export function selectInterclubSingleCourtMatch({
   playersById,
   sessionData,
   reshuffleSource,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: readonly RankedInterclubCandidate[];
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   reshuffleSource: ReshuffleSource | null;
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getEffectiveSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   const clubIds = getInterclubClubIds(sessionData);
   if (!clubIds) {
     throw new GenerateMatchError(400, "Club vs club tournament is not ready.");
@@ -753,6 +903,7 @@ export function selectInterclubSingleCourtMatch({
     rankedCandidates,
     playersById,
     sessionData,
+    socialPriorityPolicy: resolvedSocialPriorityPolicy,
   });
 
   if (!initialSelection) {
@@ -767,7 +918,7 @@ export function selectInterclubSingleCourtMatch({
   }
 
   if (!reshuffleSource) {
-    return toInterclubSelection(initialSelection, clubIds);
+    return toInterclubSelection(initialSelection, clubIds, initialSelection.socialPolicyDecision);
   }
 
   const previousQuartetKey = [...reshuffleSource.ids].sort().join("|");
@@ -784,14 +935,15 @@ export function selectInterclubSingleCourtMatch({
     playersById,
     sessionData,
     excludedQuartetKey: previousQuartetKey,
+    socialPriorityPolicy: resolvedSocialPriorityPolicy,
   });
 
   if (alternativeQuartet) {
-    return toInterclubSelection(alternativeQuartet, clubIds);
+    return toInterclubSelection(alternativeQuartet, clubIds, alternativeQuartet.socialPolicyDecision);
   }
 
   if (selectedPartitionKey !== previousPartitionKey) {
-    return toInterclubSelection(initialSelection, clubIds);
+    return toInterclubSelection(initialSelection, clubIds, initialSelection.socialPolicyDecision);
   }
 
   const alternativePartition = findInterclubSingleCourtSelection({
@@ -799,6 +951,7 @@ export function selectInterclubSingleCourtMatch({
     playersById,
     sessionData,
     excludedPartitionKey: previousPartitionKey,
+    socialPriorityPolicy: resolvedSocialPriorityPolicy,
   });
 
   if (!alternativePartition) {
@@ -808,7 +961,7 @@ export function selectInterclubSingleCourtMatch({
     );
   }
 
-  return toInterclubSelection(alternativePartition, clubIds);
+  return toInterclubSelection(alternativePartition, clubIds, alternativePartition.socialPolicyDecision);
 }
 
 export function selectInterclubReplacementMatch({
@@ -817,13 +970,19 @@ export function selectInterclubReplacementMatch({
   sessionData,
   retainedUserIds,
   excludedUserIds = [],
+  socialPriorityPolicy,
 }: {
   rankedCandidates: readonly RankedInterclubCandidate[];
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   retainedUserIds: [string, string, string];
   excludedUserIds?: string[];
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getEffectiveSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   const retainedUserIdSet = new Set(retainedUserIds);
 
   if (retainedUserIdSet.size !== 3) {
@@ -848,6 +1007,7 @@ export function selectInterclubReplacementMatch({
       !excludedUserIdSet.has(candidate.userId)
   );
   const sessionType = getEffectiveSessionType(sessionData);
+  const resolvedReplacementPolicy = resolveSocialCandidatePolicy(sessionType, resolvedSocialPriorityPolicy);
   const players = buildInterclubMatchmakerPlayers({
     sessionData,
     rankedCandidates: eligibleCandidates,
@@ -859,7 +1019,7 @@ export function selectInterclubReplacementMatch({
     clubIds,
     retainedUserIds,
   });
-  const result = findBestSingleCourtSelectionV3(players, {
+  const options: V3SingleCourtOptions<InterclubMatchmakerPlayer> = {
     sessionMode: getEffectiveSessionMode(sessionData) as SessionMode,
     sessionType,
     completedMatches: buildCompletedInterclubMatches(sessionData),
@@ -868,6 +1028,22 @@ export function selectInterclubReplacementMatch({
     candidatePool,
     lockedPlayerIds: retainedUserIdSet,
     selectionConstraints: getInterclubSelectionConstraints(clubIds),
+  };
+  const result = runInterclubSingleCourtSelection({
+    availablePlayers: players,
+    structuralPlayers: resolvedReplacementPolicy
+      ? buildInterclubCandidateStructuralRoster({
+          sessionData,
+          rankedCandidates: eligibleCandidates,
+          playersById,
+          clubIds,
+        })
+      : players,
+    options,
+    ...(resolvedReplacementPolicy
+      ? { completedSocialHistory: buildCompletedInterclubSocialHistory(sessionData) }
+      : {}),
+    socialPriorityPolicy: resolvedReplacementPolicy,
   });
 
   if (!result.selection) {
@@ -880,7 +1056,11 @@ export function selectInterclubReplacementMatch({
     );
   }
 
-  return toInterclubSelection(result.selection, clubIds);
+  return toInterclubSelection(
+    result.selection,
+    clubIds,
+    "socialPolicyDecision" in result ? result.socialPolicyDecision : undefined
+  );
 }
 
 export function selectInterclubBatchMatches({
@@ -889,13 +1069,19 @@ export function selectInterclubBatchMatches({
   sessionData,
   requestedMatchCount,
   randomFn,
+  socialPriorityPolicy,
 }: {
   rankedCandidates: readonly RankedInterclubCandidate[];
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   requestedMatchCount: number;
   randomFn?: () => number;
+  socialPriorityPolicy?: SocialCandidatePolicy;
 }) {
+  const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
+    getEffectiveSessionType(sessionData),
+    socialPriorityPolicy,
+  );
   const clubIds = getInterclubClubIds(sessionData);
   if (!clubIds) {
     throw new GenerateMatchError(400, "Club vs club tournament is not ready.");
@@ -913,7 +1099,7 @@ export function selectInterclubBatchMatches({
     throw new GenerateMatchError(400, "Club vs club tournament is not ready.");
   }
 
-  const result = findBestBatchSelectionV3(context.players, {
+  const options: RotationBatchOptions<InterclubMatchmakerPlayer> = {
     courtCount: requestedMatchCount,
     sessionMode: context.sessionMode,
     sessionType: context.sessionType,
@@ -924,7 +1110,29 @@ export function selectInterclubBatchMatches({
     candidatePool: context.sessionType === SessionType.SOCIAL_MIX ? undefined : context.candidatePool,
     selectionConstraints: context.selectionConstraints,
     pairingRandomMode: "side-balanced",
-  });
+  };
+  const resolvedBatchPolicy = resolveSocialCandidatePolicy(context.sessionType, resolvedSocialPriorityPolicy);
+  const safeRun = resolvedBatchPolicy
+    ? runSocialCandidateWithProductionFallback({
+        candidatePlayers: buildInterclubCandidateStructuralRoster({
+          sessionData,
+          rankedCandidates,
+          playersById,
+          clubIds: context.clubIds,
+        }),
+        productionPlayers: context.players,
+        options,
+        candidateOptions: {
+          ...options,
+          completedMatches: buildCompletedInterclubSocialHistory(sessionData),
+          socialHistoryMatches: buildCompletedInterclubSocialHistory(sessionData),
+        },
+      })
+    : {
+        result: findBestBatchSelectionV3(context.players, options),
+        decision: undefined,
+      };
+  const result = safeRun.result;
 
   if (!result.selection) {
     if (usesRotationMatchmaking(context.sessionType) && result.debug.searchLimitReached) {
@@ -943,7 +1151,7 @@ export function selectInterclubBatchMatches({
 
   return {
     selections: result.selection.selections.map((selection) =>
-      toInterclubSelection(selection, clubIds)
+      toInterclubSelection(selection, clubIds, safeRun.decision)
     ),
   };
 }

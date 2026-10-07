@@ -1,5 +1,15 @@
 # Matchmaking benchmark artifacts
 
+The Social API default selects `courtmate-beneficial-rescue` through the hardened
+API boundary; Balanced Points/Elo and the explicit Social fallback retain their
+existing policies. The Interclub context repair and changed-default regression
+are documented in [the default-switch report](../docs/social-default-switch-results.md).
+The historical commands and tables below keep their original
+low-level policy meanings and data. The API default switch does not silently
+change these benchmark arms. New controlled Social measurements are capped at
+100 completed matches; the preserved 400-match artifacts remain historical.
+Conditional joint refill remains experimental and disabled in production.
+
 ## Artifact storage and publication
 
 Keep benchmark code, reviewed Markdown reports, compact `*.summary.json`
@@ -79,7 +89,7 @@ This score is distinct from normalized Shannon entropy: the horizon asks how muc
 | Legacy-metric coverage gate | 81.160% / 81.160% / 81.680% | 79.4% / 79.4% / 79.5% |
 | Experimental 3:2:1 coverage gate | 81.160% / 81.160% / 80.293% | 77.8% / 77.8% / 79.7% |
 
-The default remains the legacy-metric coverage gate. The experimental 3:2:1 gate, measured at source revision `248eb35f4dbadacdafd7db0afe1d4f5e6589dfb0`, did not improve the 21-match averages: Social and Points are essentially unchanged (+0.00305 percentage points in paired raw means), while Elo is lower by 1.38 percentage points. Pooled B2B is unchanged for Social and Points (23.1% each) and decreases from 23.4% to 22.9% for Elo. The comparison report includes each seed's paired score and B2B count deltas.
+The historical low-level benchmark default remains the legacy-metric coverage gate. The experimental 3:2:1 gate, measured at source revision `248eb35f4dbadacdafd7db0afe1d4f5e6589dfb0`, did not improve the 21-match averages: Social and Points are essentially unchanged (+0.00305 percentage points in paired raw means), while Elo is lower by 1.38 percentage points. Pooled B2B is unchanged for Social and Points (23.1% each) and decreases from 23.4% to 22.9% for Elo. The comparison report includes each seed's paired score and B2B count deltas.
 
 The machine-readable per-seed result and full human report are [social-horizon-policy-comparison.json](social-horizon-321/social-horizon-policy-comparison.json) and [social-horizon-policy-comparison.md](social-horizon-321/social-horizon-policy-comparison.md). They include C/O/P facet means, average distinct counts, the legacy VCS, per-seed completed counts, B2B, rest, fairness, starvation, match-type counts, and the previously measured 400-match secondary results. Aggregate B2B is pooled as total zero-rest assignments divided by total eligible post-first-match assignments. The displayed aggregate rest p95 is the mean of per-seed p95s; the worst maximum is the maximum across seeds.
 

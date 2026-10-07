@@ -24,19 +24,62 @@ import {
   getRotationVarietyScore,
 } from "./scoring";
 import {
-  buildSocialVarietyContext, createSocialHorizonCoverageScorer, createSocialVarietyCoverageScorer, getSocialVarietyGains,
+  buildSocialStructuralVarietyContext, buildSocialVarietyContext, createSocialHorizonCoverageScorer, createSocialVarietyCoverageScorer, getSocialVarietyGains,
   getSocialVarietySnapshot, sumSocialVarietyGains,
 } from "./socialVariety";
 import type { SocialCoverageGainMetric, SocialVarietyContext, SocialVarietyCoverageScorer } from "./socialVariety";
+import { createRollingSocialCoverageScorer } from "./socialRollingVariety";
+import {
+  compareCourtmateCoverageProfiles,
+  createSocialCourtmatePriorityScorer,
+} from "./socialCourtmatePriority";
+import {
+  buildOptimisticCourtmateCoverageProfile,
+  isStrictlyDominantSocialCourtPartition,
+} from "./socialFrontierSearchBounds";
+import type { SocialCourtPartitionDominanceMetrics } from "./socialFrontierSearchBounds";
+import type {
+  SocialCourtmatePriorityPartitionMetrics,
+} from "./socialCourtmatePriority";
 import type {
   ActiveMatchmakerV3Player, MatchmakerV3Player, SocialHistoryMatch,
+  SocialCourtmateCoverageEntry,
   V3BatchPairingRandomMode, V3BatchPairingRandomSalts, V3BatchResult, V3BatchSelection,
   V3CandidatePool, V3CompletedMatch, V3SelectionConstraints, V3SingleCourtSelection,
   V3SocialStarvationSummary, SocialVarietyGains,
   V3BalanceGuardrail, V3CoverageGateStatus, V3FinalTieBreak, V3ReplayEnvelopeStatus,
+  SocialPriorityPolicy,
 } from "./types";
 
 export { compareSocialBatchSelections, compareSocialFairnessPlayers } from "./scoring";
+
+/** Exact one-pair admission rule shared by the beneficial-rescue policy and its contract tests. */
+export function isCourtmateBeneficialRescueAdmissible(
+  candidateCourtmateGain: number,
+  maximumCourtmateGain: number,
+  candidateRollingTypeGainUnits: bigint,
+  bestRollingTypeGainAtMaximumUnits: bigint
+): boolean {
+  return candidateCourtmateGain === maximumCourtmateGain ||
+    (candidateCourtmateGain === maximumCourtmateGain - 1 &&
+      candidateRollingTypeGainUnits > bestRollingTypeGainAtMaximumUnits);
+}
+
+/** Negative means the left candidate wins the new policy's T-then-gain tie-break. */
+export function compareCourtmateBeneficialRescuePrimary(
+  leftRollingTypeGainUnits: bigint,
+  leftCourtmateGain: number,
+  rightRollingTypeGainUnits: bigint,
+  rightCourtmateGain: number
+): number {
+  if (leftRollingTypeGainUnits !== rightRollingTypeGainUnits) {
+    return leftRollingTypeGainUnits > rightRollingTypeGainUnits ? -1 : 1;
+  }
+  if (leftCourtmateGain !== rightCourtmateGain) {
+    return leftCourtmateGain > rightCourtmateGain ? -1 : 1;
+  }
+  return 0;
+}
 
 function canonicalSum(values: number[]) {
   return values.sort((a, b) => a - b).reduce((total, value) => total + value, 0);
@@ -78,11 +121,18 @@ export interface SocialBatchOptions<T extends MatchmakerV3Player> {
   completedMatches?: V3CompletedMatch[];
   socialHistoryMatches?: SocialHistoryMatch[];
   socialVarietyContext?: SocialVarietyContext;
+  /**
+   * Full-roster legal opportunity structure for candidate scoring, distinct
+   * from temporary per-search schedules/constraints and legacy history.
+   */
+  socialStructuralOpportunityConstraints?: Array<V3SelectionConstraints<ActiveMatchmakerV3Player<T>>>;
   randomFn?: () => number;
   candidatePool?: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
   lockedPlayerIds?: ReadonlySet<string>;
   schedules?: SocialCourtSchedule<ActiveMatchmakerV3Player<T>>[];
   selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
+  /** Social lexicographic policy. Rejected outside SOCIAL_MIX. */
+  socialPriorityPolicy?: SocialPriorityPolicy;
   pairingRandomMode?: V3BatchPairingRandomMode;
   searchLimits?: { maxBranches?: number; maxMs?: number };
   excludedQuartetKeys?: ReadonlySet<string>;
@@ -93,7 +143,7 @@ export interface RotationBatchOptions<T extends MatchmakerV3Player> extends Soci
   sessionType: SessionType;
   balanceGuardrailPolicy?: Partial<Pick<BalanceGuardrailPolicy, "nearBestWindow" | "absoluteCeiling">>;
   /** Benchmark-only opt-in. Omitted keeps the production legacy four-facet gate. */
-  coverageGainMetric?: "social-horizon-321";
+  coverageGainMetric?: "social-horizon-321" | "rolling-equal" | "social-horizon-3211";
 }
 
 export interface RotationStarvationInterventionMeasurement<T extends ActiveMatchmakerV3Player> {
@@ -112,6 +162,7 @@ export function usesRotationMatchmaking(sessionType: SessionType | string) {
 
 export type SocialBatchResult<T extends ActiveMatchmakerV3Player> = V3BatchResult<T> & {
   scheduleIndex: number | null;
+  scheduleCertified: boolean;
   fairnessCertified: boolean;
   starvationCertified: boolean;
   bestImmediateReplayCount: number | null;
@@ -127,6 +178,15 @@ export type SocialBatchResult<T extends ActiveMatchmakerV3Player> = V3BatchResul
   coverageGainMetric: SocialCoverageGainMetric;
   varietyOptimal: boolean;
   balanceCertified?: boolean;
+  socialPriorityPolicy?: SocialPriorityPolicy;
+  priorityCertified?: boolean;
+  chosenNewCourtmatePairCount?: number | null;
+  chosenPostBatchCourtmateCoverage?: SocialCourtmateCoverageEntry[] | null;
+  chosenRollingMatchTypeGain?: number | null;
+  courtmateGainMaximumCertified?: boolean;
+  courtmateGainMaximum?: number | null;
+  chosenCourtmateGainDeficit?: number | null;
+  bestRollingMatchTypeGainAtGmax?: number | null;
 };
 
 export function summarizeSocialBatch<T extends ActiveMatchmakerV3Player>(
@@ -163,7 +223,176 @@ type Candidate<T extends ActiveMatchmakerV3Player> = {
   mask: bigint;
   varietyScored: boolean;
   coverageGainUnits?: bigint;
+  socialPriorityMetrics?: SocialCourtmatePriorityPartitionMetrics;
+  priorityRankingMetrics?: SocialPriorityBatchMetrics;
 };
+
+type SocialPriorityBatchMetrics = {
+  newCourtmatePairs: number;
+  courtmateCoverageProfile: readonly SocialCourtmateCoverageEntry[];
+  rollingMatchTypeGainUnits: bigint;
+  immediateReplayCount: number;
+  softCadenceVector: number[];
+  newPartnerPairs: number;
+  newOpponentPairs: number;
+  relationshipEntropyGain: number;
+  sharedCourtRepeatPenalty: number;
+  sharedCourtEncounterFrequencyPenalty: number;
+  partnerRepeatPenalty: number;
+  opponentRepeatPenalty: number;
+  exactRematchPenalty: number;
+  maxBalanceGap: number;
+  totalBalanceGap: number;
+  maxPointDiffGap: number;
+  totalPointDiffGap: number;
+};
+
+type BeneficialCourtBounds = {
+  hasCandidates: boolean;
+  maximumRollingTypeGainUnits: bigint;
+  maximumCourtmateGainsByPlayer: Map<string, number>;
+  maximumCourtmatePairs: number;
+  maximumPartnerPairs: number;
+  maximumOpponentPairs: number;
+  maximumVarietyGainByFacet: Map<keyof SocialVarietyGains, number>;
+  minimumPenaltyByMetric: Map<
+    "sharedCourtRepeatPenalty" | "sharedCourtEncounterFrequencyPenalty" |
+    "partnerRepeatPenalty" | "opponentRepeatPenalty" | "exactRematchPenalty",
+    number
+  >;
+  minimumBalanceGap: number;
+  minimumPointDiffGap: number;
+};
+
+type SocialPriorityRotationClass = {
+  fairness: number[];
+  rank: number;
+  starvation: number[];
+};
+
+function compareSocialPriorityRotationClasses(
+  left: SocialPriorityRotationClass,
+  right: SocialPriorityRotationClass
+): number {
+  return compareSocialNumberVectors(left.fairness, right.fairness) ||
+    left.rank - right.rank ||
+    compareSocialNumberVectors(left.starvation, right.starvation);
+}
+
+function compareSocialPriorityMetrics(
+  left: SocialPriorityBatchMetrics,
+  right: SocialPriorityBatchMetrics,
+  respectRest: boolean
+): number {
+  if (left.newCourtmatePairs !== right.newCourtmatePairs) {
+    return left.newCourtmatePairs > right.newCourtmatePairs ? -1 : 1;
+  }
+  const coverageComparison = compareCourtmateCoverageProfiles(
+    left.courtmateCoverageProfile,
+    right.courtmateCoverageProfile
+  );
+  if (coverageComparison !== 0) return -coverageComparison;
+  if (left.rollingMatchTypeGainUnits !== right.rollingMatchTypeGainUnits) {
+    return left.rollingMatchTypeGainUnits > right.rollingMatchTypeGainUnits ? -1 : 1;
+  }
+  if (respectRest) {
+    if (left.immediateReplayCount !== right.immediateReplayCount) {
+      return left.immediateReplayCount - right.immediateReplayCount;
+    }
+    const softDiff = compareSocialNumberVectors(left.softCadenceVector, right.softCadenceVector);
+    if (softDiff !== 0) return softDiff;
+  }
+  if (left.newPartnerPairs !== right.newPartnerPairs) return left.newPartnerPairs > right.newPartnerPairs ? -1 : 1;
+  if (left.newOpponentPairs !== right.newOpponentPairs) return left.newOpponentPairs > right.newOpponentPairs ? -1 : 1;
+  if (left.relationshipEntropyGain !== right.relationshipEntropyGain) {
+    return left.relationshipEntropyGain > right.relationshipEntropyGain ? -1 : 1;
+  }
+  return left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+    left.sharedCourtEncounterFrequencyPenalty - right.sharedCourtEncounterFrequencyPenalty ||
+    left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+    left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+    left.exactRematchPenalty - right.exactRematchPenalty ||
+    left.maxBalanceGap - right.maxBalanceGap ||
+    left.totalBalanceGap - right.totalBalanceGap ||
+    left.maxPointDiffGap - right.maxPointDiffGap ||
+    left.totalPointDiffGap - right.totalPointDiffGap;
+}
+
+function compareSocialNearBestMetrics(
+  left: SocialPriorityBatchMetrics,
+  right: SocialPriorityBatchMetrics,
+  respectRest: boolean
+): number {
+  if (left.rollingMatchTypeGainUnits !== right.rollingMatchTypeGainUnits) {
+    return left.rollingMatchTypeGainUnits > right.rollingMatchTypeGainUnits ? -1 : 1;
+  }
+  const coverageComparison = compareCourtmateCoverageProfiles(
+    left.courtmateCoverageProfile,
+    right.courtmateCoverageProfile
+  );
+  if (coverageComparison !== 0) return -coverageComparison;
+  if (respectRest) {
+    if (left.immediateReplayCount !== right.immediateReplayCount) {
+      return left.immediateReplayCount - right.immediateReplayCount;
+    }
+    const softDiff = compareSocialNumberVectors(left.softCadenceVector, right.softCadenceVector);
+    if (softDiff !== 0) return softDiff;
+  }
+  if (left.newPartnerPairs !== right.newPartnerPairs) return left.newPartnerPairs > right.newPartnerPairs ? -1 : 1;
+  if (left.newOpponentPairs !== right.newOpponentPairs) return left.newOpponentPairs > right.newOpponentPairs ? -1 : 1;
+  if (left.relationshipEntropyGain !== right.relationshipEntropyGain) {
+    return left.relationshipEntropyGain > right.relationshipEntropyGain ? -1 : 1;
+  }
+  return left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+    left.sharedCourtEncounterFrequencyPenalty - right.sharedCourtEncounterFrequencyPenalty ||
+    left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+    left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+    left.exactRematchPenalty - right.exactRematchPenalty ||
+    left.maxBalanceGap - right.maxBalanceGap ||
+    left.totalBalanceGap - right.totalBalanceGap ||
+    left.maxPointDiffGap - right.maxPointDiffGap ||
+    left.totalPointDiffGap - right.totalPointDiffGap;
+}
+
+function compareSocialBeneficialRescueMetrics(
+  left: SocialPriorityBatchMetrics,
+  right: SocialPriorityBatchMetrics,
+  respectRest: boolean
+): number {
+  const primaryComparison = compareCourtmateBeneficialRescuePrimary(
+    left.rollingMatchTypeGainUnits,
+    left.newCourtmatePairs,
+    right.rollingMatchTypeGainUnits,
+    right.newCourtmatePairs
+  );
+  if (primaryComparison !== 0) return primaryComparison;
+  const coverageComparison = compareCourtmateCoverageProfiles(
+    left.courtmateCoverageProfile,
+    right.courtmateCoverageProfile
+  );
+  if (coverageComparison !== 0) return -coverageComparison;
+  if (respectRest) {
+    if (left.immediateReplayCount !== right.immediateReplayCount) {
+      return left.immediateReplayCount - right.immediateReplayCount;
+    }
+    const softDiff = compareSocialNumberVectors(left.softCadenceVector, right.softCadenceVector);
+    if (softDiff !== 0) return softDiff;
+  }
+  if (left.newPartnerPairs !== right.newPartnerPairs) return left.newPartnerPairs > right.newPartnerPairs ? -1 : 1;
+  if (left.newOpponentPairs !== right.newOpponentPairs) return left.newOpponentPairs > right.newOpponentPairs ? -1 : 1;
+  if (left.relationshipEntropyGain !== right.relationshipEntropyGain) {
+    return left.relationshipEntropyGain > right.relationshipEntropyGain ? -1 : 1;
+  }
+  return left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+    left.sharedCourtEncounterFrequencyPenalty - right.sharedCourtEncounterFrequencyPenalty ||
+    left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+    left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+    left.exactRematchPenalty - right.exactRematchPenalty ||
+    left.maxBalanceGap - right.maxBalanceGap ||
+    left.totalBalanceGap - right.totalBalanceGap ||
+    left.maxPointDiffGap - right.maxPointDiffGap ||
+    left.totalPointDiffGap - right.totalPointDiffGap;
+}
 
 /** Whole-batch set packing. No Social candidate cap, local exemplars or anchor locks. */
 export function findBestSocialBatchSelection<T extends MatchmakerV3Player>(
@@ -221,8 +450,21 @@ export function findBestRotationBatchSelection<T extends MatchmakerV3Player>(
 function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   players: T[], options: RotationBatchOptions<T>, ignoreStarvationForDiagnostic = false
 ): SocialBatchResult<ActiveMatchmakerV3Player<T>> {
+  const socialPriorityPolicy = options.socialPriorityPolicy;
+  if (socialPriorityPolicy && options.sessionType !== SessionType.SOCIAL_MIX) {
+    throw new Error("socialPriorityPolicy is supported only for SOCIAL_MIX sessions.");
+  }
+  if (socialPriorityPolicy && socialPriorityPolicy !== "courtmate-first" &&
+    socialPriorityPolicy !== "courtmate-near-best" &&
+    socialPriorityPolicy !== "courtmate-beneficial-rescue") {
+    throw new Error("Unsupported socialPriorityPolicy.");
+  }
+  const socialCourtmateNearBest = socialPriorityPolicy === "courtmate-near-best";
+  const socialCourtmateBeneficialRescue = socialPriorityPolicy === "courtmate-beneficial-rescue";
+  const socialCourtmateEnvelopePolicy = socialCourtmateNearBest || socialCourtmateBeneficialRescue;
   const balancePolicy = getBalanceGuardrailPolicy(options.sessionType, options.balanceGuardrailPolicy);
   const respectRest = options.respectPlayerRest !== false;
+  const gateRespectRest = respectRest && !socialPriorityPolicy;
   const randomFn = options.randomFn ?? Math.random;
   const sourcePool = options.candidatePool;
   const socialCandidatePool = sourcePool?.tieZone && sourcePool.selectionBand
@@ -260,8 +502,19 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         sessionMode: options.sessionMode,
         opportunityConstraints: profiles.flatMap((profile) => profile.courts.filter((court): court is V3SelectionConstraints<ActiveMatchmakerV3Player<T>> => Boolean(court))),
       });
+  const priorityContext = socialPriorityPolicy
+    ? buildSocialStructuralVarietyContext(players, history, {
+        sessionMode: options.sessionMode,
+        opportunityConstraints: options.socialStructuralOpportunityConstraints,
+      })
+    : context;
+  const candidateScoringContext = socialPriorityPolicy ? priorityContext : context;
+  const socialPriorityScorer = socialPriorityPolicy
+    ? createSocialCourtmatePriorityScorer(priorityContext, history)
+    : null;
   const coverageGainMetric: SocialCoverageGainMetric = options.coverageGainMetric ?? "legacy-four-facet";
-  const coverageContext = coverageGainMetric === "social-horizon-321" &&
+  const rollingCoverage = coverageGainMetric === "rolling-equal" || coverageGainMetric === "social-horizon-3211";
+  const coverageContext = (coverageGainMetric === "social-horizon-321" || rollingCoverage) &&
     players.some((player) => !context.playersByUserId.has(player.userId))
     ? buildSocialVarietyContext(players, options.socialHistoryMatches ?? history, {
         sessionMode: options.sessionMode,
@@ -269,9 +522,18 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         includePausedPlayers: true,
       })
     : context;
-  const coverageScorer: SocialVarietyCoverageScorer = coverageGainMetric === "social-horizon-321"
-    ? createSocialHorizonCoverageScorer(coverageContext)
-    : createSocialVarietyCoverageScorer(context, options.sessionMode);
+  // Experimental modes change only replay admission value. Production keeps
+  // its existing coverage gate and lifetime entropy ranking by default.
+  const coverageScorer: SocialVarietyCoverageScorer = rollingCoverage
+    ? createRollingSocialCoverageScorer(
+        coverageGainMetric === "social-horizon-3211" ? coverageContext : context,
+        history,
+        coverageGainMetric,
+        coverageContext,
+      )
+    : coverageGainMetric === "social-horizon-321"
+      ? createSocialHorizonCoverageScorer(coverageContext)
+      : createSocialVarietyCoverageScorer(context, options.sessionMode);
   const playersById = new Map(active.map((player) => [player.userId, player]));
   const bits = new Map(active.map((player, index) => [player.userId, BigInt(1) << BigInt(index)]));
   const lockedMask = [...locked].reduce((mask, id) => mask | (bits.get(id) ?? BigInt(0)), BigInt(0));
@@ -295,12 +557,23 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   let best: V3BatchSelection<ActiveMatchmakerV3Player<T>> | null = null;
   let bestFairness: number[] | null = null;
   let bestMetrics: number[] | null = null;
+  let bestSocialPriorityMetrics: SocialPriorityBatchMetrics | null = null;
+  let nearBestRotationClass: SocialPriorityRotationClass | null = null;
+  let nearBestCourtmateGainMaximum: number | null = null;
+  let bestRollingMatchTypeGainAtGmaxUnits: bigint | null = null;
+  let nearBestFrontierPhase = false;
+  let nearBestSelectionPhase = false;
+  let beneficialRescueSelectionPhase = false;
+  let nearBestFrontierCertified = false;
+  let nearBestFrontierLimitReached = false;
+  let nearBestSelectionLimitReached = false;
+  let nearBestPriorityCertified = false;
   let scheduleIndex: number | null = null;
   let bestRank = Infinity;
   let balanceGuardrail: V3BalanceGuardrail | undefined;
   let balanceCertified = !balancePolicy;
   let baselinePhase = Boolean(balancePolicy);
-  let replayBaselinePhase = !balancePolicy && respectRest;
+  let replayBaselinePhase = !balancePolicy && gateRespectRest;
   let coverageBaselinePhase = false;
   let baselineProven = false;
   let replayBaselineProven = false;
@@ -333,11 +606,11 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   let bestImmediateReplayCount: number | null = null;
   let allowedImmediateReplayCount: number | null = null;
   let bestMinimumReplayCoverageGain: number | null = null;
-  let coverageGateCertified = !respectRest;
+  let coverageGateCertified = !gateRespectRest;
   let coverageGateUpperBoundCertified = false;
-  let coverageGateStatus: V3CoverageGateStatus = respectRest ? "UNCERTIFIED" : "DISABLED";
-  let replayCertified = !respectRest;
-  let replayEnvelopeStatus: V3ReplayEnvelopeStatus = respectRest ? "UNCERTIFIED" : "DISABLED";
+  let coverageGateStatus: V3CoverageGateStatus = gateRespectRest ? "UNCERTIFIED" : "DISABLED";
+  let replayCertified = !gateRespectRest;
+  let replayEnvelopeStatus: V3ReplayEnvelopeStatus = gateRespectRest ? "UNCERTIFIED" : "DISABLED";
   const fairnessCache = new Map<bigint, number[]>();
   const starvationCache = new Map<bigint, number[]>();
   const immediateReplayCache = new Map<bigint, number>();
@@ -374,6 +647,125 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   };
   const getBatchCoverageGainUnits = (chosen: readonly Candidate<ActiveMatchmakerV3Player<T>>[]) =>
     chosen.reduce((gain, candidate) => gain + getCandidateCoverageGainUnits(candidate), BigInt(0));
+  const getCandidateSocialPriorityMetrics = (candidate: Candidate<ActiveMatchmakerV3Player<T>>) => {
+    if (candidate.socialPriorityMetrics === undefined) {
+      candidate.socialPriorityMetrics = socialPriorityScorer?.getPartitionMetrics(candidate.selection.partition);
+    }
+    return candidate.socialPriorityMetrics!;
+  };
+  const getSocialPriorityBatchMetrics = (
+    chosen: readonly Candidate<ActiveMatchmakerV3Player<T>>[],
+    mask: bigint,
+    selections = chosen.map((candidate) => candidate.selection),
+    variety = getSocialVarietyTotals(selections, options.sessionMode)
+  ): SocialPriorityBatchMetrics => {
+    const courtmateGains = new Map<string, number>();
+    let newCourtmatePairs = 0;
+    let newPartnerPairs = 0;
+    let newOpponentPairs = 0;
+    let rollingMatchTypeGainUnits = BigInt(0);
+    for (const candidate of chosen) {
+      const candidateMetrics = getCandidateSocialPriorityMetrics(candidate);
+      newCourtmatePairs += candidateMetrics.newCourtmatePairs;
+      newPartnerPairs += candidateMetrics.newPartnerPairs;
+      newOpponentPairs += candidateMetrics.newOpponentPairs;
+      rollingMatchTypeGainUnits += candidateMetrics.rollingMatchTypeGainUnits;
+      for (const [userId, gain] of candidateMetrics.courtmateGainsByPlayer) {
+        courtmateGains.set(userId, (courtmateGains.get(userId) ?? 0) + gain);
+      }
+    }
+    const scorer = socialPriorityScorer!;
+    return {
+      newCourtmatePairs,
+      courtmateCoverageProfile: scorer.getPostBatchCourtmateCoverageProfile(courtmateGains),
+      rollingMatchTypeGainUnits,
+      immediateReplayCount: getImmediateReplayCountForMask(mask),
+      softCadenceVector: respectRest ? getSoftCadenceVectorForMask(mask) : [],
+      newPartnerPairs,
+      newOpponentPairs,
+      relationshipEntropyGain: getSocialRelationshipEntropyGain(variety.totalSocialVarietyGains),
+      sharedCourtRepeatPenalty: selections.reduce((sum, selection) => sum + selection.sharedCourtRepeatPenalty, 0),
+      sharedCourtEncounterFrequencyPenalty: selections.reduce(
+        (sum, selection) => sum + (selection.sharedCourtEncounterFrequencyPenalty ?? 0), 0
+      ),
+      partnerRepeatPenalty: selections.reduce((sum, selection) => sum + selection.partnerRepeatPenalty, 0),
+      opponentRepeatPenalty: selections.reduce((sum, selection) => sum + selection.opponentRepeatPenalty, 0),
+      exactRematchPenalty: selections.reduce((sum, selection) => sum + selection.exactRematchPenalty, 0),
+      maxBalanceGap: Math.max(0, ...selections.map((selection) => selection.balanceGap)),
+      totalBalanceGap: canonicalSum(selections.map((selection) => selection.balanceGap)),
+      maxPointDiffGap: Math.max(0, ...selections.map((selection) => selection.pointDiffGap)),
+      totalPointDiffGap: canonicalSum(selections.map((selection) => selection.pointDiffGap)),
+    };
+  };
+  const getCandidatePriorityRankingMetrics = (candidate: Candidate<ActiveMatchmakerV3Player<T>>) => {
+    if (!candidate.priorityRankingMetrics) {
+      candidate.priorityRankingMetrics = getSocialPriorityBatchMetrics(
+        [candidate], candidate.mask, [candidate.selection]
+      );
+    }
+    return candidate.priorityRankingMetrics;
+  };
+  const toPriorityMetricVector = (metrics: SocialPriorityBatchMetrics, starvation: readonly number[]) => [
+    ...starvation,
+    -metrics.newCourtmatePairs,
+    ...metrics.courtmateCoverageProfile.map((entry) => -(entry.covered / entry.possible)),
+    -Number(metrics.rollingMatchTypeGainUnits) /
+      Number(socialPriorityScorer?.rollingTypeDenominator ?? BigInt(1)),
+    ...(respectRest
+      ? [metrics.immediateReplayCount, ...metrics.softCadenceVector]
+      : []),
+    -metrics.newPartnerPairs,
+    -metrics.newOpponentPairs,
+    -metrics.relationshipEntropyGain,
+    metrics.sharedCourtRepeatPenalty,
+    metrics.sharedCourtEncounterFrequencyPenalty,
+    metrics.partnerRepeatPenalty,
+    metrics.opponentRepeatPenalty,
+    metrics.exactRematchPenalty,
+    metrics.maxBalanceGap,
+    metrics.totalBalanceGap,
+    metrics.maxPointDiffGap,
+    metrics.totalPointDiffGap,
+  ];
+  const toNearBestPriorityMetricVector = (metrics: SocialPriorityBatchMetrics, starvation: readonly number[]) => [
+    ...starvation,
+    -Number(metrics.rollingMatchTypeGainUnits) /
+      Number(socialPriorityScorer?.rollingTypeDenominator ?? BigInt(1)),
+    ...metrics.courtmateCoverageProfile.map((entry) => -(entry.covered / entry.possible)),
+    ...(respectRest ? [metrics.immediateReplayCount, ...metrics.softCadenceVector] : []),
+    -metrics.newPartnerPairs,
+    -metrics.newOpponentPairs,
+    -metrics.relationshipEntropyGain,
+    metrics.sharedCourtRepeatPenalty,
+    metrics.sharedCourtEncounterFrequencyPenalty,
+    metrics.partnerRepeatPenalty,
+    metrics.opponentRepeatPenalty,
+    metrics.exactRematchPenalty,
+    metrics.maxBalanceGap,
+    metrics.totalBalanceGap,
+    metrics.maxPointDiffGap,
+    metrics.totalPointDiffGap,
+  ];
+  const toBeneficialRescuePriorityMetricVector = (metrics: SocialPriorityBatchMetrics, starvation: readonly number[]) => [
+    ...starvation,
+    -Number(metrics.rollingMatchTypeGainUnits) /
+      Number(socialPriorityScorer?.rollingTypeDenominator ?? BigInt(1)),
+    -metrics.newCourtmatePairs,
+    ...metrics.courtmateCoverageProfile.map((entry) => -(entry.covered / entry.possible)),
+    ...(respectRest ? [metrics.immediateReplayCount, ...metrics.softCadenceVector] : []),
+    -metrics.newPartnerPairs,
+    -metrics.newOpponentPairs,
+    -metrics.relationshipEntropyGain,
+    metrics.sharedCourtRepeatPenalty,
+    metrics.sharedCourtEncounterFrequencyPenalty,
+    metrics.partnerRepeatPenalty,
+    metrics.opponentRepeatPenalty,
+    metrics.exactRematchPenalty,
+    metrics.maxBalanceGap,
+    metrics.totalBalanceGap,
+    metrics.maxPointDiffGap,
+    metrics.totalPointDiffGap,
+  ];
   const getGlobalCoverageGainUpperBoundUnits = () => {
     const lockedPlayers = active.filter((player) => locked.has(player.userId));
     const remainingCount = Math.max(0, required - lockedPlayers.length);
@@ -406,6 +798,31 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     getRotationVarietyScore(getCandidateTotalEntropyGain(right), options.sessionType) -
       getRotationVarietyScore(getCandidateTotalEntropyGain(left), options.sessionType) ||
     (respectRest ? compareSocialNumberVectors(getSoftCadenceVectorForMask(left.mask), getSoftCadenceVectorForMask(right.mask)) : 0);
+  const compareCandidatesForSocialPriority = (
+    left: Candidate<ActiveMatchmakerV3Player<T>>,
+    right: Candidate<ActiveMatchmakerV3Player<T>>
+  ) => compareCandidateStrongerClass(left, right) ||
+    compareSocialPriorityMetrics(
+      getCandidatePriorityRankingMetrics(left),
+      getCandidatePriorityRankingMetrics(right),
+      respectRest
+    );
+  const compareCandidatesForSocialNearBest = (
+    left: Candidate<ActiveMatchmakerV3Player<T>>,
+    right: Candidate<ActiveMatchmakerV3Player<T>>
+  ) => compareCandidateStrongerClass(left, right) || compareSocialNearBestMetrics(
+    getCandidatePriorityRankingMetrics(left),
+    getCandidatePriorityRankingMetrics(right),
+    respectRest
+  );
+  const compareCandidatesForSocialBeneficialRescue = (
+    left: Candidate<ActiveMatchmakerV3Player<T>>,
+    right: Candidate<ActiveMatchmakerV3Player<T>>
+  ) => compareCandidateStrongerClass(left, right) || compareSocialBeneficialRescueMetrics(
+    getCandidatePriorityRankingMetrics(left),
+    getCandidatePriorityRankingMetrics(right),
+    respectRest
+  );
   const getOptimisticImmediateReplayCount = (selectedMask: bigint, remainingSlots: number) => {
     const selected = active.filter((player) => (selectedMask & bits.get(player.userId)!) !== BigInt(0));
     const selectable = active.filter((player) => (selectedMask & bits.get(player.userId)!) === BigInt(0));
@@ -441,7 +858,406 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       }
       return gain + maximum;
     }, BigInt(0));
-  const globalImmediateReplayLowerBound = respectRest
+  const beneficialCourtBoundsCache = new WeakMap<
+    Candidate<ActiveMatchmakerV3Player<T>>[],
+    BeneficialCourtBounds
+  >();
+  const compatibleCandidatesCache = new WeakMap<
+    Candidate<ActiveMatchmakerV3Player<T>>[],
+    Map<string, Candidate<ActiveMatchmakerV3Player<T>>[]>
+  >();
+  const getCompatibleCandidates = (
+    candidates: Candidate<ActiveMatchmakerV3Player<T>>[],
+    used: bigint,
+    minimumOrdinal: number | null,
+    candidateOrdinal: ReadonlyMap<Candidate<ActiveMatchmakerV3Player<T>>, number> | null
+  ) => {
+    const key = `${used.toString()}:${minimumOrdinal ?? "none"}`;
+    let byState = compatibleCandidatesCache.get(candidates);
+    if (!byState) {
+      byState = new Map();
+      compatibleCandidatesCache.set(candidates, byState);
+    }
+    const cached = byState.get(key);
+    if (cached) return cached;
+    const compatible = candidates.filter((candidate) =>
+      (candidate.mask & used) === BigInt(0) &&
+      (minimumOrdinal === null || !candidateOrdinal ||
+        (candidateOrdinal.get(candidate) ?? -1) > minimumOrdinal)
+    );
+    byState.set(key, compatible);
+    return compatible;
+  };
+  const getBeneficialCourtBounds = (
+    candidates: Candidate<ActiveMatchmakerV3Player<T>>[]
+  ): BeneficialCourtBounds => {
+    const cached = beneficialCourtBoundsCache.get(candidates);
+    if (cached) return cached;
+    const penalties = [
+      "sharedCourtRepeatPenalty",
+      "sharedCourtEncounterFrequencyPenalty",
+      "partnerRepeatPenalty",
+      "opponentRepeatPenalty",
+      "exactRematchPenalty",
+    ] as const;
+    const result: BeneficialCourtBounds = {
+      hasCandidates: candidates.length > 0,
+      maximumRollingTypeGainUnits: BigInt(0),
+      maximumCourtmateGainsByPlayer: new Map(),
+      maximumCourtmatePairs: 0,
+      maximumPartnerPairs: 0,
+      maximumOpponentPairs: 0,
+      maximumVarietyGainByFacet: new Map(entropyFacets.map((facet) => [facet, -Infinity])),
+      minimumPenaltyByMetric: new Map(penalties.map((metric) => [metric, Infinity])),
+      minimumBalanceGap: Infinity,
+      minimumPointDiffGap: Infinity,
+    };
+    let first = true;
+    for (const candidate of candidates) {
+      const priority = getCandidateSocialPriorityMetrics(candidate);
+      if (first || priority.rollingMatchTypeGainUnits > result.maximumRollingTypeGainUnits) {
+        result.maximumRollingTypeGainUnits = priority.rollingMatchTypeGainUnits;
+      }
+      result.maximumPartnerPairs = Math.max(result.maximumPartnerPairs, priority.newPartnerPairs);
+      result.maximumOpponentPairs = Math.max(result.maximumOpponentPairs, priority.newOpponentPairs);
+      result.maximumCourtmatePairs = Math.max(result.maximumCourtmatePairs, priority.newCourtmatePairs);
+      for (const [userId, gain] of priority.courtmateGainsByPlayer) {
+        result.maximumCourtmateGainsByPlayer.set(
+          userId,
+          Math.max(result.maximumCourtmateGainsByPlayer.get(userId) ?? 0, gain)
+        );
+      }
+      for (const facet of entropyFacets) {
+        const gain = candidate.selection.socialVarietyGains?.[facet] ?? 0;
+        result.maximumVarietyGainByFacet.set(
+          facet,
+          Math.max(result.maximumVarietyGainByFacet.get(facet) ?? -Infinity, gain)
+        );
+      }
+      for (const metric of penalties) {
+        result.minimumPenaltyByMetric.set(
+          metric,
+          Math.min(result.minimumPenaltyByMetric.get(metric) ?? Infinity,
+            metric === "sharedCourtRepeatPenalty" ? candidate.selection.sharedCourtRepeatPenalty
+              : metric === "sharedCourtEncounterFrequencyPenalty" ? candidate.selection.sharedCourtEncounterFrequencyPenalty ?? 0
+                : metric === "partnerRepeatPenalty" ? candidate.selection.partnerRepeatPenalty
+                  : metric === "opponentRepeatPenalty" ? candidate.selection.opponentRepeatPenalty
+                    : candidate.selection.exactRematchPenalty)
+        );
+      }
+      result.minimumBalanceGap = Math.min(result.minimumBalanceGap, candidate.selection.balanceGap);
+      result.minimumPointDiffGap = Math.min(result.minimumPointDiffGap, candidate.selection.pointDiffGap);
+      first = false;
+    }
+    beneficialCourtBoundsCache.set(candidates, result);
+    return result;
+  };
+  const getBeneficialRemainingBounds = (
+    remaining: readonly number[],
+    lists: readonly Candidate<ActiveMatchmakerV3Player<T>>[][],
+    listOverrides?: ReadonlyMap<number, Candidate<ActiveMatchmakerV3Player<T>>[]>
+  ) => {
+    const courtBounds = remaining.map((court) =>
+      getBeneficialCourtBounds(listOverrides?.get(court) ?? lists[court])
+    );
+    const maximumCourtmateGainsByPlayer = new Map<string, number>();
+    const maximumVarietyGainByFacet = new Map<keyof SocialVarietyGains, number[]>(
+      entropyFacets.map((facet) => [facet, []])
+    );
+    const minimumPenaltyByMetric = new Map<
+      "sharedCourtRepeatPenalty" | "sharedCourtEncounterFrequencyPenalty" |
+      "partnerRepeatPenalty" | "opponentRepeatPenalty" | "exactRematchPenalty",
+      number
+    >();
+    let maximumRollingTypeGainUnits = BigInt(0);
+    let maximumCourtmatePairs = 0;
+    let maximumPartnerPairs = 0;
+    let maximumOpponentPairs = 0;
+    let hasCandidates = true;
+    for (const court of courtBounds) {
+      if (!court.hasCandidates) hasCandidates = false;
+      maximumRollingTypeGainUnits += court.maximumRollingTypeGainUnits;
+      maximumCourtmatePairs += court.maximumCourtmatePairs;
+      maximumPartnerPairs += court.maximumPartnerPairs;
+      maximumOpponentPairs += court.maximumOpponentPairs;
+      for (const [userId, gain] of court.maximumCourtmateGainsByPlayer) {
+        maximumCourtmateGainsByPlayer.set(
+          userId,
+          Math.max(maximumCourtmateGainsByPlayer.get(userId) ?? 0, gain)
+        );
+      }
+      for (const facet of entropyFacets) {
+        maximumVarietyGainByFacet.get(facet)!.push(court.maximumVarietyGainByFacet.get(facet) ?? -Infinity);
+      }
+      for (const [metric, minimum] of court.minimumPenaltyByMetric) {
+        minimumPenaltyByMetric.set(metric, (minimumPenaltyByMetric.get(metric) ?? 0) + minimum);
+      }
+    }
+    return {
+      hasCandidates,
+      maximumRollingTypeGainUnits,
+      maximumCourtmatePairs,
+      maximumCourtmateGainsByPlayer,
+      maximumPartnerPairs,
+      maximumOpponentPairs,
+      maximumVarietyGainByFacet,
+      minimumPenaltyByMetric,
+      minimumBalanceGap: Math.max(0, ...courtBounds.map((court) => court.minimumBalanceGap)),
+      minimumPointDiffGap: Math.max(0, ...courtBounds.map((court) => court.minimumPointDiffGap)),
+    };
+  };
+  const shouldPruneBeneficialPriorityBranch = (
+    chosen: readonly Candidate<ActiveMatchmakerV3Player<T>>[],
+    used: bigint,
+    remaining: readonly number[],
+    lists: readonly Candidate<ActiveMatchmakerV3Player<T>>[][],
+    index: number,
+    remainingListOverrides?: ReadonlyMap<number, Candidate<ActiveMatchmakerV3Player<T>>[]>,
+    onPreBalancePrefixCertified?: () => void
+  ) => {
+    if (!socialCourtmateBeneficialRescue || remaining.length === 0) return false;
+    const remainingBounds = getBeneficialRemainingBounds(remaining, lists, remainingListOverrides);
+    if (!remainingBounds.hasCandidates) return true;
+
+    let chosenCourtmatePairs = 0;
+    let chosenRollingTypeGainUnits = BigInt(0);
+    let chosenPartnerPairs = 0;
+    let chosenOpponentPairs = 0;
+    const chosenCourtmateGains = new Map<string, number>();
+    const chosenFacetGains = new Map<keyof SocialVarietyGains, number[]>();
+    const chosenPenaltyValues = new Map<
+      "sharedCourtRepeatPenalty" | "sharedCourtEncounterFrequencyPenalty" |
+      "partnerRepeatPenalty" | "opponentRepeatPenalty" | "exactRematchPenalty",
+      number[]
+    >();
+    let chosenMaxBalanceGap = 0;
+    let chosenMaxPointDiffGap = 0;
+    for (const facet of entropyFacets) chosenFacetGains.set(facet, []);
+    for (const metric of [
+      "sharedCourtRepeatPenalty",
+      "sharedCourtEncounterFrequencyPenalty",
+      "partnerRepeatPenalty",
+      "opponentRepeatPenalty",
+      "exactRematchPenalty",
+    ] as const) chosenPenaltyValues.set(metric, []);
+    for (const candidate of chosen) {
+      const priority = getCandidateSocialPriorityMetrics(candidate);
+      chosenCourtmatePairs += priority.newCourtmatePairs;
+      chosenRollingTypeGainUnits += priority.rollingMatchTypeGainUnits;
+      chosenPartnerPairs += priority.newPartnerPairs;
+      chosenOpponentPairs += priority.newOpponentPairs;
+      for (const [userId, gain] of priority.courtmateGainsByPlayer) {
+        chosenCourtmateGains.set(userId, (chosenCourtmateGains.get(userId) ?? 0) + gain);
+      }
+      for (const facet of entropyFacets) {
+        chosenFacetGains.get(facet)!.push(candidate.selection.socialVarietyGains?.[facet] ?? 0);
+      }
+      chosenPenaltyValues.get("sharedCourtRepeatPenalty")!.push(candidate.selection.sharedCourtRepeatPenalty);
+      chosenPenaltyValues.get("sharedCourtEncounterFrequencyPenalty")!.push(
+        candidate.selection.sharedCourtEncounterFrequencyPenalty ?? 0
+      );
+      chosenPenaltyValues.get("partnerRepeatPenalty")!.push(candidate.selection.partnerRepeatPenalty);
+      chosenPenaltyValues.get("opponentRepeatPenalty")!.push(candidate.selection.opponentRepeatPenalty);
+      chosenPenaltyValues.get("exactRematchPenalty")!.push(candidate.selection.exactRematchPenalty);
+      chosenMaxBalanceGap = Math.max(chosenMaxBalanceGap, candidate.selection.balanceGap);
+      chosenMaxPointDiffGap = Math.max(chosenMaxPointDiffGap, candidate.selection.pointDiffGap);
+    }
+
+    const endpointGainUpper = [...remainingBounds.maximumCourtmateGainsByPlayer]
+      .filter(([userId]) => (used & (bits.get(userId) ?? BigInt(0))) === BigInt(0))
+      .map(([, gain]) => gain)
+      .sort((left, right) => right - left)
+      .slice(0, remaining.length * 4)
+      .reduce((total, gain) => total + gain, 0);
+    const courtmateGainUpper = chosenCourtmatePairs + Math.min(
+      Math.floor(endpointGainUpper / 2),
+      remainingBounds.maximumCourtmatePairs
+    );
+    const rollingTypeGainUpper = chosenRollingTypeGainUnits + remainingBounds.maximumRollingTypeGainUnits;
+
+    if (nearBestFrontierPhase) {
+      if (!nearBestRotationClass || nearBestCourtmateGainMaximum === null ||
+        bestRollingMatchTypeGainAtGmaxUnits === null) return false;
+      const chosenPlayers = chosen.flatMap((candidate) => candidate.selection.players);
+      const available = active.filter((player) => (used & bits.get(player.userId)!) === BigInt(0));
+      const mandatory = available.filter((player) => locked.has(player.userId));
+      const slots = remaining.length * 4;
+      const optimisticPlayers = [...chosenPlayers, ...mandatory,
+        ...available.filter((player) => !locked.has(player.userId)).sort(compareOptimisticPlayers)
+          .slice(0, Math.max(0, slots - mandatory.length))];
+      const fairnessBound = getSocialFairnessVector(optimisticPlayers);
+      const fairnessDiff = compareSocialNumberVectors(fairnessBound, nearBestRotationClass.fairness);
+      if (fairnessDiff > 0) return true;
+      if (fairnessDiff < 0 || profiles[index].rank < nearBestRotationClass.rank) return false;
+      if (profiles[index].rank > nearBestRotationClass.rank) return true;
+      const starvationBound = getStarvationLowerBound(used, slots);
+      const starvationDiff = compareSocialNumberVectors(starvationBound, nearBestRotationClass.starvation);
+      if (starvationDiff > 0) return true;
+      if (starvationDiff < 0) return false;
+      return courtmateGainUpper < nearBestCourtmateGainMaximum ||
+        (courtmateGainUpper === nearBestCourtmateGainMaximum &&
+          rollingTypeGainUpper <= bestRollingMatchTypeGainAtGmaxUnits);
+    }
+
+    if (!beneficialRescueSelectionPhase || !nearBestRotationClass ||
+      nearBestCourtmateGainMaximum === null || bestRollingMatchTypeGainAtGmaxUnits === null) return false;
+    const chosenPlayers = chosen.flatMap((candidate) => candidate.selection.players);
+    const available = active.filter((player) => (used & bits.get(player.userId)!) === BigInt(0));
+    const mandatory = available.filter((player) => locked.has(player.userId));
+    const slots = remaining.length * 4;
+    const optimisticPlayers = [...chosenPlayers, ...mandatory,
+      ...available.filter((player) => !locked.has(player.userId)).sort(compareOptimisticPlayers)
+        .slice(0, Math.max(0, slots - mandatory.length))];
+    const fairnessBound = getSocialFairnessVector(optimisticPlayers);
+    if (compareSocialNumberVectors(fairnessBound, nearBestRotationClass.fairness) > 0) return true;
+    const starvationBound = getStarvationLowerBound(used, slots);
+    if (compareSocialNumberVectors(fairnessBound, nearBestRotationClass.fairness) === 0 &&
+      compareSocialNumberVectors(starvationBound, nearBestRotationClass.starvation) > 0) return true;
+
+    const maximumCourtmateGain = nearBestCourtmateGainMaximum;
+    if (courtmateGainUpper < maximumCourtmateGain - 1) return true;
+    if (courtmateGainUpper === maximumCourtmateGain - 1 &&
+      rollingTypeGainUpper <= bestRollingMatchTypeGainAtGmaxUnits) return true;
+    const incumbent = bestSocialPriorityMetrics;
+    if (!incumbent) return false;
+
+    if (rollingTypeGainUpper < incumbent.rollingMatchTypeGainUnits) return true;
+    if (rollingTypeGainUpper > incumbent.rollingMatchTypeGainUnits) return false;
+    if (courtmateGainUpper < incumbent.newCourtmatePairs) return true;
+    if (courtmateGainUpper > incumbent.newCourtmatePairs) return false;
+
+    const chosenProfile = socialPriorityScorer!.getPostBatchCourtmateCoverageProfile(chosenCourtmateGains);
+    const fixedIds = new Set(active
+      .filter((player) => (used & bits.get(player.userId)!) !== BigInt(0))
+      .map((player) => player.userId));
+    const coverageUpper = buildOptimisticCourtmateCoverageProfile(
+      chosenProfile,
+      remainingBounds.maximumCourtmateGainsByPlayer,
+      fixedIds,
+      slots
+    );
+    const coverageDiff = compareCourtmateCoverageProfiles(coverageUpper, incumbent.courtmateCoverageProfile);
+    if (coverageDiff < 0) return true;
+    if (coverageDiff > 0) return false;
+
+    if (respectRest) {
+      const replayLower = getOptimisticImmediateReplayCount(used, slots);
+      if (replayLower > incumbent.immediateReplayCount) return true;
+      if (replayLower < incumbent.immediateReplayCount) return false;
+      const softCadenceLower = getOptimisticSoftCadenceVector(used, slots);
+      const softDiff = compareSocialNumberVectors(softCadenceLower, incumbent.softCadenceVector);
+      if (softDiff > 0) return true;
+      if (softDiff < 0) return false;
+    }
+    const partnerUpper = chosenPartnerPairs + remainingBounds.maximumPartnerPairs;
+    if (partnerUpper < incumbent.newPartnerPairs) return true;
+    if (partnerUpper > incumbent.newPartnerPairs) return false;
+    const opponentUpper = chosenOpponentPairs + remainingBounds.maximumOpponentPairs;
+    if (opponentUpper < incumbent.newOpponentPairs) return true;
+    if (opponentUpper > incumbent.newOpponentPairs) return false;
+
+    const facetTotals = new Map<keyof SocialVarietyGains, number>();
+    for (const facet of entropyFacets) {
+      const addends = [
+        ...(chosenFacetGains.get(facet) ?? []),
+        ...(remainingBounds.maximumVarietyGainByFacet.get(facet) ?? []),
+      ];
+      facetTotals.set(facet, canonicalSum(addends));
+    }
+    // This uses the same per-facet and final canonical grouping as the batch
+    // scorer. Coordinate-wise maxima dominate every legal completion, and the
+    // monotone sorted finite additions preserve an admissible upper bound.
+    const entropyUpper = getSocialRelationshipEntropyGain({
+      courtmates: facetTotals.get("courtmates"),
+      partners: facetTotals.get("partners"),
+      opponents: facetTotals.get("opponents"),
+    });
+    if (entropyUpper < incumbent.relationshipEntropyGain) return true;
+    if (entropyUpper > incumbent.relationshipEntropyGain) return false;
+
+    const penaltyKeys = [
+      "sharedCourtRepeatPenalty",
+      "sharedCourtEncounterFrequencyPenalty",
+      "partnerRepeatPenalty",
+      "opponentRepeatPenalty",
+      "exactRematchPenalty",
+    ] as const;
+    for (const metric of penaltyKeys) {
+      const values = [...(chosenPenaltyValues.get(metric) ?? []),
+        remainingBounds.minimumPenaltyByMetric.get(metric) ?? 0];
+      const sum = canonicalSum(values);
+      const roundoff = Number.EPSILON * 4 * (values.length + 1) *
+        values.reduce((total, value) => total + Math.abs(value), 0);
+      const penaltyLower = Math.max(0, sum - roundoff);
+      if (penaltyLower > incumbent[metric]) return true;
+      if (penaltyLower < incumbent[metric]) return false;
+    }
+    onPreBalancePrefixCertified?.();
+    const balanceGapLower = Math.max(chosenMaxBalanceGap, remainingBounds.minimumBalanceGap);
+    if (balanceGapLower > incumbent.maxBalanceGap) return true;
+    if (balanceGapLower < incumbent.maxBalanceGap) return false;
+    const totalBalanceGapLower = canonicalSum([
+      ...chosen.map((candidate) => candidate.selection.balanceGap),
+      ...remaining.map((court) => getBeneficialCourtBounds(remainingListOverrides?.get(court) ?? lists[court]).minimumBalanceGap),
+    ]);
+    if (totalBalanceGapLower > incumbent.totalBalanceGap) return true;
+    if (totalBalanceGapLower < incumbent.totalBalanceGap) return false;
+    const pointDiffGapLower = Math.max(chosenMaxPointDiffGap, remainingBounds.minimumPointDiffGap);
+    if (pointDiffGapLower > incumbent.maxPointDiffGap) return true;
+    if (pointDiffGapLower < incumbent.maxPointDiffGap) return false;
+    const totalPointDiffGapLower = canonicalSum([
+      ...chosen.map((candidate) => candidate.selection.pointDiffGap),
+      ...remaining.map((court) => getBeneficialCourtBounds(remainingListOverrides?.get(court) ?? lists[court]).minimumPointDiffGap),
+    ]);
+    return totalPointDiffGapLower > incumbent.totalPointDiffGap;
+  };
+  const shouldPruneBeneficialTwoCourtSuffix = (
+    chosen: readonly Candidate<ActiveMatchmakerV3Player<T>>[],
+    used: bigint,
+    index: number,
+    rightCandidates: Candidate<ActiveMatchmakerV3Player<T>>[],
+    lists: readonly Candidate<ActiveMatchmakerV3Player<T>>[][]
+  ) => {
+    if (!socialCourtmateBeneficialRescue || !nearBestRotationClass || !rightCandidates.length) return false;
+    const slots = 4;
+    const available = active.filter((player) => (used & bits.get(player.userId)!) === BigInt(0));
+    const mandatory = available.filter((player) => locked.has(player.userId));
+    const optimisticPlayers = [
+      ...chosen.flatMap((candidate) => candidate.selection.players),
+      ...mandatory,
+      ...available.filter((player) => !locked.has(player.userId)).sort(compareOptimisticPlayers)
+        .slice(0, Math.max(0, slots - mandatory.length)),
+    ];
+    const fairnessBound = getSocialFairnessVector(optimisticPlayers);
+    const fairnessDiff = compareSocialNumberVectors(fairnessBound, nearBestRotationClass.fairness);
+    if (fairnessDiff > 0) return true;
+    if (fairnessDiff < 0 || profiles[index].rank < nearBestRotationClass.rank) return false;
+    if (profiles[index].rank > nearBestRotationClass.rank) return true;
+    const starvationBound = getStarvationLowerBound(used, slots);
+    const starvationDiff = compareSocialNumberVectors(starvationBound, nearBestRotationClass.starvation);
+    if (starvationDiff > 0) return true;
+    if (starvationDiff < 0) return false;
+    let prefixCertified = false;
+    const shouldPrune = shouldPruneBeneficialPriorityBranch(
+      chosen,
+      used,
+      [1],
+      lists,
+      index,
+      undefined,
+      () => { prefixCertified = true; }
+    );
+    if (shouldPrune) return true;
+    if (prefixCertified && bestSocialPriorityMetrics) {
+      for (let candidateIndex = rightCandidates.length - 1; candidateIndex >= 0; candidateIndex -= 1) {
+        if (rightCandidates[candidateIndex].selection.balanceGap > bestSocialPriorityMetrics.maxBalanceGap) {
+          rightCandidates.splice(candidateIndex, 1);
+        }
+      }
+    }
+    return rightCandidates.length === 0;
+  };
+  const globalImmediateReplayLowerBound = gateRespectRest
     ? getOptimisticImmediateReplayCount(lockedMask, Math.max(0, required - locked.size))
     : null;
   const entropyFacets: Array<keyof SocialVarietyGains> = options.sessionMode === SessionMode.MIXICANO
@@ -504,13 +1320,19 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     return false;
   };
   const candidatesFor = (constraints: V3SelectionConstraints<ActiveMatchmakerV3Player<T>> | undefined) => {
+    const deferCandidateSorting = socialCourtmateBeneficialRescue &&
+      (nearBestFrontierPhase || beneficialRescueSelectionPhase);
+    const deferCandidateEntropy = socialCourtmateBeneficialRescue && nearBestFrontierPhase;
     const cached = candidateCache.get(constraints);
     const compareCandidateOrder = baselinePhase
       ? (left: Candidate<ActiveMatchmakerV3Player<T>>, right: Candidate<ActiveMatchmakerV3Player<T>>) =>
         compareCandidateStrongerClass(left, right) || left.selection.balanceGap - right.selection.balanceGap
       : replayBaselinePhase ? compareCandidatesForReplay
-        : coverageBaselinePhase ? compareCandidatesForCoverage : compareCandidatesForVariety;
-    if (cached) return baselinePhase ? cached : cached.sort(compareCandidateOrder);
+        : coverageBaselinePhase ? compareCandidatesForCoverage
+          : socialCourtmateNearBest ? compareCandidatesForSocialNearBest
+            : socialCourtmateBeneficialRescue ? compareCandidatesForSocialBeneficialRescue
+            : socialPriorityPolicy ? compareCandidatesForSocialPriority : compareCandidatesForVariety;
+    if (cached) return baselinePhase || deferCandidateSorting ? cached : cached.sort(compareCandidateOrder);
     const candidates: Candidate<ActiveMatchmakerV3Player<T>>[] = [];
     const keys = new Set<string>();
     for (let a = 0; a < active.length - 3; a++) {
@@ -536,8 +1358,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
               keys.add(key);
               // The baseline needs only legality and balance. Score entropy
               // after certification, and only inside its fixed envelope.
-              const gains = baselinePhase || replayBaselinePhase || coverageBaselinePhase
-                ? undefined : getSocialVarietyGains(partition, context);
+              const gains = baselinePhase || replayBaselinePhase || coverageBaselinePhase || deferCandidateEntropy
+                ? undefined : getSocialVarietyGains(partition, candidateScoringContext);
               const selection: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>> = {
                 ids, players: quartet, partition,
                 restSummary: buildRestSummary(quartet),
@@ -555,7 +1377,12 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
                 randomScore: getQuartetRandomScore(quartet),
                 pairingRandomScore: getPartitionPairingRandomScore(partition, salts.combined),
               };
-              candidates.push({ selection, mask, varietyScored: Boolean(gains) });
+              candidates.push({
+                selection, mask, varietyScored: Boolean(gains),
+                ...(socialPriorityScorer
+                  ? { socialPriorityMetrics: socialPriorityScorer.getPartitionMetrics(partition) }
+                  : {}),
+              });
               validPartitions++;
             }
           }
@@ -568,21 +1395,138 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     // Baseline certification only needs to find a witness on the certified
     // lower bound; sorting tens of thousands of equivalent layouts cannot
     // strengthen that proof. Later phases sort by their own objective.
-    if (!baselinePhase) candidates.sort(compareCandidateOrder);
+    if (!baselinePhase && !deferCandidateSorting) candidates.sort(compareCandidateOrder);
     candidateCache.set(constraints, candidates);
     return candidates;
   };
   const scoreVariety = (candidate: Candidate<ActiveMatchmakerV3Player<T>>) => {
     if (candidate.varietyScored) return;
-    const gains = getSocialVarietyGains(candidate.selection.partition, context);
+    const gains = getSocialVarietyGains(candidate.selection.partition, candidateScoringContext);
     candidate.selection = { ...candidate.selection, socialVarietyGain: sumSocialVarietyGains(gains), socialVarietyGains: gains };
     candidate.varietyScored = true;
   };
+  const dominanceMetricsByCandidate = new WeakMap<
+    Candidate<ActiveMatchmakerV3Player<T>>,
+    SocialCourtPartitionDominanceMetrics
+  >();
+  const getCandidateDominanceMetrics = (candidate: Candidate<ActiveMatchmakerV3Player<T>>) => {
+    const cached = dominanceMetricsByCandidate.get(candidate);
+    if (cached) return cached;
+    scoreVariety(candidate);
+    const partitionMetrics = getCandidateSocialPriorityMetrics(candidate);
+    const gains = candidate.selection.socialVarietyGains;
+    const metrics: SocialCourtPartitionDominanceMetrics = {
+      newCourtmatePairs: partitionMetrics.newCourtmatePairs,
+      rollingMatchTypeGainUnits: partitionMetrics.rollingMatchTypeGainUnits,
+      courtmateCoverage: socialPriorityScorer!.getPostBatchCourtmateCoverageProfile(
+        partitionMetrics.courtmateGainsByPlayer
+      ),
+      newPartnerPairs: partitionMetrics.newPartnerPairs,
+      newOpponentPairs: partitionMetrics.newOpponentPairs,
+      relationshipFacetGains: [gains?.courtmates ?? 0, gains?.partners ?? 0, gains?.opponents ?? 0],
+      penalties: [
+        candidate.selection.sharedCourtRepeatPenalty,
+        candidate.selection.sharedCourtEncounterFrequencyPenalty ?? 0,
+        candidate.selection.partnerRepeatPenalty,
+        candidate.selection.opponentRepeatPenalty,
+        candidate.selection.exactRematchPenalty,
+      ],
+      balanceGap: candidate.selection.balanceGap,
+      pointDiffGap: candidate.selection.pointDiffGap,
+    };
+    dominanceMetricsByCandidate.set(candidate, metrics);
+    return metrics;
+  };
+  const filterDominatedBeneficialPartitions = (
+    lists: Candidate<ActiveMatchmakerV3Player<T>>[][]
+  ): Candidate<ActiveMatchmakerV3Player<T>>[][] => {
+    const maximumAbsoluteBatchMetric = (get: (candidate: Candidate<ActiveMatchmakerV3Player<T>>) => number) => {
+      let total = 0;
+      for (const candidates of lists) {
+        let maximum = 0;
+        for (const candidate of candidates) {
+          if (deadline !== Infinity && Date.now() >= deadline) {
+            interrupted = true;
+            return Infinity;
+          }
+          const value = Math.abs(get(candidate));
+          if (!Number.isFinite(value)) return Infinity;
+          maximum = Math.max(maximum, value);
+        }
+        total += maximum;
+        if (!Number.isFinite(total)) return Infinity;
+      }
+      return total;
+    };
+    const maximumAbsoluteBalanceGap = maximumAbsoluteBatchMetric((candidate) => candidate.selection.balanceGap);
+    const maximumAbsolutePointDiffGap = maximumAbsoluteBatchMetric((candidate) => candidate.selection.pointDiffGap);
+
+    return lists.map((candidates) => {
+      if (interrupted) return candidates;
+      const groups = new Map<string, Candidate<ActiveMatchmakerV3Player<T>>[]>();
+      for (const candidate of candidates) {
+        if (deadline !== Infinity && Date.now() >= deadline) {
+          interrupted = true;
+          return candidates;
+        }
+        const partitionMetrics = getCandidateSocialPriorityMetrics(candidate);
+        const key = `${candidate.mask.toString()}:${partitionMetrics.rollingMatchTypeGainUnits.toString()}`;
+        const group = groups.get(key) ?? [];
+        group.push(candidate);
+        groups.set(key, group);
+      }
+
+      const dominated = new Set<Candidate<ActiveMatchmakerV3Player<T>>>();
+      for (const group of groups.values()) {
+        if (group.length < 2) continue;
+        for (const candidate of group) {
+          if (deadline !== Infinity && Date.now() >= deadline) {
+            interrupted = true;
+            return candidates;
+          }
+          getCandidateDominanceMetrics(candidate);
+        }
+        for (let leftIndex = 0; leftIndex < group.length; leftIndex += 1) {
+          if (deadline !== Infinity && Date.now() >= deadline) {
+            interrupted = true;
+            return candidates;
+          }
+          const left = group[leftIndex];
+          if (!left || dominated.has(left)) continue;
+          const leftMetrics = getCandidateDominanceMetrics(left);
+          for (let rightIndex = 0; rightIndex < group.length; rightIndex += 1) {
+            if (rightIndex === leftIndex) continue;
+            const right = group[rightIndex];
+            if (!right || dominated.has(right)) continue;
+            if (isStrictlyDominantSocialCourtPartition(
+              leftMetrics,
+              getCandidateDominanceMetrics(right),
+              options.courtCount,
+              maximumAbsoluteBalanceGap,
+              maximumAbsolutePointDiffGap
+            )) dominated.add(right);
+          }
+        }
+      }
+      pruned += dominated.size;
+      return candidates.filter((candidate) => !dominated.has(candidate));
+    });
+  };
   const metricsFor = (
+    chosen: readonly Candidate<ActiveMatchmakerV3Player<T>>[],
     selections: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[],
     selectedMask: bigint,
     variety = getSocialVarietyTotals(selections, options.sessionMode)
   ) => {
+    if (socialPriorityPolicy) {
+      const priorityMetrics = getSocialPriorityBatchMetrics(chosen, selectedMask, selections, variety);
+      const starvation = getStarvation(selectedMask);
+      return socialCourtmateBeneficialRescue
+        ? toBeneficialRescuePriorityMetricVector(priorityMetrics, starvation)
+        : socialCourtmateNearBest
+          ? toNearBestPriorityMetricVector(priorityMetrics, starvation)
+        : toPriorityMetricVector(priorityMetrics, starvation);
+    }
     return [
       ...getStarvation(selectedMask),
       -getRotationVarietyScore(variety.totalSocialVarietyGain, options.sessionType),
@@ -600,6 +1544,156 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   };
   let layoutTies: V3BatchSelection<ActiveMatchmakerV3Player<T>>[] = [];
   const layoutScheduleIndexes = new WeakMap<V3BatchSelection<ActiveMatchmakerV3Player<T>>, number>();
+  const socialPriorityMetricsBySummary = new WeakMap<
+    V3BatchSelection<ActiveMatchmakerV3Player<T>>,
+    SocialPriorityBatchMetrics
+  >();
+  const considerNearBestFrontier = (
+    chosen: Candidate<ActiveMatchmakerV3Player<T>>[], mask: bigint, index: number
+  ) => {
+    if ((mask & lockedMask) !== lockedMask) return;
+    const rotationClass = {
+      fairness: getFairness(mask),
+      rank: profiles[index].rank,
+      starvation: getStarvation(mask),
+    };
+    const classComparison = nearBestRotationClass
+      ? compareSocialPriorityRotationClasses(rotationClass, nearBestRotationClass)
+      : -1;
+    if (classComparison > 0) return;
+    let newCourtmatePairs: number;
+    let rollingMatchTypeGainUnits: bigint;
+    if (socialCourtmateBeneficialRescue) {
+      newCourtmatePairs = 0;
+      rollingMatchTypeGainUnits = BigInt(0);
+      for (const candidate of chosen) {
+        const candidateMetrics = getCandidateSocialPriorityMetrics(candidate);
+        newCourtmatePairs += candidateMetrics.newCourtmatePairs;
+        rollingMatchTypeGainUnits += candidateMetrics.rollingMatchTypeGainUnits;
+      }
+    } else {
+      const selections = chosen.map((candidate) => candidate.selection);
+      const metrics = getSocialPriorityBatchMetrics(chosen, mask, selections);
+      newCourtmatePairs = metrics.newCourtmatePairs;
+      rollingMatchTypeGainUnits = metrics.rollingMatchTypeGainUnits;
+    }
+    if (classComparison < 0) {
+      nearBestRotationClass = rotationClass;
+      nearBestCourtmateGainMaximum = newCourtmatePairs;
+      bestRollingMatchTypeGainAtGmaxUnits = rollingMatchTypeGainUnits;
+      return;
+    }
+    if (nearBestCourtmateGainMaximum === null || newCourtmatePairs > nearBestCourtmateGainMaximum) {
+      nearBestCourtmateGainMaximum = newCourtmatePairs;
+      bestRollingMatchTypeGainAtGmaxUnits = rollingMatchTypeGainUnits;
+    } else if (newCourtmatePairs === nearBestCourtmateGainMaximum &&
+      (bestRollingMatchTypeGainAtGmaxUnits === null ||
+        rollingMatchTypeGainUnits > bestRollingMatchTypeGainAtGmaxUnits)) {
+      // Record the T frontier before any coverage-profile, replay or late-tie
+      // comparison. The best strict C/profile winner can have lower T.
+      bestRollingMatchTypeGainAtGmaxUnits = rollingMatchTypeGainUnits;
+    }
+  };
+  const considerNearBestSelection = (
+    chosen: Candidate<ActiveMatchmakerV3Player<T>>[], mask: bigint, index: number
+  ) => {
+    if ((mask & lockedMask) !== lockedMask || !nearBestRotationClass || nearBestCourtmateGainMaximum === null) return;
+    const fairness = getFairness(mask);
+    const starvation = getStarvation(mask);
+    const rank = profiles[index].rank;
+    if (compareSocialPriorityRotationClasses({ fairness, rank, starvation }, nearBestRotationClass) !== 0) return;
+    const selections = chosen.map((candidate) => candidate.selection);
+    const variety = getSocialVarietyTotals(selections, options.sessionMode);
+    const priorityMetrics = getSocialPriorityBatchMetrics(chosen, mask, selections, variety);
+    if (priorityMetrics.newCourtmatePairs < nearBestCourtmateGainMaximum - 1) return;
+    const metrics = toNearBestPriorityMetricVector(priorityMetrics, starvation);
+    const diff = bestSocialPriorityMetrics
+      ? compareSocialNearBestMetrics(priorityMetrics, bestSocialPriorityMetrics, respectRest)
+      : -1;
+    if (diff > 0) return;
+    if (diff === 0 && best && options.pairingRandomMode !== "side-balanced" &&
+      getBatchPairingRandomScore(selections, salts.combined) >= best.totalPairingRandomScore) return;
+    if (diff === 0 && best && options.pairingRandomMode === "side-balanced" &&
+      salts.sides[0] === 0 && salts.sides[1] === 0 && salts.combined === 0) return;
+
+    const selectedWithSnapshots = selections.map((selection) => selection.socialVariety
+      ? selection
+      : { ...selection, socialVariety: getSocialVarietySnapshot(selection.partition, candidateScoringContext) });
+    const summary = {
+      ...summarizeSocialBatch(selectedWithSnapshots, salts, options.sessionMode),
+      ...(balancePolicy ? { totalBalanceGap: canonicalSum(selections.map((selection) => selection.balanceGap)) } : {}),
+    };
+    layoutScheduleIndexes.set(summary, index);
+    socialPriorityMetricsBySummary.set(summary, priorityMetrics);
+    if (diff < 0) {
+      best = summary;
+      bestFairness = fairness;
+      bestMetrics = metrics;
+      bestRank = rank;
+      scheduleIndex = index;
+      bestSocialPriorityMetrics = priorityMetrics;
+      layoutTies = options.pairingRandomMode === "side-balanced" ? [summary] : [];
+    } else if (options.pairingRandomMode === "side-balanced") {
+      layoutTies.push(summary);
+    } else if (!best || summary.totalPairingRandomScore < best.totalPairingRandomScore) {
+      best = summary;
+      bestMetrics = metrics;
+      bestSocialPriorityMetrics = priorityMetrics;
+      scheduleIndex = index;
+    }
+  };
+  const considerBeneficialRescueSelection = (
+    chosen: Candidate<ActiveMatchmakerV3Player<T>>[], mask: bigint, index: number
+  ) => {
+    if ((mask & lockedMask) !== lockedMask || !nearBestRotationClass || nearBestCourtmateGainMaximum === null ||
+      bestRollingMatchTypeGainAtGmaxUnits === null) return;
+    const fairness = getFairness(mask);
+    const starvation = getStarvation(mask);
+    const rank = profiles[index].rank;
+    if (compareSocialPriorityRotationClasses({ fairness, rank, starvation }, nearBestRotationClass) !== 0) return;
+    const selections = chosen.map((candidate) => candidate.selection);
+    const variety = getSocialVarietyTotals(selections, options.sessionMode);
+    const priorityMetrics = getSocialPriorityBatchMetrics(chosen, mask, selections, variety);
+    if (!isCourtmateBeneficialRescueAdmissible(
+      priorityMetrics.newCourtmatePairs,
+      nearBestCourtmateGainMaximum,
+      priorityMetrics.rollingMatchTypeGainUnits,
+      bestRollingMatchTypeGainAtGmaxUnits
+    )) return;
+    const metrics = toBeneficialRescuePriorityMetricVector(priorityMetrics, starvation);
+    const diff = bestSocialPriorityMetrics
+      ? compareSocialBeneficialRescueMetrics(priorityMetrics, bestSocialPriorityMetrics, respectRest)
+      : -1;
+    if (diff > 0) return;
+    if (diff === 0 && best && options.pairingRandomMode !== "side-balanced" &&
+      getBatchPairingRandomScore(selections, salts.combined) >= best.totalPairingRandomScore) return;
+    if (diff === 0 && best && options.pairingRandomMode === "side-balanced" &&
+      salts.sides[0] === 0 && salts.sides[1] === 0 && salts.combined === 0) return;
+
+    const selectedWithSnapshots = selections.map((selection) => selection.socialVariety
+      ? selection
+      : { ...selection, socialVariety: getSocialVarietySnapshot(selection.partition, candidateScoringContext) });
+    const summary = {
+      ...summarizeSocialBatch(selectedWithSnapshots, salts, options.sessionMode),
+      ...(balancePolicy ? { totalBalanceGap: canonicalSum(selections.map((selection) => selection.balanceGap)) } : {}),
+    };
+    layoutScheduleIndexes.set(summary, index);
+    socialPriorityMetricsBySummary.set(summary, priorityMetrics);
+    if (diff < 0) {
+      best = summary;
+      bestFairness = fairness;
+      bestMetrics = metrics;
+      bestRank = rank;
+      scheduleIndex = index;
+      bestSocialPriorityMetrics = priorityMetrics;
+      layoutTies = options.pairingRandomMode === "side-balanced" ? [summary] : [];
+    } else if (options.pairingRandomMode === "side-balanced") {
+      layoutTies.push(summary);
+    } else if (!best || summary.totalPairingRandomScore < best.totalPairingRandomScore) {
+      best = summary;
+      scheduleIndex = index;
+    }
+  };
   const constraintLabels = new Map(profiles.flatMap((profile) => profile.courts)
     .filter((constraints, index, all) => all.indexOf(constraints) === index)
     .map((constraints, index) => [constraints, index]));
@@ -711,6 +1805,9 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     if (baselinePhase) { considerBaseline(chosen, mask, index); return; }
     if (replayBaselinePhase) { considerReplayBaseline(chosen, mask, index); return; }
     if (coverageBaselinePhase) { considerCoverageBaseline(chosen, mask, index); return; }
+    if (nearBestFrontierPhase) { considerNearBestFrontier(chosen, mask, index); return; }
+    if (nearBestSelectionPhase) { considerNearBestSelection(chosen, mask, index); return; }
+    if (beneficialRescueSelectionPhase) { considerBeneficialRescueSelection(chosen, mask, index); return; }
     if ((mask & lockedMask) !== lockedMask) return;
     const fairness = getFairness(mask);
     const starvation = getStarvation(mask);
@@ -723,7 +1820,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       }, balanceGuardrail))) return;
     let coverageGainUnits = BigInt(0);
     let chosenReplayCoverageEligible: boolean | null = null;
-    if (respectRest) {
+    if (gateRespectRest) {
       const replayCount = getImmediateReplayCountForMask(mask);
       if (!replayCertified || !replayBaseline || !coverageGateCertified || !coverageBaseline ||
         compareSocialNumberVectors(fairness, replayBaseline.fairness) !== 0 || rank !== replayBaseline.rank ||
@@ -738,29 +1835,48 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     if (fairnessDiff > 0) return;
     if (fairnessDiff === 0 && rank > bestRank) return;
     const selections = chosen.map((candidate) => candidate.selection);
+    let priorityStarvationDiff = 0;
     let varietyForMetrics: ReturnType<typeof getSocialVarietyTotals<ActiveMatchmakerV3Player<T>>> | undefined;
+    let socialPriorityMetricsForCandidate: SocialPriorityBatchMetrics | null = null;
     if (fairnessDiff === 0 && rank === bestRank && bestMetrics) {
       const starvationDiff = compareSocialNumberVectors(
         starvation,
         bestMetrics.slice(0, SOCIAL_STARVATION_METRIC_COUNT)
       );
+      priorityStarvationDiff = starvationDiff;
       if (starvationDiff > 0) return;
       let compareNextLayer = starvationDiff === 0;
       if (compareNextLayer) {
         varietyForMetrics = getSocialVarietyTotals(selections, options.sessionMode);
-        const currentScore = getRotationVarietyScore(varietyForMetrics.totalSocialVarietyGain, options.sessionType);
-        const incumbentScore = -bestMetrics[varietyMetricIndex];
-        if (currentScore < incumbentScore) return;
-        compareNextLayer = currentScore === incumbentScore;
+        if (socialPriorityPolicy) {
+          socialPriorityMetricsForCandidate = getSocialPriorityBatchMetrics(chosen, mask, selections, varietyForMetrics);
+          if (bestSocialPriorityMetrics && compareSocialPriorityMetrics(
+            socialPriorityMetricsForCandidate, bestSocialPriorityMetrics, respectRest
+          ) > 0) return;
+        } else {
+          const currentScore = getRotationVarietyScore(varietyForMetrics.totalSocialVarietyGain, options.sessionType);
+          const incumbentScore = -bestMetrics[varietyMetricIndex];
+          if (currentScore < incumbentScore) return;
+          compareNextLayer = currentScore === incumbentScore;
+          if (compareNextLayer && softCadenceMetricIndex !== null && compareSocialNumberVectors(
+            getSoftCadenceVectorForMask(mask),
+            bestMetrics.slice(softCadenceMetricIndex, softCadenceMetricIndex + required)
+          ) > 0) return;
+        }
       }
-      if (compareNextLayer && softCadenceMetricIndex !== null && compareSocialNumberVectors(
-        getSoftCadenceVectorForMask(mask),
-        bestMetrics.slice(softCadenceMetricIndex, softCadenceMetricIndex + required)
-      ) > 0) return;
     }
-    const metrics = metricsFor(selections, mask, varietyForMetrics);
+    if (socialPriorityPolicy && !socialPriorityMetricsForCandidate) {
+      varietyForMetrics ??= getSocialVarietyTotals(selections, options.sessionMode);
+      socialPriorityMetricsForCandidate = getSocialPriorityBatchMetrics(chosen, mask, selections, varietyForMetrics);
+    }
+    const metrics = metricsFor(chosen, selections, mask, varietyForMetrics);
     recordLateTieFrontier(selections, metrics, index);
-    const diff = fairnessDiff || rank - bestRank || (bestMetrics ? compareSocialNumberVectors(metrics, bestMetrics) : -1);
+    const objectiveDiff = socialPriorityPolicy && bestSocialPriorityMetrics && socialPriorityMetricsForCandidate
+      ? priorityStarvationDiff || compareSocialPriorityMetrics(
+          socialPriorityMetricsForCandidate, bestSocialPriorityMetrics, respectRest
+        )
+      : bestMetrics ? compareSocialNumberVectors(metrics, bestMetrics) : -1;
+    const diff = fairnessDiff || rank - bestRank || objectiveDiff;
     if (diff > 0) return;
     if (diff === 0 && best && options.pairingRandomMode !== "side-balanced" &&
       getBatchPairingRandomScore(selections, salts.combined) >= best.totalPairingRandomScore) {
@@ -772,13 +1888,17 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     }
     const selectedWithSnapshots = selections.map((selection) => selection.socialVariety
       ? selection
-      : { ...selection, socialVariety: getSocialVarietySnapshot(selection.partition, context) });
+        : { ...selection, socialVariety: getSocialVarietySnapshot(selection.partition, candidateScoringContext) });
     const summary = { ...summarizeSocialBatch(selectedWithSnapshots, salts, options.sessionMode),
       ...(balancePolicy ? { totalBalanceGap: canonicalSum(selections.map((selection) => selection.balanceGap)) } : {}),
     };
     layoutScheduleIndexes.set(summary, index);
+    if (socialPriorityMetricsForCandidate) {
+      socialPriorityMetricsBySummary.set(summary, socialPriorityMetricsForCandidate);
+    }
     if (diff < 0) {
       best = summary; bestFairness = fairness; bestMetrics = metrics; bestRank = rank; scheduleIndex = index;
+      bestSocialPriorityMetrics = socialPriorityMetricsForCandidate;
       layoutTies = options.pairingRandomMode === "side-balanced" ? [summary] : [];
     } else if (options.pairingRandomMode === "side-balanced") {
       layoutTies.push(summary);
@@ -792,7 +1912,9 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     for (const index of scheduleIndexes) {
       if (profiles[index].courts.length !== options.courtCount) continue;
       const finalScheduleRank = !baselinePhase && !replayBaselinePhase
-        ? (balancePolicy ? baseline?.rank : respectRest ? replayBaseline?.rank : undefined)
+        ? (balancePolicy ? baseline?.rank
+          : gateRespectRest ? replayBaseline?.rank
+            : nearBestSelectionPhase || beneficialRescueSelectionPhase ? nearBestRotationClass?.rank : undefined)
         : undefined;
       if (finalScheduleRank !== undefined && profiles[index].rank !== finalScheduleRank) continue;
       const lists = profiles[index].courts.map((constraints) => {
@@ -837,6 +1959,40 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           }
           return eligible.sort(compareCandidatesForCoverage);
         }
+        if (nearBestFrontierPhase && socialCourtmateBeneficialRescue) {
+          // The G/T frontier depends on the quartet mask and court type, not
+          // the team partition. Keep the best T representative per mask and
+          // defer all entropy/layout scoring until the exact selection pass.
+          const frontierCandidates = balanceGuardrail
+            ? candidates.filter((candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
+            : candidates;
+          const bestByMask = new Map<bigint, Candidate<ActiveMatchmakerV3Player<T>>>();
+          for (const candidate of frontierCandidates) {
+            const candidateMetrics = getCandidateSocialPriorityMetrics(candidate);
+            const incumbent = bestByMask.get(candidate.mask);
+            if (!incumbent || candidateMetrics.rollingMatchTypeGainUnits >
+              getCandidateSocialPriorityMetrics(incumbent).rollingMatchTypeGainUnits) {
+              bestByMask.set(candidate.mask, candidate);
+            }
+          }
+          return [...bestByMask.values()].sort((left, right) => {
+            const classDiff = compareCandidateStrongerClass(left, right);
+            if (classDiff !== 0) return classDiff;
+            const leftMetrics = getCandidateSocialPriorityMetrics(left);
+            const rightMetrics = getCandidateSocialPriorityMetrics(right);
+            return rightMetrics.newCourtmatePairs - leftMetrics.newCourtmatePairs ||
+              (leftMetrics.rollingMatchTypeGainUnits > rightMetrics.rollingMatchTypeGainUnits ? -1
+                : leftMetrics.rollingMatchTypeGainUnits < rightMetrics.rollingMatchTypeGainUnits ? 1 : 0);
+          });
+        }
+        if (beneficialRescueSelectionPhase) {
+          // Keep the admitted list in original generation order until strict
+          // same-quartet, same-T Pareto losers are removed. Exact ties remain
+          // available for the existing batch-hash tie rules.
+          return balanceGuardrail
+            ? candidates.filter((candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
+            : candidates;
+        }
         // Every candidate inside the fixed balance envelope and certified
         // replay/coverage gate remains visible to the entropy/soft search.
         const eligible = balanceGuardrail
@@ -846,9 +2002,35 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           if (deadline !== Infinity && Date.now() >= deadline) { interrupted = true; break; }
           scoreVariety(candidate);
         }
-        return eligible.sort(compareCandidatesForVariety);
+        return eligible.sort(socialCourtmateNearBest ? compareCandidatesForSocialNearBest : compareCandidatesForVariety);
       });
       if (interrupted) break;
+      if (beneficialRescueSelectionPhase) {
+        const retainedLists = filterDominatedBeneficialPartitions(lists);
+        if (interrupted) break;
+        for (const candidates of retainedLists) {
+          for (const candidate of candidates) {
+            if (deadline !== Infinity && Date.now() >= deadline) {
+              interrupted = true;
+              break;
+            }
+            scoreVariety(candidate);
+            // Do not carry a ranking cached before entropy was materialized
+            // into the exact selection pass.
+            candidate.priorityRankingMetrics = undefined;
+          }
+          if (interrupted) break;
+          candidates.sort(compareCandidatesForSocialBeneficialRescue);
+        }
+        if (interrupted) break;
+        lists.splice(0, lists.length, ...retainedLists);
+      }
+      const identicalPhysicalCourts = socialCourtmateBeneficialRescue && options.courtCount > 2 &&
+        profiles[index].courts.length === options.courtCount &&
+        profiles[index].courts.every((court) => court === profiles[index].courts[0]);
+      const candidateOrdinal = identicalPhysicalCourts
+        ? new Map(lists[0].map((candidate, ordinal) => [candidate, ordinal]))
+        : null;
       let coverageProfileUpperBound: bigint | null = null;
       if (coverageBaselinePhase) {
         let upper = BigInt(0);
@@ -882,24 +2064,37 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           ...available.filter((player) => !locked.has(player.userId)).sort(compareOptimisticPlayers)
             .slice(0, slots - mandatory.length)];
         const fairnessBound = getSocialFairnessVector(optimistic);
-        const incumbentFairness = baselinePhase ? baseline?.fairness
+        const incumbentFairness = nearBestFrontierPhase ? nearBestRotationClass?.fairness
+          : baselinePhase ? baseline?.fairness
           : replayBaselinePhase ? replayBaseline?.fairness
-            : respectRest ? replayBaseline?.fairness : bestFairness ?? baseline?.fairness;
+          : gateRespectRest ? replayBaseline?.fairness : bestFairness ?? baseline?.fairness;
         if (incumbentFairness && compareSocialNumberVectors(fairnessBound, incumbentFairness) > 0) { pruned++; return; }
+        const previousOrdinal = candidateOrdinal && chosen.length
+          ? candidateOrdinal.get(chosen[chosen.length - 1]!) ?? null
+          : null;
+        const compatibleByCourt = new Map<number, Candidate<ActiveMatchmakerV3Player<T>>[]>();
+        for (const other of remaining) {
+          const options = socialCourtmateBeneficialRescue
+            ? getCompatibleCandidates(lists[other], used, previousOrdinal, candidateOrdinal)
+            : lists[other].filter((candidate) => (candidate.mask & used) === BigInt(0));
+          compatibleByCourt.set(other, options);
+        }
         let court = remaining[0];
-        let compatible = lists[court].filter((candidate) => (candidate.mask & used) === BigInt(0));
+        let compatible = compatibleByCourt.get(court)!;
         for (const other of remaining.slice(1)) {
-          const options = lists[other].filter((candidate) => (candidate.mask & used) === BigInt(0));
+          const options = compatibleByCourt.get(other)!;
           if (options.length < compatible.length) { court = other; compatible = options; }
         }
         if (!compatible.length) { pruned++; return; }
         // Relax overlaps for an upper bound on achievable variety gain.
-        const incumbentRank = baselinePhase ? baseline?.rank
+        const incumbentRank = nearBestFrontierPhase ? nearBestRotationClass?.rank
+          : baselinePhase ? baseline?.rank
           : replayBaselinePhase ? replayBaseline?.rank
-            : respectRest ? replayBaseline?.rank : baseline?.rank ?? bestRank;
-        const incumbentStarvation = baselinePhase ? baseline?.starvation
+            : gateRespectRest ? replayBaseline?.rank : baseline?.rank ?? bestRank;
+        const incumbentStarvation = nearBestFrontierPhase ? nearBestRotationClass?.starvation
+          : baselinePhase ? baseline?.starvation
           : replayBaselinePhase ? replayBaseline?.starvation
-            : respectRest ? replayBaseline?.starvation
+              : gateRespectRest ? replayBaseline?.starvation
               : bestMetrics?.slice(0, SOCIAL_STARVATION_METRIC_COUNT) ?? baseline?.starvation;
         if (incumbentFairness && compareSocialNumberVectors(fairnessBound, incumbentFairness) === 0 && profiles[index].rank === incumbentRank && incumbentStarvation) {
           const starvationBound = getStarvationLowerBound(used, slots);
@@ -927,7 +2122,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
               if (getOptimisticCoverageGainUnits(chosen, remaining, used, lists) <= coverageBaseline.coverageGainUnits) {
                 pruned++; return;
               }
-            } else if (bestMetrics) {
+            } else if (bestMetrics && !socialPriorityPolicy) {
               const getOptimisticEntropyScore = () => {
                 const facets = entropyFacets;
                 const addendsByFacet = new Map(facets.map((facet) => [facet, [] as number[]]));
@@ -959,7 +2154,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
                 const roundoff = Number.EPSILON * operationCount * absoluteAddendSum;
                 return getRotationVarietyScore(rawUpperBound + roundoff, options.sessionType);
               };
-              if (respectRest && replayBaseline && allowedImmediateReplayCount !== null) {
+              if (gateRespectRest && replayBaseline && allowedImmediateReplayCount !== null) {
                 const optimisticReplayCount = getOptimisticImmediateReplayCount(used, slots);
                 if (optimisticReplayCount > allowedImmediateReplayCount) { pruned++; return; }
                 if (coverageGateCertified && coverageBaseline &&
@@ -978,7 +2173,38 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
             }
           }
         }
+        if (socialCourtmateBeneficialRescue) {
+          let prefixCertified = false;
+          if (shouldPruneBeneficialPriorityBranch(
+            chosen,
+            used,
+            remaining,
+            lists,
+            index,
+            compatibleByCourt,
+            () => { prefixCertified = true; }
+          )) {
+            pruned++;
+            return;
+          }
+          if (prefixCertified && bestSocialPriorityMetrics) {
+            for (const other of remaining) {
+              compatibleByCourt.set(other, compatibleByCourt.get(other)!.filter((candidate) =>
+                candidate.selection.balanceGap <= bestSocialPriorityMetrics!.maxBalanceGap
+              ));
+            }
+            compatible = compatibleByCourt.get(court)!;
+            if (!compatible.length) { pruned++; return; }
+          }
+        }
         for (const candidate of compatible) {
+          if (candidateOrdinal && chosen.length > 0) {
+            const previousOrdinal = candidateOrdinal.get(chosen[chosen.length - 1]);
+            const nextOrdinal = candidateOrdinal.get(candidate);
+            // Identical physical courts produce the same batch under any
+            // permutation. Keep the first canonical candidate ordering only.
+            if (previousOrdinal !== undefined && nextOrdinal !== undefined && nextOrdinal <= previousOrdinal) continue;
+          }
           const ordered = [...chosen, candidate];
           // Return selections in physical profile order, even when search chooses a different court.
           assignments[court] = candidate;
@@ -999,26 +2225,52 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         }
       } else if (options.courtCount === 2) {
         const identical = profiles[index].courts[0] === profiles[index].courts[1];
-        for (let a = 0; a < lists[0].length; a++) {
-          if (coverageProfileOptimal()) break;
-          if (baselinePhase && baselineGlobalRotationClass && baseline &&
-            lists[0][a].selection.balanceGap > baseline.maxBalanceGap) { pruned++; continue; }
-          for (let b = identical ? a + 1 : 0; b < lists[1].length; b++) {
+        if (socialCourtmateBeneficialRescue && !baselinePhase) {
+          for (let a = 0; a < lists[0].length; a++) {
             if (outOfBudget()) break;
-            const left = lists[0][a], right = lists[1][b];
-            if (baselinePhase && baselineGlobalRotationClass && baseline) {
-              const maxGap = Math.max(left.selection.balanceGap, right.selection.balanceGap);
-              const totalGap = left.selection.balanceGap + right.selection.balanceGap;
-              if (maxGap > baseline.maxBalanceGap ||
-                (maxGap === baseline.maxBalanceGap && totalGap > baseline.totalBalanceGap)) { pruned++; continue; }
+            const left = lists[0][a];
+            const suffixStart = identical ? a + 1 : 0;
+            const rightCandidates = lists[1]
+              .slice(suffixStart)
+              .filter((candidate) => (left.mask & candidate.mask) === BigInt(0));
+            explored++;
+            phaseExplored++;
+            if (!rightCandidates.length) { pruned++; continue; }
+            if (shouldPruneBeneficialTwoCourtSuffix([left], left.mask, index, rightCandidates, lists)) {
+              pruned++;
+              continue;
             }
-            if (!baselinePhase) { explored++; phaseExplored++; }
-            if ((left.mask & right.mask) !== BigInt(0)) continue;
-            if (baselinePhase) { explored++; phaseExplored++; }
-            consider([left, right], left.mask | right.mask, index);
-            if (coverageProfileOptimal()) break;
+            for (const right of rightCandidates) {
+              if (outOfBudget()) break;
+              explored++;
+              phaseExplored++;
+              consider([left, right], left.mask | right.mask, index);
+              if (coverageProfileOptimal()) break;
+            }
+            if (interrupted || coverageProfileOptimal()) break;
           }
-          if (interrupted || (baselinePhase && baselineProven) || (replayBaselinePhase && replayBaselineProven) || coverageProfileOptimal()) break;
+        } else {
+          for (let a = 0; a < lists[0].length; a++) {
+            if (coverageProfileOptimal()) break;
+            if (baselinePhase && baselineGlobalRotationClass && baseline &&
+              lists[0][a].selection.balanceGap > baseline.maxBalanceGap) { pruned++; continue; }
+            for (let b = identical ? a + 1 : 0; b < lists[1].length; b++) {
+              if (outOfBudget()) break;
+              const left = lists[0][a], right = lists[1][b];
+              if (baselinePhase && baselineGlobalRotationClass && baseline) {
+                const maxGap = Math.max(left.selection.balanceGap, right.selection.balanceGap);
+                const totalGap = left.selection.balanceGap + right.selection.balanceGap;
+                if (maxGap > baseline.maxBalanceGap ||
+                  (maxGap === baseline.maxBalanceGap && totalGap > baseline.totalBalanceGap)) { pruned++; continue; }
+              }
+              if (!baselinePhase) { explored++; phaseExplored++; }
+              if ((left.mask & right.mask) !== BigInt(0)) continue;
+              if (baselinePhase) { explored++; phaseExplored++; }
+              consider([left, right], left.mask | right.mask, index);
+              if (coverageProfileOptimal()) break;
+            }
+            if (interrupted || (baselinePhase && baselineProven) || (replayBaselinePhase && replayBaselineProven) || coverageProfileOptimal()) break;
+          }
         }
       } else visit([], BigInt(0), profiles[index].courts.map((_, court) => court));
       if (interrupted || (baselinePhase && baselineProven) || (replayBaselinePhase && replayBaselineProven)) break;
@@ -1089,13 +2341,90 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     if (seed) {
       seed.forEach(scoreVariety);
       const seedMask = seed.reduce((mask, candidate) => mask | candidate.mask, BigInt(0));
-      const seedIndex = requestedSeedIndex ?? (respectRest
+      const seedIndex = requestedSeedIndex ?? (gateRespectRest
         ? coverageBaseline?.index ?? replayBaseline?.index ?? 0
         : balancePolicy ? baseline?.index ?? 0 : 0);
       consider(seed, seedMask, seedIndex);
     }
     runSearch();
     varietyLimitReached = interrupted;
+  };
+  const runCourtmateNearBestPolicy = () => {
+    replayBaselinePhase = false;
+    coverageBaselinePhase = false;
+    baselinePhase = false;
+    nearBestFrontierPhase = true;
+    nearBestSelectionPhase = false;
+    startNextPhase();
+    varietyStarted = true;
+    // First prove the strongest fairness/schedule/starvation class, then
+    // independently measure Gmax and the maximum signed T at exactly Gmax.
+    // This pass intentionally does not use any strict C/profile/T winner
+    // shortcut: every candidate in the strongest class contributes to the
+    // frontier proof.
+    runSearch();
+    nearBestFrontierLimitReached = interrupted;
+    nearBestFrontierCertified = !interrupted && nearBestRotationClass !== null &&
+      nearBestCourtmateGainMaximum !== null && bestRollingMatchTypeGainAtGmaxUnits !== null;
+    if (!nearBestFrontierCertified) {
+      varietyLimitReached = interrupted;
+      nearBestPriorityCertified = false;
+      return;
+    }
+
+    const frontierClass = nearBestRotationClass!;
+    best = null;
+    bestFairness = [...frontierClass.fairness];
+    bestMetrics = [...frontierClass.starvation];
+    bestSocialPriorityMetrics = null;
+    scheduleIndex = null;
+    bestRank = frontierClass.rank;
+    layoutTies = [];
+    lateTieFrontier = null;
+    nearBestFrontierPhase = false;
+    nearBestSelectionPhase = true;
+    startNextPhase();
+    runSearch();
+    nearBestSelectionLimitReached = interrupted;
+    varietyLimitReached = interrupted;
+    nearBestPriorityCertified = nearBestFrontierCertified && !nearBestSelectionLimitReached && Boolean(best);
+  };
+  const runCourtmateBeneficialRescuePolicy = () => {
+    replayBaselinePhase = false;
+    coverageBaselinePhase = false;
+    baselinePhase = false;
+    nearBestFrontierPhase = true;
+    nearBestSelectionPhase = false;
+    beneficialRescueSelectionPhase = false;
+    startNextPhase();
+    varietyStarted = true;
+    runSearch();
+    nearBestFrontierLimitReached = interrupted;
+    nearBestFrontierCertified = !interrupted && nearBestRotationClass !== null &&
+      nearBestCourtmateGainMaximum !== null && bestRollingMatchTypeGainAtGmaxUnits !== null;
+    if (!nearBestFrontierCertified) {
+      varietyLimitReached = interrupted;
+      nearBestPriorityCertified = false;
+      return;
+    }
+
+    const frontierClass = nearBestRotationClass!;
+    best = null;
+    bestFairness = [...frontierClass.fairness];
+    bestMetrics = [...frontierClass.starvation];
+    bestSocialPriorityMetrics = null;
+    scheduleIndex = null;
+    bestRank = frontierClass.rank;
+    layoutTies = [];
+    lateTieFrontier = null;
+    nearBestFrontierPhase = false;
+    nearBestSelectionPhase = false;
+    beneficialRescueSelectionPhase = true;
+    startNextPhase();
+    runSearch();
+    nearBestSelectionLimitReached = interrupted;
+    varietyLimitReached = interrupted;
+    nearBestPriorityCertified = nearBestFrontierCertified && !nearBestSelectionLimitReached && Boolean(best);
   };
 
   // Balanced first certifies its unchanged global balance baseline/envelope.
@@ -1128,7 +2457,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       coverageGateStatus = respectRest ? "NO_SELECTION" : "DISABLED";
       coverageGateCertified = !respectRest;
     }
-  } else if (respectRest) {
+  } else if (gateRespectRest) {
     // Social certifies its strongest class and minimum whole-batch replay
     // count before freezing the shared +1 admissibility envelope.
     runReplayBaselinePhase();
@@ -1147,15 +2476,18 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     replayCertified = true;
     coverageGateStatus = "DISABLED";
     coverageGateCertified = true;
-    runVarietyPhase(null);
+    if (socialCourtmateNearBest) runCourtmateNearBestPolicy();
+    else if (socialCourtmateBeneficialRescue) runCourtmateBeneficialRescuePolicy();
+    else runVarietyPhase(null);
   }
 
-  const searchLimitReached = baselineLimitReached || replayBaselineLimitReached || coverageBaselineLimitReached || varietyLimitReached;
+  const searchLimitReached = baselineLimitReached || replayBaselineLimitReached || coverageBaselineLimitReached ||
+    varietyLimitReached || nearBestFrontierLimitReached || nearBestSelectionLimitReached;
   const selectedRotationClass = Boolean(best && bestFairness);
   const selectedReplayBaseline = replayBaseline as ReplayBaseline | null;
   const fairnessCertified = balancePolicy
     ? balanceCertified
-    : respectRest
+    : gateRespectRest
       ? Boolean(selectedReplayBaseline && (
           !replayBaselineLimitReached ||
           compareSocialNumberVectors(selectedReplayBaseline.fairness, globalFairnessBound) === 0
@@ -1163,17 +2495,17 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       : selectedRotationClass && (!varietyLimitReached || compareSocialNumberVectors(bestFairness!, globalFairnessBound) === 0);
   const selectedRankCertified = balancePolicy
     ? balanceCertified
-    : respectRest
+    : gateRespectRest
       ? Boolean(selectedReplayBaseline && (
           !replayBaselineLimitReached || selectedReplayBaseline.rank === lowestScheduleRank
         ))
       : selectedRotationClass && (!varietyLimitReached || bestRank === lowestScheduleRank);
   const selectedMetrics = bestMetrics as number[] | null;
   const selectedStarvation = selectedMetrics?.slice(0, SOCIAL_STARVATION_METRIC_COUNT) ??
-    (respectRest ? selectedReplayBaseline?.starvation : null);
+    (gateRespectRest ? selectedReplayBaseline?.starvation : null);
   const starvationCertified = balancePolicy
     ? balanceCertified
-    : respectRest
+    : gateRespectRest
       ? Boolean(selectedReplayBaseline && fairnessCertified && selectedRankCertified && (
           !replayBaselineLimitReached ||
           compareSocialNumberVectors(selectedReplayBaseline.starvation, globalStarvationBound) === 0
@@ -1181,11 +2513,11 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       : selectedRotationClass && selectedRankCertified &&
         (!varietyLimitReached || Boolean(selectedStarvation && compareSocialNumberVectors(selectedStarvation, globalStarvationBound) === 0));
   if (!fairnessCertified || !selectedRankCertified || !starvationCertified ||
-    (respectRest && (!replayCertified || !coverageGateCertified)) || (balancePolicy && !balanceCertified)) {
+    (gateRespectRest && (!replayCertified || !coverageGateCertified)) || (balancePolicy && !balanceCertified)) {
     best = null;
     scheduleIndex = null;
   }
-  if (respectRest && replayCertified && selectedReplayBaseline) {
+  if (gateRespectRest && replayCertified && selectedReplayBaseline) {
     allowedImmediateReplayCount = selectedReplayBaseline.replayCount + 1;
   }
   if (best && layoutTies.length > 1) {
@@ -1220,28 +2552,31 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     ? getImmediateReplayCount(bestSelection.selections.flatMap((court) => court.players))
     : null;
   const chosenCoverageGainUnits = bestSelection
-    ? coverageScorer.getBatchGainUnits(bestSelection.selections.map((court) => court.partition))
+    ? socialPriorityPolicy ? null : coverageScorer.getBatchGainUnits(bestSelection.selections.map((court) => court.partition))
     : null;
   const selectedCoverageBaseline = coverageBaseline as CoverageBaseline | null;
   const chosenImmediateCoverageGain = chosenCoverageGainUnits === null
     ? null : coverageScorer.toNormalizedScore(chosenCoverageGainUnits);
-  const chosenReplayCoverageEligible = chosenImmediateReplayCount === null || !respectRest ||
+  const chosenReplayCoverageEligible = chosenImmediateReplayCount === null || !gateRespectRest ||
     !coverageGateCertified || !selectedCoverageBaseline || bestImmediateReplayCount === null
     ? null
     : chosenImmediateReplayCount === bestImmediateReplayCount ||
       (chosenImmediateReplayCount === bestImmediateReplayCount + 1 && chosenCoverageGainUnits! > selectedCoverageBaseline.coverageGainUnits);
   const varietyOptimal = Boolean(selection && varietyStarted && !varietyLimitReached &&
     fairnessCertified && selectedRankCertified && starvationCertified &&
-    (!respectRest || (replayCertified && coverageGateCertified)) && (!balancePolicy || balanceCertified));
+    (!gateRespectRest || (replayCertified && coverageGateCertified)) && (!balancePolicy || balanceCertified));
+  const selectedSocialPriorityMetrics = best
+    ? socialPriorityMetricsBySummary.get(best) ?? bestSocialPriorityMetrics as SocialPriorityBatchMetrics | null
+    : null;
   const finalFailureReason = selection ? null
-    : searchLimitReached || (respectRest && replayEnvelopeStatus === "UNCERTIFIED")
+    : searchLimitReached || (gateRespectRest && replayEnvelopeStatus === "UNCERTIFIED")
       ? "SEARCH_LIMIT_REACHED"
       : active.length < required || required <= 0 ? "INSUFFICIENT_PLAYERS"
         : !locksFeasible ? "LOCKED_PLAYERS_CANNOT_ALL_FIT"
           : balancePolicy && options.sessionMode === SessionMode.MIXICANO && validPartitions === 0
             ? "NO_VALID_MIXED_QUARTETS" : "NOT_ENOUGH_NON_OVERLAPPING_COURTS";
   return {
-    selection, scheduleIndex, fairnessCertified, starvationCertified,
+    selection, scheduleIndex, scheduleCertified: selectedRankCertified, fairnessCertified, starvationCertified,
     bestImmediateReplayCount, allowedImmediateReplayCount, chosenImmediateReplayCount,
     replayCertified, replayEnvelopeStatus,
     bestMinimumReplayCoverageGain, chosenImmediateCoverageGain,
@@ -1249,6 +2584,29 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     coverageGainMetric,
     varietyOptimal,
     ...(balancePolicy ? { balanceCertified } : {}),
+    ...(socialPriorityPolicy ? {
+      socialPriorityPolicy,
+      priorityCertified: socialCourtmateEnvelopePolicy
+        ? Boolean(varietyOptimal && nearBestPriorityCertified)
+        : varietyOptimal,
+      chosenNewCourtmatePairCount: selectedSocialPriorityMetrics?.newCourtmatePairs ?? null,
+      chosenPostBatchCourtmateCoverage: selectedSocialPriorityMetrics
+        ? [...selectedSocialPriorityMetrics.courtmateCoverageProfile].map((entry) => ({ ...entry }))
+        : null,
+      chosenRollingMatchTypeGain: selectedSocialPriorityMetrics && socialPriorityScorer
+        ? socialPriorityScorer.toNormalizedRollingTypeGain(selectedSocialPriorityMetrics.rollingMatchTypeGainUnits)
+        : null,
+      ...(socialCourtmateEnvelopePolicy ? {
+        courtmateGainMaximumCertified: nearBestFrontierCertified,
+        courtmateGainMaximum: nearBestFrontierCertified ? nearBestCourtmateGainMaximum : null,
+        chosenCourtmateGainDeficit: nearBestFrontierCertified && selectedSocialPriorityMetrics && nearBestCourtmateGainMaximum !== null
+          ? nearBestCourtmateGainMaximum - selectedSocialPriorityMetrics.newCourtmatePairs
+          : null,
+        bestRollingMatchTypeGainAtGmax: nearBestFrontierCertified && bestRollingMatchTypeGainAtGmaxUnits !== null && socialPriorityScorer
+          ? socialPriorityScorer.toNormalizedRollingTypeGain(bestRollingMatchTypeGainAtGmaxUnits)
+          : null,
+      } : {}),
+    } : {}),
     debug: {
       eligiblePlayerIds: active.map((player) => player.userId), availableCandidateCount: active.length,
       consideredCandidateCount: active.length, candidateCap: null,
@@ -1278,7 +2636,30 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       bestMinimumReplayCoverageGain, chosenImmediateCoverageGain,
       coverageGateCertified, coverageGateUpperBoundCertified, coverageGateStatus, chosenReplayCoverageEligible,
       coverageGainMetric,
-      fairnessCertified, starvationCertified, varietyOptimal,
+      fairnessCertified, scheduleCertified: selectedRankCertified, starvationCertified, varietyOptimal,
+      ...(socialPriorityPolicy ? {
+        socialPriorityPolicy,
+        priorityCertified: socialCourtmateEnvelopePolicy
+          ? Boolean(varietyOptimal && nearBestPriorityCertified)
+          : varietyOptimal,
+        chosenNewCourtmatePairCount: selectedSocialPriorityMetrics?.newCourtmatePairs ?? null,
+        chosenPostBatchCourtmateCoverage: selectedSocialPriorityMetrics
+          ? [...selectedSocialPriorityMetrics.courtmateCoverageProfile].map((entry) => ({ ...entry }))
+          : null,
+        chosenRollingMatchTypeGain: selectedSocialPriorityMetrics && socialPriorityScorer
+          ? socialPriorityScorer.toNormalizedRollingTypeGain(selectedSocialPriorityMetrics.rollingMatchTypeGainUnits)
+          : null,
+        ...(socialCourtmateEnvelopePolicy ? {
+          courtmateGainMaximumCertified: nearBestFrontierCertified,
+          courtmateGainMaximum: nearBestFrontierCertified ? nearBestCourtmateGainMaximum : null,
+          chosenCourtmateGainDeficit: nearBestFrontierCertified && selectedSocialPriorityMetrics && nearBestCourtmateGainMaximum !== null
+            ? nearBestCourtmateGainMaximum - selectedSocialPriorityMetrics.newCourtmatePairs
+            : null,
+          bestRollingMatchTypeGainAtGmax: nearBestFrontierCertified && bestRollingMatchTypeGainAtGmaxUnits !== null && socialPriorityScorer
+            ? socialPriorityScorer.toNormalizedRollingTypeGain(bestRollingMatchTypeGainAtGmaxUnits)
+            : null,
+        } : {}),
+      } : {}),
       ...(balancePolicy ? { balanceCertified, balanceGuardrail, fairnessVector: bestFairness ?? undefined, schedulingRank: bestRank === Infinity ? undefined : bestRank, finalTieBreak } : {}),
       socialIdealRestGap: idealRestGap,
       availableOverduePlayerCount: starvationSummary?.availableOverdueCount ?? overdueAvailablePlayers.length,

@@ -181,6 +181,21 @@ const crossoverSelection = {
   matchmakingReasonJson: null,
 };
 
+const socialCandidateDecision = {
+  version: 1,
+  requestedPolicy: "courtmate-beneficial-rescue",
+  appliedPolicy: "courtmate-beneficial-rescue",
+  outcome: "candidate-exact",
+  reasonCodes: [],
+};
+
+function socialQueueSelection() {
+  return {
+    ...crossoverSelection,
+    matchmakingReasonJson: JSON.stringify({ socialPolicyDecision: socialCandidateDecision }),
+  };
+}
+
 describe("queued player-group lifecycle", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
@@ -282,6 +297,71 @@ describe("queued player-group lifecycle", () => {
       }),
     });
     expect(result.isAutomatic).toBe(true);
+  });
+
+  it("routes automatic Social queue creation through the beneficial-rescue gate and persists its outcome", async () => {
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({
+      poolsEnabled: false,
+      type: SessionType.SOCIAL_MIX,
+      mode: SessionMode.MIXICANO,
+    });
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    mocks.selectSingleCourtMatchRespectingSkips.mockReturnValue({
+      selection: socialQueueSelection(),
+      consumedSkipUserIds: [],
+    });
+    const socialSession = sessionRecord({
+      type: SessionType.SOCIAL_MIX,
+      mode: SessionMode.MIXICANO,
+      poolsEnabled: false,
+    });
+
+    const result = await createQueuedMatchForSession(socialSession);
+
+    const selectorOptions = mocks.selectSingleCourtMatchRespectingSkips.mock.calls[0]?.[0] as {
+      sessionData: { type: SessionType };
+      socialPriorityPolicy?: string;
+    };
+    expect(selectorOptions.sessionData.type).toBe(SessionType.SOCIAL_MIX);
+    expect(selectorOptions.socialPriorityPolicy).toBe("courtmate-beneficial-rescue");
+    const metadata = JSON.parse(tx.queuedMatch.create.mock.calls[0][0].data.matchmakingReasonJson);
+    expect(metadata.socialPolicyDecision).toEqual(socialCandidateDecision);
+    expect(result.isAutomatic).toBe(true);
+  });
+
+  it("uses the same Social acceptance gate when rebuilding an automatic queue", async () => {
+    const oldQueue = queueRecord({ isAutomatic: true });
+    const socialSession = sessionRecord({
+      type: SessionType.SOCIAL_MIX,
+      mode: SessionMode.MIXICANO,
+      poolsEnabled: false,
+      queuedMatch: oldQueue,
+    });
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({
+      poolsEnabled: false,
+      type: SessionType.SOCIAL_MIX,
+      mode: SessionMode.MIXICANO,
+    });
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    mocks.loadSessionRecordById.mockResolvedValue(socialSession);
+    mocks.selectSingleCourtMatchRespectingSkips.mockReturnValue({
+      selection: socialQueueSelection(),
+      consumedSkipUserIds: [],
+    });
+
+    const result = await tryRebuildAutomaticQueuedMatchForSessionId("session-1");
+
+    const selectorOptions = mocks.selectSingleCourtMatchRespectingSkips.mock.calls[0]?.[0] as {
+      sessionData: { type: SessionType };
+      socialPriorityPolicy?: string;
+    };
+    expect(selectorOptions.sessionData.type).toBe(SessionType.SOCIAL_MIX);
+    expect(selectorOptions.socialPriorityPolicy).toBe("courtmate-beneficial-rescue");
+    const metadata = JSON.parse(tx.queuedMatch.update.mock.calls[0][0].data.matchmakingReasonJson);
+    expect(metadata.socialPolicyDecision).toEqual(socialCandidateDecision);
+    expect(result?.isAutomatic).toBe(true);
   });
 
   it("rejects an automatic queue when a selected player's group changes before persistence", async () => {

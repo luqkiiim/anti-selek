@@ -68,6 +68,10 @@ export interface V3BalanceGuardrail {
 }
 
 export type V3FinalTieBreak = "EXACT_REMATCH" | "RANDOM" | "DETERMINISTIC";
+export type SocialPriorityPolicy =
+  | "courtmate-first"
+  | "courtmate-near-best"
+  | "courtmate-beneficial-rescue";
 
 export type ActiveMatchmakerV3Player<
   T extends MatchmakerV3Player = MatchmakerV3Player,
@@ -218,13 +222,14 @@ export interface V3SingleCourtDebug {
   replayEnvelopeStatus?: V3ReplayEnvelopeStatus;
   bestMinimumReplayCoverageGain?: number | null;
   chosenImmediateCoverageGain?: number | null;
-  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321";
+  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321" | "rolling-equal" | "social-horizon-3211";
   coverageGateCertified?: boolean;
   coverageGateUpperBoundCertified?: boolean;
   coverageGateStatus?: V3CoverageGateStatus;
   chosenReplayCoverageEligible?: boolean | null;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
+  scheduleCertified?: boolean;
   starvationCertified?: boolean;
   balanceCertified?: boolean;
   balanceGuardrail?: V3BalanceGuardrail;
@@ -238,6 +243,15 @@ export interface V3SingleCourtDebug {
   highestLeftOutRestTurns?: number | null;
   totalLeftOutRestTurns?: number | null;
   varietyOptimal?: boolean;
+  socialPriorityPolicy?: SocialPriorityPolicy;
+  priorityCertified?: boolean;
+  chosenNewCourtmatePairCount?: number | null;
+  chosenPostBatchCourtmateCoverage?: SocialCourtmateCoverageEntry[] | null;
+  chosenRollingMatchTypeGain?: number | null;
+  courtmateGainMaximumCertified?: boolean;
+  courtmateGainMaximum?: number | null;
+  chosenCourtmateGainDeficit?: number | null;
+  bestRollingMatchTypeGainAtGmax?: number | null;
   searchLimitReached?: boolean;
   failureReason?: V3BatchFailureReason | null;
 }
@@ -329,13 +343,23 @@ export interface V3BatchDebug {
   replayEnvelopeStatus: V3ReplayEnvelopeStatus;
   bestMinimumReplayCoverageGain?: number | null;
   chosenImmediateCoverageGain?: number | null;
-  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321";
+  coverageGainMetric?: "legacy-four-facet" | "social-horizon-321" | "rolling-equal" | "social-horizon-3211";
   coverageGateCertified?: boolean;
   coverageGateUpperBoundCertified?: boolean;
   coverageGateStatus?: V3CoverageGateStatus;
   chosenReplayCoverageEligible?: boolean | null;
+  socialPriorityPolicy?: SocialPriorityPolicy;
+  priorityCertified?: boolean;
+  chosenNewCourtmatePairCount?: number | null;
+  chosenPostBatchCourtmateCoverage?: SocialCourtmateCoverageEntry[] | null;
+  chosenRollingMatchTypeGain?: number | null;
+  courtmateGainMaximumCertified?: boolean;
+  courtmateGainMaximum?: number | null;
+  chosenCourtmateGainDeficit?: number | null;
+  bestRollingMatchTypeGainAtGmax?: number | null;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
+  scheduleCertified?: boolean;
   starvationCertified?: boolean;
   balanceCertified?: boolean;
   balanceGuardrail?: V3BalanceGuardrail;
@@ -353,6 +377,12 @@ export interface V3BatchDebug {
 
 export type V3ReplayEnvelopeStatus = "DISABLED" | "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION";
 export type V3CoverageGateStatus = "DISABLED" | "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION";
+
+export interface SocialCourtmateCoverageEntry {
+  userId: string;
+  covered: number;
+  possible: number;
+}
 
 export interface V3BatchResult<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,

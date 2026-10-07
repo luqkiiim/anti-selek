@@ -1,0 +1,20 @@
+{
+  "purpose": "Pre-scalability engine and transitive local source dependency control",
+  "engineSha256": "40538cb672c3a8cef256192b114dffb28bc853f8c1aa28790af40775f79b64e6",
+  "files": {
+    "src/lib/matchmaking/arrivalPriority.ts": "c8516122596b37a0401b641b4eafe7d7a7945fe01d580d24cb6c5fb710170bca",
+    "src/lib/matchmaking/v3/balance.ts": "7c2d2cfe4c494bc31816976ec0fe7386890daa735fd3a9e0adda6e4a49e32c05",
+    "src/lib/matchmaking/v3/balanceGuardrail.ts": "b2d1fa82dda134ffde5d2dc66c3ecc8fdbcc63c848cde24584164939bcbec173",
+    "src/lib/matchmaking/v3/consecutive.ts": "c2effd96cf6e06d6a7d11f7c89c5bfd72968e9611aa10c640893fee417fe8a8d",
+    "src/lib/matchmaking/v3/fairness.ts": "d5b94b17998d0c18ecd14ae575c644efe14c919dbcff5d116f6be7785903d401",
+    "src/lib/matchmaking/v3/rematch.ts": "f56a1b8ea3af2939c80d4b07605a2292c2f7d47c8b7063398e6aba4237328b1c",
+    "src/lib/matchmaking/v3/scoring.ts": "4add50e2d7635190a803869a651fb0e9b930a24bc41790cf9b87abb036ce93b2",
+    "src/lib/matchmaking/v3/socialBatch.ts": "40538cb672c3a8cef256192b114dffb28bc853f8c1aa28790af40775f79b64e6",
+    "src/lib/matchmaking/v3/socialCourtmatePriority.ts": "0fc292dd569846e1a828227d45ca4b4e2e0462b45fdf4dc6c127dc4b1189f51f",
+    "src/lib/matchmaking/v3/socialHorizonCoverageScoring.ts": "7654952de230db4672a053a17f244f047bf99450f73ae6aeafe56ce8a7b3ddc9",
+    "src/lib/matchmaking/v3/socialRollingVariety.ts": "cf58e5dbf6758906f80f4059984c2a4c6f773652905b345d4a33e230e7eb3103",
+    "src/lib/matchmaking/v3/socialVariety.ts": "d6a929333c1de1d9c2e7999e54ec7460bfe47b593b0a70e13d9e76cdc6d2cc3c",
+    "src/lib/matchmaking/v3/types.ts": "ffe23fd256f643df1667851bb5019dc63f887603492c37f62f537b77916c8fa4",
+    "src/types/enums.ts": "b95d55e93146ddded8a3894a54a16db5cab16e88a9e968e6567444c99db28617"
+  }
+}
