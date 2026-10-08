@@ -1,7 +1,8 @@
 import { buildSocialSessionHistory } from "./socialSessionHistory";
 import { buildSocialVarietyContext, getSocialVarietyGain } from "./v3/socialVariety";
 import { getDoublesPartitions } from "./v3/balance";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as balancedAcceptance from "./v3/balancedCandidateAcceptance";
 import {
   getRankedCandidates,
   selectBatchMatches,
@@ -176,7 +177,7 @@ describe("player-group batch selection", () => {
     expect(result.selections).toHaveLength(2);
   });
 
-  it("falls from three courts to two when Mixed constraints make the third infeasible", () => {
+  it.each([SessionType.POINTS, SessionType.ELO])("%s falls from three courts to two when Mixed constraints make the third infeasible", (type) => {
     const groupPlayers = (pool: SessionPool) => [
       createPlayer(`${pool}-M1`, pool, PlayerGender.MALE),
       createPlayer(`${pool}-M2`, pool, PlayerGender.MALE),
@@ -193,7 +194,7 @@ describe("player-group batch selection", () => {
       id: "session-3",
       code: "CONSTRAINED",
       clubId: "club-1",
-      type: SessionType.ELO,
+      type,
       mode: SessionMode.MIXICANO,
       poolsEnabled: true,
       respectPlayerRest: true,
@@ -224,15 +225,45 @@ describe("player-group batch selection", () => {
       ])
     );
 
-    const result = selectBatchMatches({
-      rankedCandidates,
-      playersById,
-      sessionData,
-      rotationHistory: buildRotationHistory([]),
-      requestedMatchCount: 3,
-      requestedCourtIds: ["court-1", "court-2", "court-3"],
-      randomFn: () => 0,
-    });
+    vi.stubEnv("BALANCED_RECURRENCE_CANDIDATE_ENABLED", undefined);
+    const gate = vi.spyOn(balancedAcceptance, "runBalancedCandidateWithProductionFallback");
+    let result: ReturnType<typeof selectBatchMatches>;
+    try {
+      result = selectBatchMatches({
+        rankedCandidates,
+        playersById,
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        requestedMatchCount: 3,
+        requestedCourtIds: ["court-1", "court-2", "court-3"],
+        randomFn: () => 0,
+      });
+      const attempts = gate.mock.results.flatMap((entry, index) => entry.type === "return"
+        ? [{ courtCount: gate.mock.calls[index][0].options.courtCount, ...entry.value }]
+        : []);
+      expect(attempts.some((attempt) => attempt.courtCount === 3 &&
+        attempt.result.selection === null && attempt.result.debug.searchLimitReached === false))
+        .toBe(true);
+      expect(attempts.some((attempt) => attempt.courtCount === 2 &&
+        attempt.decision.outcome === "candidate-exact" &&
+        attempt.decision.candidateProof.fullSearchCertified))
+        .toBe(true);
+    } catch (error) {
+      const attempts = gate.mock.results.flatMap((entry, index) => entry.type === "return"
+        ? [{
+            courtCount: gate.mock.calls[index][0].options.courtCount,
+            outcome: entry.value.decision.outcome,
+            failureReason: entry.value.result.debug.failureReason,
+            searchLimitReached: entry.value.result.debug.searchLimitReached,
+            fallbackSearch: entry.value.decision.fallbackSearch,
+            reasonCodes: entry.value.decision.reasonCodes,
+          }]
+        : []);
+      throw new Error(`${error instanceof Error ? error.message : String(error)}; gate: ${JSON.stringify(attempts)}`);
+    } finally {
+      gate.mockRestore();
+      vi.unstubAllEnvs();
+    }
 
     expect(result.selections).toHaveLength(2);
     expect(

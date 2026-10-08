@@ -4,7 +4,7 @@ import { buildSocialVarietyContext, getSocialVarietyGain } from "@/lib/matchmaki
 import { getDoublesPartitions } from "@/lib/matchmaking/v3/balance";
 import { buildPlayerGroupCourtPlans, getPlayerGroupSelectionConstraints } from "@/lib/matchmaking/playerGroupPlanner";
 import { prisma } from "@/lib/prisma";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CourtGroupType,
   MatchStatus,
@@ -377,7 +377,15 @@ function createLadderSelection(
 describe("generate match service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // These service unit fixtures return synthetic legacy V3 matcher outputs.
+    // Keep them on the explicit production rollback path; real default behavior
+    // is exercised by the Balanced route integration tests.
+    vi.stubEnv("BALANCED_RECURRENCE_CANDIDATE_ENABLED", "0");
     vi.mocked(prisma.match.findMany).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   describe("parseGenerateMatchRequest", () => {

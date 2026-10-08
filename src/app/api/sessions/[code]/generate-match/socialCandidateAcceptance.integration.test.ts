@@ -1,4 +1,5 @@
 import { withLegacySportingAliases } from "@/lib/sportingIdentity";
+import * as balancedRecurrence from "@/lib/matchmaking/v3/balancedRecurrence";
 import * as socialBatch from "@/lib/matchmaking/v3/socialBatch";
 import { withSocialVarietySnapshot } from "@/lib/matchmaking/v3/socialVariety";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +28,10 @@ import {
   resolveSocialCandidatePolicy,
   runSocialCandidateWithProductionFallback,
 } from "./socialCandidateAcceptance";
+import {
+  resolveBalancedCandidatePolicy,
+  type BalancedCandidateDecision,
+} from "@/lib/matchmaking/v3/balancedCandidateAcceptance";
 import { selectAutomaticMatchForSession } from "../queue-match/shared";
 import { selectInterclubSingleCourtMatch } from "./interclub";
 import type { MatchmakerV3Player } from "@/lib/matchmaking/v3/types";
@@ -220,6 +225,56 @@ function expectCertifiedSocialDecision(selection: { matchmakingReasonJson?: stri
   return decision;
 }
 
+function readBalancedDecision(selection: { matchmakingReasonJson?: string | null }) {
+  return JSON.parse(selection.matchmakingReasonJson ?? "{}").balancedPolicyDecision as BalancedCandidateDecision | undefined;
+}
+
+function expectCertifiedBalancedDecision(selection: { matchmakingReasonJson?: string | null }) {
+  const decision = readBalancedDecision(selection);
+  expect(decision).toMatchObject({ requestedPolicy: "strict-replay-rescue" });
+
+  if (decision?.outcome === "candidate-exact") {
+    expect(decision).toMatchObject({
+      appliedPolicy: "strict-replay-rescue",
+      reasonCodes: [],
+      candidateProof: {
+        selectionPresent: true,
+        echoedPolicy: true,
+        fairnessCertified: true,
+        scheduleCertified: true,
+        starvationCertified: true,
+        balanceCertified: true,
+        replayCertified: true,
+        coverageGateCertified: true,
+        recurrenceFrontierCertified: true,
+        recurrenceAdmissionCertified: true,
+        fullSearchCertified: true,
+        structuralVocabularyVerified: true,
+      },
+    });
+  } else {
+    expect(decision?.outcome).toBe("production-fallback");
+    expect(decision).toMatchObject({
+      appliedPolicy: "production",
+      fallbackProof: {
+        selectionPresent: true,
+        certified: true,
+        fairnessCertified: true,
+        scheduleCertified: true,
+        starvationCertified: true,
+        balanceCertified: true,
+        replayCertified: true,
+        coverageGateCertified: true,
+        recurrenceCertified: false,
+        lateVarietyCertified: false,
+      },
+    });
+    expect(decision?.reasonCodes.length).toBeGreaterThan(0);
+  }
+
+  return decision;
+}
+
 describe("Social candidate acceptance at API selection boundaries", () => {
   const originalMatcher = socialBatch.findBestRotationBatchSelection;
 
@@ -229,6 +284,7 @@ describe("Social candidate acceptance at API selection boundaries", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("uses beneficial-rescue by default for Social and records its acceptance metadata", async () => {
@@ -263,28 +319,58 @@ describe("Social candidate acceptance at API selection boundaries", () => {
   });
 
   it.each([SessionType.POINTS, SessionType.ELO])(
-    "keeps Balanced %s on its existing matcher with omitted or internal Social policy",
+    "routes Balanced %s through default Arm 3 with omitted or internal Social policy",
     async (type) => {
+      vi.stubEnv("BALANCED_RECURRENCE_CANDIDATE_ENABLED", undefined);
+      expect(process.env.BALANCED_RECURRENCE_CANDIDATE_ENABLED).toBeUndefined();
+      expect(resolveBalancedCandidatePolicy(type)).toBe("strict-replay-rescue");
       const data = session({
         type,
         players: Array.from({ length: 8 }, (_, index) => player(`p${index + 1}`)),
       });
       const state = await inputs(data);
-      const spy = vi.spyOn(socialBatch, "findBestRotationBatchSelection");
+      const productionSpy = vi.spyOn(socialBatch, "findBestRotationBatchSelection");
+      const balancedSpy = vi.spyOn(balancedRecurrence, "findBestBalancedRecurrenceSelection");
 
       for (const socialPriorityPolicy of [undefined, policy] as const) {
-        spy.mockClear();
+        productionSpy.mockClear();
+        balancedSpy.mockClear();
         const selection = selectSingleCourtMatch({
           ...state,
           reshuffleSource: null,
           ...(socialPriorityPolicy ? { socialPriorityPolicy } : {}),
         });
+        const balancedDecision = expectCertifiedBalancedDecision(selection);
 
-        expect(spy).toHaveBeenCalled();
-        expect(spy.mock.calls.every(([, options]) => options.socialPriorityPolicy === undefined)).toBe(true);
+        expect(balancedSpy).toHaveBeenCalled();
+        expect(balancedSpy.mock.calls.every(([, options]) =>
+          options.recurrencePolicy === "strict-replay-rescue" &&
+          (!("socialPriorityPolicy" in options) || options.socialPriorityPolicy === undefined),
+        )).toBe(true);
+        expect(productionSpy.mock.calls.every(([, options]) => options.socialPriorityPolicy === undefined)).toBe(true);
+        expect("balancedPolicyDecision" in selection ? selection.balancedPolicyDecision : undefined).toEqual(balancedDecision);
         expect("socialPolicyDecision" in selection ? selection.socialPolicyDecision : undefined).toBeUndefined();
-        expect(JSON.parse(selection.matchmakingReasonJson ?? "{}")).not.toHaveProperty("socialPolicyDecision");
+        const reason = JSON.parse(selection.matchmakingReasonJson ?? "{}");
+        expect(reason).not.toHaveProperty("socialPolicyDecision");
+        expect(reason.balancedPolicyDecision).toEqual(balancedDecision);
       }
+
+      vi.stubEnv("BALANCED_RECURRENCE_CANDIDATE_ENABLED", "0");
+      expect(resolveBalancedCandidatePolicy(type)).toBeUndefined();
+      productionSpy.mockClear();
+      balancedSpy.mockClear();
+      const rollbackSelection = selectSingleCourtMatch({
+        ...state,
+        reshuffleSource: null,
+        socialPriorityPolicy: policy,
+      });
+      expect(productionSpy).toHaveBeenCalled();
+      expect(productionSpy.mock.calls.every(([, options]) => options.socialPriorityPolicy === undefined)).toBe(true);
+      expect(balancedSpy).not.toHaveBeenCalled();
+      expect("balancedPolicyDecision" in rollbackSelection ? rollbackSelection.balancedPolicyDecision : undefined).toBeUndefined();
+      expect("socialPolicyDecision" in rollbackSelection ? rollbackSelection.socialPolicyDecision : undefined).toBeUndefined();
+      expect(JSON.parse(rollbackSelection.matchmakingReasonJson ?? "{}")).not.toHaveProperty("socialPolicyDecision");
+
       expect(resolveSocialCandidatePolicy(type)).toBeUndefined();
       expect(resolveSocialCandidatePolicy(type, policy)).toBeUndefined();
     }

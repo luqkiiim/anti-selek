@@ -3,10 +3,12 @@
 Social uses `courtmate-beneficial-rescue` through the hardened API acceptance
 boundary. The Interclub structural-context repair and changed-default validation
 are recorded in the [default-switch report](../../../../docs/social-default-switch-results.md).
-Balanced Points and Elo retain their existing variety policy inside
-an explicit balance envelope. Both use `socialBatch.ts` as shared search
-infrastructure for single courts, global batches, player groups, Interclub,
-reshuffles and player replacement. Level Match uses the separate ladder matcher.
+Balanced Points and Elo default to hardened Arm 3 through
+`balancedCandidateAcceptance.ts`, inside their existing explicit balance
+envelopes. The recurrence engine is `balancedRecurrence.ts`; `socialBatch.ts`
+remains the production fallback and rollback matcher. The API adapters cover
+single courts, global batches, player groups, Interclub, reshuffles and player
+replacement. Level Match uses the separate ladder matcher.
 
 ## Shared stronger priorities
 
@@ -56,10 +58,50 @@ constraints remain stronger than variety. See the
 [hardening report](../../../../docs/social-production-hardening-results.md) for
 certificate checks and the measured larger-roster fallback boundaries.
 
-## Balanced and legacy Social fallback
+## Balanced default
 
-This section describes the unchanged Balanced policy and the explicitly labelled
-legacy Social fallback. After the stronger priorities tie, the fallback
+With `BALANCED_RECURRENCE_CANDIDATE_ENABLED` absent, Points and Elo request
+`strict-replay-rescue`. Setting it to `0` explicitly restores the old Balanced
+behavior for rollback/testing; `1` also selects Arm 3. Other explicit values
+retain the previous disabled-flag behavior. This flag does not affect Social or
+Level Match. An internal explicit strict request takes precedence over the flag.
+
+The Arm 3 objective is frozen. Fairness/arrival, schedule, starvation and the
+balance envelope remain stronger than recurrence. The existing replay minimum
+and first-exposure exception remain in place. Once a player has experienced
+every structurally feasible type, signed recent match-type gain can influence
+ranking using the latest six completed appearances, capped naturally without
+an appearance-count threshold. One additional replay may be admitted for
+strictly better T than the best T at the certified replay minimum. Coverage
+and recurrence exceptions do not stack; two additional replays are never
+admitted. There is no target MIXED ratio, quota or debt.
+
+The default gate requires a complete exact candidate and independently checks
+its selected layout, stronger-priority/balance/replay certificates, exact C/T
+values, admission and full legal structural vocabulary before returning it to
+automatic writers. An incomplete candidate is discarded and current production
+Balanced is rerun and checked for its core contract. A fallback is explicitly
+labelled and never recurrence-certified; an incomplete production late ranking
+may certify only the core contract. If neither attempt certifies, no selection
+is returned. Rest-disabled requests can use this certified fallback.
+
+This boundary certifies fresh automatic selections before match or queue writes.
+Consuming an existing queue preserves its stored lineup and decision rather than
+rerunning matchmaking. Fully manual lineups keep the existing legality checks
+and do not claim automatic Balanced certification. The switch does not reselect
+manual or pre-existing queued lineups.
+
+Recurrence uses completed-only history and full structural opportunities,
+including paused/busy/queued players while keeping them ineligible. The legacy
+coverage gate retains its existing context. The frozen exhaustive reference is retained under test fixtures for parity
+checks; experiment runners and generated traces remain local. See the
+[default-switch validation report](../../../../docs/balanced-recurrence-default-switch-results.md).
+
+## Balanced production fallback and legacy Social fallback
+
+This section describes the unchanged production Balanced fallback/rollback
+policy and the explicitly labelled legacy Social fallback. After the stronger
+priorities tie, the fallback
 certifies the smallest immediate-replay
 count available in that rotation class. Balanced first establishes its fixed
 balance envelope inside the same stronger class, then certifies the minimum

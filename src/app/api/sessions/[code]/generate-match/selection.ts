@@ -61,6 +61,8 @@ import {
 import type {
   ActiveMatchmakerV3Player,
 } from "@/lib/matchmaking/v3/types";
+import type { BalancedCandidateDecision } from "@/lib/matchmaking/v3/balancedCandidateAcceptance";
+import type { BalancedRecurrenceOptions } from "@/lib/matchmaking/v3/balancedRecurrence";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import {
@@ -80,6 +82,11 @@ import {
   type SocialCandidateDecision,
   type SocialCandidatePolicy,
 } from "./socialCandidateAcceptance";
+import {
+  runBalancedCandidateWithProductionFallback,
+  resolveBalancedCandidatePolicy,
+  withBalancedCandidateDecision,
+} from "@/lib/matchmaking/v3/balancedCandidateAcceptance";
 import {
   CourtGroupType,
   MixedSide,
@@ -134,6 +141,7 @@ interface PoolAwareSelection extends CourtGroupSnapshot {
   competitiveTargetRatio: number;
   matchmakingReasonJson?: string | null;
   socialPolicyDecision?: SocialCandidateDecision;
+  balancedPolicyDecision?: BalancedCandidateDecision;
 }
 
 type MatchSelectionBase = {
@@ -150,6 +158,7 @@ type MatchSelectionBase = {
   competitiveTargetRatio?: number;
   matchmakingReasonJson?: string | null;
   socialPolicyDecision?: SocialCandidateDecision;
+  balancedPolicyDecision?: BalancedCandidateDecision;
 };
 
 const MAX_POOL_SELECTION_OPTIONS_PER_PLAN = 64;
@@ -214,11 +223,11 @@ function withMatchmakingReason<
       };
 
   if (!isV3Selection(selection)) {
-    return withSocialCandidateDecision({
+    return withBalancedCandidateDecision(withSocialCandidateDecision({
       ...selection,
       ...groupSnapshot,
       matchmakingReasonJson: null,
-    }, selection.socialPolicyDecision);
+    }, selection.socialPolicyDecision), selection.balancedPolicyDecision);
   }
 
   const reasonJson = buildV3MatchmakingReasonJson(selection, {
@@ -238,11 +247,11 @@ function withMatchmakingReason<
     respectPlayerRest: sessionData.respectPlayerRest,
   });
 
-  return withSocialCandidateDecision({
+  return withBalancedCandidateDecision(withSocialCandidateDecision({
     ...selection,
     ...groupSnapshot,
     matchmakingReasonJson: reasonJson,
-  }, selection.socialPolicyDecision);
+  }, selection.socialPolicyDecision), selection.balancedPolicyDecision);
 }
 
 function runRotationSelectionWithSocialCandidate<T extends MatchmakerV3Player>(
@@ -262,6 +271,27 @@ function runRotationSelectionWithSocialCandidate<T extends MatchmakerV3Player>(
   return { result: findBestRotationBatchSelection(players, options), decision: undefined };
 }
 
+function runRotationSelectionWithBalancedCandidate<T extends MatchmakerV3Player>(
+  players: T[],
+  options: RotationBatchOptions<T>,
+  candidateOptions: RotationBatchOptions<T> = options,
+) {
+  const policy = resolveBalancedCandidatePolicy(options.sessionType);
+  if (!policy) {
+    return { result: findBestRotationBatchSelection(players, options), decision: undefined };
+  }
+
+  return runBalancedCandidateWithProductionFallback({
+    candidatePlayers: players,
+    options,
+    candidateOptions: {
+      ...candidateOptions,
+      recurrencePolicy: policy,
+    } as BalancedRecurrenceOptions<T>,
+    requestedPolicy: policy,
+  });
+}
+
 function runSingleCourtSelectionWithSocialCandidate<T extends MatchmakerV3Player>(
   players: T[],
   options: Omit<RotationBatchOptions<T>, "courtCount"> & {
@@ -277,7 +307,8 @@ function runSingleCourtSelectionWithSocialCandidate<T extends MatchmakerV3Player
   },
 ) {
   const resolvedPolicy = resolveSocialCandidatePolicy(options.sessionType, socialPriorityPolicy);
-  if (!resolvedPolicy) {
+  const balancedPolicy = resolveBalancedCandidatePolicy(options.sessionType);
+  if (!resolvedPolicy && !balancedPolicy) {
     return {
       ...findBestSingleCourtSelectionV3(players, options),
       socialPolicyDecision: undefined,
@@ -318,6 +349,26 @@ function runSingleCourtSelectionWithSocialCandidate<T extends MatchmakerV3Player
         selectionConstraints,
       }
     : adaptedOptions;
+  if (balancedPolicy) {
+    const safeRun = runBalancedCandidateWithProductionFallback({
+      candidatePlayers: players,
+      options: adaptedOptions,
+      candidateOptions: {
+        ...adaptedCandidateOptions,
+        recurrencePolicy: balancedPolicy,
+      } as BalancedRecurrenceOptions<T>,
+      requestedPolicy: balancedPolicy,
+    });
+    const selection = safeRun.result.selection?.selections[0] ?? null;
+    return {
+      selection: selection
+        ? withBalancedCandidateDecision(selection, safeRun.decision)
+        : null,
+      debug: { searchLimitReached: safeRun.result.debug.searchLimitReached },
+      socialPolicyDecision: undefined,
+      balancedPolicyDecision: safeRun.decision,
+    };
+  }
   const safeRun = runRotationSelectionWithSocialCandidate(
     players,
     adaptedOptions,
@@ -390,6 +441,27 @@ function buildCompletedSocialMatches(sessionData: GenerateMatchSession) {
 
 function getRotationPlayerGroupOpportunityConstraints(sessionData: GenerateMatchSession) {
   const counts = getPoolActiveCounts(sessionData);
+  return buildPlayerGroupCourtPlans({
+    requestedCourtCount: 1,
+    activePoolAPlayerCount: counts[SessionPool.A],
+    activePoolBPlayerCount: counts[SessionPool.B],
+    waitingPoolAPlayerCount: counts[SessionPool.A],
+    waitingPoolBPlayerCount: counts[SessionPool.B],
+    crossoverFrequency: sessionData.crossoverFrequency,
+  }).flatMap((plan) =>
+    plan.compositions.map((composition) =>
+      getPlayerGroupSelectionConstraints<ReturnType<typeof buildActivePlayers>[number]>(composition)
+    )
+  );
+}
+
+function getBalancedRotationPlayerGroupOpportunityConstraints(
+  sessionData: GenerateMatchSession
+) {
+  const counts = {
+    [SessionPool.A]: countPoolPlayers(sessionData.players, SessionPool.A),
+    [SessionPool.B]: countPoolPlayers(sessionData.players, SessionPool.B),
+  };
   return buildPlayerGroupCourtPlans({
     requestedCourtCount: 1,
     activePoolAPlayerCount: counts[SessionPool.A],
@@ -1726,12 +1798,45 @@ function selectRotationPlayerGroupBatch({
           socialHistoryMatches: buildCompletedSocialMatches(sessionData),
         }
       : selectionOptions;
-    const safeRun = runRotationSelectionWithSocialCandidate(
-      players,
-      selectionOptions,
-      socialPriorityPolicy,
-      candidateOptions
-    );
+    const balancedPolicy = resolveBalancedCandidatePolicy(selectionOptions.sessionType);
+    const balancedCandidateOptions = balancedPolicy
+      ? {
+          ...selectionOptions,
+          socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+          socialStructuralOpportunityConstraints:
+            getBalancedRotationPlayerGroupOpportunityConstraints(sessionData),
+        }
+      : candidateOptions;
+    const safeRun = balancedPolicy
+      ? (() => {
+          const balancedRun = runBalancedCandidateWithProductionFallback({
+            candidatePlayers: players,
+            options: selectionOptions,
+            candidateOptions: {
+              ...balancedCandidateOptions,
+              recurrencePolicy: balancedPolicy,
+            } as BalancedRecurrenceOptions<typeof players[number]>,
+            requestedPolicy: balancedPolicy,
+          });
+          return {
+            result: balancedRun.result,
+            balancedPolicyDecision: balancedRun.decision,
+            socialPolicyDecision: undefined,
+          };
+        })()
+      : (() => {
+          const socialRun = runRotationSelectionWithSocialCandidate(
+            players,
+            selectionOptions,
+            socialPriorityPolicy,
+            candidateOptions
+          );
+          return {
+            result: socialRun.result,
+            balancedPolicyDecision: undefined,
+            socialPolicyDecision: socialRun.decision,
+          };
+        })();
     const result = safeRun.result;
     if (result.selection && result.scheduleIndex !== null) {
       const profile = profiles[result.scheduleIndex];
@@ -1742,7 +1847,10 @@ function selectRotationPlayerGroupBatch({
         selections: result.selection.selections.map((selection, index) =>
           withMatchmakingReason({
             ...selection,
-            ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
+            ...(safeRun.socialPolicyDecision ? { socialPolicyDecision: safeRun.socialPolicyDecision } : {}),
+            ...(safeRun.balancedPolicyDecision
+              ? { balancedPolicyDecision: safeRun.balancedPolicyDecision }
+              : {}),
             ...profile.compositions[index],
             targetPool: getCompositionTargetPool(profile.compositions[index]),
             missedPool: null,
@@ -1751,7 +1859,12 @@ function selectRotationPlayerGroupBatch({
         ),
         poolSchedulingState: sessionData,
         competitiveTargetRatio: plan.competitiveTargetRatio,
-        ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
+        ...(safeRun.socialPolicyDecision
+          ? { socialPolicyDecision: safeRun.socialPolicyDecision }
+          : {}),
+        ...(safeRun.balancedPolicyDecision
+          ? { balancedPolicyDecision: safeRun.balancedPolicyDecision }
+          : {}),
       };
     }
     if (result.debug.searchLimitReached) {
@@ -1919,6 +2032,9 @@ export function selectSingleCourtMatch({
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
   );
+  const balancedPolicy = resolveBalancedCandidatePolicy(
+    getMatchmakerSessionType(sessionData)
+  );
   if (isInterclubSession(sessionData)) {
     return withNoPlayerGroupSnapshot(
       selectInterclubSingleCourtMatch({
@@ -1960,7 +2076,13 @@ export function selectSingleCourtMatch({
         completedMatches: buildCompletedSocialMatches(sessionData),
         socialHistoryMatches: buildCompletedSocialMatches(sessionData),
       }
-    : v3SelectionOptions;
+    : balancedPolicy
+      ? {
+          ...v3SelectionOptions,
+          socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+          socialStructuralOpportunityConstraints: [],
+        }
+      : v3SelectionOptions;
   const initialResult = usesCompetitiveGrouping
       ? findBestSingleCourtSelectionLadder(
           buildLadderPlayers(sessionData, playersById, rankedCandidates),
@@ -2064,12 +2186,21 @@ export function selectSingleCourtMatch({
     ...getRotationSelectionOptions(sessionData, v3Players),
     excludedQuartetKey: previousQuartetKey,
   };
+  const alternativeQuartetCandidateOptions = resolvedSocialPriorityPolicy
+    ? {
+        ...alternativeQuartetOptions,
+        completedMatches: buildCompletedSocialMatches(sessionData),
+        socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+      }
+    : balancedPolicy
+      ? {
+          ...alternativeQuartetOptions,
+          socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+          socialStructuralOpportunityConstraints: [],
+        }
+      : undefined;
   const alternativeQuartet = runSingleCourtSelectionWithSocialCandidate(v3Players, alternativeQuartetOptions, resolvedSocialPriorityPolicy,
-    resolvedSocialPriorityPolicy ? {
-      ...alternativeQuartetOptions,
-      completedMatches: buildCompletedSocialMatches(sessionData),
-      socialHistoryMatches: buildCompletedSocialMatches(sessionData),
-    } : undefined);
+    alternativeQuartetCandidateOptions);
 
   if (alternativeQuartet.selection) {
     return withMatchmakingReason(alternativeQuartet.selection, sessionData);
@@ -2087,12 +2218,21 @@ export function selectSingleCourtMatch({
     ...getRotationSelectionOptions(sessionData, v3Players),
     excludedPartitionKey: previousPartitionKey,
   };
+  const alternativePartitionCandidateOptions = resolvedSocialPriorityPolicy
+    ? {
+        ...alternativePartitionOptions,
+        completedMatches: buildCompletedSocialMatches(sessionData),
+        socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+      }
+    : balancedPolicy
+      ? {
+          ...alternativePartitionOptions,
+          socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+          socialStructuralOpportunityConstraints: [],
+        }
+      : undefined;
   const alternativePartition = runSingleCourtSelectionWithSocialCandidate(v3Players, alternativePartitionOptions, resolvedSocialPriorityPolicy,
-    resolvedSocialPriorityPolicy ? {
-      ...alternativePartitionOptions,
-      completedMatches: buildCompletedSocialMatches(sessionData),
-      socialHistoryMatches: buildCompletedSocialMatches(sessionData),
-    } : undefined);
+    alternativePartitionCandidateOptions);
 
   if (!alternativePartition.selection) {
     throw new GenerateMatchError(
@@ -2257,6 +2397,9 @@ export function selectReplacementMatch({
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
   );
+  const balancedPolicy = resolveBalancedCandidatePolicy(
+    getMatchmakerSessionType(sessionData)
+  );
   if (isInterclubSession(sessionData)) {
     return withNoPlayerGroupSnapshot(
       selectInterclubReplacementMatch({
@@ -2316,18 +2459,36 @@ export function selectReplacementMatch({
             completedMatches: buildCompletedSocialMatches(sessionData),
             socialHistoryMatches: buildCompletedSocialMatches(sessionData),
           }
-        : rotationOptions;
-      const safeRun = runRotationSelectionWithSocialCandidate(
-        players,
-        rotationOptions,
-        resolvedSocialPriorityPolicy,
-        candidateOptions
-      );
+        : balancedPolicy
+          ? {
+              ...rotationOptions,
+              socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+              socialStructuralOpportunityConstraints: [],
+            }
+          : rotationOptions;
+      const safeRun = balancedPolicy
+        ? runRotationSelectionWithBalancedCandidate(
+            players,
+            rotationOptions,
+            candidateOptions
+          )
+        : runRotationSelectionWithSocialCandidate(
+            players,
+            rotationOptions,
+            resolvedSocialPriorityPolicy,
+            candidateOptions
+          );
       const result = safeRun.result;
       if (result.selection) {
+        const decision = "decision" in safeRun ? safeRun.decision : undefined;
         return withMatchmakingReason({
           ...result.selection.selections[0],
-          ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
+          ...(decision?.requestedPolicy === "courtmate-beneficial-rescue"
+            ? { socialPolicyDecision: decision }
+            : {}),
+          ...(decision?.requestedPolicy === "strict-replay-rescue"
+            ? { balancedPolicyDecision: decision }
+            : {}),
         }, sessionData);
       }
       if (result.debug.searchLimitReached) {
@@ -2728,6 +2889,9 @@ export function selectBatchMatches({
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
   );
+  const balancedPolicy = resolveBalancedCandidatePolicy(
+    getMatchmakerSessionType(sessionData)
+  );
   if (isInterclubSession(sessionData)) {
     const result = selectInterclubBatchMatches({
       rankedCandidates,
@@ -2905,21 +3069,55 @@ export function selectBatchMatches({
       ...getRotationSelectionOptions(sessionData, players),
       randomFn,
     };
-  const safeRun = resolvedSocialPriorityPolicy
-    ? runRotationSelectionWithSocialCandidate(
-        players,
-        rotationOptions,
-        resolvedSocialPriorityPolicy,
-        {
+  const candidateOptions = resolvedSocialPriorityPolicy
+    ? {
+        ...rotationOptions,
+        completedMatches: buildCompletedSocialMatches(sessionData),
+        socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+      }
+    : balancedPolicy
+      ? {
           ...rotationOptions,
-          completedMatches: buildCompletedSocialMatches(sessionData),
           socialHistoryMatches: buildCompletedSocialMatches(sessionData),
+          socialStructuralOpportunityConstraints: [],
         }
-      )
-    : {
-        result: findBestBatchSelectionV3(players, rotationOptions),
-        decision: undefined,
-      };
+      : rotationOptions;
+  const safeRun = balancedPolicy
+    ? (() => {
+        const balancedRun = runBalancedCandidateWithProductionFallback({
+          candidatePlayers: players,
+          options: rotationOptions,
+          candidateOptions: {
+            ...candidateOptions,
+            recurrencePolicy: balancedPolicy,
+          } as BalancedRecurrenceOptions<(typeof players)[number]>,
+          requestedPolicy: balancedPolicy,
+        });
+        return {
+          result: balancedRun.result,
+          balancedPolicyDecision: balancedRun.decision,
+          socialPolicyDecision: undefined,
+        };
+      })()
+    : resolvedSocialPriorityPolicy
+      ? (() => {
+          const socialRun = runRotationSelectionWithSocialCandidate(
+            players,
+            rotationOptions,
+            resolvedSocialPriorityPolicy,
+            candidateOptions
+          );
+          return {
+            result: socialRun.result,
+            balancedPolicyDecision: undefined,
+            socialPolicyDecision: socialRun.decision,
+          };
+        })()
+      : {
+          result: findBestBatchSelectionV3(players, rotationOptions),
+          balancedPolicyDecision: undefined,
+          socialPolicyDecision: undefined,
+        };
   const result = safeRun.result;
 
   if (!result.selection) {
@@ -2939,10 +3137,20 @@ export function selectBatchMatches({
     selections: result.selection.selections.map((selection) =>
       withMatchmakingReason({
         ...selection,
-        ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
+        ...(safeRun.socialPolicyDecision
+          ? { socialPolicyDecision: safeRun.socialPolicyDecision }
+          : {}),
+        ...(safeRun.balancedPolicyDecision
+          ? { balancedPolicyDecision: safeRun.balancedPolicyDecision }
+          : {}),
       }, sessionData)
     ),
-    ...(safeRun.decision ? { socialPolicyDecision: safeRun.decision } : {}),
+    ...(safeRun.socialPolicyDecision
+      ? { socialPolicyDecision: safeRun.socialPolicyDecision }
+      : {}),
+    ...(safeRun.balancedPolicyDecision
+      ? { balancedPolicyDecision: safeRun.balancedPolicyDecision }
+      : {}),
   };
 }
 

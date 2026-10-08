@@ -309,6 +309,9 @@ export async function selectAutomaticMatchForSession(
     team1ClubId: "team1ClubId" in selection ? selection.team1ClubId : null,
     team2ClubId: "team2ClubId" in selection ? selection.team2ClubId : null,
     matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
+    ...("balancedPolicyDecision" in selection && selection.balancedPolicyDecision
+      ? { balancedPolicyDecision: selection.balancedPolicyDecision }
+      : {}),
     consumedSkipUserIds,
   };
 }
