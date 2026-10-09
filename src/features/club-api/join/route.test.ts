@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import bcrypt from "bcryptjs";
 
 import { expectClubContractAliases } from "@/lib/clubContractAliasTestUtils";
 
@@ -142,5 +143,43 @@ describe("club join API", () => {
       error: "Password is required",
       field: "password",
     });
+  });
+
+  it("requires the legacy protected-club password and cannot forge a target Player", async () => {
+    const password = "LegacyJoinPasswordForTest";
+    mocks.clubFindMany.mockResolvedValue([
+      {
+        id: "club-protected",
+        name: "Protected Club",
+        isTutorial: false,
+        isPasswordProtected: true,
+        passwordHash: await bcrypt.hash(password, 4),
+      },
+    ]);
+
+    const invalid = await POST(new Request("http://localhost/api/clubs/join", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clubName: "Protected Club", password: "wrong", targetPlayerId: "forged-player" }),
+    }));
+    expect(invalid.status).toBe(403);
+    expect(mocks.submit).not.toHaveBeenCalled();
+
+    const accepted = await POST(new Request("http://localhost/api/clubs/join", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clubName: "Protected Club", password, targetPlayerId: "forged-player", targetUserId: "forged-player" }),
+    }));
+    expect(accepted.status).toBe(200);
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+    const submitted = mocks.submit.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(submitted).toEqual({
+      clubId: "club-protected",
+      requesterUserId: "viewer-1",
+      kind: "NEW_PLAYER",
+      proposedPlayerName: "Account Name",
+      proposedGender: "MALE",
+    });
+    expect(submitted).not.toHaveProperty("requestedPlayerId");
   });
 });

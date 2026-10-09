@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
-import { getOwnedClubPlayer, IdentityConflictError, linkUnownedPlayer } from "@/lib/playerIdentity";
+import { getOwnedClubPlayer, IdentityConflictError, linkUnownedPlayer, nonretiredPlayer } from "@/lib/playerIdentity";
 import { normalizeClaimName } from "@/lib/clubClaimRules";
 
 type Db = Prisma.TransactionClient;
@@ -25,9 +25,18 @@ function retryable(error: unknown) {
 }
 export async function admissionTransaction<T>(db: PrismaClient, operation: (tx: Db) => Promise<T>): Promise<T> {
   for (let attempt = 0; ; attempt++) {
-    try { return await db.$transaction(operation); }
+    try { return await db.$transaction(async tx => {
+      // Prisma/libSQL begin deferred transactions. Reserve the SQLite writer before
+      // reading to avoid two clients deadlocking while upgrading shared snapshots.
+      // WHERE 0 changes no rows, revisions, timestamps, or audit records.
+      await tx.$executeRaw`UPDATE "ClubJoinRequest" SET "revision"="revision" WHERE 0`;
+      return operation(tx);
+    }); }
     catch (error) {
-      if (retryable(error) && attempt < 3) continue;
+      if (retryable(error) && attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, 25 * 2 ** attempt));
+        continue;
+      }
       if (error instanceof IdentityConflictError) throw new ClubAdmissionError(error.message, 409);
       if (/owned.*player|owner.*club|ownership.*conflict|same.club/i.test((error as Error).message ?? "")) throw new ClubAdmissionError("This account already owns a different Player in one of this Player's clubs. No history has been changed.", 409);
       throw error;
@@ -60,13 +69,13 @@ export async function submitClubAdmission(db: Db, input: SubmitAdmission) {
   if (input.idempotencyKey) {
     const previous = await db.clubAdmissionRequest.findUnique({ where: { requesterUserId_idempotencyKey: { requesterUserId: input.requesterUserId, idempotencyKey: input.idempotencyKey } }, include: admissionInclude });
     if (previous) {
-      if (!sameAdmissionPayload(previous, input)) throw new ClubAdmissionError("This request key was already used for a different request", 409);
+      if (previous.originInvitationId || !sameAdmissionPayload(previous, input)) throw new ClubAdmissionError("This request key was already used for a different request", 409);
       return previous;
     }
   }
   const pending = await db.clubAdmissionRequest.findFirst({ where: { clubId: input.clubId, requesterUserId: input.requesterUserId, status: "PENDING" }, include: admissionInclude });
   if (pending) {
-    if (!sameAdmissionPayload(pending, input)) throw new ClubAdmissionError("Cancel your pending request before changing its details", 409);
+    if (pending.originInvitationId || !sameAdmissionPayload(pending, input)) throw new ClubAdmissionError("Cancel your pending request before changing its details", 409);
     return pending;
   }
   if (!["EXISTING_PLAYER", "OWNED_PLAYER", "NEW_PLAYER"].includes(input.kind)) throw new ClubAdmissionError("Choose an existing profile or a new player");
@@ -99,10 +108,21 @@ export async function submitClubAdmission(db: Db, input: SubmitAdmission) {
 export interface ReviewAdmission {
   clubId: string; requestId: string; reviewerUserId: string; isGlobalAdmin?: boolean;
   action: "APPROVE" | "REJECT" | "CANCEL"; playerId?: string | null; asNew?: boolean; revision?: number; reason?: string;
+  confirmRestoreAccess?: boolean; retireEmptyPlayerId?: string;
+  /** Set only by the authorized invitation executor when cancelling an exact obsolete recovery request. */
+  supersededByInvitationId?: string;
+  /** Server-derived HTTP guard; omitted only by trusted internal callers. */
+  requestOriginValid?: boolean;
 }
 export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
   const request = await db.clubAdmissionRequest.findUnique({ where: { id: input.requestId }, include: admissionInclude });
   if (!request || request.clubId !== input.clubId) throw new ClubAdmissionError("Request not found", 404);
+  if (request.originInvitationId) {
+    // Load after this module initializes: invitations share the admission error type.
+    const { reviewInvitationRecovery } = await import("./playerInvitationRecovery");
+    return reviewInvitationRecovery(db, input);
+  }
+  if (input.confirmRestoreAccess !== undefined || input.retireEmptyPlayerId !== undefined) throw new ClubAdmissionError("Recovery confirmation requires an invitation-backed request", 400);
   if (input.action === "CANCEL") {
     if (request.requesterUserId !== input.reviewerUserId) throw new ClubAdmissionError("You can only cancel your own request", 403);
   } else {
@@ -135,7 +155,7 @@ export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
       if (target.ownerUserId && target.ownerUserId !== request.requesterUserId) throw new ClubAdmissionError("This Player is already owned by another account", 409);
       if (existingOwned && existingOwned.playerId !== target.id) throw new ClubAdmissionError("This account already owns another Player in this club. A future merge review is required", 409);
       const targetClubIds = [...new Set([input.clubId, ...target.clubMemberships.map(m => m.clubId)])];
-      const conflict = await db.clubMember.findFirst({ where: { clubId: { in: targetClubIds }, playerId: { not: target.id }, player: { ownerUserId: request.requesterUserId } } });
+      const conflict = await db.clubMember.findFirst({ where: { clubId: { in: targetClubIds }, retiredByAdmissionEventId: null, playerId: { not: target.id }, player: { ownerUserId: request.requesterUserId } } });
       if (conflict) throw new ClubAdmissionError("This account already owns a different Player in one of the target's clubs. No history has been changed", 409);
       if (target.ownerUserId === null) {
         // Prisma's @updatedAt and Date serialization would normalize a legacy timestamp.
@@ -149,7 +169,7 @@ export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
     } else {
       if (existingOwned) throw new ClubAdmissionError("This account already owns a Player in this club. Select that profile instead", 409);
       // Avoid a new identity for an account already owning a global Player; admins must choose it explicitly.
-      const anyOwned = await db.player.findFirst({ where: { ownerUserId: request.requesterUserId } });
+      const anyOwned = await db.player.findFirst({ where: { ownerUserId: request.requesterUserId, ...nonretiredPlayer } });
       if (anyOwned) throw new ClubAdmissionError("This account already owns a Player. Select that profile to join the club", 409);
       const name = request.proposedPlayerName?.trim() || request.requester.name;
       const gender = request.proposedGender ?? requester.gender;

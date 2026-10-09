@@ -11,7 +11,7 @@ describe("legacy claim review routes through ownership admission", () => {
   it("passes the Account actor and selected Player separately without avatar/history cleanup", async () => {
     const response = await PATCH(request({ action: "APPROVE", playerId: "historical-player", revision: 0 }), context);
     expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ approvedPlayerId: "historical-player" });
-    expect(mocks.review).toHaveBeenCalledWith({}, { action: "APPROVE", playerId: "historical-player", revision: 0, clubId: "club", requestId: "claim", reviewerUserId: "admin-account", isGlobalAdmin: false });
+    expect(mocks.review).toHaveBeenCalledWith({}, { action: "APPROVE", playerId: "historical-player", revision: 0, clubId: "club", requestId: "claim", reviewerUserId: "admin-account", isGlobalAdmin: false, requestOriginValid: false });
   });
   it("rejects an invalid action before invoking review", async () => {
     expect((await PATCH(request({ action: "MERGE" }), context)).status).toBe(400); expect(mocks.review).not.toHaveBeenCalled();

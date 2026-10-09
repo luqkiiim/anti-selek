@@ -66,6 +66,7 @@ describe("admin update player route", () => {
       name: "Claimed Player",
       email: "claimed@example.com",
       ownerUserId: "account-other",
+      clubMemberships: [],
     });
 
     const response = await patchAdminPlayer({ name: "Renamed Claimed Player" });
@@ -82,6 +83,7 @@ describe("admin update player route", () => {
       name: "Placeholder",
       email: null,
       ownerUserId: null,
+      clubMemberships: [],
     });
     mocks.userUpdate.mockResolvedValue({
       id: "user-1",
@@ -119,15 +121,42 @@ describe("admin update player route", () => {
   });
 
 it("archives a durable Player instead of cascading historical deletion", async () => {
-  mocks.userFindUnique.mockResolvedValue({ id: "historical-player", name: "Historical Player", ownerUserId: "different-account", avatarKey: null });
+  mocks.userFindUnique.mockResolvedValue({ id: "historical-player", name: "Historical Player", ownerUserId: "different-account", avatarKey: null, clubMemberships: [] });
   const response = await DELETE(new Request("http://localhost/api/admin/players/historical-player", { method: "DELETE" }), { params: Promise.resolve({ id: "historical-player" }) });
   expect(response.status).toBe(200);
   expect(mocks.userUpdate).toHaveBeenCalledWith({ where: { id: "historical-player" }, data: { isActive: false } });
 });
 it("recognizes the actor's own Player using ownership when IDs differ", async () => {
-  mocks.userFindUnique.mockResolvedValue({ ownerUserId: "global-admin-1" });
+  mocks.userFindUnique.mockResolvedValue({ id: "historical-player", ownerUserId: "global-admin-1", clubMemberships: [] });
   const response = await DELETE(new Request("http://localhost/api/admin/players/historical-player", { method: "DELETE" }), { params: Promise.resolve({ id: "historical-player" }) });
   expect(response.status).toBe(400);
+  expect(mocks.userUpdate).not.toHaveBeenCalled();
+});
+
+it("rejects updates to a retired Player before writing", async () => {
+  mocks.userFindUnique.mockResolvedValue({
+    id: "retired-player",
+    name: "Retired Player",
+    ownerUserId: "account-1",
+    clubMemberships: [{ id: "retired-membership" }],
+  });
+  const response = await patchAdminPlayer({ elo: 1200 });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ error: "Retired player profiles cannot be changed" });
+  expect(mocks.userUpdate).not.toHaveBeenCalled();
+});
+
+it("rejects archiving a retired Player before writing", async () => {
+  mocks.userFindUnique.mockResolvedValue({
+    id: "retired-player",
+    name: "Retired Player",
+    ownerUserId: "account-1",
+    avatarKey: null,
+    clubMemberships: [{ id: "retired-membership" }],
+  });
+  const response = await DELETE(new Request("http://localhost/api/admin/players/retired-player", { method: "DELETE" }), { params: Promise.resolve({ id: "retired-player" }) });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ error: "Retired player profiles cannot be changed" });
   expect(mocks.userUpdate).not.toHaveBeenCalled();
 });
 

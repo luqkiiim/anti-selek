@@ -133,6 +133,7 @@ export async function GET(
     const memberships = await prisma.clubMember.findMany({
       where: {
         clubId: { in: uniqueManageableClubIds },
+        retiredByAdmissionEventId: null,
       },
       include: {
         club: {

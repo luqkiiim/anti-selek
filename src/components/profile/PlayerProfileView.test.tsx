@@ -126,9 +126,11 @@ function buildRecentSession(id: string, overrides?: Partial<{
 
 function buildProfileResponse(overrides?: Partial<{
   avatarUrl: string | null;
+  isRetired: boolean;
   context: {
     clubId: string;
     viewerCanManageClub: boolean;
+    canAddGuestToClub?: boolean;
     rankContext: {
       leaderboardSize: number;
       currentRank: number | null;
@@ -153,6 +155,7 @@ function buildProfileResponse(overrides?: Partial<{
       avatarUrl,
       elo: 1320,
       createdAt: "2026-05-01T00:00:00.000Z",
+      isRetired: overrides?.isRetired ?? false,
     },
     context: overrides?.context ?? null,
     stats: {
@@ -305,6 +308,7 @@ describe("PlayerProfileView", () => {
       players: [],
     },
     mode = "standalone",
+    clubId = "",
   }: {
     profileResponse?: ReturnType<typeof buildProfileResponse>;
     currentUser?: {
@@ -316,6 +320,7 @@ describe("PlayerProfileView", () => {
       players?: Array<{ id: string }>;
     };
     mode?: "standalone" | "embedded";
+    clubId?: string;
   } = {}) {
     mocks.fetch.mockImplementation((input: string | Request | URL) => {
       const url =
@@ -338,11 +343,30 @@ describe("PlayerProfileView", () => {
         );
       }
 
+      if (url.includes("/identity-options?purpose=ACCESS_RESTORE")) {
+        return Promise.resolve(createJsonResponse({
+          purpose: "ACCESS_RESTORE",
+          target: {
+            playerId: "player-1",
+            name: "Alex Lee",
+            rating: 1320,
+            isActive: true,
+            ownerAccount: { accountId: "account-owner", accountRef: "A-91F2", displayName: "Alex Lee", maskedEmail: "a•••@example.test", isActive: true },
+            member: { memberId: "archived-member", archivedAt: "2026-05-01T00:00:00.000Z", retiredByAdmissionEventId: null },
+            clubAccess: { accessId: "access-revoked", status: "REVOKED", role: "MEMBER", revision: 2 },
+            history: { matchesPlayed: 12, lastPlayedAt: "2026-05-20T00:00:00.000Z", blockers: [] },
+            activeInvitation: null,
+            accessRestoreBlockers: [],
+          },
+          correctionCandidates: [],
+        }));
+      }
+
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     });
 
     await act(async () => {
-      root.render(<PlayerProfileView playerId="player-1" mode={mode} />);
+      root.render(<PlayerProfileView playerId="player-1" mode={mode} clubId={clubId} />);
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -791,6 +815,55 @@ describe("PlayerProfileView", () => {
       "https://cdn.test/avatars/alex.jpg"
     );
     expect(document.body.textContent).not.toContain("View photo");
+  });
+
+  it("keeps retired profile history read-only for owners and club admins", async () => {
+    await renderView({
+      profileResponse: buildProfileResponse({
+        isRetired: true,
+        context: {
+          clubId: "club-1",
+          viewerCanManageClub: true,
+          canAddGuestToClub: true,
+          rankContext: {
+            leaderboardSize: 4,
+            currentRank: null,
+            previousRank: null,
+            rankDelta: null,
+          },
+        },
+      }),
+      currentUser: {
+        id: "account-owner",
+        isAdmin: true,
+        isClaimed: true,
+        isQuickAccess: false,
+        avatarUrl: null,
+        players: [{ id: "player-1" }],
+      },
+    });
+
+    expect(container.querySelector('button[aria-label="Change profile photo for Alex Lee"]')).toBeNull();
+    expect(container.textContent).not.toContain("Adjust rating");
+    expect(Array.from(container.querySelectorAll("button")).some(button => button.textContent?.trim() === "Add to club")).toBe(false);
+  });
+
+  it("offers access restoration from a manageable nonretired profile, including its archived exact member", async () => {
+    await renderView({
+      clubId: "club-1",
+      profileResponse: buildProfileResponse({
+        context: {
+          clubId: "club-1",
+          viewerCanManageClub: true,
+          rankContext: { leaderboardSize: 4, currentRank: null, previousRank: null, rankDelta: null },
+        },
+      }),
+    });
+
+    expect(mocks.fetch.mock.calls.some(([input]) => String(input).includes("/api/clubs/club-1/players/player-1/identity-options?purpose=ACCESS_RESTORE"))).toBe(true);
+    expect(container.querySelector('[aria-label="Restore access to an owned Player"]')).toBeTruthy();
+    expect(container.textContent).toContain("archived-member");
+    expect(container.textContent).toContain("Exact Account");
   });
 
   it("uses owned Player IDs to manage a profile photo, never the account ID", async () => {

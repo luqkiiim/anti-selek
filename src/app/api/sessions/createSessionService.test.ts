@@ -99,6 +99,12 @@ describe("createSessionForUser", () => {
     ).rejects.toThrow(
       "Player groups require at least 2 Competitive and 2 Social players"
     );
+    expect(prisma.clubMember.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        clubId: { in: ["community-1"] },
+        retiredByAdmissionEventId: null,
+      }),
+    }));
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 

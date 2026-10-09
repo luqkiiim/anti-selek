@@ -76,7 +76,15 @@ export async function fetchClubAdminSnapshot(clubId: string) {
       : [],
     claimRequests: Array.isArray(claimRequestsData)
       ? (claimRequestsData as ClubAdminClaimRequest[])
-      : [],
+      : (claimRequestsData.requests ?? []).filter((entry: { kind: string }) => entry.kind === "EXISTING_PLAYER").map((entry: {
+          id: string; requesterUserId: string; requesterName: string; requesterEmail: string | null;
+          requestedPlayerId: string; targetName: string; status: ClubAdminClaimRequest["status"];
+          note?: string; createdAt: string; revision: number; recovery?: ClubAdminClaimRequest["recovery"]; recoveryReviewAuthorized?: boolean;
+        }): ClubAdminClaimRequest => ({
+          id: entry.id, requesterUserId: entry.requesterUserId, requesterName: entry.requesterName, requesterEmail: entry.requesterEmail,
+          targetUserId: entry.requestedPlayerId, targetName: entry.targetName, targetEmail: null, status: entry.status,
+          note: entry.note, createdAt: entry.createdAt, revision: entry.revision, recovery: entry.recovery, recoveryReviewAuthorized: entry.recoveryReviewAuthorized,
+        })),
     offlineIdentityLinks: Array.isArray(offlineIdentityLinksData)
       ? (offlineIdentityLinksData as ClubAdminOfflineIdentityLink[])
       : [],

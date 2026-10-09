@@ -1,4 +1,5 @@
 import { beforeAll, afterAll, beforeEach, it, expect, vi } from "vitest";
+import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, copyFileSync, rmSync, writeFileSync } from "node:fs";
@@ -6,6 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { admissionTransaction, reviewClubAdmission, submitClubAdmission } from "@/lib/clubAdmissions";
 import { getOwnedClubPlayer, resolveOwnedSessionPlayer } from "@/lib/playerIdentity";
+import { CLUB_COMMUNITY_COMPAT_COOKIE_PATH, CLUB_JOIN_COOKIE_PATH, CLUB_JOIN_PROOF_TTL_SECONDS, clubJoinProofCookieName, issueClubJoinProof } from "@/lib/clubJoinProof";
 let db: PrismaClient;
 let actor: { id: string; isAdmin?: boolean; isQuickAccess?: boolean; guestPlayerId?: string } | null;
 vi.mock("@/lib/prisma", () => ({ get prisma() { return db; } }));
@@ -14,11 +16,15 @@ vi.mock("@/lib/rateLimit", () => ({ rateLimit: async () => null }));
 import { POST, GET as discovery } from "./route";
 import { GET, PATCH as settings } from "../[id]/join-requests/route";
 import { PATCH as review } from "../[id]/join-requests/[requestId]/route";
+import { POST as issueJoinProof } from "../join-proof/route";
+import { POST as canonicalClaimAlias } from "../[id]/claim-requests/route";
+import { POST as communityClaimAlias } from "../../communities/[id]/claim-requests/route";
 const dir = mkdtempSync(path.join(tmpdir(), "account-player-admissions-"));
 const baseline = path.join(dir, "baseline.db");
 let count = 0;
 const context = { params: Promise.resolve({ id: "club-a" }) };
 const request = (body: unknown) => new Request("http://localhost/api/clubs/join-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const proofRequest = (body: unknown) => new Request("http://localhost/api/clubs/join-proof", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body) });
 const newInput = { clubId: "club-a", kind: "NEW_PLAYER" as const, proposedPlayerName: "New Player", proposedGender: "FEMALE" };
 const submit = (input: Parameters<typeof submitClubAdmission>[1] = { clubId: "club-a", requesterUserId: "account-member", kind: "EXISTING_PLAYER" as const, requestedPlayerId: "historical-player" }) => admissionTransaction(db, tx => submitClubAdmission(tx, input));
 const approve = (requestId: string, overrides: Partial<Parameters<typeof reviewClubAdmission>[1]> = {}) => admissionTransaction(db, tx => reviewClubAdmission(tx, { clubId: "club-a", requestId, reviewerUserId: "account-owner", action: "APPROVE", ...overrides }));
@@ -195,13 +201,35 @@ it("checks ownership clashes in every club of the target", async () => {
   const entry = await submit(); await expect(approve(entry.id!)).rejects.toMatchObject({ statusCode: 409 });
   expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null });
 });
-it("allows separate legacy profiles in disjoint clubs without consolidating them", async () => {
-  await db.player.create({ data: { id: "legacy-b", ownerUserId: "account-member", name: "Legacy B" } });
-  await db.clubMember.create({ data: { clubId: "club-b", playerId: "legacy-b" } });
-  const entry = await submit(); await approve(entry.id!);
-  expect(await db.player.count({ where: { ownerUserId: "account-member" } })).toBe(2);
-  expect(await getOwnedClubPlayer(db, { clubId: "club-a", userId: "account-member" })).toMatchObject({ playerId: "historical-player" });
-  await expect(resolveOwnedSessionPlayer(db, { userId: "account-member", clubIds: ["club-a", "club-b"] })).rejects.toThrow("Choose which owned player");
+it("blocks acquiring a second nonretired owned identity across disjoint clubs without changing either profile", async () => {
+  const legacyPlayer = await db.player.create({ data: { id: "legacy-b", ownerUserId: "account-member", name: "Legacy B" } });
+  await db.clubMember.create({ data: { clubId: "club-b", playerId: "legacy-b", elo: 1275 } });
+  const legacyMember = await db.clubMember.findUniqueOrThrow({ where: { clubId_playerId: { clubId: "club-b", playerId: "legacy-b" } } });
+  const historicalPlayer = await db.player.findUniqueOrThrow({ where: { id: "historical-player" } });
+  const historicalMember = await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } });
+  const entry = await submit();
+  await expect(approve(entry.id!)).rejects.toMatchObject({ statusCode: 409 });
+  expect(await db.player.findMany({ where: { ownerUserId: "account-member" } })).toEqual([legacyPlayer]);
+  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toEqual(historicalPlayer);
+  expect(await db.clubMember.findUnique({ where: { id: legacyMember.id } })).toMatchObject({ ...legacyMember, ownerUserId: "account-member" });
+  expect(await db.clubMember.findUnique({ where: { id: historicalMember.id } })).toEqual(historicalMember);
+  expect(await db.clubAdmissionRequest.findUnique({ where: { id: entry.id } })).toMatchObject({ status: "PENDING", revision: 0, approvedPlayerId: null });
+});
+it("reuses an explicitly selected owned Player without consolidating a different legacy placeholder", async () => {
+  const legacyPlayer = await db.player.create({ data: { id: "legacy-b", ownerUserId: "account-member", name: "Legacy B" } });
+  await db.clubMember.create({ data: { id: "legacy-b-club-membership", clubId: "club-b", playerId: "legacy-b", elo: 1275 } });
+  const historicalPlayer = await db.player.findUniqueOrThrow({ where: { id: "historical-player" } });
+  const historicalMember = await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } });
+  const entry = await submit({ clubId: "club-a", requesterUserId: "account-member", kind: "OWNED_PLAYER", requestedPlayerId: "legacy-b" });
+  const result = await approve(entry.id!);
+  expect(result).toMatchObject({ approvedPlayerId: "legacy-b", decision: "REUSE_OWNED" });
+  expect(await db.player.count({ where: { ownerUserId: "account-member" } })).toBe(1);
+  expect(await db.player.findUnique({ where: { id: legacyPlayer.id } })).toEqual(legacyPlayer);
+  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toEqual(historicalPlayer);
+  expect(await db.clubMember.findUnique({ where: { id: historicalMember.id } })).toEqual(historicalMember);
+  expect(await db.clubMember.findUnique({ where: { clubId_playerId: { clubId: "club-a", playerId: "legacy-b" } } })).toMatchObject({ playerId: "legacy-b", elo: 1000 });
+  expect(await getOwnedClubPlayer(db, { clubId: "club-a", userId: "account-member" })).toMatchObject({ playerId: "legacy-b" });
+  await expect(resolveOwnedSessionPlayer(db, { userId: "account-member", clubIds: ["club-a", "club-b"] })).resolves.toMatchObject({ id: "legacy-b" });
 });
 it("reuses an owned global player for a new club instead of creating another identity", async () => {
   await db.player.update({ where: { id: "historical-player" }, data: { ownerUserId: "account-member" } });
@@ -265,4 +293,263 @@ it("writes only ownership while preserving a legacy text timestamp representatio
   expect(await rawTimestamp()).toEqual(before);
   expect(before[0].storageType).toBe("text");
   expect(await db.player.findUnique({ where: { id: "historical-player" }, select: { ownerUserId: true } })).toEqual({ ownerUserId: "account-member" });
+});
+
+it("requires current account-bound password proof for protected candidate discovery and admission", async () => {
+  const priorSecret = process.env.AUTH_SECRET;
+  process.env.AUTH_SECRET = "local-test-secret-for-club-join-proof-0123456789";
+  try {
+    const password = "ClubPasswordForLocalTest";
+    const passwordHash = await bcrypt.hash(password, 4);
+    await db.club.update({ where: { id: "club-a" }, data: { isPasswordProtected: true, passwordHash } });
+    await db.player.create({ data: { id: "member-owned-player", ownerUserId: "account-member", name: "Owned Profile" } });
+
+    actor = { id: "account-member" };
+    const lockedResponse = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a&q=Known"));
+    const locked = await lockedResponse.json();
+    expect(lockedResponse.status).toBe(200);
+    expect(lockedResponse.headers.get("cache-control")).toContain("no-store");
+    expect(locked).toMatchObject({ passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null }, players: [], ownedPlayers: [] });
+    expect(locked.requests).toEqual([]);
+    expect(locked).not.toHaveProperty("passwordHash");
+
+    const blockedSubmission = await POST(request(newInput));
+    expect(blockedSubmission.status).toBe(428);
+    expect(await blockedSubmission.json()).toMatchObject({ code: "PASSWORD_REQUIRED" });
+    expect(await db.clubAdmissionRequest.count()).toBe(0);
+
+    const wrongPassword = await issueJoinProof(proofRequest({ clubId: "club-a", password: "incorrect" }));
+    expect(wrongPassword.status).toBe(403);
+    expect(await wrongPassword.json()).toMatchObject({ code: "INVALID_PASSWORD" });
+    expect(wrongPassword.headers.get("set-cookie")).toBeNull();
+
+    const issued = await issueJoinProof(proofRequest({ clubId: "club-a", password }));
+    const issuedBody = await issued.json();
+    expect(issued.status).toBe(200);
+    expect(issuedBody).toMatchObject({ ok: true, clubId: "club-a", expiresAt: expect.any(String) });
+    expect(issuedBody).not.toHaveProperty("token");
+    expect(JSON.stringify(issuedBody)).not.toContain(passwordHash);
+    const setCookie = issued.headers.get("set-cookie");
+    expect(setCookie).toMatch(/HttpOnly/i);
+    expect(setCookie).toMatch(/SameSite=Lax/i);
+    expect(setCookie).toContain("Path=/api/clubs");
+    expect(setCookie).toContain("Path=/api/communities");
+    expect(setCookie).not.toContain(password);
+    expect(setCookie).not.toContain(passwordHash);
+    const cookiePair = setCookie!.split(";", 1)[0];
+
+    const unlockedResponse = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a&q=Known", { headers: { Cookie: cookiePair } }));
+    const unlocked = await unlockedResponse.json();
+    expect(unlocked).toMatchObject({ passwordProof: { status: "VERIFIED", expiresAt: expect.any(String) } });
+    expect(unlocked.players).toContainEqual(expect.objectContaining({ id: "historical-player", name: "Known Name", elo: 1455 }));
+    expect(unlocked.ownedPlayers).toContainEqual({ id: "member-owned-player", name: "Owned Profile" });
+
+    const submitted = await POST(new Request("http://localhost/api/clubs/join-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookiePair },
+      body: JSON.stringify(newInput),
+    }));
+    const submittedBody = await submitted.json();
+    expect(submitted.status).toBe(200);
+    expect(submittedBody).toMatchObject({ status: "PENDING", kind: "NEW_PLAYER" });
+    expect(await db.player.count({ where: { ownerUserId: "account-member" } })).toBe(1);
+    expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } })).toBeNull();
+
+    actor = { id: "account-other" };
+    const otherAccount = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a", { headers: { Cookie: cookiePair } }));
+    expect(await otherAccount.json()).toMatchObject({ passwordProof: { status: "PASSWORD_REQUIRED" }, players: [], ownedPlayers: [] });
+    const otherSubmission = await POST(new Request("http://localhost/api/clubs/join-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookiePair },
+      body: JSON.stringify(newInput),
+    }));
+    expect(otherSubmission.status).toBe(428);
+
+    actor = { id: "account-member" };
+    const replacementPasswordHash = await bcrypt.hash("RotatedLocalClubPassword", 4);
+    await db.club.update({ where: { id: "club-a" }, data: { passwordHash: replacementPasswordHash } });
+    const staleProof = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a", { headers: { Cookie: cookiePair } }));
+    const staleBody = await staleProof.json();
+    expect(staleBody).toMatchObject({ passwordProof: { status: "PASSWORD_REQUIRED" }, players: [], ownedPlayers: [] });
+    expect(staleBody.requests).toEqual([expect.objectContaining({ status: "PENDING" })]);
+    const allStatuses = await (await discovery(new Request("http://localhost/api/clubs/join-requests"))).json();
+    expect(allStatuses.requests[0]).toMatchObject({ id: submittedBody.id, status: "PENDING" });
+    expect(allStatuses.requests[0]).not.toHaveProperty("requestedPlayer");
+    expect(allStatuses.requests[0]).not.toHaveProperty("requester");
+    const staleSubmission = await POST(new Request("http://localhost/api/clubs/join-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookiePair },
+      body: JSON.stringify({ ...newInput, idempotencyKey: "stale-proof-retry" }),
+    }));
+    expect(staleSubmission.status).toBe(428);
+    expect(await db.clubAdmissionRequest.count()).toBe(1);
+
+    await db.user.update({ where: { id: "account-member" }, data: { isActive: false } });
+    expect((await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"))).status).toBe(403);
+    expect((await issueJoinProof(proofRequest({ clubId: "club-a", password: "RotatedLocalClubPassword" }))).status).toBe(403);
+    expect((await POST(request({ ...newInput, idempotencyKey: "inactive-account" }))).status).toBe(403);
+    await db.user.update({ where: { id: "account-member" }, data: { isActive: true } });
+    delete process.env.AUTH_SECRET;
+    const missingSigner = await issueJoinProof(proofRequest({ clubId: "club-a", password: "RotatedLocalClubPassword" }));
+    expect(missingSigner.status).toBe(503);
+    expect(await missingSigner.json()).toMatchObject({ code: "PASSWORD_PROOF_UNAVAILABLE" });
+    expect((await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"))).status).toBe(503);
+    expect((await POST(request({ ...newInput, idempotencyKey: "missing-proof-secret" }))).status).toBe(503);
+  } finally {
+    if (priorSecret === undefined) delete process.env.AUTH_SECRET;
+    else process.env.AUTH_SECRET = priorSecret;
+  }
+});
+
+it("requires the matching scoped proof on canonical and deprecated claim aliases", async () => {
+  const priorSecret = process.env.AUTH_SECRET;
+  process.env.AUTH_SECRET = "local-test-secret-for-club-join-proof-0123456789";
+  try {
+    const passwordHash = await bcrypt.hash("AliasPasswordForLocalTest", 4);
+    await db.club.updateMany({ where: { id: { in: ["club-a", "club-b"] } }, data: { isPasswordProtected: true, passwordHash } });
+    await db.player.create({ data: { id: "alias-player-b", name: "Alias Player B" } });
+    await db.clubMember.create({ data: { id: "alias-membership-b", clubId: "club-b", playerId: "alias-player-b", elo: 1420 } });
+
+    actor = { id: "account-member" };
+    const canonicalContext = { params: Promise.resolve({ id: "club-a" }) };
+    const communityContext = { params: Promise.resolve({ id: "club-b" }) };
+    const canonicalUrl = "http://localhost/api/clubs/club-a/claim-requests";
+    const communityUrl = "http://localhost/api/communities/club-b/claim-requests";
+    type ClaimAliasHandler = (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response>;
+    const postAlias = (url: string, targetPlayerId: string, handler: ClaimAliasHandler, context: typeof canonicalContext, cookie?: string, targetField: "targetPlayerId" | "targetUserId" = "targetPlayerId") => handler(
+      new Request(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+        body: JSON.stringify({ [targetField]: targetPlayerId }),
+      }),
+      context,
+    );
+    const cookieFor = (userId: string, clubId: string, path: string, issuedAt = Date.now()) => {
+      const proof = issueClubJoinProof({ userId, clubId, passwordHash }, issuedAt);
+      return `${clubJoinProofCookieName(clubId, path)}=${proof.token}`;
+    };
+    const cookieFromIssuance = (header: string | null, prefix: string) => header
+      ?.split(/,\s*(?=[A-Za-z0-9_]+=)/)
+      .find(value => value.startsWith(prefix))
+      ?.split(";", 1)[0];
+
+    for (const [url, targetPlayerId, handler, context] of [
+      [canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext],
+      [communityUrl, "alias-player-b", communityClaimAlias, communityContext],
+    ] as const) {
+      expect((await postAlias(url, targetPlayerId, handler, context)).status, `missing proof: ${url}`).toBe(428);
+    }
+
+    const canonicalWrongAccount = cookieFor("account-other", "club-a", CLUB_JOIN_COOKIE_PATH);
+    const communityWrongAccount = cookieFor("account-other", "club-b", CLUB_COMMUNITY_COMPAT_COOKIE_PATH);
+    expect((await postAlias(canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext, canonicalWrongAccount)).status).toBe(428);
+    expect((await postAlias(communityUrl, "alias-player-b", communityClaimAlias, communityContext, communityWrongAccount)).status).toBe(428);
+
+    const wrongClubForCanonical = cookieFor("account-member", "club-b", CLUB_JOIN_COOKIE_PATH);
+    const wrongClubForCommunity = cookieFor("account-member", "club-a", CLUB_COMMUNITY_COMPAT_COOKIE_PATH);
+    expect((await postAlias(canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext, wrongClubForCanonical)).status).toBe(428);
+    expect((await postAlias(communityUrl, "alias-player-b", communityClaimAlias, communityContext, wrongClubForCommunity)).status).toBe(428);
+
+    const expiredAt = Date.now() - (CLUB_JOIN_PROOF_TTL_SECONDS + 1) * 1000;
+    const expiredCanonical = cookieFor("account-member", "club-a", CLUB_JOIN_COOKIE_PATH, expiredAt);
+    const expiredCommunity = cookieFor("account-member", "club-b", CLUB_COMMUNITY_COMPAT_COOKIE_PATH, expiredAt);
+    expect((await postAlias(canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext, expiredCanonical)).status).toBe(428);
+    expect((await postAlias(communityUrl, "alias-player-b", communityClaimAlias, communityContext, expiredCommunity)).status).toBe(428);
+
+    const canonicalProofResponse = await issueJoinProof(proofRequest({ clubId: "club-a", password: "AliasPasswordForLocalTest" }));
+    const communityProofResponse = await issueJoinProof(proofRequest({ clubId: "club-b", password: "AliasPasswordForLocalTest" }));
+    expect(canonicalProofResponse.status).toBe(200);
+    expect(communityProofResponse.status).toBe(200);
+    const validCanonical = cookieFromIssuance(canonicalProofResponse.headers.get("set-cookie"), "club_join_proof_");
+    const validCommunity = cookieFromIssuance(communityProofResponse.headers.get("set-cookie"), "community_join_proof_");
+    expect(validCanonical).toContain("=");
+    expect(validCommunity).toContain("=");
+    expect(canonicalProofResponse.headers.get("set-cookie")).toContain(`Path=${CLUB_JOIN_COOKIE_PATH}`);
+    expect(communityProofResponse.headers.get("set-cookie")).toContain(`Path=${CLUB_COMMUNITY_COMPAT_COOKIE_PATH}`);
+    const canonicalAccepted = await postAlias(canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext, validCanonical);
+    const communityAccepted = await postAlias(communityUrl, "alias-player-b", communityClaimAlias, communityContext, validCommunity, "targetUserId");
+    expect(canonicalAccepted.status).toBe(200);
+    expect(await canonicalAccepted.json()).toMatchObject({ status: "PENDING", clubId: "club-a", kind: "EXISTING_PLAYER" });
+    expect(communityAccepted.status).toBe(200);
+    expect(await communityAccepted.json()).toMatchObject({ status: "PENDING", clubId: "club-b", kind: "EXISTING_PLAYER", requestedPlayerId: "alias-player-b" });
+    expect(await db.clubAdmissionRequest.count({ where: { requesterUserId: "account-member" } })).toBe(2);
+    expect(await db.player.findUnique({ where: { id: "historical-player" }, select: { ownerUserId: true } })).toEqual({ ownerUserId: null });
+    expect(await db.player.findUnique({ where: { id: "alias-player-b" }, select: { ownerUserId: true } })).toEqual({ ownerUserId: null });
+  } finally {
+    if (priorSecret === undefined) delete process.env.AUTH_SECRET;
+    else process.env.AUTH_SECRET = priorSecret;
+  }
+});
+
+it("rejects a missing target on the deprecated community alias without creating an admission", async () => {
+  actor = { id: "account-member" };
+  const response = await communityClaimAlias(
+    new Request("http://localhost/api/communities/club-a/claim-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: "No Player selected" }),
+    }),
+    { params: Promise.resolve({ id: "club-a" }) },
+  );
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ error: "Choose an existing Player or enter a new Player's name and gender" });
+  expect(await db.clubAdmissionRequest.count({ where: { requesterUserId: "account-member" } })).toBe(0);
+});
+
+it("signals an inactive owned identity without exposing or offering that Player", async () => {
+  const priorSecret = process.env.AUTH_SECRET;
+  process.env.AUTH_SECRET = "local-test-secret-for-club-join-proof-0123456789";
+  try {
+    const password = "ReviewIdentityPassword";
+    const passwordHash = await bcrypt.hash(password, 4);
+    await db.club.update({ where: { id: "club-a" }, data: { isPasswordProtected: true, passwordHash } });
+    await db.player.create({ data: { id: "inactive-owned-hidden", ownerUserId: "account-member", name: "Private Inactive Profile", isActive: false } });
+    actor = { id: "account-member" };
+
+    const lockedResponse = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"));
+    const locked = await lockedResponse.json();
+    expect(locked).toMatchObject({ identityReviewRequired: true, passwordProof: { status: "PASSWORD_REQUIRED" }, players: [], ownedPlayers: [] });
+    expect(JSON.stringify(locked)).not.toContain("inactive-owned-hidden");
+    expect(JSON.stringify(locked)).not.toContain("Private Inactive Profile");
+
+    const issued = await issueJoinProof(proofRequest({ clubId: "club-a", password }));
+    expect(issued.status).toBe(200);
+    const cookie = issued.headers.get("set-cookie")!.split(/,\s*(?=[A-Za-z0-9_]+=)/).find(value => value.startsWith("club_join_proof_"))!.split(";", 1)[0];
+    const unlockedResponse = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a", { headers: { Cookie: cookie } }));
+    const unlocked = await unlockedResponse.json();
+    expect(unlocked).toMatchObject({ identityReviewRequired: true, passwordProof: { status: "VERIFIED" }, ownedPlayers: [] });
+    expect(JSON.stringify(unlocked)).not.toContain("inactive-owned-hidden");
+    expect(JSON.stringify(unlocked)).not.toContain("Private Inactive Profile");
+  } finally {
+    if (priorSecret === undefined) delete process.env.AUTH_SECRET;
+    else process.env.AUTH_SECRET = priorSecret;
+  }
+});
+
+it("does not let an active club member browse protected candidates without password proof", async () => {
+  const priorSecret = process.env.AUTH_SECRET;
+  process.env.AUTH_SECRET = "local-test-secret-for-club-join-proof-0123456789";
+  try {
+    await db.club.update({ where: { id: "club-a" }, data: { isPasswordProtected: true, passwordHash: await bcrypt.hash("MemberPasswordForTest", 4) } });
+    await db.player.update({ where: { id: "historical-player" }, data: { ownerUserId: "account-member" } });
+    await db.player.create({ data: { id: "another-unclaimed-player", name: "Other Candidate" } });
+    await db.clubMember.create({ data: { clubId: "club-a", playerId: "another-unclaimed-player", elo: 1600 } });
+    await db.clubAccess.create({ data: { clubId: "club-a", userId: "account-member", role: "MEMBER", status: "ACTIVE" } });
+    actor = { id: "account-member" };
+
+    const response = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a&q=Other"));
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data).toMatchObject({
+      passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null },
+      players: [],
+      ownedPlayers: [],
+      membership: { playerId: "historical-player" },
+      access: { role: "MEMBER", status: "ACTIVE" },
+    });
+  } finally {
+    if (priorSecret === undefined) delete process.env.AUTH_SECRET;
+    else process.env.AUTH_SECRET = priorSecret;
+  }
 });

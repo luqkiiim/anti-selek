@@ -117,14 +117,31 @@ export function useClubPageActions({
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`/api/clubs/${clubId}/claim-requests`, {
+      const request = () => fetch(`/api/clubs/${clubId}/claim-requests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           targetUserId: player.id,
         }),
       });
-      const data = await safeJson(res);
+      let res = await request();
+      let data = await safeJson(res);
+      if (!res.ok && data.code === "PASSWORD_REQUIRED") {
+        const password = window.prompt("This club requires a password. Enter it to continue with your claim request.");
+        if (password === null || password.length === 0) {
+          setError("A club password is required. Your claim request was not submitted.");
+          return;
+        }
+        const proofRes = await fetch("/api/clubs/join-proof", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clubId, password }),
+        });
+        const proofData = await safeJson(proofRes);
+        if (!proofRes.ok) throw new Error(proofData.error || "Unable to verify the club password.");
+        res = await request();
+        data = await safeJson(res);
+      }
       if (!res.ok) {
         throw new Error(data.error || "Failed to request claim");
       }

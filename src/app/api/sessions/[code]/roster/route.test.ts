@@ -150,7 +150,7 @@ describe("session roster route", () => {
     });
     expect(mocks.clubMemberFindMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        where: { clubId: { in: ["club-b"] } },
+        where: { clubId: { in: ["club-b"] }, retiredByAdmissionEventId: null },
       })
     );
   });
@@ -173,7 +173,7 @@ describe("session roster route", () => {
     });
     expect(mocks.clubMemberFindMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        where: { clubId: { in: ["club-b"] } },
+        where: { clubId: { in: ["club-b"] }, retiredByAdmissionEventId: null },
       })
     );
   });
@@ -235,7 +235,7 @@ describe("session roster route", () => {
     expect(mocks.clubMemberFindMany).toHaveBeenCalledTimes(1);
     expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { clubId: { in: ["club-a", "club-b"] } },
+        where: { clubId: { in: ["club-a", "club-b"] }, retiredByAdmissionEventId: null },
       })
     );
   });
@@ -273,7 +273,7 @@ describe("session roster route", () => {
     expect(mocks.clubMemberFindMany).toHaveBeenCalledTimes(1);
     expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { clubId: { in: ["club-a", "club-b"] } },
+        where: { clubId: { in: ["club-a", "club-b"] }, retiredByAdmissionEventId: null },
       })
     );
   });

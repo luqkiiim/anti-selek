@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { nonretiredPlayer } from "@/lib/playerIdentity";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
     await prisma.$transaction([
       // 1. Reset all players ELO to 1000
       prisma.player.updateMany({
+        where: nonretiredPlayer,
         data: { elo: 1000 }
       }),
       // 2. Delete all matches

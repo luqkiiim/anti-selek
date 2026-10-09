@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   clubAccessFindUnique: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
   playerFindMany: vi.fn(),
+  playerFindFirst: vi.fn(),
   playerFindUnique: vi.fn(),
   getAcceptedSessionClubIds: vi.fn(),
   getPlayerClubBadges: vi.fn(),
@@ -68,6 +69,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     player: {
       findMany: mocks.playerFindMany,
+      findFirst: mocks.playerFindFirst,
       findUnique: mocks.playerFindUnique,
     },
   },
@@ -139,6 +141,7 @@ describe("join session route", () => {
     mocks.playerFindMany.mockImplementation(async (args: { where: { ownerUserId: string } }) => [
       { id: args.where.ownerUserId.replace(/^account-/, "") },
     ]);
+    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-other" });
     mocks.playerFindUnique.mockResolvedValue({
       ownerUserId: "account-other",
       gender: PlayerGender.MALE,
@@ -263,6 +266,7 @@ describe("join session route", () => {
     });
     mocks.getAcceptedSessionClubIds.mockResolvedValue(["community-1"]);
     mocks.getSessionMembership.mockResolvedValue(null);
+    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
     mocks.playerFindUnique.mockResolvedValue({
       ownerUserId: "account-owner",
       gender: PlayerGender.MALE,
@@ -294,6 +298,7 @@ describe("join session route", () => {
       clubId: "community-1",
       role: "MEMBER",
     });
+    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
     mocks.playerFindUnique.mockResolvedValue({
       ownerUserId: "account-owner",
       gender: PlayerGender.MALE,
@@ -346,6 +351,7 @@ describe("join session route", () => {
       clubId: "linked-club",
       role: "MEMBER",
     });
+    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
     mocks.playerFindUnique.mockResolvedValue({
       ownerUserId: "account-owner",
       gender: PlayerGender.MALE,
@@ -406,6 +412,7 @@ describe("join session route", () => {
         clubId: "club-a",
         role: "MEMBER",
       });
+      mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
       mocks.playerFindUnique.mockResolvedValue({ ownerUserId: "account-owner" });
       mocks.getPlayerClubBadges.mockResolvedValue(
         new Map([["player-profile-9", [{ id: "club-b" }]]])
@@ -849,5 +856,83 @@ describe("join session route", () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe("Choose which club this player represents");
     expect(mocks.sessionUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a retired explicit Player before joining an unscoped session", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "account-owner", isAdmin: false } });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-global",
+      clubId: null,
+      status: SessionStatus.WAITING,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: false,
+      players: [],
+    });
+    mocks.playerFindFirst.mockResolvedValue(null);
+
+    const response = await postJoin({ playerId: "retired-duplicate" });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      error: "Player profile is not available for new sessions",
+    });
+    expect(mocks.playerFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "retired-duplicate",
+        clubMemberships: {
+          none: { retiredByAdmissionEventId: { not: null } },
+        },
+      },
+      select: { ownerUserId: true },
+    });
+    expect(mocks.sessionPlayerFindUnique).not.toHaveBeenCalled();
+    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
+  });
+
+  it("joins the active original Player by explicit ID in an unscoped session", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "account-owner", isAdmin: false } });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-global",
+      clubId: null,
+      status: SessionStatus.WAITING,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: false,
+      players: [],
+    });
+    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
+    mocks.playerFindUnique.mockResolvedValue({
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
+    mocks.sessionUpdate.mockResolvedValue({
+      id: "session-global",
+      clubId: null,
+      courts: [],
+      players: [],
+    });
+
+    const response = await postJoin({ playerId: "historical-player" });
+
+    expect(response.status).toBe(200);
+    expect(mocks.playerFindFirst).toHaveBeenCalledWith({
+      where: {
+        id: "historical-player",
+        clubMemberships: {
+          none: { retiredByAdmissionEventId: { not: null } },
+        },
+      },
+      select: { ownerUserId: true },
+    });
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          players: {
+            create: expect.objectContaining({ playerId: "historical-player" }),
+          },
+        },
+      })
+    );
   });
 });

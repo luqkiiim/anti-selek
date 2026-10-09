@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { formatProfileDate } from "./profileDate";
-import type { AdmissionCandidate, AdmissionDiscovery, AdmissionKind, AdmissionRequest } from "./admissionTypes";
+import type { AdmissionCandidate, AdmissionDiscovery, AdmissionKind, AdmissionRequest, AdmissionRequestSummary } from "./admissionTypes";
 import "./admission.css";
 
 type Selection = { id: string; kind: "EXISTING_PLAYER" | "OWNED_PLAYER" } | null;
@@ -36,13 +36,14 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
 }) {
   const [value, setValue] = useState(initialValue);
   const [discovery, setDiscovery] = useState<AdmissionDiscovery | null>(null);
-  const [latestRequest, setLatestRequest] = useState<AdmissionRequest | null>(null);
+  const [latestRequest, setLatestRequest] = useState<AdmissionRequestSummary | null>(null);
   const [mode, setMode] = useState<"start" | "existing" | "new">("start");
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection>(null);
   const [playerName, setPlayerName] = useState(accountName);
   const [gender, setGender] = useState(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : "");
   const [note, setNote] = useState("");
+  const [clubPassword, setClubPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const requestVersion = useRef(0);
@@ -51,7 +52,10 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
     const version = ++requestVersion.current;
     setBusy(true);
     setError("");
-    if (nextMode === "existing" && discovery) setDiscovery(current => current ? { ...current, players: [] } : current);
+    if (nextMode === "existing" && discovery) {
+      setDiscovery(current => current ? { ...current, players: [], ownedPlayers: [] } : current);
+      setSelection(null);
+    }
     try {
       const params = new URLSearchParams({ clubId });
       if (search.trim()) params.set("q", search.trim());
@@ -85,9 +89,42 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   const mostRecentRequest = latestRequest ?? discovery?.requests[0] ?? null;
   const hasActiveAccess = discovery?.access?.status === "ACTIVE";
   const isMember = hasActiveAccess && !!discovery?.membership;
+  const proofSatisfied = discovery?.passwordProof.status === "NOT_REQUIRED" || discovery?.passwordProof.status === "VERIFIED";
+
+  function relockProtectedDiscovery(clubId: string) {
+    setDiscovery(current => current?.club.id === clubId ? {
+      ...current,
+      passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null },
+      players: [],
+      ownedPlayers: [],
+    } : current);
+    setSelection(null);
+    setMode("start");
+  }
+
+  async function verifyPassword() {
+    if (!discovery) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api<{ ok: true; clubId: string; expiresAt: string }>("/api/clubs/join-proof", "POST", { clubId: discovery.club.id, password: clubPassword });
+      setClubPassword("");
+      await loadClub(discovery.club.id, query, mode === "existing" ? "existing" : "start");
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "INVALID_PASSWORD") setError("That password is incorrect. Try again.");
+      else if (reason instanceof ApiError && reason.code === "PASSWORD_REQUIRED") {
+        setClubPassword("");
+        relockProtectedDiscovery(discovery.club.id);
+        await loadClub(discovery.club.id, query, mode === "existing" ? "existing" : "start");
+      } else setError(reason instanceof Error ? reason.message : "Unable to verify the club password.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(kind: AdmissionKind, requestedPlayerId?: string) {
     if (!discovery) return;
+    if (!proofSatisfied) { setError("Enter the club password to continue."); return; }
     setBusy(true);
     setError("");
     try {
@@ -106,13 +143,17 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       setLatestRequest(result);
       setMode("start");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to send your request");
+      if (reason instanceof ApiError && reason.code === "PASSWORD_REQUIRED") {
+        relockProtectedDiscovery(discovery.club.id);
+        await loadClub(discovery.club.id, query, mode === "existing" ? "existing" : "start");
+        setError("The password check expired. Enter the club password to continue.");
+      } else setError(reason instanceof Error ? reason.message : "Unable to send your request");
     } finally {
       setBusy(false);
     }
   }
 
-  async function cancel(request: AdmissionRequest) {
+  async function cancel(request: AdmissionRequestSummary) {
     if (!discovery) return;
     setBusy(true);
     setError("");
@@ -149,14 +190,22 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
 
       {!isMember && !currentPending && hasActiveAccess && <div className="admission-status is-approved" role="status"><strong>Your account already has club access.</strong><span>Connect a Player profile to appear on the roster and keep the right match history.</span></div>}
 
-      {!isMember && !currentPending && <>
+      {!isMember && !currentPending && discovery.club.allowJoinRequests && discovery.passwordProof.status === "PASSWORD_REQUIRED" ? <section className="admission-status" aria-label="Club password required">
+        <strong>Verify the club password to browse Player profiles.</strong>
+        <p>Request status and existing access remain available without the password.</p>
+        <form className="admission-form" onSubmit={event => { event.preventDefault(); void verifyPassword(); }}>
+          <label className="field-label">Club password<input type="password" value={clubPassword} onChange={event => setClubPassword(event.target.value)} autoComplete="current-password" /></label>
+          <button className="primary" disabled={busy || !clubPassword}>{busy ? "Checking password…" : "Continue"}</button>
+        </form>
+      </section> : !isMember && !currentPending && <>
         {!discovery.club.allowJoinRequests ? <div className="admission-status"><strong>Requests are closed.</strong><span>{discovery.club.name} is not accepting new members right now.</span></div>
-          : mode === "start" ? <>
+          : !proofSatisfied ? null : mode === "start" ? <>
             <h3 className="admission-question">Have you played with this club before?</h3>
             <p className="muted">We’ll connect you to the right Player record so your match history stays together.</p>
+            {discovery.identityReviewRequired && <p className="admission-status" role="status">An inactive Player identity on this account still needs admin review. It will not be reactivated or replaced automatically.</p>}
             <div className="admission-choice-grid">
               <button type="button" className="admission-choice" onClick={openExisting}><strong>Yes, find my profile</strong><span>Search the club roster</span></button>
-              <button type="button" className="admission-choice" onClick={() => { setMode("new"); setSelection(null); setPlayerName(accountName); setGender(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : ""); }}><strong>I’m new to this club</strong><span>Ask the admin to add a Player</span></button>
+              <button type="button" className="admission-choice" disabled={discovery.identityReviewRequired && discovery.ownedPlayers.length === 0} onClick={() => { setMode("new"); setSelection(null); setPlayerName(accountName); setGender(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : ""); }}><strong>{discovery.ownedPlayers.length ? "Use a Player you own" : "I’m new to this club"}</strong><span>{discovery.ownedPlayers.length ? "Choose an active profile and keep its history" : discovery.identityReviewRequired ? "Admin review is needed before creating another Player" : "Ask the admin to add a Player"}</span></button>
             </div>
           </> : mode === "existing" ? <>
             <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
@@ -175,9 +224,14 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
             <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
             <h3>Use a Player profile you already own</h3>
             <p className="muted">This account already has Player profiles. Choose one to request access with its existing history.</p>
+            {discovery.identityReviewRequired && <p className="admission-status" role="status">An inactive Player identity also needs admin review. You can still choose one of your active profiles here.</p>}
             <div className="admission-owned">{discovery.ownedPlayers.map(player => <button key={player.id} type="button" className={`admission-owned-choice${selection?.id === player.id ? " selected" : ""}`} aria-pressed={selection?.id === player.id} onClick={() => setSelection({ id: player.id, kind: "OWNED_PLAYER" })}><Avatar name={player.name} /><strong>{player.name}</strong><span>{selection?.id === player.id ? "Selected" : "Choose"}</span></button>)}</div>
             <label className="field-label">Note for the admin <textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder="Optional context for your request" /></label>
             <button type="button" className="primary" disabled={!selection || selection.kind !== "OWNED_PLAYER" || busy} onClick={() => selection?.kind === "OWNED_PLAYER" && void submit("OWNED_PLAYER", selection.id)}>Request to use this Player</button>
+          </> : discovery.identityReviewRequired ? <>
+            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
+            <h3>Identity review needed</h3>
+            <p className="admission-status" role="status">This account has an inactive Player identity that is not available for joining. Ask a club admin to review it before requesting another Player profile. No identity will be reactivated or changed automatically.</p>
           </> : <>
             <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
             <h3>Request a new Player profile</h3>
@@ -189,7 +243,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
             <button type="button" className="primary" disabled={busy || playerName.trim().length < 1 || !gender} onClick={() => void submit("NEW_PLAYER")}>Send request</button>
           </>}
       </>}
-      <button type="button" className="text-button admission-change-club" onClick={() => { setDiscovery(null); setLatestRequest(null); setMode("start"); setError(""); }}>Use a different club code</button>
+      <button type="button" className="text-button admission-change-club" onClick={() => { setDiscovery(null); setLatestRequest(null); setMode("start"); setClubPassword(""); setError(""); }}>Use a different club code</button>
     </>}
   </Sheet>;
 }

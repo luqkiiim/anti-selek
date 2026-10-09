@@ -12,14 +12,14 @@ export async function captureAchievementEligibility(db: Database, sessionId: str
   const session=await db.session.findUniqueOrThrow({where:{id:sessionId},select:{achievementEligibilityJson:true}});
   const snapshot=parseObject(session.achievementEligibilityJson);
   for(const clubId of new Set(clubIds)) if(!Array.isArray(snapshot[clubId])) {
-    const members=await db.clubMember.findMany({where:{clubId},select:{playerId:true}});
+    const members=await db.clubMember.findMany({where:{clubId,retiredByAdmissionEventId:null},select:{playerId:true}});
     snapshot[clubId]=members.map(m=>m.playerId);
   }
   await db.session.update({where:{id:sessionId},data:{achievementEligibilityJson:JSON.stringify(snapshot)}});
 }
 
 export async function getClubAchievementCollection(clubId: string,playerId: string): Promise<AchievementCollection> {
-  const members=await prisma.clubMember.findMany({where:{clubId},select:{playerId:true,createdAt:true,achievementPreferencesJson:true}});
+  const members=await prisma.clubMember.findMany({where:{clubId,retiredByAdmissionEventId:null},select:{playerId:true,createdAt:true,achievementPreferencesJson:true}});
   const member=members.find(m=>m.playerId===playerId);
   if(!member) throw new Error("Achievement member unavailable");
   const resolve=await getClubStatUserResolver(prisma,{clubId,memberUserIds:members.map(m=>m.playerId)});

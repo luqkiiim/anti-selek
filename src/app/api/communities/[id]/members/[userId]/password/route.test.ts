@@ -133,4 +133,35 @@ describe("club emergency password reset route", () => {
     expect(response.status).toBe(400);
     expect(mocks.userUpdate).not.toHaveBeenCalled();
   });
+
+  it("does not reset Account credentials through a retired Player ID alias", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "global-admin-1", isAdmin: true, email: "admin@example.com" },
+    });
+    const account = { passwordHash: "existing-hash", sessionVersion: 12 };
+    mocks.clubMemberFindUnique.mockResolvedValue({
+      retiredByAdmissionEventId: "retirement-event-1",
+      player: {
+        id: "player-target",
+        name: "Player One",
+        ownerUser: {
+          id: "account-target",
+          name: "Account One",
+          email: "player@example.com",
+        },
+      },
+    });
+    mocks.userUpdate.mockImplementation(async ({ data }: { data: { passwordHash: string; sessionVersion: { increment: number } } }) => {
+      account.passwordHash = data.passwordHash;
+      account.sessionVersion += data.sessionVersion.increment;
+      return account;
+    });
+
+    const response = await postPasswordReset({ password: "new-password123" });
+
+    expect(response.status).toBe(403);
+    expect(mocks.bcryptHash).not.toHaveBeenCalled();
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(account).toEqual({ passwordHash: "existing-hash", sessionVersion: 12 });
+  });
 });

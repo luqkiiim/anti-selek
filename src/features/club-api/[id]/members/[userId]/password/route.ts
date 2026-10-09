@@ -66,6 +66,7 @@ export async function POST(
         },
       },
       select: {
+        retiredByAdmissionEventId: true,
         player: {
           select: {
             id: true,
@@ -77,6 +78,10 @@ export async function POST(
     });
 
     if (!membership?.player) {
+      return invalidTargetResponse(request, "api:communities:id:members:userId:password");
+    }
+
+    if (membership.retiredByAdmissionEventId) {
       return invalidTargetResponse(request, "api:communities:id:members:userId:password");
     }
 

@@ -111,7 +111,7 @@ export async function POST(
       await deleteEphemeralGuestUsers(tx, guestUserIds);
 
       await tx.clubMember.updateMany({
-        where: { clubId: id },
+        where: { clubId: id, retiredByAdmissionEventId: null },
         data: { elo: 1000 },
       });
     });

@@ -120,8 +120,26 @@ describe("club achievements target reads", () => {
     expect(mocks.getCollection).toHaveBeenCalledWith("club-1", "player-target");
     expect(mocks.memberFindUnique).toHaveBeenCalledWith({
       where: { clubId_playerId: { clubId: "club-1", playerId: "player-target" } },
-      select: { id: true },
+      select: { id: true, retiredByAdmissionEventId: true },
     });
+  });
+
+  it("rejects a retired target before reading or writing achievement snapshots", async () => {
+    mocks.memberFindUnique.mockResolvedValue({ id: "membership-retired", retiredByAdmissionEventId: "retirement-event" });
+
+    const read = await GET(request("?userId=player-retired"), { params });
+
+    expect(read.status).toBe(404);
+    expect(await read.json()).toEqual({ error: "Club unavailable" });
+    expect(mocks.getCollection).not.toHaveBeenCalled();
+    expect(mocks.savePreferences).not.toHaveBeenCalled();
+
+    const write = await PATCH(request("?userId=player-retired", { method: "PATCH", body: JSON.stringify({ showcase: [] }) }), { params });
+
+    expect(write.status).toBe(404);
+    expect(await write.json()).toEqual({ error: "Club unavailable" });
+    expect(mocks.getCollection).not.toHaveBeenCalled();
+    expect(mocks.savePreferences).not.toHaveBeenCalled();
   });
 
   it("rejects a target who is not a member of the club", async () => {

@@ -19,7 +19,12 @@ describe("authenticated account settings are separate from Players", () => {
     expect(response.status).toBe(200); expect(body.user).toMatchObject({ id: "account-new", name: "Account Name", canRenameName: true, canChangeGender: true });
     expect(body.players).toMatchObject([{ id: "historical-player", name: "Historical Player", gender: "FEMALE" }]);
     expect(body.user).not.toHaveProperty("elo");
-    expect(mocks.players).toHaveBeenCalledWith(expect.objectContaining({ where: { ownerUserId: "account-new" } }));
+    expect(mocks.players).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        ownerUserId: "account-new",
+        clubMemberships: { none: { retiredByAdmissionEventId: { not: null } } },
+      },
+    }));
   });
   it("changes an Account name once without editing its owned Player", async () => {
     expect((await patch({ name: "New Account Name" })).status).toBe(200);

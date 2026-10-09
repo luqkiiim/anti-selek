@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AdjustClubRating } from "./AdjustClubRating";
 import { AddGuestToClub } from "./AddGuestToClub";
+import { PlayerIdentityInvitationActions } from "@/components/club-admin/PlayerIdentityInvitationActions";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -54,6 +55,7 @@ interface UserProfileResponse {
     avatarUrl: string | null;
     elo: number;
     createdAt: string;
+    isRetired?: boolean;
   };
   context?: {
     clubId: string;
@@ -1935,6 +1937,7 @@ export function PlayerProfileView({
       ? "No streak"
       : `${data.recentForm.currentStreak.result === "WIN" ? "W" : "L"}${data.recentForm.currentStreak.count}`;
   const canManageAvatar =
+    data.user.isRetired !== true &&
     !!currentUser &&
     (currentUser.isAdmin === true ||
       (currentUser.playerIds?.includes(playerId) === true &&
@@ -1963,11 +1966,16 @@ export function PlayerProfileView({
         onBack={isEmbedded ? undefined : handleBack}
       />
 
-      {data.context?.viewerCanManageClub && !data.context.canAddGuestToClub ? (
+      {data.user.isRetired !== true && data.context?.viewerCanManageClub && !data.context.canAddGuestToClub ? (
         <div className="px-4 sm:px-0"><AdjustClubRating key={`${clubId}:${playerId}`} clubId={clubId} userId={playerId} name={data.user.name} onChanged={() => setRatingRevision(value => value + 1)} /></div>
       ) : null}
-      {data.context?.canAddGuestToClub ? (
+      {data.user.isRetired !== true && data.context?.canAddGuestToClub ? (
         <AddGuestToClub key={`${clubId}:${playerId}`} clubId={clubId} userId={playerId} name={data.user.name} />
+      ) : null}
+      {data.user.isRetired !== true && clubId && data.context?.viewerCanManageClub ? (
+        <div className="px-4 sm:px-0">
+          <PlayerIdentityInvitationActions clubId={clubId} playerId={playerId} connected />
+        </div>
       ) : null}
 
       <AvatarPreviewModal

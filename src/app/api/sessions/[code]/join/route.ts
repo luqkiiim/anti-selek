@@ -13,7 +13,7 @@ import {
   isValidSessionPool,
 } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
-import { IdentityConflictError, resolveOwnedSessionPlayer } from "@/lib/playerIdentity";
+import { IdentityConflictError, nonretiredPlayer, resolveOwnedSessionPlayer } from "@/lib/playerIdentity";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
   getAcceptedSessionClubIds,
@@ -150,12 +150,15 @@ export async function POST(
     let requesterOwnsTarget = false;
 
     if (requestedPlayerId) {
-      const requestedPlayer = await prisma.player.findUnique({
-        where: { id: requestedPlayerId },
+      const requestedPlayer = await prisma.player.findFirst({
+        where: { id: requestedPlayerId, ...nonretiredPlayer },
         select: { ownerUserId: true },
       });
       if (!requestedPlayer) {
-        return invalidTargetResponse(request, "api:sessions:code:join");
+        return sportingJson(
+          { error: "Player profile is not available for new sessions" },
+          { status: 409 }
+        );
       }
       requesterOwnsTarget = requestedPlayer.ownerUserId === session.user.id;
       if (!requesterOwnsTarget && !session.user.isAdmin && !requesterOperatorMembership) {

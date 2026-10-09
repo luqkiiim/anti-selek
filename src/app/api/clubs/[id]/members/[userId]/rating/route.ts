@@ -38,6 +38,7 @@ export async function POST(request: Request, context: Context) {
     const result = await prisma.$transaction(async (tx) => {
       const member = await tx.clubMember.findUnique({ where: { clubId_playerId: { clubId: access.clubId!, playerId: access.userId! } } });
       if (!member) return { status: 404, error: "Club player not found" };
+      if (member.retiredByAdmissionEventId) return { status: 409, error: "Retired player ratings cannot be changed" };
       if (member.elo !== body.expectedRating) return { status: 409, error: "Rating changed since you opened this panel. Reopen it to review the latest rating." };
       if (member.elo === body.rating) return { status: 400, error: "Choose a different rating" };
       const updated = await tx.clubMember.updateMany({ where: { id: member.id, elo: body.expectedRating }, data: { elo: body.rating } });

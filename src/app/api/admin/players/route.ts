@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { serializeAvatarEntity } from "@/lib/avatar";
+import { nonretiredPlayer } from "@/lib/playerIdentity";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
   try {
     const limited = await rateLimit(request, "api:admin:players:get", { limit: 20, windowMs: 60000 }); if (limited) return limited;
     const session = await auth(); if (!session?.user?.isAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const players = await prisma.player.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, avatarKey: true, elo: true, ownerUserId: true, isActive: true, createdAt: true } });
+    const players = await prisma.player.findMany({ where: nonretiredPlayer, orderBy: { name: "asc" }, select: { id: true, name: true, avatarKey: true, elo: true, ownerUserId: true, isActive: true, createdAt: true } });
     return NextResponse.json(players.map(player => ({ ...serializeAvatarEntity(player), email: null, isClaimed: !!player.ownerUserId })));
   } catch (error) { logError("Admin list players", error); return safeErrorResponse(); }
 }

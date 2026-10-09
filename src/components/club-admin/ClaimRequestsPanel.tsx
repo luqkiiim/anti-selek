@@ -3,6 +3,7 @@
 import { doClaimNamesMatch } from "@/lib/clubClaimRules";
 import styles from "@/features/club-admin-page/ClubAdminPage.module.css";
 import type { ClubAdminClaimRequest } from "./clubAdminTypes";
+import { PlayerRecoveryReview, type RecoveryReviewDecision } from "./PlayerRecoveryReview";
 
 interface ClaimRequestsPanelProps {
   claimRequests: ClubAdminClaimRequest[];
@@ -10,7 +11,8 @@ interface ClaimRequestsPanelProps {
   currentUserId?: string | null;
   onReviewClaimRequest: (
     claimRequest: ClubAdminClaimRequest,
-    decision: "APPROVE" | "REJECT"
+    decision: "APPROVE" | "REJECT",
+    recoveryDecision?: Omit<RecoveryReviewDecision, "action">
   ) => void;
 }
 
@@ -119,7 +121,7 @@ export function ClaimRequestsPanel({
                     Another admin must approve this request
                   </p>
                 ) : null}
-                <div className={styles.requestActions}>
+                {claimRequest.recovery ? <PlayerRecoveryReview key={`${claimRequest.id}:${claimRequest.revision}`} recovery={claimRequest.recovery} busy={reviewingClaimRequestId !== null} authorized={claimRequest.recoveryReviewAuthorized === true} selfApproval={claimRequest.requesterUserId === currentUserId} onReview={({ action, ...decision }) => onReviewClaimRequest(claimRequest, action, decision)} /> : <div className={styles.requestActions}>
                   <button
                     type="button"
                     onClick={() => onReviewClaimRequest(claimRequest, "APPROVE")}
@@ -139,7 +141,7 @@ export function ClaimRequestsPanel({
                   >
                     Reject
                   </button>
-                </div>
+                </div>}
               </div>
             );
           })

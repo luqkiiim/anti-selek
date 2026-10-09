@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       quick ? Promise.resolve(null) : prisma.user.findUnique({ where: { id: actorId } }),
       quick ? Promise.resolve(null) : prisma.clubAccess.findUnique({ where: { clubId_userId: { clubId: id, userId: actorId } } }),
       prisma.club.findUnique({ where: { id }, include: { _count: { select: { members: true, sessions: true } } } }),
-      prisma.clubMember.findFirst({ where: { clubId: id, archivedAt: null, ...(quick ? { playerId: session.user.guestPlayerId ?? "" } : { ownerUserId: actorId }) }, include: { player: true } }),
+      prisma.clubMember.findFirst({ where: { clubId: id, archivedAt: null, retiredByAdmissionEventId: null, ...(quick ? { playerId: session.user.guestPlayerId ?? "" } : { ownerUserId: actorId }) }, include: { player: true } }),
     ]);
     if (!club || (!quick && !account) || (club.isTutorial && club.tutorialOwnerId !== actorId)) return invalidTargetResponse(request, "api:communities:id");
     const isOwner = !quick && club.createdById === actorId && access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role);

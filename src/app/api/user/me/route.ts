@@ -6,6 +6,7 @@ import { rateLimit } from "@/lib/rateLimit";
 import { getSessionAccountId, getQuickAccessPlayerId, normalizeNameLookupKey } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/serverAudit";
+import { nonretiredPlayer } from "@/lib/playerIdentity";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
       if (!player?.isActive || player.ownerUserId !== null) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
       return NextResponse.json({ user: { ...serializeAvatarEntity(player), id: session!.user.id, playerId: player.id, email: null, isClaimed: false, isQuickAccess: true, quickAccessClubId: session!.user.quickAccessClubId ?? null, quickAccessCommunityId: session!.user.quickAccessClubId ?? null, isAdmin: false, canRenameName: false, canChangeGender: false }, players: [] });
     }
-    const [user, players] = await Promise.all([prisma.user.findUnique({ where: { id: userId }, select: accountSelect }), prisma.player.findMany({ where: { ownerUserId: userId }, select: ownedPlayerSelect })]);
+    const [user, players] = await Promise.all([prisma.user.findUnique({ where: { id: userId }, select: accountSelect }), prisma.player.findMany({ where: { ownerUserId: userId, ...nonretiredPlayer }, select: ownedPlayerSelect })]);
     if (!user?.isActive) return NextResponse.json({ error: "Account not found" }, { status: 404 });
     return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), players: players.map(serializeAvatarEntity) });
   } catch (error) { logError("Load account", error); return safeErrorResponse(); }

@@ -8,7 +8,7 @@ type Database = PrismaClient | Prisma.TransactionClient;
 export async function getClubRoster(db: Database, clubId: string, includeArchived = false) {
   const [members, access, club] = await Promise.all([
     db.clubMember.findMany({
-      where: { clubId, ...(includeArchived ? {} : { archivedAt: null }) },
+      where: { clubId, ...(includeArchived ? {} : { archivedAt: null, retiredByAdmissionEventId: null }) },
       include: { player: true },
       orderBy: { createdAt: "asc" },
     }),
@@ -21,6 +21,7 @@ export async function getClubRoster(db: Database, clubId: string, includeArchive
     playerId: member.playerId,
     clubMemberId: member.id,
     ownerUserId: member.player.ownerUserId,
+    retiredByAdmissionEventId: member.retiredByAdmissionEventId,
     name: member.player.name,
     email: null,
     avatarUrl: serializeAvatarEntity(member.player).avatarUrl,

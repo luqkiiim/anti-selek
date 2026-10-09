@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) { super(message); }
+}
+
 export async function api<T>(
   url: string,
   method = "GET",
@@ -13,12 +17,13 @@ export async function api<T>(
   });
   const data = await response.json().catch(() => null);
   if (!response.ok)
-    throw new Error(data?.error || `Request failed (${response.status})`);
+    throw new ApiError(data?.error || `Request failed (${response.status})`, response.status, data?.code);
   return data as T;
 }
 export function useResource<T>(url: string | null) {
   const [state, setState] = useState<{ url: string; data: T } | null>(null);
   const [error, setError] = useState("");
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const latest = useRef(url);
   const requestVersion = useRef(0);
   useEffect(() => { latest.current = url; }, [url]);
@@ -30,10 +35,13 @@ export function useResource<T>(url: string | null) {
       if (latest.current === url && requestVersion.current === version) {
         setState({ url, data });
         setError("");
+        setErrorStatus(null);
       }
     } catch (e) {
-      if (latest.current === url && requestVersion.current === version)
+      if (latest.current === url && requestVersion.current === version) {
         setError(e instanceof Error ? e.message : "Unable to load");
+        setErrorStatus(e instanceof ApiError ? e.status : null);
+      }
       throw e;
     }
   }, [url]);
@@ -45,11 +53,12 @@ export function useResource<T>(url: string | null) {
       ? { url, data: updater(current.data) }
       : current);
     setError("");
+    setErrorStatus(null);
   }, [url]);
   useEffect(() => {
     void Promise.resolve().then(refresh).catch(() => {});
   }, [refresh]);
-  return { data: state?.url === url ? state.data : null, error, refresh, update };
+  return { data: state?.url === url ? state.data : null, error, errorStatus, refresh, update };
 }
 export function useAction(refresh?: () => Promise<unknown>) {
   const [busy, setBusy] = useState(false),

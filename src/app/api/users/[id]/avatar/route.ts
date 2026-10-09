@@ -20,6 +20,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { isClubAdminRole } from "@/lib/clubRoles";
 import { isQuickAccessSession } from "@/lib/quickAccess";
+import { nonretiredPlayer } from "@/lib/playerIdentity";
 import {
   checkInvalidTargetRateLimit,
   invalidTargetResponse,
@@ -29,8 +30,8 @@ import {
 export const dynamic = "force-dynamic";
 
 async function getAvatarTargetUser(playerId: string) {
-  return prisma.player.findUnique({
-    where: { id: playerId },
+  return prisma.player.findFirst({
+    where: { id: playerId, ...nonretiredPlayer },
     select: {
       id: true,
       avatarKey: true,

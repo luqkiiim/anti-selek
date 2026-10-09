@@ -80,6 +80,7 @@ describe("user stats route", () => {
       id: where.id, name: "Alex Lee",
       avatarKey: `https://blob.vercel-storage.com/avatars/${where.id}/profile.webp`,
       elo: 1333, createdAt: new Date("2026-05-18T00:00:00.000Z"),
+      clubMemberships: [],
     }));
     mocks.matchFindMany.mockResolvedValue([]);
     mocks.matchEloAdjustmentFindMany.mockResolvedValue([]);
@@ -101,6 +102,7 @@ describe("user stats route", () => {
     expect(response.status).toBe(200);
     expect(mocks.playerFindUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "player-1" } }));
     expect(body.player.avatarUrl).toBe("https://blob.vercel-storage.com/avatars/player-1/profile.webp");
+    expect(body.player.isRetired).toBe(false);
     expect(mocks.auth).toHaveResolvedWith({ user: { id: "account-viewer", isAdmin: false } });
   });
 
@@ -180,10 +182,81 @@ describe("user stats route", () => {
 
     const response = await getStats("player-1", "?clubId=club-1");
     expect(response.status).toBe(200);
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        clubId: "club-1",
+        retiredByAdmissionEventId: null,
+        status: { not: "OCCASIONAL" },
+      },
+    }));
     expect(mocks.buildProfileClubRankWindow).toHaveBeenCalledWith("player-1", [
       expect.objectContaining({ userId: "player-1", isLeaderboardEligible: false }),
       expect.objectContaining({ userId: "player-2", isLeaderboardEligible: true }),
     ], []);
+  });
+
+  it("keeps retired profile history readable while marking it non-editable and excluding it from rankings", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "account-admin", isAdmin: false } });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
+    mocks.playerFindUnique.mockResolvedValue({
+      id: "duplicate",
+      name: "Duplicate",
+      avatarKey: null,
+      elo: 1000,
+      createdAt: new Date("2026-05-18T00:00:00.000Z"),
+      clubMemberships: [{ id: "retired-membership" }],
+    });
+    mocks.clubMemberFindUnique.mockResolvedValue({
+      id: "retired-membership",
+      elo: 1050,
+      status: "CORE",
+      retiredByAdmissionEventId: "retirement-event",
+      player: { id: "duplicate", name: "Duplicate" },
+    });
+    mocks.clubMemberFindMany.mockResolvedValue([
+      { playerId: "duplicate", elo: 1050, player: { name: "Duplicate" } },
+      { playerId: "historical-player", elo: 1455, player: { name: "Original" } },
+    ]);
+
+    const response = await getStats("duplicate", "?clubId=club-1");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.player).toMatchObject({ id: "duplicate", isRetired: true });
+    expect(body.context.viewerCanManageClub).toBe(true);
+    expect(body.profile).toBeDefined();
+    expect(mocks.buildMemberProfileData).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "duplicate" })
+    );
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        clubId: "club-1",
+        retiredByAdmissionEventId: null,
+        status: { not: "OCCASIONAL" },
+      },
+    }));
+  });
+
+  it("does not offer guest promotion for a globally retired Player viewed from another club", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "account-admin", isAdmin: false } });
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
+    mocks.playerFindUnique.mockResolvedValue({
+      id: "duplicate",
+      name: "Duplicate",
+      avatarKey: null,
+      elo: 1000,
+      createdAt: new Date("2026-05-18T00:00:00.000Z"),
+      clubMemberships: [{ id: "retired-membership" }],
+    });
+    mocks.clubMemberFindUnique.mockResolvedValue(null);
+    mocks.sessionPlayerFindFirst.mockResolvedValue({ id: "legacy-appearance" });
+
+    const response = await getStats("duplicate", "?clubId=other-club");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.player.isRetired).toBe(true);
+    expect(body.context.canAddGuestToClub).toBe(false);
   });
 
   it.each([["ADMIN", true], ["MEMBER", false]])("shows a club guest profile to %s with correct promotion access", async (role, canAdd) => {

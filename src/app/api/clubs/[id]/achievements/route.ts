@@ -49,8 +49,9 @@ async function handle(request:Request,context:{params:Promise<{id:string}>},writ
     if (!quick && !identity?.canAccess) return NextResponse.json({error:"Club unavailable"},{status:404});
     const playerId = hasTargetUserId ? targetUserId : ownPlayerId;
     if (!playerId) return NextResponse.json({error:"Connect your Player profile to view your collection"},{status:409});
-    const member = await prisma.clubMember.findUnique({where:{clubId_playerId:{clubId,playerId}},select:{id:true}});
+    const member = await prisma.clubMember.findUnique({where:{clubId_playerId:{clubId,playerId}},select:{id:true,retiredByAdmissionEventId:true}});
     if (!member) return NextResponse.json({error:"Club unavailable"},{status:404});
+    if (member.retiredByAdmissionEventId) return NextResponse.json({error:"Club unavailable"},{status:404});
     if (write && playerId !== ownPlayerId) return NextResponse.json({error:"Achievement preferences are self-only"},{status:403});
     if (playerId !== ownPlayerId) return NextResponse.json(toPublicAchievementCollection(await getClubAchievementCollection(clubId,playerId)));
     if(write) {

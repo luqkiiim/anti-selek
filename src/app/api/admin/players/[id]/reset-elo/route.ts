@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { nonretiredPlayer } from "@/lib/playerIdentity";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
@@ -29,8 +30,8 @@ export async function POST(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const user = await prisma.player.findUnique({
-      where: { id },
+    const user = await prisma.player.findFirst({
+      where: { id, ...nonretiredPlayer },
     });
 
     if (!user) {

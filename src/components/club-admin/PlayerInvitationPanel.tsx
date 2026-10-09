@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api, useAction, useResource } from "@/components/prototype/api";
 import { playerInvitationQr } from "@/lib/playerInvitationQr";
+import { PlayerIdentityInvitationActions } from "./PlayerIdentityInvitationActions";
 
 type InvitationSummary = { id: string; status: string; createdAt: string; expiresAt: string };
 type InvitationResponse = { invitation: InvitationSummary | null; secret?: string };
@@ -46,5 +47,6 @@ export function PlayerInvitationPanel({ clubId, playerId, playerName, rating, ma
       </> : resource.data && <button className="app-button-secondary px-4 py-2" type="button" disabled={action.busy} onClick={() => void action.run(() => manage("CREATE"))}>Invite player</button>}
       <p className="muted">Share privately with this person. Anyone with the link can claim the profile.</p>
     </>}
+    <PlayerIdentityInvitationActions clubId={clubId} playerId={playerId} connected={connected} onInvitationCreated={() => resource.refresh()} />
   </section>;
 }

@@ -1,3 +1,4 @@
+import type { RecoveryEligibility } from "@/types/playerRecovery";
 export type AdmissionKind = "EXISTING_PLAYER" | "OWNED_PLAYER" | "NEW_PLAYER";
 export type AdmissionStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 
@@ -13,6 +14,9 @@ export type AdmissionCandidate = {
 export type AdmissionRequest = {
   id: string;
   clubId: string;
+  originInvitationId?: string | null;
+  recovery?: RecoveryEligibility;
+  recoveryReviewAuthorized?: boolean;
   kind: AdmissionKind;
   status: AdmissionStatus;
   revision: number;
@@ -38,11 +42,15 @@ export type AdmissionRequest = {
   approvedPlayer?: { id: string; name: string } | null;
 };
 
+export type AdmissionRequestSummary = Pick<AdmissionRequest, "id" | "clubId" | "kind" | "status" | "revision" | "createdAt"> & Partial<AdmissionRequest>;
+
 export type AdmissionDiscovery = {
   club: { id: string; name: string; allowJoinRequests: boolean };
+  passwordProof: { status: "NOT_REQUIRED" | "PASSWORD_REQUIRED" | "VERIFIED"; expiresAt: string | null };
   players: AdmissionCandidate[];
   ownedPlayers: Array<{ id: string; name: string }>;
-  requests: AdmissionRequest[];
+  identityReviewRequired: boolean;
+  requests: AdmissionRequestSummary[];
   membership: { playerId: string } | null;
   access: { role: string; status: string } | null;
 };

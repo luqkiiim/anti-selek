@@ -3,7 +3,7 @@ import { AVATAR_MAX_FILE_BYTES } from "@/lib/avatar";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  playerFindUnique: vi.fn(),
+  playerFindFirst: vi.fn(),
   playerUpdate: vi.fn(),
   clubAccessFindUnique: vi.fn(),
   clubMemberFindUnique: vi.fn(),
@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    player: { findUnique: mocks.playerFindUnique, update: mocks.playerUpdate },
+    player: { findFirst: mocks.playerFindFirst, update: mocks.playerUpdate },
     clubAccess: { findUnique: mocks.clubAccessFindUnique },
     clubMember: { findUnique: mocks.clubMemberFindUnique },
   },
@@ -42,7 +42,7 @@ function createAvatarRequest({
 }
 function setOwnerRequest() {
   mocks.auth.mockResolvedValue({ user: { id: "account-1", isAdmin: false, isQuickAccess: false } });
-  mocks.playerFindUnique.mockResolvedValue({
+  mocks.playerFindFirst.mockResolvedValue({
     id: "player-1", ownerUserId: "account-1", avatarKey: "https://blob.vercel-storage.com/avatars/player-1/old.jpg", name: "Owner",
   });
 }
@@ -64,7 +64,12 @@ describe("user avatar route", () => {
     const response = await POST(createAvatarRequest(), { params: Promise.resolve({ id: "player-1" }) });
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(mocks.playerFindUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "player-1" } }));
+    expect(mocks.playerFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: "player-1",
+        clubMemberships: { none: { retiredByAdmissionEventId: { not: null } } },
+      },
+    }));
     expect(mocks.uploadAvatarObject).toHaveBeenCalledWith(expect.objectContaining({ avatarPathname: expect.stringMatching(/^avatars\/player-1\//) }));
     expect(mocks.playerUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "player-1" } }));
     expect(body.avatarUrl).toBe("https://blob.vercel-storage.com/avatars/player-1/123-avatar.png");
@@ -102,7 +107,7 @@ describe("user avatar route", () => {
 
   it("rejects quick-access self-management", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "player-1", isAdmin: false, isQuickAccess: true } });
-    mocks.playerFindUnique.mockResolvedValue({ id: "player-1", ownerUserId: "account-1", avatarKey: null, name: "Quick User" });
+    mocks.playerFindFirst.mockResolvedValue({ id: "player-1", ownerUserId: "account-1", avatarKey: null, name: "Quick User" });
     const response = await POST(createAvatarRequest(), { params: Promise.resolve({ id: "player-1" }) });
     expect(response.status).toBe(403);
     expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
@@ -110,7 +115,7 @@ describe("user avatar route", () => {
 
   it("allows an active club admin to manage a guest Player avatar", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "account-admin", isAdmin: false, isQuickAccess: false } });
-    mocks.playerFindUnique.mockResolvedValue({ id: "player-guest", ownerUserId: null, avatarKey: null, name: "Guest" });
+    mocks.playerFindFirst.mockResolvedValue({ id: "player-guest", ownerUserId: null, avatarKey: null, name: "Guest" });
     mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
     mocks.clubMemberFindUnique.mockResolvedValue({ id: "club-player-guest" });
     const response = await POST(createAvatarRequest({ url: "http://localhost/api/users/player-guest/avatar?clubId=club-1" }), { params: Promise.resolve({ id: "player-guest" }) });
@@ -121,7 +126,7 @@ describe("user avatar route", () => {
 
   it("allows an active OWNER Account to manage a different Player avatar", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "account-owner", isAdmin: false, isQuickAccess: false } });
-    mocks.playerFindUnique.mockResolvedValue({ id: "historical-player-789", ownerUserId: null, avatarKey: null, name: "Historical Player" });
+    mocks.playerFindFirst.mockResolvedValue({ id: "historical-player-789", ownerUserId: null, avatarKey: null, name: "Historical Player" });
     mocks.clubAccessFindUnique.mockResolvedValue({ role: "OWNER", status: "ACTIVE" });
     mocks.clubMemberFindUnique.mockResolvedValue({ id: "club-player-789" });
 
@@ -137,7 +142,7 @@ describe("user avatar route", () => {
 
   it("does not allow a revoked OWNER grant to manage a Player avatar", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "account-owner", isAdmin: false, isQuickAccess: false } });
-    mocks.playerFindUnique.mockResolvedValue({ id: "historical-player-789", ownerUserId: null, avatarKey: null, name: "Historical Player" });
+    mocks.playerFindFirst.mockResolvedValue({ id: "historical-player-789", ownerUserId: null, avatarKey: null, name: "Historical Player" });
     mocks.clubAccessFindUnique.mockResolvedValue({ role: "OWNER", status: "REVOKED" });
     mocks.clubMemberFindUnique.mockResolvedValue({ id: "club-player-789" });
 
@@ -152,11 +157,27 @@ describe("user avatar route", () => {
 
   it("clears a managed Player avatar key", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "account-admin", isAdmin: true, isQuickAccess: false } });
-    mocks.playerFindUnique.mockResolvedValue({ id: "player-9", ownerUserId: null, avatarKey: "https://blob.vercel-storage.com/avatars/player-9/avatar.jpg", name: "Managed Player" });
+    mocks.playerFindFirst.mockResolvedValue({ id: "player-9", ownerUserId: null, avatarKey: "https://blob.vercel-storage.com/avatars/player-9/avatar.jpg", name: "Managed Player" });
     const response = await DELETE(new Request("http://localhost/api/users/player-9/avatar", { method: "DELETE" }), { params: Promise.resolve({ id: "player-9" }) });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ avatarUrl: null });
     expect(mocks.playerUpdate).toHaveBeenCalledWith({ where: { id: "player-9" }, data: { avatarKey: null } });
     expect(mocks.cleanupSupersededAvatar).toHaveBeenCalledWith({ previousAvatarKey: "https://blob.vercel-storage.com/avatars/player-9/avatar.jpg", nextAvatarKey: null });
+  });
+
+  it("rejects avatar changes for a retired Player before blob or database work", async () => {
+    setOwnerRequest();
+    mocks.playerFindFirst.mockResolvedValue(null);
+
+    const postResponse = await POST(createAvatarRequest(), { params: Promise.resolve({ id: "player-1" }) });
+    expect(postResponse.status).toBe(403);
+    expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
+    expect(mocks.playerUpdate).not.toHaveBeenCalled();
+    expect(mocks.cleanupSupersededAvatar).not.toHaveBeenCalled();
+
+    const deleteResponse = await DELETE(new Request("http://localhost/api/users/player-1/avatar", { method: "DELETE" }), { params: Promise.resolve({ id: "player-1" }) });
+    expect(deleteResponse.status).toBe(403);
+    expect(mocks.playerUpdate).not.toHaveBeenCalled();
+    expect(mocks.cleanupSupersededAvatar).not.toHaveBeenCalled();
   });
 });

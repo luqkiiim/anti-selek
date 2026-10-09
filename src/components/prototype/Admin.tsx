@@ -17,6 +17,7 @@ import type { AdminAdmissionList, AdmissionCandidate, AdmissionRequest } from ".
 import { MemberPhotoEditor } from "./MemberPhotoEditor";
 import { ClubSettings } from "./ClubSettings";
 import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
+import { PlayerRecoveryReview, type RecoveryReviewDecision } from "@/components/club-admin/PlayerRecoveryReview";
 import "./manage-club.css";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 export default function Admin({
@@ -73,7 +74,7 @@ export default function Admin({
     const id = selectedCandidate[request.id] ?? request.requestedPlayerId ?? "";
     return candidatesFor(request).find(candidate => candidate.id === id) ?? null;
   }
-  function reviewAdmission(request: AdmissionRequest, body: { action: "APPROVE" | "REJECT"; playerId?: string; asNew?: boolean; reason?: string }) {
+  function reviewAdmission(request: AdmissionRequest, body: RecoveryReviewDecision & { playerId?: string; asNew?: boolean }) {
     void action.run(() => api(endpoint + "/join-requests/" + request.id, "PATCH", { ...body, revision: request.revision }));
   }
   function editor(player: ClubPageMember | null) {
@@ -139,7 +140,7 @@ export default function Admin({
             role="tab"
             aria-selected={tab === t}
             className={tab === t ? "selected" : ""}
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); if (t === "Requests") void joins.refresh().catch(() => {}); }}
           >
             {t}
             {t === "Requests" && requests.length > 0 && (
@@ -191,11 +192,12 @@ export default function Admin({
                   </div>
                   <p className="admission-review-kind">{r.kind === "NEW_PLAYER" ? "New Player request" : r.kind === "OWNED_PLAYER" ? "Existing owned Player" : "Claim an existing Player"}</p>
                   {r.kind === "NEW_PLAYER" ? <div className="admission-review-player"><strong>{r.proposedPlayerName ?? r.requesterName ?? "New Player"}</strong><span>{r.proposedGender === "FEMALE" ? "Female" : r.proposedGender === "MALE" ? "Male" : "Gender not provided"} · no Player profile has been created</span></div> : <div className="admission-review-player"><strong>Claim candidate: {r.targetName ?? r.history?.name ?? "Player unavailable"}</strong><span>{r.history ? `${r.history.elo} rating · ${r.history.matchesPlayed} matches` : "No completed match history found"}{r.history?.lastPlayedAt ? ` · last played ${new Date(r.history.lastPlayedAt).toLocaleDateString()}` : ""}</span></div>}
-                  {r.conflict && <p className="admission-review-conflict" role="alert">{r.conflict} No Player records or match history will be merged.</p>}
-                  {!!r.possibleDuplicates?.length && <div className="admission-duplicate-list"><strong>Possible matching Players</strong>{r.possibleDuplicates.map(candidate => <button key={candidate.id} type="button" className="text-button" onClick={() => { setAlternatePicker(current => ({ ...current, [r.id]: true })); setSelectedCandidate(current => ({ ...current, [r.id]: candidate.id })); }}>{candidate.name} · {candidate.elo} rating</button>)}</div>}
+                  {r.conflict && !r.recovery && <p className="admission-review-conflict" role="alert">{r.conflict} No Player records or match history will be merged.</p>}
+                  {!r.recovery && !!r.possibleDuplicates?.length && <div className="admission-duplicate-list"><strong>Possible matching Players</strong>{r.possibleDuplicates.map(candidate => <button key={candidate.id} type="button" className="text-button" onClick={() => { setAlternatePicker(current => ({ ...current, [r.id]: true })); setSelectedCandidate(current => ({ ...current, [r.id]: candidate.id })); }}>{candidate.name} · {candidate.elo} rating</button>)}</div>}
                   {r.note && <blockquote className="admission-review-note">“{r.note}”</blockquote>}
                   {r.events?.length ? <small className="admission-review-events">Request history: {r.events.map(event => event.action.toLowerCase()).join(" → ")}</small> : null}
 
+                  {r.recovery ? <PlayerRecoveryReview key={`${r.id}:${r.revision}`} recovery={r.recovery} busy={action.busy} authorized={r.recoveryReviewAuthorized === true} selfApproval={r.requester?.id === snapshot.viewer.id} onReview={body => reviewAdmission(r, body)} /> : <>
                   {r.requestedPlayerId && !alternatePicker[r.id] ? <button type="button" className="text-button admission-change-candidate" onClick={() => setAlternatePicker(current => ({ ...current, [r.id]: true }))}>Choose another Player</button> : null}
                   {!r.requestedPlayerId && !alternatePicker[r.id] ? <button type="button" className="text-button admission-change-candidate" onClick={() => setAlternatePicker(current => ({ ...current, [r.id]: true }))}>Choose an existing Player instead</button> : null}
                   {alternatePicker[r.id] && <label className="field-label admission-candidate-picker">Player to connect<select aria-label={`Player for ${r.requesterName ?? r.name ?? "request"}`} value={selectedCandidate[r.id] ?? r.requestedPlayerId ?? ""} onChange={event => setSelectedCandidate(current => ({ ...current, [r.id]: event.target.value }))}><option value="">Select a Player</option>{candidatesFor(r).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}{r.ownedPlayers?.some(owned => owned.id === candidate.id) ? " · owned by this account" : ""}{candidate.elo !== undefined ? ` · ${candidate.elo} rating` : ""}</option>)}</select></label>}
@@ -206,6 +208,7 @@ export default function Admin({
                     <button type="button" className="secondary" disabled={action.busy || !!r.ownedPlayers?.length} onClick={() => reviewAdmission(r, { action: "APPROVE", asNew: true })}>Approve as new Player</button>
                     <button type="button" className="secondary admission-reject" disabled={action.busy} onClick={() => reviewAdmission(r, { action: "REJECT", reason: rejectionReasons[r.id]?.trim() || undefined })}>Reject request</button>
                   </div>
+                  </>}
                 </article>
               ))}
               {joins.data && !requests.length && (

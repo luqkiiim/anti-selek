@@ -78,12 +78,19 @@ async function getUserStatsRoute(
       avatarKey: true,
       elo: true,
       createdAt: true,
+      clubMemberships: {
+        where: { retiredByAdmissionEventId: { not: null } },
+        select: { id: true },
+        take: 1,
+      },
     },
   });
 
   if (!user) {
     return invalidTargetResponse(request, "api:users:id:stats");
   }
+  const { clubMemberships: retirementMarkers = [], ...profilePlayer } = user;
+  const isRetiredPlayer = retirementMarkers.length > 0;
 
   let targetMemberStatus: string | null = null;
   let targetMemberId: string | null = null;
@@ -140,6 +147,7 @@ async function getUserStatsRoute(
           id: true,
           elo: true,
           status: true,
+          retiredByAdmissionEventId: true,
           player: {
             select: {
               id: true,
@@ -165,7 +173,7 @@ async function getUserStatsRoute(
     viewerCanManageClub =
       !isQuickAccessSession(session) &&
       ((requesterMembership?.status === "ACTIVE" && (requesterMembership.role === "ADMIN" || requesterMembership.role === "OWNER")) || !!session.user.isAdmin);
-    canAddGuestToClub = !targetMembership && viewerCanManageClub;
+    canAddGuestToClub = !targetMembership && !isRetiredPlayer && viewerCanManageClub;
     targetMemberStatus = targetMembership?.status ?? null;
     targetMemberId = targetMembership?.id ?? null;
     usesClubRating = !!targetMembership;
@@ -174,6 +182,7 @@ async function getUserStatsRoute(
     leaderboardMembers = await prisma.clubMember.findMany({
       where: {
         clubId,
+        retiredByAdmissionEventId: null,
         status: {
           not: ClubPlayerStatus.OCCASIONAL,
         },
@@ -370,8 +379,9 @@ async function getUserStatsRoute(
 
   return sportingJson({
     player: {
-      ...serializeAvatarEntity(user),
+      ...serializeAvatarEntity(profilePlayer),
       elo: effectiveElo,
+      isRetired: isRetiredPlayer,
     },
     context,
     ...profileData,

@@ -145,7 +145,9 @@ export async function GET(
 
     const memberships = await prisma.clubMember.findMany({
       where: {
-        clubId: { in: [hostClubId, partnerClubId] }, archivedAt: null,
+        clubId: { in: [hostClubId, partnerClubId] },
+        archivedAt: null,
+        retiredByAdmissionEventId: null,
       },
       include: {
         club: { select: { id: true, name: true } },

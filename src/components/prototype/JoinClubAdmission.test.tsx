@@ -34,8 +34,10 @@ function makeRequest(overrides: Partial<AdmissionRequest> = {}): AdmissionReques
 function makeDiscovery(overrides: Partial<AdmissionDiscovery> = {}): AdmissionDiscovery {
   return {
     club: { id: "club-1", name: "Riverside", allowJoinRequests: true },
+    passwordProof: { status: "NOT_REQUIRED", expiresAt: null },
     players: [{ id: "player-1", name: "Ari Tan", elo: 1080, matchesPlayed: 12, lastPlayedAt: "2026-09-28T00:00:00.000Z" }],
     ownedPlayers: [],
+    identityReviewRequired: false,
     requests: [],
     membership: null,
     access: null,
@@ -49,11 +51,23 @@ function button(container: HTMLElement, label: string) {
   return found as HTMLButtonElement;
 }
 
+function changeInput(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  valueSetter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("JoinClubAdmission", () => {
   let container: HTMLDivElement;
   let root: Root;
   let discovery: AdmissionDiscovery;
   let submitted: Record<string, unknown> | null;
+  let passwordProtected: boolean;
+  let proofIssued: boolean;
+  let expireProofOnSubmit: boolean;
+  let holdPasswordRelock: boolean;
+  let passwordRelockStarted: boolean;
+  let releasePasswordRelock: (() => void) | null;
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -62,9 +76,29 @@ describe("JoinClubAdmission", () => {
     root = createRoot(container);
     discovery = makeDiscovery();
     submitted = null;
+    passwordProtected = false;
+    proofIssued = false;
+    expireProofOnSubmit = false;
+    holdPasswordRelock = false;
+    passwordRelockStarted = false;
+    releasePasswordRelock = null;
     vi.stubGlobal("crypto", { randomUUID: () => "admission-key" });
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(_input), window.location.origin);
       const body = typeof init?.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : null;
+      if (url.pathname === "/api/clubs/join-proof") {
+        proofIssued = true;
+        return { ok: true, json: async () => ({ ok: true, clubId: "club-1", expiresAt: "2026-10-08T12:10:00.000Z" }) } as Response;
+      }
+      if (url.pathname === "/api/clubs/join-requests" && init?.method === "POST" && expireProofOnSubmit) {
+        proofIssued = false;
+        discovery = { ...discovery, passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null }, players: [], ownedPlayers: [] };
+        return { ok: false, status: 428, json: async () => ({ code: "PASSWORD_REQUIRED", error: "Enter the club password to continue." }) } as Response;
+      }
+      if (url.pathname === "/api/clubs/join-requests" && init?.method !== "POST" && holdPasswordRelock && !proofIssued) {
+        passwordRelockStarted = true;
+        await new Promise<void>(resolve => { releasePasswordRelock = resolve; });
+      }
       if (init?.method === "POST") {
         submitted = body;
         return { ok: true, json: async () => makeRequest({
@@ -72,11 +106,15 @@ describe("JoinClubAdmission", () => {
           requestedPlayerId: typeof body?.requestedPlayerId === "string" ? body.requestedPlayerId : null,
         }) } as Response;
       }
-      return { ok: true, json: async () => discovery } as Response;
+      const result = passwordProtected
+        ? { ...discovery, passwordProof: { status: proofIssued ? "VERIFIED" as const : "PASSWORD_REQUIRED" as const, expiresAt: proofIssued ? "2026-10-08T12:10:00.000Z" : null }, players: proofIssued ? discovery.players : [], ownedPlayers: proofIssued ? discovery.ownedPlayers : [] }
+        : discovery;
+      return { ok: true, json: async () => result } as Response;
     }));
   });
 
   afterEach(async () => {
+    releasePasswordRelock?.();
     await act(async () => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
@@ -108,11 +146,37 @@ describe("JoinClubAdmission", () => {
   it("requires an account with existing Player profiles to choose one instead of requesting a duplicate", async () => {
     discovery = makeDiscovery({ ownedPlayers: [{ id: "owned-player", name: "Ari Tan" }] });
     await openSheet();
-    await act(async () => button(container, "I’m new to this club").click());
+    await act(async () => button(container, "Use a Player you own").click());
     expect(container.textContent).toContain("Use a Player profile you already own");
     await act(async () => button(container, "Ari Tan").click());
     await act(async () => button(container, "Request to use this Player").click());
     expect(submitted).toMatchObject({ kind: "OWNED_PLAYER", requestedPlayerId: "owned-player" });
+    expect(submitted).not.toHaveProperty("proposedPlayerName");
+  });
+
+  it("requires admin review instead of offering a new Player when the only owned identity is inactive", async () => {
+    discovery = makeDiscovery({ identityReviewRequired: true });
+    await openSheet();
+
+    expect(container.textContent).toContain("An inactive Player identity on this account still needs admin review.");
+    const newPlayerChoice = button(container, "Admin review is needed before creating another Player");
+    expect(newPlayerChoice.disabled).toBe(true);
+    expect(container.textContent).not.toContain("Request a new Player profile");
+    expect(submitted).toBeNull();
+  });
+
+  it("keeps active owned profiles selectable when an additional inactive identity needs review", async () => {
+    discovery = makeDiscovery({
+      identityReviewRequired: true,
+      ownedPlayers: [{ id: "active-owned-player", name: "Ari Tan" }],
+    });
+    await openSheet();
+
+    await act(async () => button(container, "Use a Player you own").click());
+    expect(container.textContent).toContain("An inactive Player identity also needs admin review.");
+    await act(async () => button(container, "Ari Tan").click());
+    await act(async () => button(container, "Request to use this Player").click());
+    expect(submitted).toMatchObject({ kind: "OWNED_PLAYER", requestedPlayerId: "active-owned-player" });
     expect(submitted).not.toHaveProperty("proposedPlayerName");
   });
 
@@ -150,7 +214,7 @@ describe("JoinClubAdmission", () => {
     await openSheet();
 
     expect(container.textContent).not.toContain("You’re already a member.");
-    await act(async () => button(container, "I’m new to this club").click());
+    await act(async () => button(container, "Use a Player you own").click());
     expect(container.textContent).toContain("Use a Player profile you already own");
     await act(async () => button(container, "Ari Tan").click());
     await act(async () => button(container, "Request to use this Player").click());
@@ -161,5 +225,83 @@ describe("JoinClubAdmission", () => {
       requestedPlayerId: "owned-player",
     });
     expect(container.textContent).toContain("Request sent");
+  });
+
+  it("keeps protected roster details hidden until the password is verified", async () => {
+    passwordProtected = true;
+    discovery = makeDiscovery({ passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null } });
+    await openSheet();
+
+    expect(container.textContent).toContain("Verify the club password to browse Player profiles.");
+    expect(container.textContent).not.toContain("Ari Tan");
+    expect(container.querySelector('input[type="password"]')).not.toBeNull();
+  });
+
+  it("sends the password in the proof request, then loads candidates without URL credentials", async () => {
+    passwordProtected = true;
+    discovery = makeDiscovery({ passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null } });
+    await openSheet();
+
+    const password = container.querySelector('input[type="password"]') as HTMLInputElement;
+    await act(async () => {
+      changeInput(password, "club-secret");
+    });
+    await act(async () => button(container, "Continue").click());
+
+    expect(container.textContent).toContain("Have you played with this club before?");
+    expect(container.textContent).not.toContain("Ari Tan");
+    await act(async () => button(container, "Yes, find my profile").click());
+    expect(container.textContent).toContain("Ari Tan");
+    const calls = vi.mocked(fetch).mock.calls;
+    const proofCall = calls.find(([input]) => new URL(String(input), window.location.origin).pathname === "/api/clubs/join-proof");
+    expect(proofCall?.[1]?.body).toBe(JSON.stringify({ clubId: "club-1", password: "club-secret" }));
+    expect(calls.every(([input]) => !String(input).includes("club-secret"))).toBe(true);
+    await act(async () => button(container, "Ari Tan").click());
+    await act(async () => button(container, "Request to connect this Player").click());
+    expect(submitted).toMatchObject({ kind: "EXISTING_PLAYER", requestedPlayerId: "player-1" });
+    expect(submitted).not.toHaveProperty("password");
+    expect(submitted).not.toHaveProperty("proof");
+  });
+
+  it("re-locks candidate details and asks for the password again after proof expiry", async () => {
+    passwordProtected = true;
+    proofIssued = true;
+    expireProofOnSubmit = true;
+    holdPasswordRelock = true;
+    discovery = makeDiscovery({
+      passwordProof: { status: "VERIFIED", expiresAt: "2026-10-08T12:10:00.000Z" },
+      ownedPlayers: [{ id: "owned-player", name: "Owned Alex" }],
+    });
+    await openSheet();
+    await act(async () => button(container, "Yes, find my profile").click());
+    expect(container.textContent).toContain("Owned Alex");
+    await act(async () => button(container, "Ari Tan").click());
+    await act(async () => {
+      button(container, "Request to connect this Player").click();
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(passwordRelockStarted).toBe(true);
+    expect(container.textContent).not.toContain("Ari Tan");
+    expect(container.textContent).not.toContain("Owned Alex");
+    expect(container.textContent).toContain("Verify the club password to browse Player profiles.");
+    expect(container.querySelector('input[type="password"]')).not.toBeNull();
+    releasePasswordRelock?.();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(container.textContent).toContain("The password check expired.");
+  });
+
+  it("keeps an account's own pending request status visible when its password proof expires", async () => {
+    passwordProtected = true;
+    discovery = makeDiscovery({
+      passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null },
+      players: [],
+      requests: [{ id: "request-1", clubId: "club-1", kind: "NEW_PLAYER", status: "PENDING", revision: 2, createdAt: "2026-10-04T00:00:00.000Z" }],
+    });
+    await openSheet();
+
+    expect(container.textContent).toContain("Request sent");
+    expect(container.textContent).not.toContain("Ari Tan");
+    expect(container.textContent).not.toContain("Verify the club password");
   });
 });

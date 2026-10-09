@@ -213,7 +213,10 @@ export async function createSessionForUser({
   }
 
   const memberRows = await prisma.clubMember.findMany({
-    where: { clubId: { in: involvedClubIds } },
+    where: {
+      clubId: { in: involvedClubIds },
+      retiredByAdmissionEventId: null,
+    },
     select: {
       clubId: true,
       playerId: true,

@@ -5,6 +5,7 @@ import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import {
   ADMIN_ONBOARDING_TUTORIAL_KEY,
 } from "@/lib/adminOnboarding";
+import { nonretiredPlayer } from "@/lib/playerIdentity";
 import {
   ClubPlayerStatus,
   MatchStatus,
@@ -364,7 +365,7 @@ async function getUniqueOwnedTutorialPlayerId(
   ownerUserId: string
 ) {
   const players = await tx.player.findMany({
-    where: { ownerUserId },
+    where: { ownerUserId, ...nonretiredPlayer },
     select: { id: true },
     take: 2,
   });

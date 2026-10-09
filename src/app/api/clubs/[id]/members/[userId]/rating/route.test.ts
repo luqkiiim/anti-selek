@@ -6,14 +6,14 @@ vi.mock("@/lib/quickAccess", () => ({ isQuickAccessSession: m.quick }));
 vi.mock("@/lib/rateLimit", () => ({ rateLimit: vi.fn(async () => null) }));
 vi.mock("@/lib/prisma", () => { const tx = { clubMember: { findUnique: m.member, updateMany: m.update }, clubRatingAdjustment: { create: m.audit } }; return { prisma: { ...tx, $transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } }; });
 import { GET, POST } from "./route";
-const context = { params: Promise.resolve({ id: "club", userId: "player" }) };
+const context = { params: Promise.resolve({ id: "club", userId: "historical-player" }) };
 const call = (body: unknown = { rating: 1125, expectedRating: 1000, reason: "Guest results correction" }) => POST(new Request('http://localhost/rating', { method: 'POST', body: JSON.stringify(body) }), context);
 describe('manual club rating adjustment', () => {
-  beforeEach(() => { vi.clearAllMocks(); m.auth.mockResolvedValue({ user: { id: 'admin', name: 'Admin' } }); m.quick.mockReturnValue(false); m.access.mockResolvedValue({ canAdmin: true }); m.member.mockResolvedValue({ id: 'member', elo: 1000, ratingAdjustments: [] }); m.update.mockResolvedValue({ count: 1 }); m.audit.mockResolvedValue({}); });
+  beforeEach(() => { vi.clearAllMocks(); m.auth.mockResolvedValue({ user: { id: 'admin', name: 'Admin' } }); m.quick.mockReturnValue(false); m.access.mockResolvedValue({ canAdmin: true }); m.member.mockResolvedValue({ id: 'original-membership', elo: 1000, retiredByAdmissionEventId: null, ratingAdjustments: [] }); m.update.mockResolvedValue({ count: 1 }); m.audit.mockResolvedValue({}); });
   it('changes only membership rating and records actor, reason, and before/after values', async () => {
     expect((await call()).status).toBe(200);
-    expect(m.update).toHaveBeenCalledWith({ where: { id: 'member', elo: 1000 }, data: { elo: 1125 } });
-    expect(m.audit).toHaveBeenCalledWith({ data: { memberId: 'member', actorId: 'admin', actorName: 'Admin', beforeElo: 1000, afterElo: 1125, reason: 'Guest results correction' } });
+    expect(m.update).toHaveBeenCalledWith({ where: { id: 'original-membership', elo: 1000 }, data: { elo: 1125 } });
+    expect(m.audit).toHaveBeenCalledWith({ data: { memberId: 'original-membership', actorId: 'admin', actorName: 'Admin', beforeElo: 1000, afterElo: 1125, reason: 'Guest results correction' } });
   });
   it.each([{ rating: -1, expectedRating: 1000, reason: 'x' }, { rating: 5001, expectedRating: 1000, reason: 'x' }, { rating: 1000.5, expectedRating: 1000, reason: 'x' }, { rating: 1100, expectedRating: 1000, reason: '  ' }, { rating: 1100, reason: 'x' }])('rejects invalid input %j', async body => { expect((await call(body)).status).toBe(400); expect(m.update).not.toHaveBeenCalled(); });
   it('rejects a stale rating instead of overwriting a new match result', async () => { m.member.mockResolvedValue({ id: 'member', elo: 1015 }); expect((await call()).status).toBe(409); expect(m.audit).not.toHaveBeenCalled(); });
@@ -23,4 +23,22 @@ describe('manual club rating adjustment', () => {
   it('rejects non-admin reads and writes', async () => { m.access.mockResolvedValue({ canAdmin: false }); expect((await call()).status).toBe(403); expect((await GET(new Request('http://localhost/rating'), context)).status).toBe(403); });
   it('rejects view-only users', async () => { m.quick.mockReturnValue(true); expect((await call()).status).toBe(403); });
   it('returns current rating and history', async () => { const response = await GET(new Request('http://localhost/rating'), context); expect(await response.json()).toEqual({ rating: 1000, history: [] }); });
+  it('preserves retired rating history reads but rejects rating writes before mutation', async () => {
+    m.member.mockResolvedValue({
+      id: 'retired-membership',
+      elo: 1010,
+      retiredByAdmissionEventId: 'retirement-event',
+      ratingAdjustments: [{ beforeElo: 1000, afterElo: 1010 }],
+    });
+
+    const read = await GET(new Request('http://localhost/rating'), context);
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({ rating: 1010, history: [{ afterElo: 1010 }] });
+
+    const write = await call();
+    expect(write.status).toBe(409);
+    expect(await write.json()).toMatchObject({ error: 'Retired player ratings cannot be changed' });
+    expect(m.update).not.toHaveBeenCalled();
+    expect(m.audit).not.toHaveBeenCalled();
+  });
 });

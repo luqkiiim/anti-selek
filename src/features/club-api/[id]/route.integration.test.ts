@@ -60,6 +60,8 @@ function createMigratedLegacyFixture() {
     db.exec(creatorMigration);
     db.exec(fs.readFileSync(path.join(migrationRoot, "20261005180000_player_invitations", "migration.sql"), "utf8"));
     db.exec(fs.readFileSync(path.join(migrationRoot, "20261005190000_cleanup_player_invitation_continuations", "migration.sql"), "utf8"));
+    db.exec(fs.readFileSync(path.join(migrationRoot, "20261008120000_placeholder_claim_recovery", "migration.sql"), "utf8"));
+    db.exec(fs.readFileSync(path.join(migrationRoot, "20261008140000_authorized_identity_transitions", "migration.sql"), "utf8"));
   } finally {
     db.close();
   }

@@ -29,6 +29,7 @@ export async function PATCH(request: Request, { params }: Context) {
     ]);
     if (!member || member.archivedAt) return NextResponse.json({ error: "Player not found" }, { status: 404 });
     if (!access?.isGlobalAdmin && !access?.membershipRole) return NextResponse.json({ error: "Active club access required" }, { status: 403 });
+    if (member.retiredByAdmissionEventId) return NextResponse.json({ error: "Retired player profiles cannot be changed" }, { status: 409 });
     const self = member.player.ownerUserId === session.user.id;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -86,6 +87,7 @@ export async function DELETE(request: Request, { params }: Context) {
     ]);
     if (!member) return NextResponse.json({ error: "Player not found" }, { status: 404 });
     if (!access?.isGlobalAdmin && !access?.membershipRole) return NextResponse.json({ error: "Active club access required" }, { status: 403 });
+    if (member.retiredByAdmissionEventId) return NextResponse.json({ error: "Retired player profiles cannot be changed" }, { status: 409 });
     const self = member.player.ownerUserId === session.user.id;
     if (!access?.canAdmin && !self) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     if (member.player.ownerUserId === access?.createdById) return NextResponse.json({ error: "The club owner cannot be removed." }, { status: 400 });

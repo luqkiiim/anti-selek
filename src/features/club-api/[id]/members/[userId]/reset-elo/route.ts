@@ -52,11 +52,17 @@ export async function POST(
           playerId: userId,
         },
       },
-      select: { id: true },
+      select: { id: true, retiredByAdmissionEventId: true },
     });
 
     if (!targetMembership) {
       return invalidTargetResponse(request, "api:communities:id:members:userId:reset-elo");
+    }
+    if (targetMembership.retiredByAdmissionEventId) {
+      return NextResponse.json(
+        { error: "Retired player ratings cannot be changed" },
+        { status: 409 }
+      );
     }
 
     const [updatedMembership, updatedUser] = await prisma.$transaction([
