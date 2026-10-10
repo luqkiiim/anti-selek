@@ -531,6 +531,59 @@ function applicationDatabaseSnapshot(databaseFile: string) {
   } finally { sqlite.close(); }
 }
 
+it.each(["ordinary admission", "CLAIM", "CORRECTION active", "CORRECTION archived", "ACCESS_RESTORE", "CORRECTION rollback"])(
+  "replays the actual %s SQL flow at hosted expression depth 100", async flow => {
+    if (flow.startsWith("CORRECTION")) await activeOwnedDuplicate({ archived: flow === "CORRECTION archived", access: { role: "ADMIN" } });
+    if (flow === "ACCESS_RESTORE") {
+      await db.player.update({ where: { id: "historical-player" }, data: { ownerUserId: "account-a" } });
+      await db.clubMember.update({ where: { id: "original-member" }, data: { archivedAt: new Date() } });
+      await db.clubAccess.create({ data: { clubId: "club-a", userId: "account-a", role: "ADMIN" } });
+    }
+    await db.$disconnect();
+    const replayFile = path.join(dir, `depth-100-${index}.db`);
+    copyFileSync(file, replayFile);
+    const queries: Array<{ query: string; params: string }> = [];
+    const recordingDb = new PrismaClient({ datasources: { db: { url: `file:${file}` } }, log: [{ emit: "event", level: "query" }] });
+    recordingDb.$on("query", event => queries.push({ query: event.query, params: event.params }));
+    db = recordingDb;
+    const before = applicationDatabaseSnapshot(file);
+    if (flow === "ordinary admission") {
+      const admission = await transaction(tx => submitClubAdmission(tx, { clubId: "club-a", requesterUserId: "account-a", kind: "NEW_PLAYER", proposedPlayerName: "Normal join", proposedGender: "MALE" }));
+      await transaction(tx => reviewClubAdmission(tx, { clubId: "club-a", requestId: admission.id!, reviewerUserId: "admin", action: "APPROVE", revision: 0 }));
+      expect(await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: admission.id! } })).toMatchObject({ status: "APPROVED" });
+    } else if (flow === "CLAIM") {
+      const invite = await ready();
+      await redeem(invite.id, invite.handle);
+      expect(await db.player.findUniqueOrThrow({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: "account-a" });
+    } else {
+      const purpose = flow === "ACCESS_RESTORE" ? "ACCESS_RESTORE" : "CORRECTION";
+      if (flow === "CORRECTION rollback") {
+        await db.$executeRawUnsafe(`CREATE TRIGGER depth100_fault BEFORE UPDATE OF "retiredByAdmissionEventId" ON "CommunityMember" WHEN NEW."retiredByAdmissionEventId" IS NOT NULL BEGIN SELECT RAISE(ABORT,'DEPTH100_ROLLBACK'); END`);
+      }
+      const created = purpose === "CORRECTION" ? await createCorrection({ action: "PRESERVE_ACTIVE" }) : await createAccessRestore({ restoreArchivedRoster: true, action: "PRESERVE_ACTIVE" });
+      const invitationId = created.invitation!.id;
+      const { handle } = await transaction(tx => exchangeInvitationSecret(tx, invitationId, created.secret!));
+      const beforeExecution = applicationDatabaseSnapshot(file);
+      const confirm = () => transaction(tx => confirmAuthorizedInvitation(tx, purpose, { invitationId, handle, userId: "account-a" }));
+      if (flow === "CORRECTION rollback") {
+        await expect(confirm()).rejects.toThrow();
+        expect(applicationDatabaseSnapshot(file)).toEqual(beforeExecution);
+      } else {
+        const result = await confirm();
+        expect(result.receipt).toMatchObject({ purpose, sourceRetired: purpose === "CORRECTION" });
+      }
+    }
+    await db.$disconnect();
+    expect(queries.some(({ query }) => query.includes("INSERT INTO"))).toBe(true);
+    const expected = applicationDatabaseSnapshot(file);
+    expect(expected).not.toEqual(before);
+    const payloadFile = path.join(dir, `depth-100-${index}.json`);
+    writeFileSync(payloadFile, JSON.stringify({ database: replayFile, queries, expected, expectedErrors: flow === "CORRECTION rollback" ? 1 : 0, errorMessages: flow === "CORRECTION rollback" ? ["DEPTH100_ROLLBACK"] : [] }));
+    const result = execFileSync(process.env.PYTHON ?? "python", ["scripts/test-identity-expression-depth.py", "--replay", payloadFile], { encoding: "utf8", stdio: "pipe" });
+    expect(JSON.parse(result)).toMatchObject({ depth: 100, snapshotMatched: true });
+  }, 60000,
+);
+
 async function prepareAuthorizedFaultCase(kind: string) {
   let purpose: "CORRECTION" | "ACCESS_RESTORE" = "CORRECTION";
   let inviteId: string;

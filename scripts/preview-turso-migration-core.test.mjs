@@ -26,7 +26,7 @@ import {
 } from "./preview-turso-target-guard.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const migrationsRoot = path.join(projectRoot, "prisma", "migrations");
+const repositoryMigrationsRoot = path.join(projectRoot, "prisma", "migrations");
 const fixtureUrl = "https://preview-fixture.invalid";
 const fixtureToken = "synthetic-preview-token-for-local-tests";
 const fixtureTarget = Object.freeze({
@@ -60,7 +60,24 @@ const syntheticReadFile = async (...args) => {
 };
 const matchesErrorCode = (error, expected) => error?.code === expected || error?.message === expected;
 const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "preview-migration-core-tests-"));
+// Exercise the frozen writer against its original exact58 source, without relaxing
+// its production loader to accept the independently reviewed forward migration.
+const migrationsRoot = path.join(runDir, "frozen58-source");
+fs.mkdirSync(migrationsRoot);
+for (const entry of manifestSource.migrations) {
+  fs.cpSync(path.join(repositoryMigrationsRoot, entry.name), path.join(migrationsRoot, entry.name), { recursive: true });
+}
 let fixtureNumber = 0;
+
+test("frozen58 writer rejects the repository59 chain before opening any client", async () => {
+  const run = createPreviewMigrationRunner({ target: fixtureTarget, manifest: fixtureManifest, migrationsRoot: repositoryMigrationsRoot });
+  let calls = 0;
+  await assert.rejects(run({ mode: "verify-only", confirmation: { ...fixtureConfirmation, expectEmpty: false },
+    readFile: async () => { calls++; throw new Error("must not read credentials"); },
+    clientFactory: async () => { calls++; throw new Error("must not connect"); } }),
+  (error) => matchesErrorCode(error, "PREVIEW_MIGRATION_CHAIN_MISMATCH"));
+  assert.equal(calls, 0);
+});
 
 function makeRun({
   target = fixtureTarget,
