@@ -1,7 +1,21 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import databasePolicy from "../config/database-targets.json" with { type: "json" };
+import pinnedDatabasePolicy from "../config/database-targets.json" with { type: "json" };
+
+/**
+ * @typedef {object} DatabaseTargetPolicy
+ * @property {number} version
+ * @property {string} productionEndpointSha256
+ * @property {string} nonProductionEndpointSha256
+ * @property {string} nonProductionTokenSha256
+ * @property {boolean} productionRehearsalEnabled
+ * @property {string} [previewEndpointSha256] Required only for Preview access.
+ * @property {string} [previewTokenSha256] Required only for Preview access.
+ */
+
+/** @type {DatabaseTargetPolicy} */
+const databasePolicy = pinnedDatabasePolicy;
 
 const DEFAULT_REGISTRATION_PATH = path.resolve(
   /* turbopackIgnore: true */ process.cwd(),
@@ -72,6 +86,23 @@ export function assertLocalTursoEndpoint(value, {
   throw new Error("Refusing unregistered remote Turso access from this checkout; register the development endpoint first.");
 }
 
+function assertPreviewTursoCredentials(value, authToken, policy) {
+  const endpoint = tursoEndpointFingerprint(value);
+  if (endpoint === policy.productionEndpointSha256) {
+    throw new Error("Refusing remote Turso access: production database is forbidden outside the production deployment or explicit read-only production rehearsal.");
+  }
+  if (policy.previewEndpointSha256 === policy.productionEndpointSha256 ||
+      policy.previewEndpointSha256 === policy.nonProductionEndpointSha256 ||
+      endpoint !== policy.previewEndpointSha256) {
+    throw new Error("Refusing remote Turso access: endpoint is not the approved isolated Preview database.");
+  }
+  const token = tursoTokenFingerprint(authToken);
+  if (policy.previewTokenSha256 === policy.nonProductionTokenSha256 || token !== policy.previewTokenSha256) {
+    throw new Error("Refusing remote Turso access: token is not the approved isolated Preview credential.");
+  }
+  return "approved-preview";
+}
+
 export function assertRuntimeTursoEndpoint(value, {
   authToken = "",
   env = process.env,
@@ -91,7 +122,7 @@ export function assertRuntimeTursoEndpoint(value, {
     return "deployed-production";
   }
   if (deployed && env.VERCEL_ENV === "preview") {
-    return assertNonProductionTursoCredentials(value, authToken, policy);
+    return assertPreviewTursoCredentials(value, authToken, policy);
   }
   return assertLocalTursoEndpoint(value, { authToken, registrationPath, policy });
 }

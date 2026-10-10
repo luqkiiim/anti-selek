@@ -16,11 +16,14 @@ import {
 
 const temporaryDirectories: string[] = [];
 const developmentToken = "isolated-development-test-token";
+const previewToken = "isolated-preview-test-token";
 const policy = {
   version: 1,
   productionEndpointSha256: tursoEndpointFingerprint("libsql://production.example.invalid"),
   nonProductionEndpointSha256: tursoEndpointFingerprint("libsql://development.example.invalid"),
   nonProductionTokenSha256: tursoTokenFingerprint(developmentToken),
+  previewEndpointSha256: tursoEndpointFingerprint("libsql://preview.example.invalid"),
+  previewTokenSha256: tursoTokenFingerprint(previewToken),
   productionRehearsalEnabled: false,
 };
 
@@ -153,12 +156,47 @@ describe("isolated production rehearsal credentials", () => {
     ).toThrow("production database is forbidden");
   });
 
-  it("refuses production endpoints and tokens in Preview before client construction", () => {
+  it("requires distinct Preview endpoint and token pins before client construction", () => {
     const fixture = protectedCredentialFixture(makeJwt({ a: "ro" }));
     const options = { registrationPath: path.join(path.dirname(fixture.developmentTargetPath), "absent.json"), policy, env: { NODE_ENV: "production" as const, VERCEL: "1", VERCEL_ENV: "preview", VERCEL_URL: "preview.invalid" } };
     expect(() => assertRuntimeTursoEndpoint("libsql://production.example.invalid", { ...options, authToken: developmentToken })).toThrow("production database is forbidden");
-    expect(() => assertRuntimeTursoEndpoint("libsql://development.example.invalid", { ...options, authToken: "production-token" })).toThrow("token is not the approved non-production");
-    expect(assertRuntimeTursoEndpoint("libsql://development.example.invalid", { ...options, authToken: developmentToken })).toBe("approved-non-production");
+    expect(() => assertRuntimeTursoEndpoint("libsql://development.example.invalid", { ...options, authToken: developmentToken })).toThrow("approved isolated Preview database");
+    expect(() => assertRuntimeTursoEndpoint("libsql://unknown.example.invalid", { ...options, authToken: previewToken })).toThrow("approved isolated Preview database");
+    for (const authToken of ["production-token", developmentToken, "wrong-token"]) {
+      expect(() => assertRuntimeTursoEndpoint("libsql://preview.example.invalid", { ...options, authToken })).toThrow("approved isolated Preview credential");
+    }
+    expect(assertRuntimeTursoEndpoint("libsql://preview.example.invalid", { ...options, authToken: previewToken })).toBe("approved-preview");
+    const productionOnlyPolicy = {
+      version: policy.version,
+      productionEndpointSha256: policy.productionEndpointSha256,
+      nonProductionEndpointSha256: policy.nonProductionEndpointSha256,
+      nonProductionTokenSha256: policy.nonProductionTokenSha256,
+      productionRehearsalEnabled: policy.productionRehearsalEnabled,
+    };
+    expect(() => assertRuntimeTursoEndpoint("libsql://preview.example.invalid", {
+      ...options, authToken: previewToken, policy: productionOnlyPolicy,
+    })).toThrow("approved isolated Preview database");
+    expect(() => assertRuntimeTursoEndpoint("libsql://preview.example.invalid", {
+      ...options, authToken: previewToken, policy: { ...productionOnlyPolicy, previewEndpointSha256: policy.previewEndpointSha256 },
+    })).toThrow("approved isolated Preview credential");
+    expect(() => assertRuntimeTursoEndpoint("libsql://preview.example.invalid", {
+      ...options, authToken: previewToken, policy: { ...policy, previewEndpointSha256: "" },
+    })).toThrow("approved isolated Preview database");
+    expect(() => assertRuntimeTursoEndpoint("libsql://preview.example.invalid", {
+      ...options, authToken: previewToken, policy: { ...policy, previewTokenSha256: "" },
+    })).toThrow("approved isolated Preview credential");
+    expect(() => assertRuntimeTursoEndpoint("libsql://development.example.invalid", {
+      ...options, authToken: previewToken, policy: { ...policy, previewEndpointSha256: policy.nonProductionEndpointSha256 },
+    })).toThrow("approved isolated Preview database");
+    expect(() => assertRuntimeTursoEndpoint("libsql://preview.example.invalid", {
+      ...options, authToken: developmentToken, policy: { ...policy, previewTokenSha256: policy.nonProductionTokenSha256 },
+    })).toThrow("approved isolated Preview credential");
+    expect(() => assertRuntimeTursoEndpoint("libsql://preview.example.invalid", {
+      ...options, authToken: previewToken, registrationPath: fixture.developmentTargetPath,
+    })).toThrow("approved non-production database");
+    expect(() => assertRuntimeTursoEndpoint("libsql://preview.example.invalid", {
+      ...options, authToken: previewToken, env: { ...options.env, NODE_ENV: "test" },
+    })).toThrow("approved non-production database");
   });
 
   it("allows the production endpoint only in the Production deployment", () => {

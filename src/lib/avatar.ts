@@ -202,11 +202,86 @@ export function serializeAvatarEntity<T extends { avatarKey: string | null }>(
   };
 }
 
+function hasEnvironmentValue(value?: string | null) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export const PREVIEW_AVATAR_BLOB_STORE_ID = "xpmU5Ssj6d3fygai";
+export const PREVIEW_AVATAR_BLOB_ORIGIN = new URL(
+  `https://${PREVIEW_AVATAR_BLOB_STORE_ID}.public.blob.vercel-storage.com`
+).origin;
+
+function hasIsolatedPreviewAvatarStorage(env: NodeJS.ProcessEnv) {
+  const token = env.PREVIEW_BLOB_READ_WRITE_TOKEN;
+  const storeId = typeof token === "string"
+    ? /^vercel_blob_rw_([A-Za-z0-9]+)_[A-Za-z0-9_-]+$/.exec(token)?.[1]
+    : undefined;
+  return env.NODE_ENV === "production" && env.VERCEL === "1" &&
+    env.VERCEL_ENV === "preview" && hasEnvironmentValue(env.VERCEL_URL) &&
+    !hasEnvironmentValue(env.BLOB_READ_WRITE_TOKEN) && storeId === PREVIEW_AVATAR_BLOB_STORE_ID;
+}
+
+export function isAvatarStorageMutationAllowed(
+  env: NodeJS.ProcessEnv = process.env
+) {
+  const vercelEnv = env.VERCEL_ENV?.trim().toLowerCase();
+  const hasPreviewDatabaseHint =
+    hasEnvironmentValue(env.PREVIEW_TURSO_DATABASE_URL) ||
+    hasEnvironmentValue(env.PREVIEW_TURSO_AUTH_TOKEN);
+
+  if (vercelEnv === "preview" || hasPreviewDatabaseHint || hasEnvironmentValue(env.PREVIEW_BLOB_READ_WRITE_TOKEN)) {
+    return hasIsolatedPreviewAvatarStorage(env);
+  }
+
+  const hasVercelMarker =
+    hasEnvironmentValue(env.VERCEL) ||
+    hasEnvironmentValue(env.VERCEL_ENV) ||
+    hasEnvironmentValue(env.VERCEL_URL);
+
+  if (!hasVercelMarker) {
+    return true;
+  }
+
+  if (vercelEnv === "development" && env.NODE_ENV !== "production") {
+    return true;
+  }
+
+  return (
+    env.NODE_ENV === "production" &&
+    env.VERCEL === "1" &&
+    vercelEnv === "production" &&
+    hasEnvironmentValue(env.VERCEL_URL)
+  );
+}
+
+export function assertAvatarStorageMutationAllowed(
+  env: NodeJS.ProcessEnv = process.env
+) {
+  if (!isAvatarStorageMutationAllowed(env)) {
+    throw new Error("Avatar storage mutations are disabled in this deployment environment");
+  }
+}
+
 export function isAvatarStorageConfigured(
   env: NodeJS.ProcessEnv = process.env
 ) {
   return (
-    typeof env.BLOB_READ_WRITE_TOKEN === "string" &&
-    env.BLOB_READ_WRITE_TOKEN.trim().length > 0
+    isAvatarStorageMutationAllowed(env) &&
+    (hasIsolatedPreviewAvatarStorage(env) || hasEnvironmentValue(env.BLOB_READ_WRITE_TOKEN))
   );
+}
+
+export function avatarStorageMutationToken(env: NodeJS.ProcessEnv = process.env) {
+  assertAvatarStorageMutationAllowed(env);
+  return hasIsolatedPreviewAvatarStorage(env) ? env.PREVIEW_BLOB_READ_WRITE_TOKEN : undefined;
+}
+
+export function assertAvatarStorageObjectAllowed(avatarUrl: string, env: NodeJS.ProcessEnv = process.env) {
+  assertAvatarStorageMutationAllowed(env);
+  if (!hasIsolatedPreviewAvatarStorage(env)) return;
+  let url: URL;
+  try { url = new URL(avatarUrl); } catch { throw new Error("Preview avatar object is outside the isolated store"); }
+  if (url.origin !== PREVIEW_AVATAR_BLOB_ORIGIN || url.username || url.password || url.search || url.hash || !url.pathname.startsWith("/avatars/")) {
+    throw new Error("Preview avatar object is outside the isolated store");
+  }
 }

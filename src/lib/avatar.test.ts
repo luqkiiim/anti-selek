@@ -6,7 +6,10 @@ import {
   getAvatarFileSignatureValidationError,
   getAvatarSourceValidationError,
   getAvatarUploadValidationError,
+  isAvatarStorageMutationAllowed,
   isAvatarStorageConfigured,
+  PREVIEW_AVATAR_BLOB_ORIGIN,
+  PREVIEW_AVATAR_BLOB_STORE_ID,
   resolveAvatarUrl,
 } from "@/lib/avatar";
 import {
@@ -114,11 +117,81 @@ describe("avatar helpers", () => {
     ).toBe("The uploaded avatar file is empty.");
   });
 
-  it("detects blob storage only when the token exists", () => {
+  it("requires a configured token and an allowed deployment environment", () => {
     expect(isAvatarStorageConfigured({} as NodeJS.ProcessEnv)).toBe(false);
     expect(
       isAvatarStorageConfigured({
         BLOB_READ_WRITE_TOKEN: "blob_rw_token",
+      } as unknown as NodeJS.ProcessEnv)
+    ).toBe(true);
+    expect(
+      isAvatarStorageConfigured({
+        BLOB_READ_WRITE_TOKEN: "shared_blob_token",
+        VERCEL_ENV: "preview",
+      } as unknown as NodeJS.ProcessEnv)
+    ).toBe(false);
+  });
+
+  it("enables only the pinned Preview store in a complete isolated deployment", () => {
+    const env = { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "preview", VERCEL_URL: "preview.invalid", PREVIEW_BLOB_READ_WRITE_TOKEN: `vercel_blob_rw_${PREVIEW_AVATAR_BLOB_STORE_ID}_syntheticSecret` } as const;
+    expect(PREVIEW_AVATAR_BLOB_ORIGIN).toBe("https://xpmu5ssj6d3fygai.public.blob.vercel-storage.com");
+    expect(isAvatarStorageConfigured(env)).toBe(true);
+    expect(isAvatarStorageMutationAllowed(env)).toBe(true);
+    expect(isAvatarStorageConfigured({ ...env, BLOB_READ_WRITE_TOKEN: "shared-production-token" })).toBe(false);
+    expect(isAvatarStorageConfigured({ ...env, VERCEL_URL: "" })).toBe(false);
+    expect(isAvatarStorageConfigured({ ...env, PREVIEW_BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_wrongStore_syntheticSecret" })).toBe(false);
+  });
+
+  it.each([
+    ["an explicit Preview deployment", { VERCEL_ENV: "preview" }],
+    ["a Preview database URL hint", { PREVIEW_TURSO_DATABASE_URL: "preview-db" }],
+    ["a Preview database token hint", { PREVIEW_TURSO_AUTH_TOKEN: "preview-db-token" }],
+    [
+      "an incomplete Vercel production marker set",
+      { NODE_ENV: "production", VERCEL: "1", VERCEL_URL: "app-preview.invalid" },
+    ],
+    [
+      "a production environment marker without the Vercel marker",
+      { NODE_ENV: "production", VERCEL_ENV: "production", VERCEL_URL: "app.invalid" },
+    ],
+    [
+      "a production environment missing its deployment URL",
+      { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production" },
+    ],
+    [
+      "an unrecognized Vercel deployment environment",
+      { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "staging", VERCEL_URL: "app.invalid" },
+    ],
+    ["a nonblank invalid Vercel marker", { VERCEL: "0" }],
+  ])("blocks avatar mutations for %s", (_label, env) => {
+    expect(
+      isAvatarStorageMutationAllowed({
+        BLOB_READ_WRITE_TOKEN: "shared_blob_token",
+        ...env,
+      } as unknown as NodeJS.ProcessEnv)
+    ).toBe(false);
+  });
+
+  it.each([
+    ["ordinary local development", { NODE_ENV: "development" }],
+    [
+      "local Vercel development",
+      { NODE_ENV: "development", VERCEL: "1", VERCEL_ENV: "development" },
+    ],
+    [
+      "fully marked Vercel production",
+      {
+        NODE_ENV: "production",
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+        VERCEL_URL: "app.invalid",
+      },
+    ],
+  ])("allows avatar mutations for %s", (_label, env) => {
+    expect(
+      isAvatarStorageMutationAllowed({
+        BLOB_READ_WRITE_TOKEN: "blob_rw_token",
+        ...env,
       } as unknown as NodeJS.ProcessEnv)
     ).toBe(true);
   });

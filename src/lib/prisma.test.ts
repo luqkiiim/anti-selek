@@ -71,6 +71,34 @@ describe("resolvePrismaRuntimeMode", () => {
     ).toThrow("Deployment database access is disabled");
   });
 
+  it.each([
+    { vercel: "1", vercelEnv: "preview", vercelUrl: undefined },
+    { vercel: "1", vercelEnv: "production", vercelUrl: "" },
+    { vercel: undefined, vercelEnv: "preview", vercelUrl: "preview.example.invalid" },
+  ])("fails closed for incomplete production Vercel markers: %o", (markers) => {
+    expect(() =>
+      resolvePrismaRuntimeMode({
+        nodeEnv: "production",
+        useTurso: "true",
+        tursoUrl: "",
+        tursoToken: "",
+        ...markers,
+      })
+    ).toThrow("incomplete or inconsistent Vercel deployment markers");
+  });
+
+  it("fails closed when Preview credentials identify Preview but the deployment tuple is incomplete", () => {
+    expect(() =>
+      resolvePrismaRuntimeMode({
+        nodeEnv: "production",
+        vercel: "1",
+        vercelEnv: "preview",
+        previewTursoUrl: "libsql://preview.invalid",
+        previewTursoToken: "preview-token",
+      })
+    ).toThrow("incomplete or inconsistent Vercel deployment markers");
+  });
+
   it("keeps local production builds on SQLite despite remote credentials", () => {
     expect(resolvePrismaRuntimeMode({ nodeEnv: "production", tursoUrl: "libsql://production.invalid", tursoToken: "production-token" })).toBe("sqlite");
   });
@@ -81,6 +109,14 @@ describe("resolvePrismaRuntimeMode", () => {
 
   it("rejects Production-style credentials in Preview even with safe Preview credentials", () => {
     expect(() => selectPrismaTursoCredentials({ NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "preview", VERCEL_URL: "preview.invalid", TURSO_DATABASE_URL: "libsql://production.invalid", TURSO_AUTH_TOKEN: "production-token", PREVIEW_TURSO_DATABASE_URL: "libsql://staging.invalid", PREVIEW_TURSO_AUTH_TOKEN: "staging-token" })).toThrow("Preview refuses");
+  });
+
+  it.each([
+    { NODE_ENV: "production", VERCEL_ENV: "preview", PREVIEW_TURSO_DATABASE_URL: "libsql://preview.invalid" } as const satisfies NodeJS.ProcessEnv,
+    { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "preview", VERCEL_URL: "", PREVIEW_TURSO_AUTH_TOKEN: "preview-token" } as const satisfies NodeJS.ProcessEnv,
+    { NODE_ENV: "production", VERCEL_ENV: "production", PREVIEW_TURSO_DATABASE_URL: "libsql://preview.invalid" } as const satisfies NodeJS.ProcessEnv,
+  ])("does not select shared Turso credentials for partial or contradictory Preview hints: %o", (env) => {
+    expect(() => selectPrismaTursoCredentials(env)).toThrow("incomplete or inconsistent Vercel deployment markers");
   });
 
   it("never selects production defaults for tests with copied Vercel metadata", () => {

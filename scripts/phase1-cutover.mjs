@@ -132,6 +132,7 @@ function tokenExpiry(token, now) {
   requireCutover(Number.isFinite(claims.exp) && claims.exp > now / 1000 && claims.exp <= now / 1000 + 24 * 3600 && (claims.nbf === undefined || (Number.isFinite(claims.nbf) && claims.nbf <= now / 1000)), "SHORT_LIVED_CUTOVER_TOKEN_REQUIRED");
   return claims;
 }
+/** @param {import("./turso-local-target-guard.mjs").DatabaseTargetPolicy} [targetPolicy] */
 export function validateCutoverCredentials(entries, approval, now = Date.now(), targetPolicy = policy) {
   const keys = ["PRODUCTION_CUTOVER_TURSO_URL", "PRODUCTION_CUTOVER_WRITER_TOKEN", "PRODUCTION_CUTOVER_READER_TOKEN"];
   requireCutover(Object.keys(entries).length === 3 && keys.every(key => typeof entries[key] === "string" && entries[key].trim()), "CUTOVER_CREDENTIALS_INCOMPLETE");

@@ -3,5 +3,7 @@
   "productionEndpointSha256": "af6c24a4939dcfccb80220dffc4f164896015ca83380547609a3e29d178f6a6d",
   "nonProductionEndpointSha256": "1bc074c4e4aadc0861d51775e7adc96a116e831e95f1782922ee394222a08595",
   "nonProductionTokenSha256": "fdcd1385335021e91f135e9c1d7e793cd572e6a8369c9429e5b956144b5cac9c",
-  "productionRehearsalEnabled": false
+  "productionRehearsalEnabled": false,
+  "previewEndpointSha256": "8ea73c70eb4fc6d096af8cf566adbbf98b303c26b3d6a5dc61eb89b0bb8ba497",
+  "previewTokenSha256": "5539e255f0701f050d4e5a8f1fc531ad58db97b2dfc396cbc5b68f5b9a565a25"
 }

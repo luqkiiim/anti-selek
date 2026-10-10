@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "target": {
+    "databaseName": "anti-selek-preview-20261009-fresh",
+    "endpointSha256": "8ea73c70eb4fc6d096af8cf566adbbf98b303c26b3d6a5dc61eb89b0bb8ba497",
+    "migrationCount": 58
+  },
+  "migrations": [
+    {
+      "name": "20260303100051_init",
+      "sqlSha256": "5d1c0ed64a532ca36b6ecda95a984e67d0d97a0779773a53a9a0fd05b5e9c5c8"
+    },
+    {
+      "name": "20260303122503_allow_unclaimed_users",
+      "sqlSha256": "d1451d5ecc8749b80f46f923bd3b8d2f4b3093232f12d442bed615368064f1df"
+    },
+    {
+      "name": "20260303124150_allow_user_deletion",
+      "sqlSha256": "6fc64a012b7e730d4ea582826ae5140d199eacace6f62780ceb936d738a7cebc"
+    },
+    {
+      "name": "20260303135344_add_player_pause_state",
+      "sqlSha256": "a17ea2c0b8aa652072b4f6983633bd09ac0e8d7176359bd75de2b613f06e4d55"
+    },
+    {
+      "name": "20260303200608_add_session_type",
+      "sqlSha256": "e09a230ac36843e402ed351b04cbb2751d5045e795b70e2e0d5894ce9cb81662"
+    },
+    {
+      "name": "20260303204835_add_match_elo_change",
+      "sqlSha256": "fbff065d310133d2114943ace98d401bec73fb7c54d18d0d8558bd45f7483cdb"
+    },
+    {
+      "name": "20260304102443_add_matchmaking_state_fields",
+      "sqlSha256": "598bb90bbfebd5eeaa7b0d844e58d643485ccfc6b9bb85b3f6ae6695de519ba9"
+    },
+    {
+      "name": "20260304121915_add_inactive_seconds_to_session_player",
+      "sqlSha256": "0a23d3d5cc83113d2c9f3fddbcd3ce0ccf3aac00455b2481ebe24d8423dd99fe"
+    },
+    {
+      "name": "20260305090000_add_communities",
+      "sqlSha256": "267a3de19b940fc1f55bebf7de45a74be898a0ec17d859ecf101d40a83a7a2f9"
+    },
+    {
+      "name": "20260305103000_add_community_member_elo",
+      "sqlSha256": "c6313cfb479435ccea5eedb2a630c5a990ae61d29da824b8e08e3f5844eeb393"
+    },
+    {
+      "name": "20260305170000_add_session_player_guest_flag",
+      "sqlSha256": "df59b54f8fb98b3f40e0cf3302d410f410c20427363e82ba9ee8ac600a6e004a"
+    },
+    {
+      "name": "20260306100000_add_mixicano_mode_and_preferences",
+      "sqlSha256": "0b314ce6f46f33d2cc809dad3e7b4be9ac35617f0e2476c30510d87bceb4cafa"
+    },
+    {
+      "name": "20260307193000_add_claim_requests",
+      "sqlSha256": "002da36d98a4e6699ee147465cc096526f48d923b66ff472b02b236dbb6a6360"
+    },
+    {
+      "name": "20260311010822_add_match_score_submitter",
+      "sqlSha256": "233264e31ff930a1a19e725a3e147f1da821d6823eaf2a63e1672eea798c128a"
+    },
+    {
+      "name": "20260316203822_add_session_player_matchmaking_credit",
+      "sqlSha256": "71f9baf60aeebaedae6bee01273f375d90a386cd769b8eb0bd17fc1e1ccf6e31"
+    },
+    {
+      "name": "20260317183948_add_session_player_ladder_entry_at",
+      "sqlSha256": "59406ddd68d130d643f828ada0daf3069e53e18d908ca4e39586e39d1f6c1ac1"
+    },
+    {
+      "name": "20260327194000_add_court_labels",
+      "sqlSha256": "147fdc080d9bb9a2cd616ac04af8df5fe9da90945a42262334ba5d6ffe33817b"
+    },
+    {
+      "name": "20260330190000_add_queued_match",
+      "sqlSha256": "7bccdbc25a3ad913ee91214c2cf90f31dd5ccb60919abfe536ee67f8be94d6d2"
+    },
+    {
+      "name": "20260403075615_add_test_sessions",
+      "sqlSha256": "65353cccb3cb8030bf44d0218908dca0af54fc122e0cc214c3f8b881b559c116"
+    },
+    {
+      "name": "20260403113000_add_mixed_side_override",
+      "sqlSha256": "3571f804c353e86c815bef1cd3b19ae91f0cb8865798379d9d426ee5c1c60050"
+    },
+    {
+      "name": "20260403170000_add_session_pools",
+      "sqlSha256": "a75bf59b5a65745cbed76c2ec3828a6f9a8068212f902c1a7509c25737da0c79"
+    },
+    {
+      "name": "20260403193000_add_community_member_status",
+      "sqlSha256": "38ad3b5d04be3fe744c2fc6adc90d4d0fbae899534780f3633bf59f36ce55e3d"
+    },
+    {
+      "name": "20260417180000_add_session_auto_queue_toggle",
+      "sqlSha256": "83350755a1354277ef5ec600786c3d837374390eb5a14b8e49e25e524ab16d06"
+    },
+    {
+      "name": "20260512120000_add_rate_limit_buckets",
+      "sqlSha256": "8ee8fdc16f8000172b131bff42a1335a4ea0fcf2df104c35e40f1d3824ba3004"
+    },
+    {
+      "name": "20260514120000_add_collab_sessions",
+      "sqlSha256": "be9d627a58323489e1f312c007dc95f46004730e4fd4bdb17d44e40716a6b8d9"
+    },
+    {
+      "name": "20260515120000_add_matchmaking_reason_json",
+      "sqlSha256": "47113563dc98704bc87a36fbdfa1da942e8834286581f5281fd2d798e8080b8b"
+    },
+    {
+      "name": "20260518140000_add_user_avatar_key",
+      "sqlSha256": "2bf23e3033f78494cb53814d785959eb6007bd3dcb8e103856dd9cf74ceb8ca9"
+    },
+    {
+      "name": "20260519170000_add_password_reset_tokens",
+      "sqlSha256": "e6b0fd0ede7fa8efa01475055ae21728680740b5086c703a2450d7c9bcdafba3"
+    },
+    {
+      "name": "20260523120000_add_user_self_name_changed_at",
+      "sqlSha256": "a471337747544db56bd58e4a37827dccbcb31ed6f3d2008ce452cb26a335679a"
+    },
+    {
+      "name": "20260524120000_add_offline_identity_links",
+      "sqlSha256": "578da52abe8379222e172939052d98caf6684386f639bc125d2c33ac744564a2"
+    },
+    {
+      "name": "20260525173000_add_tutorial_progress",
+      "sqlSha256": "e956ca59da5b3a195099e7fa4ac34c66cbcae826ed740b50b205d6d9cd2a375b"
+    },
+    {
+      "name": "20260526120000_add_tutorial_playground",
+      "sqlSha256": "b4b996df1a83128c94739389abbf9ab3d76adad0a607851c6d4cbb10a7a9583b"
+    },
+    {
+      "name": "20260527103000_add_session_respect_player_rest",
+      "sqlSha256": "6ce613518be3faf4a55aab48dc7170434e107d86ecb6738d5e511cc18e62cfe1"
+    },
+    {
+      "name": "20260611120000_add_session_player_arrival_priority",
+      "sqlSha256": "59443be9236bcfef45820d3036b054c6e835cbf36ab5b023cc7bacd9d6f5ab00"
+    },
+    {
+      "name": "20260614120000_add_session_matchmaking_settings",
+      "sqlSha256": "9f75909bc75b8586c63781396ad098978772b5985791830a8d8b2585579552b0"
+    },
+    {
+      "name": "20260624120000_add_more_rest_player_markers",
+      "sqlSha256": "079a9243182f443b746c685621dd2a9af8021456fc5019b8efc969721f3c5f34"
+    },
+    {
+      "name": "20260625150000_add_interclub_collab_format",
+      "sqlSha256": "0c8c002a53b8579cf83e2eb4220e0de6ae200e7453328feb69da291efb0ff4fd"
+    },
+    {
+      "name": "20260630120000_add_club_news_likes",
+      "sqlSha256": "9af385e8af87f75721befceb8015103e1fc9d2a895d5baa981c75ecd7da0210e"
+    },
+    {
+      "name": "20260630133000_add_club_notifications",
+      "sqlSha256": "93440d2113b79317dbe0bc03d7dd1662512bd9326bd15aa5766b121631882a28"
+    },
+    {
+      "name": "20260701120000_add_club_avatar_key",
+      "sqlSha256": "2eee4c6c18086769ff8fcafb38a18fce57f70e2865d3d144800467deb914696b"
+    },
+    {
+      "name": "20260708120000_add_session_player_skip_next_match",
+      "sqlSha256": "6d2332e5939a5b1e9af60d7fb20ac1d8e49e8d23e54232691bcc24540faefbb6"
+    },
+    {
+      "name": "20260823120000_add_competitive_social_player_groups",
+      "sqlSha256": "66e05a4a0f2d62986dfc9f771a050169ae5e4fe34d80ac8622810e1d67db3158"
+    },
+    {
+      "name": "20260823121000_correct_player_group_snapshot_backfill",
+      "sqlSha256": "57b0fec1ed35198dd778a37a3c0011439f98719849161ff4e70f56669a1064af"
+    },
+    {
+      "name": "20260902120000_add_crossover_frequency",
+      "sqlSha256": "cf106bc907ef3cadf25344d83dfa467b753ee2a469ee500bb611f446c164b961"
+    },
+    {
+      "name": "20260902143000_add_pool_assignments_initialized",
+      "sqlSha256": "1e81d81dd9ae05e3201aeaaa6d02588e3bfb9fd3e3a8544e2601a8e8ef55c881"
+    },
+    {
+      "name": "20260908110000_add_manual_rating_history",
+      "sqlSha256": "813c32164d9027557d620e19a5b48a8b5d4684d2e88daacf380316550ae0bc5b"
+    },
+    {
+      "name": "20260911020000_club_join_requests",
+      "sqlSha256": "c008e66d24d17961b58f49c3231d4bfdf19299d79b6e2d3f1dda4a438841a672"
+    },
+    {
+      "name": "20260912000000_club_achievements",
+      "sqlSha256": "5879e9694a79cc7100839ef0d589d04e17d2dc24fcafcdf6cc1b59a4ccb52713"
+    },
+    {
+      "name": "20260913090000_add_self_gender_changed_at",
+      "sqlSha256": "5d272d79459a16449d2e153c1aa4c8ced87265ddc0e12c8af13eec70f536f98c"
+    },
+    {
+      "name": "20260914090000_add_club_rules",
+      "sqlSha256": "9ddeffea72de4cfd9391bd8b854a993689fde877a002b83e348b0751a8d69318"
+    },
+    {
+      "name": "20261004120000_separate_accounts_players",
+      "sqlSha256": "74d0baadc34e6fb1847b8e4138f2102286bfec6a1d9f5cf6e234ae443ac8b754"
+    },
+    {
+      "name": "20261005120000_preserve_legacy_creator_access",
+      "sqlSha256": "7188797c75543b0aac918250f5bf3f95565e849cbde50d2190ea6a74a02d8736"
+    },
+    {
+      "name": "20261005180000_player_invitations",
+      "sqlSha256": "d81365a34b367c2517a06cdd1ef9f022b15de8f48726bb43f59234abd50c7af9"
+    },
+    {
+      "name": "20261005190000_cleanup_player_invitation_continuations",
+      "sqlSha256": "8fc66614635938d98002dcae3066754b3e4ba4746d7d355d37370caf25715c23"
+    },
+    {
+      "name": "20261008120000_placeholder_claim_recovery",
+      "sqlSha256": "a406e881c8fd89c74795c68761c3658bd3fdc5e5a2194c8f844e7a6453025b36"
+    },
+    {
+      "name": "20261008140000_authorized_identity_transitions",
+      "sqlSha256": "d7612a0a886fa0b721f06633182869628c7fefc36153dccfd72a87ff40a7ca14"
+    },
+    {
+      "name": "20261008150000_correction_global_identity_guards",
+      "sqlSha256": "20f0ebb899ed3c32398d3067b2a26848cd7b4a6da153f84c1ed6edeac83d243a"
+    },
+    {
+      "name": "20261008160000_ordinary_claim_identity_authority",
+      "sqlSha256": "e43d07b96f142afc54aea8cfa82484161b7843b439d58f4128a12428b9eaf29b"
+    }
+  ],
+  "manifestSha256": "e6ea35d804e4816b9d81f6e0b84cfe753a6d1655e7a5b44f060945ed02b523c8"
+}
