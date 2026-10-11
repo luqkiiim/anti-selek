@@ -38,6 +38,12 @@ function writeReport(filename, value, productionRehearsal) {
 }
 
 async function main() {
+  if (process.argv.includes("--audited-ownership-release")) {
+    const { main: rehearseOwnershipRelease } = await import("./run-production-release60.mjs");
+    const forwarded = process.argv.slice(2).filter((value, index, all) => value !== "--audited-ownership-release" && value !== "--source" && !(index > 0 && all[index - 1] === "--source"));
+    await rehearseOwnershipRelease(["--rehearse", ...forwarded]);
+    return;
+  }
   const sourceKind = argument("--source") ?? "sqlite";
   const productionRehearsal = sourceKind === "production";
   if (productionRehearsal) assertProductionRehearsalEnabled();
