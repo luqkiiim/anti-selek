@@ -7,6 +7,8 @@ export const PREVIOUS_HOST='anti-selek-beyne8kvo-luqkiiims-projects.vercel.app';
 export const LEGACY_IDS=['rule_block_legacy_preview_database_access_rnoMzQ','rule_block_pre_phase1_production_deployments_aGIB0C'];
 export const LEGACY_HASH='387b70652a5e91b45ee83ae90032ff051df5bf533118bc6d75514b580e08ff54';
 export const canonicalRules=rules=>rules.map(({id,name,action,active,conditionGroup})=>({id,name,action,active,conditionGroup})).sort((a,b)=>a.id.localeCompare(b.id));
+const ordered=value=>Array.isArray(value)?value.map(ordered):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,ordered(value[key])])):value;
+export const sameConditions=(a,b)=>stable(ordered(a))===stable(ordered(b));
 const fresh=(value,maxAge,now)=>{const age=now-Date.parse(value);return Number.isFinite(age)&&age>=0&&age<maxAge;};
 const deny=rule=>rule?.active===true&&rule.action?.mitigate?.action==='deny'&&typeof rule.id==='string';
 function baseline(e,plan,now) {
@@ -34,7 +36,7 @@ function checkDenials(results,hosts,now) {
 export function validateMaintenance(e,plan,now=Date.now(),{requireDrained=true}={}) {
   baseline(e,plan,now);const hosts=[...new Set([...ALIASES,...inventory(e)])];
   demand(e.independentReview?.passed===true && e.independentReview.commit===plan.commit && typeof e.independentReview.reviewer==='string','SEPARATE_REVIEW_REQUIRED');
-  demand(deny(e.maintenanceRule) && stable(e.maintenanceRule.conditionGroup)===stable([{conditions:[{type:'path',op:'pre',value:'/'}]}]),'PROJECT_WIDE_HTTP_FENCE_REQUIRED');
+  demand(deny(e.maintenanceRule) && sameConditions(e.maintenanceRule.conditionGroup,[{conditions:[{type:'path',op:'pre',value:'/'}]}]),'PROJECT_WIDE_HTTP_FENCE_REQUIRED');
   checkDenials(e.denials,hosts,now);
   demand(Number.isFinite(Date.parse(e.drainNotBefore)) && Date.parse(e.drainNotBefore)>=Date.parse(e.observedAt)+330000,'DRAIN_WINDOW_INVALID');
   if(requireDrained)demand(now>=Date.parse(e.drainNotBefore),'HTTP_DRAIN_NOT_COMPLETE');
@@ -46,9 +48,9 @@ export function validateDeployment(e,plan,maintenance,now=Date.now()) {
     && /^anti-selek-[a-z0-9-]+\.vercel\.app$/.test(e.host) && e.host!==PREVIOUS_HOST,'MATCHING_DEPLOYMENT_REQUIRED');
   demand(Array.isArray(e.aliasChecks) && e.aliasChecks.length===ALIASES.length && ALIASES.every(host=>e.aliasChecks.some(a=>a.host===host&&a.deploymentId===e.deploymentId)),'CONCRETE_ALIAS_CHECKS_REQUIRED');
   const oldHosts=inventory(e);demand(stable(e.inventory)===stable(maintenance.inventory) && !oldHosts.includes(e.host),'OLD_INVENTORY_CHANGED');
-  demand(deny(e.previousGenerationRule) && stable(e.previousGenerationRule.conditionGroup)===stable([{conditions:[{type:'host',op:'inc',value:[...oldHosts].sort()}]}]),'OLD_GENERATION_RULE_REQUIRED');
+  demand(deny(e.previousGenerationRule) && sameConditions(e.previousGenerationRule.conditionGroup,[{conditions:[{type:'host',op:'inc',value:[...oldHosts].sort()}]}]),'OLD_GENERATION_RULE_REQUIRED');
   checkDenials(e.oldHostDenials,oldHosts,now);
-  demand(deny(e.maintenanceRule) && stable(e.maintenanceRule.conditionGroup)===stable([{conditions:[{type:'path',op:'pre',value:'/'},{type:'host',op:'neq',value:e.host}]}]),'MAINTENANCE_FENCE_CHANGED');
+  demand(deny(e.maintenanceRule) && sameConditions(e.maintenanceRule.conditionGroup,[{conditions:[{type:'path',op:'pre',value:'/'},{type:'host',op:'neq',value:e.host}]}]),'MAINTENANCE_FENCE_CHANGED');
   demand(e.runtime?.source==='authenticated-vercel-runtime-logs' && e.runtime.errorCount===0 && e.runtime.since===e.smokeStartedAt
     && fresh(e.runtime.observedAt,900000,now) && fresh(e.smokeStartedAt,900000,now),'FRESH_RUNTIME_LOGS_REQUIRED');
   demand(Array.isArray(e.smokeResults) && e.smokeResults.some(r=>r.host===e.host&&r.path==='/'&&r.status===200)

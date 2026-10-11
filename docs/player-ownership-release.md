@@ -28,7 +28,7 @@ The focused identity/API/UI suite passes 270 tests on the 60-migration schema. T
 
 The browser flow was completed with synthetic data: an admin disconnected an already removed Player, created a normal invitation, switched to the recipient Account, and claimed the original Player. The database confirmed the original Player ID and rating, one release audit, one claim audit, MEMBER access restored only in the inviting club, and the other club remaining revoked. The development/build runs used a temporary Turbopack root to resolve this worktree's dependency junction; that local-only configuration was removed from the source diff.
 
-The separate release writer and evidence gates pass 25 synthetic tests, including libSQL transactions, rollback, stale backups, lost freeze/migration/thaw acknowledgements, partial fences, receipt tampering, complete host inventory, concrete alias checks and fresh read-only smoke/runtime evidence.
+The separate release writer and evidence gates pass 26 synthetic tests, including libSQL transactions, rollback, stale backups, lost freeze/migration/thaw acknowledgements, partial fences, receipt tampering, complete host inventory, concrete alias checks, provider JSON key ordering and fresh read-only smoke/runtime evidence.
 
 ## Production release procedure
 

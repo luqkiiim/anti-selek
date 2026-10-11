@@ -10,7 +10,7 @@ import { splitSql } from './production-release59.mjs';
 import { ENDPOINT, PREDECESSOR, MIGRATION, SQL_HASH, BASELINE_SCHEMA, CONTROL, RECEIPT, hash, stable,
   snapshot, checkBefore, checkLedger, freezeStatements, freeze, apply, inspect, rehearse, thaw } from './production-release60.mjs';
 import { argumentsFor } from './run-production-release60.mjs';
-import { PROJECT, TEAM, ALIASES, PREVIOUS_DEPLOYMENT, PREVIOUS_HOST, LEGACY_HASH, canonicalRules, validateMaintenance, validateDeployment } from './production-release60-evidence.mjs';
+import { PROJECT, TEAM, ALIASES, PREVIOUS_DEPLOYMENT, PREVIOUS_HOST, LEGACY_HASH, canonicalRules, sameConditions, validateMaintenance, validateDeployment } from './production-release60-evidence.mjs';
 
 const root=path.resolve(import.meta.dirname,'..');
 const git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8'});
@@ -198,6 +198,17 @@ function gateEvidence(now=Date.now()) {
 test('evidence gate accepts complete drained host denials and the matching production deployment',()=>{
   assert.equal(hash(stable(canonicalRules(legacyRules))),LEGACY_HASH);
   const {now,maintenance,deployment}=gateEvidence();assert.equal(validateMaintenance(maintenance,plan,now).length,34);validateDeployment(deployment,plan,maintenance,now);
+});
+test('evidence gate accepts reordered JSON object keys while retaining exact conditions and array order',()=>{
+  const expected=[{conditions:[{type:'path',op:'pre',value:'/'}]}],actual=[{conditions:[{op:'pre',type:'path',value:'/'}]}];
+  assert.equal(sameConditions(expected,actual),true);
+  assert.equal(sameConditions(expected,[{conditions:[{op:'eq',type:'path',value:'/'}]}]),false);
+  assert.equal(sameConditions(expected,[{conditions:[{op:'pre',type:'path',value:'/',neg:true}]}]),false);
+  assert.equal(sameConditions([{conditions:[{type:'host',op:'inc',value:['a','b']}]}],[{conditions:[{op:'inc',type:'host',value:['b','a']}]}]),false);
+  const {now,maintenance,deployment}=gateEvidence();maintenance.maintenanceRule.conditionGroup=actual;validateMaintenance(maintenance,plan,now);
+  const reorder=value=>Array.isArray(value)?value.map(reorder):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).reverse().map(k=>[k,reorder(value[k])])):value;
+  deployment.maintenanceRule.conditionGroup=reorder(deployment.maintenanceRule.conditionGroup);deployment.previousGenerationRule.conditionGroup=reorder(deployment.previousGenerationRule.conditionGroup);
+  validateDeployment(deployment,plan,maintenance,now);assert.equal(hash(stable(canonicalRules(legacyRules))),LEGACY_HASH);
 });
 test('evidence gate rejects wrong targets, unreviewed source, unrelated drafts and altered legacy rules',()=>{
   const {now,maintenance}=gateEvidence();
