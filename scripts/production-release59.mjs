@@ -11,7 +11,7 @@ export const ENDPOINT_SHA256 = 'af6c24a4939dcfccb80220dffc4f164896015ca833805476
 export const SOURCE_COMMIT = 'e30f483461fcde37627419debd96d05628912042';
 export const RECOVERY_DATABASE_NAME='anti-selek-production-restore-20261011';
 export const RECOVERY_ENDPOINT_SHA256='4c1215cc60989ff0670a2a178ec82d19eeb8ce56966558d07a7d947b31a27afb';
-export const PRODUCTION_BASELINE_SCHEMA_SHA256='e0c510c788276561662bf75e1be0c6aaf08b71754e81f47f230b7f91a7557379';
+export const PRODUCTION_BASELINE_SCHEMA_SHA256='b84534af5e1162c96feb55e091cdf5ad4e2154f4930e8b28c1bb6eba25a5e8f3';
 export const PENDING = Object.freeze([...predecessor.migrations.slice(54,57), {
   name:'20261008160000_ordinary_claim_identity_authority',
   sqlSha256:'9443d1370aff7512c7330fa45768ded0baa467d3507e841d166b17d8d193c893',
@@ -111,9 +111,12 @@ export function freezeStatements(before) {
   }));
 }
 const stripControl = schema => schema.filter(row=>![CONTROL,RECEIPT].includes(row.name) && !row.name.startsWith('_release59_block_'));
-export function assertProductionBaseline(before) {
+export function productionSchemaFingerprint(before) {
   const objects=before.schema.map(row=>({type:row.type,name:row.name,table:row.tbl_name,schemaSha256:hash(row.sql)}));
-  demand(hash(stable(objects))===PRODUCTION_BASELINE_SCHEMA_SHA256,'KNOWN_PRODUCTION_SCHEMA_CHANGED');
+  return hash(stable(objects));
+}
+export function assertProductionBaseline(before) {
+  demand(productionSchemaFingerprint(before)===PRODUCTION_BASELINE_SCHEMA_SHA256,'KNOWN_PRODUCTION_SCHEMA_CHANGED');
 }
 export function validateRestoreEvidence(evidence,plan,report) {
   demand(evidence?.version===1 && evidence.type==='hosted-nonproduction-turso-restore-verified'

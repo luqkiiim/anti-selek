@@ -6,7 +6,7 @@ import test from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { createClient } from '@libsql/client';
-import { loadPlan,splitSql,checkLedger,freezeRelease,applyRelease,inspectRelease,rehearseBackup,thawRelease,CONTROL,RECEIPT,validateRestoreEvidence,validateDeploymentEvidence } from './production-release59.mjs';
+import { loadPlan,splitSql,checkLedger,freezeRelease,applyRelease,inspectRelease,rehearseBackup,thawRelease,CONTROL,RECEIPT,validateRestoreEvidence,validateDeploymentEvidence,productionSchemaFingerprint,assertProductionBaseline,PRODUCTION_BASELINE_SCHEMA_SHA256,hash,stable } from './production-release59.mjs';
 import { parseCredentials } from './production-release59-security.mjs';
 import { parseArguments } from './run-production-release59.mjs';
 import { loadRecoverySource,restoreRecoveryTarget,validateRecoveryTarget,parseRecoveryCredentials,RECOVERY_TARGET } from './production-release59-recovery.mjs';
@@ -57,6 +57,20 @@ test('exact committed source pins five transaction-safe DDL migrations including
   assert.equal(plan.migrations.length,59);assert.equal(plan.statements.length,110);
   assert.equal(plan.migrations.at(-1).sqlSha256,'1e65771993ed6f0db01d7493621c878fd892f5085750bd495b3cf7e7ce54b7a8');
   assert.equal(splitSql("-- comment;\nCREATE TRIGGER t BEFORE UPDATE ON x WHEN CASE WHEN 1 THEN 1 ELSE 0 END BEGIN SELECT 'BEGIN; END'; END;\nDROP TRIGGER t;").length,2);
+});
+test('Production baseline fingerprints tables as well as indexes and triggers',()=>{
+  assert.equal(PRODUCTION_BASELINE_SCHEMA_SHA256,'b84534af5e1162c96feb55e091cdf5ad4e2154f4930e8b28c1bb6eba25a5e8f3');
+  const schema=[
+    {type:'index',name:'fixture_index',tbl_name:'fixture_table',sql:'CREATE INDEX fixture_index ON fixture_table(id)'},
+    {type:'table',name:'fixture_table',tbl_name:'fixture_table',sql:'CREATE TABLE fixture_table(id TEXT)'},
+    {type:'trigger',name:'fixture_trigger',tbl_name:'fixture_table',sql:"CREATE TRIGGER fixture_trigger BEFORE DELETE ON fixture_table BEGIN SELECT RAISE(ABORT,'fixture'); END"},
+  ];
+  const expected=hash(stable(schema.map(row=>({type:row.type,name:row.name,table:row.tbl_name,schemaSha256:hash(row.sql)}))));
+  assert.equal(productionSchemaFingerprint({schema}),expected);
+  assert.notEqual(productionSchemaFingerprint({schema:schema.filter(row=>row.type!=='table')}),expected);
+  const changed=schema.map(row=>row.type==='table'?{...row,sql:'CREATE TABLE fixture_table(id INTEGER)'}:row);
+  assert.notEqual(productionSchemaFingerprint({schema:changed}),expected);
+  assert.throws(()=>assertProductionBaseline({schema:changed}),/KNOWN_PRODUCTION_SCHEMA_CHANGED/);
 });
 test('reject partial, reordered or fabricated baseline history',()=>{
   const ledger=plan.migrations.slice(0,54).map(m=>({name:m.name,applied_at:'original'}));

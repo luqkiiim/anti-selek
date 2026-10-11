@@ -10,7 +10,8 @@ The bounded read-only Production inspection on 11 October 2026 observed an exact
 54-name ledger prefix, 27 application tables, 24 permanent triggers, no views,
 integrity `ok` and zero FK violations. The ledger has no checksums: this tool never
 invents historical checksums or resets/rebaselines the ledger. It pins the observed
-84 explicit schema object hashes before freeze and the exact committed SQL source
+112 explicit schema object hashes (28 tables, 60 indexes and 24 triggers) before
+freeze and the exact committed SQL source
 at `e30f483461fcde37627419debd96d05628912042`. The reviewed release checkout must
 be clean, contain the committed writer, descend from that source and contain the
 same 59 migration blobs. Supply its complete SHA with `--release-commit`.
