@@ -137,6 +137,23 @@ test('recovery and deployment gates accept complete evidence and reject mismatch
   validateDeploymentEvidence(deployment,plan);
   for(const change of [{commit:'wrong'},{observedAt:new Date(Date.now()-901_000).toISOString()},{oldHostDenial:{...deployment.oldHostDenial,checkedUrls:[{url:'https://fixture.invalid',status:200}]}}]) assert.throws(()=>validateDeploymentEvidence({...deployment,...change},plan),/CONCRETE_DEPLOYMENT/);
 });
+test('mixed API deployment and authenticated UI firewall evidence requires the actual fresh rule and matching project',()=>{
+  const evidence={version:1,type:'verified-production-release-and-old-host-denial',planSha256:plan.planSha256,endpointSha256:plan.endpointSha256,
+    source:'authenticated-vercel-api-and-ui',target:'production',commit:plan.commit,state:'READY',projectId:'project',deploymentId:'deployment',observedAt:new Date().toISOString(),
+    oldHostDenial:{source:'authenticated-vercel-ui',projectId:'project',ruleId:'observed-active-rule',observedAt:new Date().toISOString(),
+      active:true,inventoryComplete:true,checkedUrls:[{url:'https://fixture.invalid',status:403}]}};
+  validateDeploymentEvidence(evidence,plan);
+  for(const change of [{source:undefined},{source:'unrecognized'},{projectId:undefined},{projectId:'other-project'},
+    {ruleId:undefined},{ruleId:''},{ruleId:' '},{ruleId:undefined,configId:'mislabelled-rule'},
+    {observedAt:new Date(Date.now()-901_000).toISOString()},{observedAt:new Date(Date.now()+60_000).toISOString()},
+    {checkedUrls:[{url:'https://fixture.invalid',status:200}]}, {active:false}, {inventoryComplete:false}]) {
+    assert.throws(()=>validateDeploymentEvidence({...evidence,oldHostDenial:{...evidence.oldHostDenial,...change}},plan),/CONCRETE_DEPLOYMENT/);
+  }
+  for(const change of [{source:'unrecognized'},{commit:'wrong'},{planSha256:'wrong'},{endpointSha256:'wrong'},
+    {state:'BUILDING'},{observedAt:new Date(Date.now()-901_000).toISOString()},{observedAt:new Date(Date.now()+60_000).toISOString()}]) {
+    assert.throws(()=>validateDeploymentEvidence({...evidence,...change},plan),/CONCRETE_DEPLOYMENT/);
+  }
+});
 const recoveryTarget=RECOVERY_TARGET;
 const recoveryConfirmation={databaseName:recoveryTarget.databaseName,endpointSha256:recoveryTarget.endpointSha256};
 test('recovery target pins and dedicated parser cannot select Production, Preview, alternate names or generic env credentials',()=>{

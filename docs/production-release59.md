@@ -137,6 +137,15 @@ an existing release artifact or relabel an older proof as current.
    entries `{url,status}` proving 403/503 for every unsafe host. Root must verify
    the inventory and active control using real provider evidence; never fabricate
    this file from the desired result.
+   When the API proves the matching READY deployment/SHA but firewall activation
+   is observed through the authenticated Vercel UI, use top-level
+   `source:'authenticated-vercel-api-and-ui'`. The `oldHostDenial` then requires
+   `source:'authenticated-vercel-ui'`, the same `projectId` as the deployment,
+   the actual nonempty `ruleId`, and its own fresh ISO `observedAt` (under 15
+   minutes and not in the future), in addition to `active:true`, complete
+   inventory and every verified 403/503 result. Record the observed rule ID as
+   `ruleId`; do not invent an API `configId` or configuration version from a UI
+   rule observation. The API-only path continues to require the actual `configId`.
 9. `--thaw --approved-production-release
    --old-generations-denied-and-deployment-verified` requires that protected
    concrete evidence plus complete database postverify, then drops only the

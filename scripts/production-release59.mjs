@@ -127,15 +127,22 @@ export function validateRestoreEvidence(evidence,plan,report) {
 }
 export function validateDeploymentEvidence(evidence,plan) {
   const age=Date.now()-Date.parse(evidence?.observedAt);
+  const denial=evidence?.oldHostDenial;
+  const uiAge=Date.now()-Date.parse(denial?.observedAt);
+  const controlVerified=evidence?.source==='authenticated-vercel-api'
+    ? typeof denial?.configId==='string' && denial.configId.length>0
+    : evidence?.source==='authenticated-vercel-api-and-ui'
+      && denial?.source==='authenticated-vercel-ui' && denial.projectId===evidence.projectId
+      && typeof denial.ruleId==='string' && denial.ruleId.trim().length>0
+      && uiAge>=0 && uiAge<900_000;
   demand(evidence?.version===1 && evidence.type==='verified-production-release-and-old-host-denial'
     && evidence.planSha256===plan.planSha256 && evidence.endpointSha256===ENDPOINT_SHA256
-    && evidence.source==='authenticated-vercel-api' && evidence.target==='production'
+    && controlVerified && evidence.target==='production'
     && evidence.commit===plan.commit && evidence.state==='READY'
     && typeof evidence.projectId==='string' && evidence.projectId.length>0
     && typeof evidence.deploymentId==='string' && evidence.deploymentId.length>0
     && age>=0 && age<900_000
-    && evidence.oldHostDenial?.active===true && typeof evidence.oldHostDenial.configId==='string'
-    && evidence.oldHostDenial.configId.length>0 && evidence.oldHostDenial.inventoryComplete===true
+    && evidence.oldHostDenial?.active===true && evidence.oldHostDenial.inventoryComplete===true
     && Array.isArray(evidence.oldHostDenial.checkedUrls) && evidence.oldHostDenial.checkedUrls.length>0
     && evidence.oldHostDenial.checkedUrls.every(row=>typeof row.url==='string' && row.url.startsWith('https://') && [403,503].includes(row.status)),
   'CONCRETE_DEPLOYMENT_AND_OLD_HOST_DENIAL_EVIDENCE_REQUIRED');
