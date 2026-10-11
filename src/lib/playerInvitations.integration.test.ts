@@ -15,6 +15,9 @@ import { invitationRecoveryGet, invitationRecoveryPost } from "./playerInvitatio
 import { getInvitationRecoveryStatus, recoveryEligibility, submitInvitationRecovery } from "./playerInvitationRecovery";
 import { getOwnedClubPlayer, getOwnedPlayer, resolveOwnedSessionPlayer } from "./playerIdentity";
 import { playerRetirementBlockers } from "./playerRetirement";
+import { disconnectRemovedPlayer } from "./playerOwnershipRelease";
+import { ownershipReleasePost, removedPlayersGet } from "./playerOwnershipReleaseApi";
+import { DELETE as removeClubPlayer } from "@/features/club-api/[id]/members/[userId]/route";
 import { captureAchievementEligibility } from "./clubAchievementService";
 import { adminAdmissionListApi, reviewAdmissionApi, submitAdmissionApi } from "./clubAdmissionApi";
 import { authorizedInvitationContext, confirmAuthorizedInvitation, createAuthorizedInvitation, identityOptions, invitationExecutionReceipt } from "./playerInvitationAuthorization";
@@ -2281,3 +2284,190 @@ it.each(["SQLite", "libSQL"] as const)("upgrades without rewriting legacy multi-
     } finally { client.close(); }
   }
 }, 60000);
+
+async function releaseFixture(twoClubs = true) {
+  await db.player.update({ where: { id: "p2" }, data: { ownerUserId: "account-a" } });
+  for (const clubId of twoClubs ? ["club-a", "club-b"] : ["club-a"]) {
+    await db.clubMember.create({ data: { id: `release-${clubId}`, clubId, playerId: "p2", archivedAt: new Date("2026-10-01") } });
+    await db.clubAccess.create({ data: { clubId, userId: "account-a", status: "REVOKED", role: "ADMIN" } });
+  }
+  await db.session.update({ where: { id: "history-session" }, data: { achievementEligibilityJson: JSON.stringify({ "club-a": ["p2", "historical-player"] }) } });
+}
+const disconnect = () => transaction(tx => disconnectRemovedPlayer(tx, { clubId: "club-a", playerId: "p2", actorUserId: "admin" }));
+it.each(["SQLite", "libSQL"] as const)("installs ownership release without rewriting any populated predecessor row on %s", async engine => {
+  await releaseFixture();
+  const migrationName = "20261011120000_audited_player_ownership_release";
+  const migrationRoot = path.resolve("prisma/migrations");
+  const definitions = new DatabaseSync(path.join(dir, `release-definitions-${engine}.db`), { enableDoubleQuotedStringLiterals: true });
+  let originalGuards: string[];
+  try {
+    const predecessors = readdirSync(migrationRoot, { withFileTypes: true })
+      .filter(entry => entry.isDirectory() && entry.name < migrationName).sort((a, b) => a.name.localeCompare(b.name));
+    expect(predecessors).toHaveLength(59);
+    for (const entry of predecessors) definitions.exec(readFileSync(path.join(migrationRoot, entry.name, "migration.sql"), "utf8"));
+    originalGuards = definitions.prepare("SELECT sql FROM sqlite_master WHERE type='trigger' AND name IN ('Player_owner_immutable','PlayerInvitation_state_guard') ORDER BY name").all().map(row => String(row.sql));
+    expect(originalGuards).toHaveLength(2);
+  } finally { definitions.close(); }
+  const populated = path.join(dir, `release-predecessor-${engine}.db`);
+  copyFileSync(file, populated);
+  const predecessor = new DatabaseSync(populated);
+  try {
+    for (const row of predecessor.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name IN ('PlayerOwnershipRelease','PlayerOwnershipReleaseClaim')").all()) predecessor.exec(`DROP TRIGGER "${row.name}"`);
+    predecessor.exec('DROP TRIGGER "Player_owner_immutable"; DROP TRIGGER "PlayerInvitation_state_guard"; DROP VIEW "ClaimReleaseAuthorization"; DROP TABLE "PlayerOwnershipReleaseClaim"; DROP TABLE "PlayerOwnershipRelease";');
+    for (const guard of originalGuards) predecessor.exec(guard);
+    predecessor.prepare('DELETE FROM "_prisma_migrations" WHERE "migration_name"=?').run(migrationName);
+  } finally { predecessor.close(); }
+  const before = applicationDatabaseSnapshot(populated);
+  const sql = readFileSync(path.join(migrationRoot, migrationName, "migration.sql"), "utf8");
+  if (engine === "SQLite") {
+    const target = new DatabaseSync(populated);
+    try { target.exec(sql); expect(target.prepare("PRAGMA foreign_key_check").all()).toEqual([]); }
+    finally { target.close(); }
+  } else {
+    adapterFiles.add(populated);
+    const target = createClient({ url: `file:${populated}` });
+    try { await target.executeMultiple(sql); expect((await target.execute("PRAGMA foreign_key_check")).rows).toEqual([]); }
+    finally { target.close(); }
+  }
+  const after = applicationDatabaseSnapshot(populated);
+  expect(after.filter(table => !["PlayerOwnershipRelease", "PlayerOwnershipReleaseClaim"].includes(table.name))).toEqual(before);
+  expect(after.filter(table => ["PlayerOwnershipRelease", "PlayerOwnershipReleaseClaim"].includes(table.name)).every(table => table.rows.length === 0)).toBe(true);
+});
+const removalContext = { params: Promise.resolve({ id: "club-a", userId: "p2" }) };
+function disconnectingRemoval() {
+  return new Request("https://app.example/api/clubs/club-a/members/p2", {
+    method: "DELETE", headers: { origin: "https://app.example", "content-type": "application/json" },
+    body: JSON.stringify({ disconnectAccount: true }),
+  });
+}
+it.each(["SQLite", "libSQL"] as const)("removes and disconnects an explicitly selected owned Player atomically on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await releaseFixture(false);
+  await db.clubMember.update({ where: { id: "release-club-a" }, data: { archivedAt: null } });
+  await db.clubAccess.update({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } }, data: { status: "ACTIVE", role: "MEMBER" } });
+  const response = await removeClubPlayer(disconnectingRemoval(), removalContext);
+  expect(response.status).toBe(200);
+  expect(await db.player.findUniqueOrThrow({ where: { id: "p2" } })).toMatchObject({ ownerUserId: null, isActive: true });
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "release-club-a" } })).toMatchObject({ archivedAt: expect.any(Date), ownerUserId: null });
+  expect(await db.clubAccess.findUniqueOrThrow({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } } })).toMatchObject({ status: "REVOKED" });
+  expect(await db.$queryRaw`SELECT "id" FROM "PlayerOwnershipRelease"`).toHaveLength(1);
+  expect(await db.match.findUnique({ where: { id: "history-match" } })).not.toBeNull();
+});
+it.each(["SQLite", "libSQL"] as const)("rolls removal and access revocation back when another club prevents disconnect on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await releaseFixture();
+  for (const clubId of ["club-a", "club-b"]) {
+    await db.clubMember.update({ where: { id: `release-${clubId}` }, data: { archivedAt: null } });
+    await db.clubAccess.update({ where: { clubId_userId: { clubId, userId: "account-a" } }, data: { status: "ACTIVE", role: "MEMBER" } });
+  }
+  const before = fullDatabaseSnapshot();
+  expect((await removeClubPlayer(disconnectingRemoval(), removalContext)).status).toBe(409);
+  expect(fullDatabaseSnapshot()).toEqual(before);
+});
+it.each(["SQLite", "libSQL"] as const)("revokes the exact legacy correction invitation before a disconnect and normal invite on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await removedDuplicate();
+  const correction = await createCorrection({ action: "RESTORE_MEMBER" });
+  const correctionId = correction.invitation!.id;
+  expect(await activePlayerInvitation(db, "club-a", "historical-player", "admin")).toMatchObject({ invitation: { id: correctionId, purpose: "CORRECTION" } });
+  await expect(create()).rejects.toMatchObject({ code: "PURPOSE_SPECIFIC_INVITATION_ACTIVE" });
+  await create("REVOKE", correctionId);
+  expect(await db.playerInvitationContinuation.count({ where: { invitationId: correctionId } })).toBe(0);
+  await transaction(tx => disconnectRemovedPlayer(tx, { clubId: "club-a", playerId: "duplicate", actorUserId: "admin" }));
+  const invite = await ready();
+  await redeem(invite.id, invite.handle);
+  expect(await db.player.findUniqueOrThrow({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: "account-a" });
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "duplicate-member" } })).toMatchObject({ archivedAt: expect.any(Date), retiredByAdmissionEventId: null });
+});
+it.each(["SQLite", "libSQL"] as const)("SQL refuses forged disconnect audits and rolls back an unlink if the claim receipt fails on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await releaseFixture();
+  const grant = await db.clubAccess.findUniqueOrThrow({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } } });
+  const snapshots = await db.$queryRaw<Array<{ snapshot: string }>>`SELECT json_group_array(json_object('memberId',"id",'clubId',"communityId",'archivedAt',"archivedAt")) AS "snapshot" FROM "CommunityMember" WHERE "userId"='p2'`;
+  await expect(db.$executeRaw`INSERT INTO "PlayerOwnershipRelease" ("id","clubId","playerId","previousOwnerUserId","actorUserId","accessId","accessRevision","membershipsJson","reason","createdAt") VALUES ('forged','club-a','p2','account-a','account-b',${grant.id},${grant.revision},${snapshots[0].snapshot},'Forged disconnect',${Date.now()})`).rejects.toThrow();
+  expect((await db.player.findUniqueOrThrow({ where: { id: "p2" } })).ownerUserId).toBe("account-a");
+  await disconnect();
+  const invite = await ready();
+  await db.$executeRawUnsafe(`CREATE TRIGGER release_receipt_fault BEFORE INSERT ON "PlayerOwnershipReleaseClaim" BEGIN SELECT RAISE(ABORT,'TEST_FAULT'); END`);
+  await expect(redeem(invite.id, invite.handle)).rejects.toThrow();
+  expect((await db.player.findUniqueOrThrow({ where: { id: "historical-player" } })).ownerUserId).toBeNull();
+  expect((await db.playerInvitation.findUniqueOrThrow({ where: { id: invite.id } })).status).toBe("ACTIVE");
+  expect((await db.clubAccess.findUniqueOrThrow({ where: { id: grant.id } })).status).toBe("REVOKED");
+  expect(await db.$queryRaw`SELECT "releaseId" FROM "PlayerOwnershipReleaseClaim"`).toHaveLength(0);
+});
+it.each(["SQLite", "libSQL"] as const)("disconnects a removed multi-club history-bearing Player and claims the original via normal invitation on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await releaseFixture();
+  const before = sportingSnapshot();
+  const account = await db.user.findUniqueOrThrow({ where: { id: "account-a" } });
+  expect(await playerRetirementBlockers(db, "p2")).not.toEqual([]);
+  await disconnect();
+  await disconnect(); // no second removal or duplicate audit
+  expect(sportingSnapshot()).toEqual(before);
+  expect(await db.player.findUniqueOrThrow({ where: { id: "p2" } })).toMatchObject({ ownerUserId: null, isActive: true });
+  expect(await db.clubMember.findMany({ where: { playerId: "p2" } })).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: "release-club-a", ownerUserId: null, archivedAt: expect.any(Date), retiredByAdmissionEventId: null }),
+    expect.objectContaining({ id: "release-club-b", ownerUserId: null, archivedAt: expect.any(Date), retiredByAdmissionEventId: null }),
+  ]));
+  const invite = await ready();
+  await redeem(invite.id, invite.handle);
+  expect(sportingSnapshot()).toEqual(before);
+  expect(await db.user.findUniqueOrThrow({ where: { id: "account-a" } })).toEqual(account);
+  expect(await db.player.findUniqueOrThrow({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: "account-a" });
+  expect(await db.clubAccess.findUniqueOrThrow({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } } })).toMatchObject({ role: "MEMBER", status: "ACTIVE" });
+  expect(await db.clubAccess.findUniqueOrThrow({ where: { clubId_userId: { clubId: "club-b", userId: "account-a" } } })).toMatchObject({ role: "ADMIN", status: "REVOKED" });
+  const releases = await db.$queryRaw<Array<{ id: string; appliedAt: unknown }>>`SELECT "id",CAST("appliedAt" AS TEXT) AS "appliedAt" FROM "PlayerOwnershipRelease"`;
+  expect(releases).toHaveLength(1); expect(releases[0].appliedAt).not.toBeNull();
+  expect(await db.$queryRaw`SELECT "releaseId" FROM "PlayerOwnershipReleaseClaim"`).toHaveLength(1);
+  await expect(db.$executeRaw`DELETE FROM "PlayerOwnershipRelease" WHERE "id"=${releases[0].id}`).rejects.toThrow();
+  await expect(db.$executeRaw`UPDATE "PlayerOwnershipRelease" SET "reason"='changed' WHERE "id"=${releases[0].id}`).rejects.toThrow();
+  await expect(db.$executeRaw`UPDATE "User" SET "ownerUserId"=NULL WHERE "id"='historical-player'`).rejects.toThrow();
+  await db.clubAccess.update({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } }, data: { status: "REVOKED" } });
+  await redeem(invite.id, invite.handle);
+  expect((await db.clubAccess.findUniqueOrThrow({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } } })).status).toBe("REVOKED");
+});
+it.each(["SQLite", "libSQL"] as const)("prevents cross-club unlink without all local admin authority on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await releaseFixture();
+  await db.clubAccess.update({ where: { clubId_userId: { clubId: "club-b", userId: "admin" } }, data: { status: "REVOKED" } });
+  const before = sportingSnapshot();
+  await expect(disconnect()).rejects.toMatchObject({ code: "ADMIN_REQUIRED" });
+  expect(sportingSnapshot()).toEqual(before);
+  expect(await db.$queryRaw`SELECT "id" FROM "PlayerOwnershipRelease"`).toHaveLength(0);
+});
+it.each(["SQLite", "libSQL"] as const)("rejects unlink if another club roster is active on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await releaseFixture();
+  await db.clubMember.update({ where: { id: "release-club-b" }, data: { archivedAt: null } });
+  await expect(disconnect()).rejects.toMatchObject({ code: "PLAYER_RELEASE_BLOCKED" });
+  expect((await db.player.findUniqueOrThrow({ where: { id: "p2" } })).ownerUserId).toBe("account-a");
+});
+it.each(["SQLite", "libSQL"] as const)("a link predating disconnect cannot bypass revoked access on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await releaseFixture(false);
+  const invite = await ready(1, new Date(Date.now() - 60_000));
+  await disconnect();
+  await expect(redeem(invite.id, invite.handle)).rejects.toMatchObject({ code: "ACCESS_REVIEW_REQUIRED" });
+  expect((await db.playerInvitation.findUniqueOrThrow({ where: { id: invite.id } })).status).toBe("ACTIVE");
+});
+it.each(["SQLite", "libSQL"] as const)("later access changes invalidate the disconnect's restoration permission on %s", async engine => {
+  if (engine === "libSQL") await useLibSqlAdapter();
+  await releaseFixture(false); await disconnect();
+  await db.clubAccess.update({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } }, data: { role: "MEMBER" } });
+  const invite = await ready();
+  await expect(redeem(invite.id, invite.handle)).rejects.toMatchObject({ code: "ACCESS_REVIEW_REQUIRED" });
+});
+it("disconnect HTTP requires exact confirmation, account authentication and same-origin JSON", async () => {
+  await releaseFixture();
+  const ctx = { params: Promise.resolve({ id: "club-a", userId: "p2" }) };
+  const url = "/api/clubs/club-a/members/p2/ownership-release";
+  expect((await ownershipReleasePost(request(url, { confirm: false }), ctx)).status).toBe(400);
+  const cross = request(url, { confirm: true }); cross.headers.set("origin", "https://other.invalid");
+  expect((await ownershipReleasePost(cross, ctx)).status).toBe(403);
+  actor = { id: "admin", isQuickAccess: true };
+  expect((await ownershipReleasePost(request(url, { confirm: true }), ctx)).status).toBe(401);
+  actor = { id: "admin" };
+  const list = await removedPlayersGet(request("/api/clubs/club-a/removed-players"), { params: Promise.resolve({ id: "club-a" }) });
+  expect(await list.json()).toEqual({ players: [{ id: "p2", name: "p2" }] });
+  expect((await ownershipReleasePost(request(url, { confirm: true }), ctx)).status).toBe(200);
+});

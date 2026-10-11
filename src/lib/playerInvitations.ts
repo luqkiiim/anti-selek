@@ -3,6 +3,7 @@ import type { PlayerInvitation, Prisma } from "@prisma/client";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 import { assertNoOtherOwnedPlayer, getOwnedClubPlayer, linkUnownedPlayer } from "@/lib/playerIdentity";
 import { ClubAdmissionError } from "@/lib/clubAdmissions";
+import { claimReleaseAuthorization, recordReleaseClaim } from "@/lib/playerOwnershipRelease";
 
 type Db = Prisma.TransactionClient;
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,7 +25,7 @@ function matchesHash(secret: string, expected: string) {
   return timingSafeEqual(Buffer.from(hashInvitationSecret(secret), "hex"), Buffer.from(expected, "hex"));
 }
 export function invitationSummary(invite: PlayerInvitation) {
-  return { id: invite.id, status: invite.status, createdAt: invite.createdAt, expiresAt: invite.expiresAt };
+  return { id: invite.id, purpose: invite.purpose, status: invite.status, createdAt: invite.createdAt, expiresAt: invite.expiresAt };
 }
 /** Terminalize only proven-expired target/source reservations; malformed dates fail closed. */
 export async function expirePlayerInvitationReservations(db: Db, playerId: string, now: Date) {
@@ -59,10 +60,10 @@ export async function managePlayerInvitation(db: Db, input: {
   await authorizedAdmin(db, input.clubId, input.userId);
   await expirePlayerInvitationReservations(db, input.playerId, now);
   const activeAuthorized = await db.playerInvitation.findFirst({ where: { clubId: input.clubId, playerId: input.playerId, status: "ACTIVE", purpose: { not: "CLAIM" } }, select: { id: true } });
-  if (activeAuthorized) throw new PlayerInvitationError("This profile has an active purpose-specific invitation. Review or replace that exact invitation in the identity action panel.", "PURPOSE_SPECIFIC_INVITATION_ACTIVE");
+  if (activeAuthorized && input.action !== "REVOKE") throw new PlayerInvitationError("Revoke the existing profile invitation before creating a normal invitation.", "PURPOSE_SPECIFIC_INVITATION_ACTIVE");
   if (input.action === "REVOKE") {
     const selected = input.invitationId ? await db.playerInvitation.findUnique({ where: { id: input.invitationId } }) : null;
-    if (!selected || selected.clubId !== input.clubId || selected.playerId !== input.playerId || selected.purpose !== "CLAIM") throw new PlayerInvitationError("The invitation changed. Refresh before revoking it.", "INVITATION_CHANGED");
+    if (!selected || selected.clubId !== input.clubId || selected.playerId !== input.playerId) throw new PlayerInvitationError("The invitation changed. Refresh before revoking it.", "INVITATION_CHANGED");
     if (selected.status === "EXPIRED") return { invitation: null };
     if (selected.status !== "ACTIVE") throw new PlayerInvitationError("The invitation changed. Refresh before revoking it.", "INVITATION_CHANGED");
     const revoked = await db.playerInvitation.updateMany({ where: { id: selected.id, status: "ACTIVE" }, data: { status: "REVOKED", revokedByUserId: input.userId, revokedAt: now, revocationReason: "ADMIN_REVOKED" } });
@@ -84,7 +85,7 @@ export async function managePlayerInvitation(db: Db, input: {
 }
 export async function activePlayerInvitation(db: Db, clubId: string, playerId: string, userId: string) {
   await authorizedAdmin(db, clubId, userId);
-  const active = await db.playerInvitation.findFirst({ where: { clubId, playerId, status: "ACTIVE", purpose: "CLAIM" }, orderBy: { createdAt: "desc" } });
+  const active = await db.playerInvitation.findFirst({ where: { clubId, playerId, status: "ACTIVE" }, orderBy: { createdAt: "desc" } });
   return { invitation: active ? invitationSummary(active) : null };
 }
 export async function validInvitation(db: Db, id: string, now: Date) {
@@ -160,7 +161,10 @@ export async function redeemPlayerInvitation(db: Db, id: string, handle: string 
   await validInvitation(db, id, now);
   if (invite.createdByUserId === userId) throw new PlayerInvitationError("Another club admin must invite you to claim this profile.", "SELF_APPROVAL", 403);
   const access = await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: invite.clubId, userId } } });
-  if (access && access.status !== "ACTIVE") throw new PlayerInvitationError("Your club access was revoked. A club admin must review and restore access before you can claim this profile.", "ACCESS_REVIEW_REQUIRED");
+  const releaseId = access?.status === "REVOKED" ? await claimReleaseAuthorization(db, invite.id, userId) : null;
+  if (access && access.status !== "ACTIVE" && !releaseId) throw new PlayerInvitationError("Your club access was revoked. A club admin must review and restore access before you can claim this profile.", "ACCESS_REVIEW_REQUIRED");
+  if (releaseId && await db.clubAdmissionRequest.findFirst({ where: { clubId: invite.clubId, requesterUserId: userId, status: "PENDING" }, select: { id: true } }))
+    throw new PlayerInvitationError("Close your pending club request before claiming this invitation.", "PENDING_REQUEST_CONFLICT");
   const existingOwned = await getOwnedClubPlayer(db, { clubId: invite.clubId, userId });
   if (existingOwned && existingOwned.playerId !== invite.playerId) throw new PlayerInvitationError("You already own another Player in this club. Ask an admin to review your profiles.", "IDENTITY_CONFLICT");
   const memberships = await db.clubMember.findMany({ where: { playerId: invite.playerId }, select: { clubId: true } });
@@ -173,5 +177,10 @@ export async function redeemPlayerInvitation(db: Db, id: string, handle: string 
   if (consumed.count !== 1) unavailable();
   await linkUnownedPlayer(db, invite.playerId, userId);
   if (!access) await db.clubAccess.create({ data: { clubId: invite.clubId, userId, status: "ACTIVE", role: "MEMBER" } });
+  else if (releaseId) {
+    const restored = await db.clubAccess.updateMany({ where: { id: access.id, status: "REVOKED", revision: access.revision }, data: { status: "ACTIVE", role: "MEMBER" } });
+    if (restored.count !== 1) throw new PlayerInvitationError("Your club access changed. Ask the admin for a fresh invitation.", "ACCESS_REVIEW_REQUIRED");
+    await recordReleaseClaim(db, releaseId, invite.id, userId);
+  }
   return result;
 }

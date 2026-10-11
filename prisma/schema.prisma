@@ -49,6 +49,9 @@ model User {
   playerInvitationEvents        PlayerInvitationEvent[]
   authorizedAdmissionEvents     ClubAdmissionEvent[]         @relation("AdmissionEventAuthorizer")
   invitationRecipients          PlayerInvitation[]           @relation("PlayerInvitationRecipient")
+  ownershipReleasesReceived     PlayerOwnershipRelease[]     @relation("ReleasedOwner")
+  ownershipReleasesAuthorized   PlayerOwnershipRelease[]     @relation("ReleaseAuthorizer")
+  ownershipReleaseClaims        PlayerOwnershipReleaseClaim[]
 
   @@map("Account")
 }
@@ -87,6 +90,7 @@ model Player {
   clubNotificationsReceived    ClubNotification[]           @relation("ClubNotificationRecipient")
   invitations                  PlayerInvitation[]
   sourceInvitations            PlayerInvitation[]           @relation("PlayerInvitationSource")
+  ownershipReleases            PlayerOwnershipRelease[]
 
   // Match relations (team memberships)
   matchesAsTeam1Player1 Match[] @relation("Team1Player1")
@@ -126,6 +130,7 @@ model Club {
   newsLikes                       ClubNewsLike[]
   notifications                   ClubNotification[]
   playerInvitations               PlayerInvitation[]
+  ownershipReleases               PlayerOwnershipRelease[]
 
   @@index([isTutorial])
   @@map("Community")
@@ -186,6 +191,7 @@ model ClubAccess {
 
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ownershipReleases PlayerOwnershipRelease[]
 
   @@unique([clubId, userId])
   @@index([userId, status])
@@ -650,6 +656,7 @@ model PlayerInvitation {
   events           PlayerInvitationEvent[]
   continuations    PlayerInvitationContinuation[]
   recoveryRequests ClubAdmissionRequest[]
+  ownershipReleaseClaim PlayerOwnershipReleaseClaim?
 
   @@index([clubId, playerId, status])
   @@index([expiresAt])
@@ -658,6 +665,37 @@ model PlayerInvitation {
   @@index([targetAccountUserId, status])
 }
 
+// Immutable audit; its insert trigger applies the explicit, scoped owner release.
+model PlayerOwnershipRelease {
+  id                  String   @id
+  clubId              String
+  playerId            String
+  previousOwnerUserId String
+  actorUserId         String
+  accessId            String
+  accessRevision      Int
+  membershipsJson     String
+  reason              String
+  createdAt           DateTime
+  appliedAt           DateTime?
+
+  club          Club        @relation(fields: [clubId], references: [id], onDelete: Restrict)
+  player        Player      @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  previousOwner User        @relation("ReleasedOwner", fields: [previousOwnerUserId], references: [id], onDelete: Restrict)
+  authorizer    User        @relation("ReleaseAuthorizer", fields: [actorUserId], references: [id], onDelete: Restrict)
+  access        ClubAccess  @relation(fields: [accessId], references: [id], onDelete: Restrict)
+  claim         PlayerOwnershipReleaseClaim?
+}
+model PlayerOwnershipReleaseClaim {
+  releaseId    String   @id
+  invitationId String   @unique
+  actorUserId  String
+  createdAt    DateTime
+
+  release    PlayerOwnershipRelease @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  invitation PlayerInvitation       @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+  actor      User                   @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+}
 model PlayerInvitationEvent {
   id           String           @id @default(cuid())
   invitationId String

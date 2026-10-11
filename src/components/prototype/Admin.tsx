@@ -17,6 +17,7 @@ import type { AdminAdmissionList, AdmissionCandidate, AdmissionRequest } from ".
 import { MemberPhotoEditor } from "./MemberPhotoEditor";
 import { ClubSettings } from "./ClubSettings";
 import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
+import { RemovedPlayerAccounts } from "@/components/club-admin/RemovedPlayerAccounts";
 import { PlayerRecoveryReview, type RecoveryReviewDecision } from "@/components/club-admin/PlayerRecoveryReview";
 import "./manage-club.css";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
@@ -40,6 +41,7 @@ export default function Admin({
     [query, setQuery] = useState(""),
     [sheet, setSheet] = useState("");
   const [alternatePicker, setAlternatePicker] = useState<Record<string, boolean>>({});
+  const [disconnectOnRemove, setDisconnectOnRemove] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Record<string, string>>({});
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [edit, setEdit] = useState<ClubPageMember | null>(null),
@@ -178,6 +180,7 @@ export default function Admin({
                 </section> : null;
               })}
               {!players.some(p => p.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) && <p className="muted">No players found.</p>}
+              <RemovedPlayerAccounts clubId={club.id} onChanged={refresh} />
             </>
           ) : tab === "Requests" ? (
             <>
@@ -295,7 +298,7 @@ export default function Admin({
               {edit && !edit.isOwner && (
                 <button
                   className="danger text-button"
-                  onClick={() => setSheet("remove")}
+                  onClick={() => { setDisconnectOnRemove(false); setSheet("remove"); }}
                 >
                   Remove player
                 </button>
@@ -306,11 +309,15 @@ export default function Admin({
               <p>
                 Remove {edit?.name} from {club.name}?
               </p>
+              {edit?.isClaimed && <label className="flex items-start gap-3">
+                <input type="checkbox" checked={disconnectOnRemove} onChange={event => setDisconnectOnRemove(event.target.checked)} />
+                <span>Also disconnect the account. The Player becomes unclaimed and keeps all history. This requires removal and admin access in every linked club.</span>
+              </label>}
               <button
                 className="primary"
                 onClick={() =>
                   void action.run(
-                    () => api(endpoint + "/members/" + edit?.id, "DELETE"),
+                    () => api(endpoint + "/members/" + edit?.id, "DELETE", disconnectOnRemove ? { disconnectAccount: true } : undefined),
                     () => setSheet(""),
                   )
                 }

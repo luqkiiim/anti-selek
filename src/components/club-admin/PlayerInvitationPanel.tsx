@@ -5,7 +5,7 @@ import { api, useAction, useResource } from "@/components/prototype/api";
 import { playerInvitationQr } from "@/lib/playerInvitationQr";
 import { PlayerIdentityInvitationActions } from "./PlayerIdentityInvitationActions";
 
-type InvitationSummary = { id: string; status: string; createdAt: string; expiresAt: string };
+type InvitationSummary = { id: string; purpose?: string; status: string; createdAt: string; expiresAt: string };
 type InvitationResponse = { invitation: InvitationSummary | null; secret?: string };
 export function PlayerInvitationPanel({ clubId, playerId, playerName, rating, matchesPlayed, connected }: {
   clubId: string; playerId: string; playerName: string; rating: number; matchesPlayed?: number; connected: boolean;
@@ -41,12 +41,12 @@ export function PlayerInvitationPanel({ clubId, playerId, playerName, rating, ma
           <p className="muted">Copy the link now. It cannot be retrieved after closing this page.</p>
         </> : <>
           <p>The original link is available only when created.</p>
-          <button className="app-button-secondary px-4 py-2" type="button" disabled={action.busy} onClick={() => { if (window.confirm("Revoke the current link and create a replacement? The current link will stop working.")) void action.run(() => manage("REPLACE")); }}>Revoke and create replacement</button>
+          {(!invitation.purpose || invitation.purpose === "CLAIM") ? <button className="app-button-secondary px-4 py-2" type="button" disabled={action.busy} onClick={() => { if (window.confirm("Revoke the current link and create a replacement? The current link will stop working.")) void action.run(() => manage("REPLACE")); }}>Revoke and create replacement</button> : <p>Revoke this existing invitation, then create a normal profile invitation.</p>}
         </>}
         <button className="app-button-danger px-4 py-2" type="button" disabled={action.busy} onClick={() => void action.run(() => manage("REVOKE"))}>Revoke invite</button>
       </> : resource.data && <button className="app-button-secondary px-4 py-2" type="button" disabled={action.busy} onClick={() => void action.run(() => manage("CREATE"))}>Invite player</button>}
       <p className="muted">Share privately with this person. Anyone with the link can claim the profile.</p>
     </>}
-    <PlayerIdentityInvitationActions clubId={clubId} playerId={playerId} connected={connected} onInvitationCreated={() => resource.refresh()} />
+    {connected && <PlayerIdentityInvitationActions clubId={clubId} playerId={playerId} connected={connected} onInvitationCreated={() => resource.refresh()} />}
   </section>;
 }

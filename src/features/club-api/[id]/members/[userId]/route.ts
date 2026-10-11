@@ -11,6 +11,7 @@ import { propagatePreferredPoolToClubSessions } from "@/lib/playerGroupPreferenc
 import { tryRebuildAutomaticQueuedMatchForSessionId } from "@/app/api/sessions/[code]/queue-match/shared";
 import { rateLimit } from "@/lib/rateLimit";
 import { ClubAdmissionError } from "@/lib/clubAdmissions";
+import { disconnectRemovedPlayer } from "@/lib/playerOwnershipRelease";
 import { logError, safeErrorResponse } from "@/lib/errors";
 
 type Context = { params: Promise<{ id: string; userId: string }> };
@@ -81,6 +82,16 @@ export async function DELETE(request: Request, { params }: Context) {
     const session = await auth();
     if (!session?.user?.id || isQuickAccessSession(session)) return NextResponse.json({ error: "Sign in with an account." }, { status: 401 });
     const { id: clubId, userId: playerId } = await params;
+    const removalBody = await request.text();
+    let disconnectAccount = false;
+    if (removalBody) {
+      const destination = new URL(request.url); destination.host = request.headers.get("host") ?? destination.host;
+      if (request.headers.get("origin") !== destination.origin || !request.headers.get("content-type")?.startsWith("application/json")) return NextResponse.json({ error: "Same-origin JSON request required." }, { status: 403 });
+      let body;
+      try { body = JSON.parse(removalBody); } catch { return NextResponse.json({ error: "Invalid removal action." }, { status: 400 }); }
+      if (!body || typeof body !== "object" || Object.keys(body).length !== 1 || body.disconnectAccount !== true) return NextResponse.json({ error: "Invalid removal action." }, { status: 400 });
+      disconnectAccount = true;
+    }
     const [access, member] = await Promise.all([
       getClubAdminAccess(prisma, { clubId, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin }),
       prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId } }, include: { player: true } }),
@@ -102,6 +113,7 @@ export async function DELETE(request: Request, { params }: Context) {
       if (activeParticipation) throw new ClubAdmissionError("Remove the Player from unfinished sessions before archiving club membership", 409);
       await tx.clubMember.updateMany({ where: { id: member.id, archivedAt: null }, data: { archivedAt: new Date() } });
       if (member.player.ownerUserId) await tx.clubAccess.updateMany({ where: { clubId, userId: member.player.ownerUserId }, data: { status: "REVOKED" } });
+      if (disconnectAccount) await disconnectRemovedPlayer(tx, { clubId, playerId, actorUserId: session.user.id });
     });
     return NextResponse.json({ success: true });
   } catch (error) { if (error instanceof ClubAdmissionError) return NextResponse.json({ error: error.message }, { status: error.statusCode }); logError("Archive club Player", error); return safeErrorResponse(); }
