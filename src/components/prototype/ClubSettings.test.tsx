@@ -17,11 +17,11 @@ const baseClub: ClubPageClub = { id: "club-1", name: "Riverside", role: "ADMIN",
 describe("ClubSettings join code", () => {
   let container: HTMLDivElement;
   let root: Root;
-  let refresh: ReturnType<typeof vi.fn>;
+  let refresh: ReturnType<typeof vi.fn<() => Promise<unknown>>>;
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
-    refresh = vi.fn(async () => {});
+    refresh = vi.fn<() => Promise<unknown>>(async () => {});
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ id: "club-1" }) }) as Response));
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });

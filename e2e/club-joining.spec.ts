@@ -16,14 +16,14 @@ test.beforeAll(async () => {
   const prisma = db();
   try {
     const passwordHash = await bcrypt.hash(accountPassword, 10);
-    await prisma.club.create({ data: { id: clubId, name: clubName, createdById: `account-${adminUserId}`, allowJoinRequests: true, isPasswordProtected: true, passwordHash: await bcrypt.hash(joinCode, 10), accountAccess: { create: { userId: `account-${adminUserId}`, role: "OWNER" } } } });
-    await prisma.club.create({ data: { id: openClubId, name: "E2E Open Joining Club", createdById: `account-${adminUserId}`, allowJoinRequests: true, accountAccess: { create: { userId: `account-${adminUserId}`, role: "OWNER" } } } });
+    await prisma.club.upsert({ where: { id: clubId }, update: {}, create: { id: clubId, name: clubName, createdById: `account-${adminUserId}`, allowJoinRequests: true, isPasswordProtected: true, passwordHash: await bcrypt.hash(joinCode, 10), accountAccess: { create: { userId: `account-${adminUserId}`, role: "OWNER" } } } });
+    await prisma.club.upsert({ where: { id: openClubId }, update: {}, create: { id: openClubId, name: "E2E Open Joining Club", createdById: `account-${adminUserId}`, allowJoinRequests: true, accountAccess: { create: { userId: `account-${adminUserId}`, role: "OWNER" } } } });
     for (const variant of [...variants, "new", "link"]) {
-      await prisma.user.create({ data: { id: `account-joining-${variant}`, name: `Joining ${variant}`, email: `joining-${variant}@example.com`, gender: "FEMALE", passwordHash } });
+      await prisma.user.upsert({ where: { id: `account-joining-${variant}` }, update: {}, create: { id: `account-joining-${variant}`, name: `Joining ${variant}`, email: `joining-${variant}@example.com`, gender: "FEMALE", passwordHash } });
     }
     for (const variant of variants) {
-      await prisma.player.create({ data: { id: `player-joining-${variant}`, name: `Returning ${variant}`, gender: "FEMALE" } });
-      await prisma.clubMember.create({ data: { clubId, playerId: `player-joining-${variant}`, elo: 1120 } });
+      await prisma.player.upsert({ where: { id: `player-joining-${variant}` }, update: {}, create: { id: `player-joining-${variant}`, name: `Returning ${variant}`, gender: "FEMALE" } });
+      await prisma.clubMember.upsert({ where: { clubId_playerId: { clubId, playerId: `player-joining-${variant}` } }, update: {}, create: { clubId, playerId: `player-joining-${variant}`, elo: 1120 } });
     }
   } finally { await prisma.$disconnect(); }
 });
@@ -82,7 +82,7 @@ for (const variant of variants) {
     await dialog.getByRole("button", { name: "Refresh status" }).click();
     await expect(dialog.getByRole("button", { name: "Open club", exact: true })).toBeVisible();
     await dialog.getByRole("button", { name: "Open club", exact: true }).click();
-    await expect(page.getByRole("heading", { name: clubName, exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: `Switch club, current ${clubName}`, exact: true })).toBeVisible();
   });
 }
 

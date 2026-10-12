@@ -31,6 +31,7 @@ const context = { params: Promise.resolve({ id: "club-a" }) };
 const request = (body: unknown) => new Request("http://localhost/api/clubs/join-requests", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body) });
 const proofRequest = (body: unknown) => new Request("http://localhost/api/clubs/join-proof", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body) });
 const newInput = { clubId: "club-a", kind: "NEW_PLAYER" as const, proposedPlayerName: "New Player", proposedGender: "FEMALE" };
+type ClaimRoute = (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response>;
 const submit = (input: Parameters<typeof submitClubAdmission>[1] = { clubId: "club-a", requesterUserId: "account-member", kind: "EXISTING_PLAYER" as const, requestedPlayerId: "historical-player" }) => admissionTransaction(db, tx => submitClubAdmission(tx, input));
 const approve = (requestId: string, overrides: Partial<Parameters<typeof reviewClubAdmission>[1]> = {}) => admissionTransaction(db, tx => reviewClubAdmission(tx, { clubId: "club-a", requestId, reviewerUserId: "account-owner", action: "APPROVE", ...overrides }));
 const claim = (clubId = "club-a", playerId = "historical-player", userId = "account-member") => admissionTransaction(db, tx => claimClubPlayer(tx, { clubId, playerId, userId, actorUserId: "account-owner" }));
@@ -399,7 +400,7 @@ it("adapts the legacy proof endpoint to the new grant and never accepts weaker l
   const passwordHash = (await db.club.findUniqueOrThrow({ where: { id: "club-a" } })).passwordHash;
   const old = issueClubJoinProof({ userId: "account-member", clubId: "club-a", passwordHash });
   const weakCookie = `${clubJoinProofCookieName("club-a")}=${old.token}`;
-  const postAlias = (cookie: string, handler = canonicalClaimAlias) => handler(new Request("http://localhost/api/clubs/club-a/claim-requests", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost", Cookie: cookie }, body: JSON.stringify({ targetUserId: "historical-player" }) }), context);
+  const postAlias = (cookie: string, handler: ClaimRoute = canonicalClaimAlias): Promise<Response> => handler(new Request("http://localhost/api/clubs/club-a/claim-requests", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost", Cookie: cookie }, body: JSON.stringify({ targetUserId: "historical-player" }) }), context);
   expect((await postAlias(weakCookie)).status).toBe(403);
   expect((await postAlias(weakCookie, communityClaimAlias)).status).toBe(403);
   const response = await issueJoinProof(proofRequest({ clubId: "club-a", password: " exact code " }));

@@ -1,3 +1,4 @@
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { joinRequestAccess } from "@/lib/clubJoinRequests";
@@ -81,9 +82,9 @@ export async function reviewAdmissionApi(request: Request, { params }: { params:
   } catch (error) { return admissionError(error); }
 }
 
-async function playerSummary(clubId: string, player: { id: string; name: string; avatarKey: string | null }, elo: number) {
+async function playerSummary(db: Prisma.TransactionClient | PrismaClient, clubId: string, player: { id: string; name: string; avatarKey: string | null }, elo: number) {
   const where = { status: "COMPLETED", OR: [{ team1Player1Id: player.id }, { team1Player2Id: player.id }, { team2Player1Id: player.id }, { team2Player2Id: player.id }], session: { isTest: false, OR: [{ clubId }, { sessionClubs: { some: { clubId, status: "ACCEPTED" } } }] } };
-  const [matchesPlayed, last] = await Promise.all([prisma.match.count({ where }), prisma.match.findFirst({ where, orderBy: { completedAt: "desc" }, select: { completedAt: true } })]);
+  const [matchesPlayed, last] = await Promise.all([db.match.count({ where }), db.match.findFirst({ where, orderBy: { completedAt: "desc" }, select: { completedAt: true } })]);
   return { id: player.id, name: player.name, avatarUrl: resolveAvatarUrl(player.avatarKey), elo, matchesPlayed, lastPlayedAt: last?.completedAt ?? null };
 }
 
@@ -124,7 +125,7 @@ export async function admissionDiscoveryApi(request: Request, onlyClubId?: strin
       const q = (url.searchParams.get("q") ?? "").trim();
       if (q.length > 64) throw new ClubAdmissionError("Search must be 64 characters or fewer");
       const members = await tx.clubMember.findMany({ where: { clubId, archivedAt: null, retiredByAdmissionEventId: null, ownerUserId: null, player: { isActive: true, ...(q ? { name: { contains: q } } : {}), clubMemberships: { none: { retiredByAdmissionEventId: null, ownerUserId: { not: null, notIn: [access.userId] } } } } }, include: { player: true }, orderBy: { player: { name: "asc" } }, take: 30 });
-      const players = await Promise.all(members.map(m => playerSummary(clubId, m.player, m.elo)));
+      const players = await Promise.all(members.map(m => playerSummary(tx, clubId, m.player, m.elo)));
       return privateJson({ club: clubSummary, requiresJoinCode, passwordProof, identityReviewRequired, players, ownedPlayers, requests, membership: activeMembership, access: accountAccess });
     });
   } catch (error) { return admissionError(error); }
@@ -140,7 +141,7 @@ export async function adminAdmissionListApi(request: Request, { params }: { para
     ]);
     const requests = await Promise.all(entries.map(async entry => {
       const member = entry.requestedPlayerId ? await prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId: entry.requestedPlayerId } } }) : null;
-      const summary = entry.requestedPlayer && member ? await playerSummary(clubId, entry.requestedPlayer, member.elo) : null;
+      const summary = entry.requestedPlayer && member ? await playerSummary(prisma, clubId, entry.requestedPlayer, member.elo) : null;
       const owned = await prisma.clubMember.findMany({ where: { clubId, ownerUserId: entry.requesterUserId, retiredByAdmissionEventId: null }, include: { player: { select: { id: true, name: true } } } });
       const ownedConflict = owned.find(m => m.playerId !== entry.requestedPlayerId);
       const sharedConflict = entry.requestedPlayerId ? await prisma.clubMember.findFirst({ where: { playerId: entry.requestedPlayerId, retiredByAdmissionEventId: null, ownerUserId: { not: null, notIn: [entry.requesterUserId] } }, select: { id: true } }) : null;
