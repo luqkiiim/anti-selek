@@ -347,6 +347,7 @@ it("rolls back consumption and ownership when the final access write fails", asy
   expect((await invitationContext(db, invite.id, invite.handle)).player.name).toBe("Luqman");
 });
 it("generic admission still works and invalidates the pre-existing invitation", async () => {
+  await db.user.update({ where: { id: "account-a" }, data: { gender: "MALE" } });
   const invite = await ready(3);
   const admission = await transaction(tx => submitClubAdmission(tx, { clubId: "club-a", requesterUserId: "account-a", kind: "EXISTING_PLAYER", requestedPlayerId: "historical-player" }));
   await transaction(tx => reviewClubAdmission(tx, { clubId: "club-a", requestId: admission.id!, reviewerUserId: "admin", action: "APPROVE" }));
@@ -627,6 +628,7 @@ it.each(["SQLite", "libSQL"] as const)("closed legacy services cannot mutate pro
 });
 it.each(["SQLite", "libSQL"] as const)("SQL rejects new legacy invitation and execution receipts on %s", async engine => {
   if (engine === "libSQL") await useLibSqlAdapter();
+  await db.user.update({ where: { id: "account-a" }, data: { gender: "MALE" } });
   for (const purpose of ["CORRECTION", "ACCESS_RESTORE"]) {
     await expect(db.$executeRawUnsafe('INSERT INTO PlayerInvitation (id,clubId,playerId,clubMemberId,createdByUserId,tokenHash,expiresAt,updatedAt,purpose) VALUES (?,?,?,?,?,?,?,?,?)', purpose, "club-a", "historical-player", "original-member", "admin", purpose, Date.now()+60000, Date.now(), purpose)).rejects.toThrow();
   }

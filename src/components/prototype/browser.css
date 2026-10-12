@@ -239,6 +239,60 @@
 .prototype-sheet .sheet-handle-zone { display: grid; height: 30px; place-items: center; touch-action: none; }
 .prototype-sheet .sheet-handle { width: 42px; height: 5px; border-radius: 999px; background: #c9c9c4; }
 
+/* Admission sheets keep their action visible while their fields scroll. */
+.prototype-sheet .sheet-panel.has-footer {
+  display: flex;
+  flex-direction: column;
+  overflow: clip;
+  padding-bottom: 0;
+}
+.prototype-sheet .sheet-panel.has-footer > header {
+  flex: 0 0 auto;
+}
+.prototype-sheet .sheet-panel.has-footer > .sheet-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: 8px;
+  scrollbar-width: thin;
+}
+.prototype-sheet .sheet-panel.has-footer > .sheet-body-scroll > .sheet-body-fields {
+  min-height: 0;
+}
+.prototype-sheet .sheet-panel.has-footer > .sheet-footer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  margin-top: 8px;
+  padding: 10px 6px calc(12px + env(safe-area-inset-bottom, 0px));
+  border: 0;
+  border-top: 1px solid #eee5ef;
+  background: #fffaf3;
+  box-shadow: 0 -5px 12px rgba(41, 20, 64, 0.035);
+}
+.prototype-sheet .sheet-panel.has-footer .sheet-footer button {
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.prototype-sheet .sheet-panel.has-footer .sheet-footer button:focus-visible {
+  outline: 3px solid #aa83ed;
+  outline-offset: 2px;
+}
+.prototype-sheet .sheet-panel.has-footer .sheet-footer button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.prototype-sheet .sheet-panel.has-footer .sheet-footer .primary {
+  width: 100%;
+  min-height: 50px;
+  margin: 0;
+}
+
 .prototype-root .avatar, .prototype-sheet .avatar {
   position: relative;
   display: inline-flex;

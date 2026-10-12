@@ -15,7 +15,7 @@ const historySessionCode = "admission-history-e2e";
 const newAdmissionClubId = "community-new-admission-e2e";
 const newAdmissionEmail = "new-admission-e2e@example.com";
 const newAdmissionPassword = "Password123!";
-const newAdmissionPlayerName = "New Admission Candidate";
+const newAdmissionPlayerName = "New Admission Account";
 
 async function seedPlayerHistory() {
   const prisma = new PrismaClient({
@@ -80,7 +80,7 @@ test("a request stays pending before review and the claimed Player keeps match h
   await joinDialog.getByRole("button", { name: "Yes, find my profile" }).click();
   await joinDialog.getByRole("button", { name: /Claim Candidate/ }).click();
   await expect(joinDialog.getByRole("button", { name: /Claim Candidate/ })).toContainText(/1\s+match(?:es)?/);
-  await joinDialog.getByRole("button", { name: "Request to connect this Player" }).click();
+  await joinDialog.getByRole("button", { name: "Send request", exact: true }).click();
   await expect(joinDialog.getByText("Waiting for admin approval")).toBeVisible();
   await expect(joinDialog.getByText(/An admin will review your request/)).toBeVisible();
 
@@ -119,6 +119,9 @@ test("a request stays pending before review and the claimed Player keeps match h
   const approvedDialog = page.getByRole("dialog", { name: "Join a club" });
   await expect(approvedDialog.getByText("You’re already a member.")).toBeVisible();
   await approvedDialog.getByRole("button", { name: "Open club", exact: true }).click();
+  await page.addLocatorHandler(page.getByRole("dialog", { name: "New club achievement" }), async dialog => {
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  });
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   const playerProfile = page.locator(".player-profile");
   await expect(playerProfile.getByRole("heading", { name: "Your latest session" })).toBeVisible();
@@ -178,7 +181,8 @@ test("registration creates only an Account until a new Player request is approve
     joinDialog.getByRole("heading", { name: "E2E New Admission Club" }),
   ).toBeVisible();
   await joinDialog.getByRole("button", { name: "I’m new to this club" }).click();
-  await joinDialog.getByLabel("Player name").fill(newAdmissionPlayerName);
+  await expect(joinDialog.locator(".admission-account-summary")).toContainText(newAdmissionPlayerName);
+  await expect(joinDialog.getByLabel("Player name", { exact: true })).toHaveCount(0);
   await joinDialog.getByRole("button", { name: "Send request" }).click();
   await expect(joinDialog.getByText("Waiting for admin approval")).toBeVisible();
 

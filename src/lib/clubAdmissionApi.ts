@@ -62,7 +62,7 @@ export async function submitAdmissionApi(request: Request, clubId?: string, lega
     let body = await request.json().catch(() => null);
     if (legacyClaim && body && typeof body === "object") body = { clubId, kind: "EXISTING_PLAYER", requestedPlayerId: body.targetPlayerId ?? body.targetUserId, note: body.note };
     const parsed = submitSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: "Choose an existing Player or enter a new Player's name and gender" }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: "Choose an existing Player or request a new Player" }, { status: 400 });
     const entryProof = await readClubEntryProof(request, parsed.data.clubId);
     const result = await admissionTransaction(prisma, tx => submitClubAdmission(tx, { ...parsed.data, requesterUserId: access.userId }, entryProof));
     return privateJson(result);
@@ -136,7 +136,7 @@ export async function adminAdmissionListApi(request: Request, { params }: { para
     const { id: clubId } = await params; const access = await joinRequestAccess(request, clubId); if (access.response) return access.response;
     const [club, entries, members] = await Promise.all([
       prisma.club.findUnique({ where: { id: clubId }, select: { allowJoinRequests: true } }),
-      prisma.clubAdmissionRequest.findMany({ where: { clubId, status: "PENDING" }, include: { ...admissionInclude, events: { orderBy: { revision: "asc" } } }, orderBy: { createdAt: "asc" } }),
+      prisma.clubAdmissionRequest.findMany({ where: { clubId, status: "PENDING" }, include: { ...admissionInclude, requester: { select: { ...admissionInclude.requester.select, gender: true } }, events: { orderBy: { revision: "asc" } } }, orderBy: { createdAt: "asc" } }),
       prisma.clubMember.findMany({ where: { clubId, archivedAt: null, retiredByAdmissionEventId: null, ownerUserId: null, player: { isActive: true } }, include: { player: true }, take: 100 }),
     ]);
     const requests = await Promise.all(entries.map(async entry => {
@@ -146,8 +146,9 @@ export async function adminAdmissionListApi(request: Request, { params }: { para
       const ownedConflict = owned.find(m => m.playerId !== entry.requestedPlayerId);
       const sharedConflict = entry.requestedPlayerId ? await prisma.clubMember.findFirst({ where: { playerId: entry.requestedPlayerId, retiredByAdmissionEventId: null, ownerUserId: { not: null, notIn: [entry.requesterUserId] } }, select: { id: true } }) : null;
       const conflict = (member?.ownerUserId && member.ownerUserId !== entry.requesterUserId) || sharedConflict ? "Player already belongs to another account" : ownedConflict ? "Remove and disconnect the account's other profile in this club first." : entry.kind === "OWNED_PLAYER" || entry.originInvitationId ? "This old request is no longer supported. Send a normal claim invitation or request a profile in this club." : null;
-      const proposedName = entry.proposedPlayerName ?? entry.requester.name;
-      return { ...entry, recoveryReviewAuthorized: false, name: entry.requester.name, requesterName: entry.requester.name, requesterEmail: entry.requester.email, targetName: entry.requestedPlayer?.name ?? null, history: summary, currentRating: member?.elo ?? null, conflict, ownedPlayers: [], possibleDuplicates: members.filter(m => normalizeClaimName(m.player.name) === normalizeClaimName(proposedName)).map(m => ({ id: m.playerId, name: m.player.name, elo: m.elo })) };
+      const proposedName = entry.kind === "NEW_PLAYER" ? entry.requester.name : entry.proposedPlayerName ?? entry.requester.name;
+      const currentAccountProfile = { name: entry.requester.name, gender: entry.requester.gender, isComplete: !!entry.requester.name.trim() && ["MALE", "FEMALE"].includes(entry.requester.gender) };
+      return { ...entry, currentAccountProfile, recoveryReviewAuthorized: false, name: entry.requester.name, requesterName: entry.requester.name, requesterEmail: entry.requester.email, targetName: entry.requestedPlayer?.name ?? null, history: summary, currentRating: member?.elo ?? null, conflict, ownedPlayers: [], possibleDuplicates: members.filter(m => normalizeClaimName(m.player.name) === normalizeClaimName(proposedName)).map(m => ({ id: m.playerId, name: m.player.name, elo: m.elo })) };
     }));
     return NextResponse.json({ allowJoinRequests: club?.allowJoinRequests ?? false, requests, candidates: members.map(m => ({ id: m.playerId, name: m.player.name, elo: m.elo })) }, { headers: { "Cache-Control": "no-store, private" } });
   } catch (error) { return admissionError(error); }

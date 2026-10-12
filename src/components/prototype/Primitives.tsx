@@ -61,13 +61,14 @@ type SheetProps = {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  footer?: ReactNode;
   busy?: boolean;
   open?: boolean;
 };
 export function Sheet({ open = true, ...props }: SheetProps) {
   return <AnimatePresence>{open && <SheetDialog {...props} />}</AnimatePresence>;
 }
-function SheetDialog({ title, onClose, children, busy = false }: SheetProps) {
+function SheetDialog({ title, onClose, children, footer, busy = false }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const controls = useDragControls();
   const reduced = useReducedMotion();
@@ -84,7 +85,7 @@ function SheetDialog({ title, onClose, children, busy = false }: SheetProps) {
       onCancel={e => { e.preventDefault(); close(); }}>
       <motion.div className="sheet-shade" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
         exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : 0.16 }} onClick={close} />
-      <motion.div className="sheet-panel" style={{ touchAction: "pan-y" }}
+      <motion.div className={`sheet-panel${footer != null ? " has-footer" : ""}`} style={{ touchAction: "pan-y" }}
         initial={{ y: reduced ? 0 : travel }} animate={{ y: 0 }}
         exit={{ y: reduced ? 0 : travel, transition: { type: "tween", duration: reduced ? 0 : 0.24, ease: [0.4, 0, 1, 1] } }}
         transition={{ type: "tween", duration: reduced ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}
@@ -94,7 +95,10 @@ function SheetDialog({ title, onClose, children, busy = false }: SheetProps) {
         onDragEnd={(_, info) => { if (info.offset.y > 96 || info.velocity.y > 550) close(); }}>
         <div className="sheet-handle-zone" onPointerDown={e => controls.start(e)}><div className="sheet-handle" /></div>
         <header><h2>{title}</h2><button disabled={busy} className="icon-button" aria-label="Close" onClick={close}><X size={22} /></button></header>
-        <fieldset disabled={busy} className="sheet-content">{children}</fieldset>
+        {footer != null
+          ? <div className="sheet-content sheet-body-scroll"><fieldset disabled={busy} className="sheet-body-fields">{children}</fieldset></div>
+          : <fieldset disabled={busy} className="sheet-content">{children}</fieldset>}
+        {footer != null && <fieldset disabled={busy} className="sheet-footer">{footer}</fieldset>}
       </motion.div>
     </dialog>
   );

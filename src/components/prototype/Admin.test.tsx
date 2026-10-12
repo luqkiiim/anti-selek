@@ -139,6 +139,34 @@ describe("Admin admission review", () => {
     );
   });
 
+  it("shows current account details for new profiles while retaining the submitted snapshot", async () => {
+    const request = { ...makeRequest(), kind: "NEW_PLAYER" as const, requestedPlayerId: null,
+      proposedPlayerName: "Old name", proposedGender: "MALE",
+      currentAccountProfile: { name: "Current name", gender: "FEMALE", isComplete: true } };
+    mocks.resourceData = { allowJoinRequests: true, requests: [request], candidates: [] } satisfies AdminAdmissionList;
+    await render();
+    const summary = container.querySelector(".admission-review-player");
+    expect(summary?.textContent).toContain("Current name");
+    expect(summary?.textContent).toContain("Female");
+    expect(summary?.textContent).not.toContain("Old name");
+    expect(container.textContent).toContain("Account details changed since this request.");
+    const approve = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Approve as new local profile") as HTMLButtonElement;
+    expect(approve.disabled).toBe(false);
+    await act(async () => approve.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(mocks.api).toHaveBeenCalledWith("/api/clubs/club-1/join-requests/request-1", "PATCH", { action: "APPROVE", asNew: true, revision: 3 });
+    expect(request.proposedPlayerName).toBe("Old name");
+    expect(request.proposedGender).toBe("MALE");
+  });
+
+  it("blocks new-profile creation for incomplete accounts while retaining ordinary claim review", async () => {
+    mocks.resourceData = { allowJoinRequests: true, requests: [{ ...makeRequest(), currentAccountProfile: { name: "Ari Account", gender: "UNSPECIFIED", isComplete: false } }], candidates: [] } satisfies AdminAdmissionList;
+    await render();
+    const buttons = Array.from(container.querySelectorAll("button"));
+    expect((buttons.find(button => button.textContent === "Approve as new local profile") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttons.find(button => button.textContent === "Approve Ari Old Profile") as HTMLButtonElement).disabled).toBe(false);
+    expect(container.textContent).toContain("Account settings before a new profile can be created");
+  });
+
   it("keeps local profile review available without showing global identity review controls", async () => {
     mocks.resourceData = {
       allowJoinRequests: true,

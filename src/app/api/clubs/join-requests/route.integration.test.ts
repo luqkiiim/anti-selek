@@ -30,7 +30,7 @@ let count = 0;
 const context = { params: Promise.resolve({ id: "club-a" }) };
 const request = (body: unknown) => new Request("http://localhost/api/clubs/join-requests", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body) });
 const proofRequest = (body: unknown) => new Request("http://localhost/api/clubs/join-proof", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body) });
-const newInput = { clubId: "club-a", kind: "NEW_PLAYER" as const, proposedPlayerName: "New Player", proposedGender: "FEMALE" };
+const newInput = { clubId: "club-a", kind: "NEW_PLAYER" as const };
 type ClaimRoute = (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response>;
 const submit = (input: Parameters<typeof submitClubAdmission>[1] = { clubId: "club-a", requesterUserId: "account-member", kind: "EXISTING_PLAYER" as const, requestedPlayerId: "historical-player" }) => admissionTransaction(db, tx => submitClubAdmission(tx, input));
 const approve = (requestId: string, overrides: Partial<Parameters<typeof reviewClubAdmission>[1]> = {}) => admissionTransaction(db, tx => reviewClubAdmission(tx, { clubId: "club-a", requestId, reviewerUserId: "account-owner", action: "APPROVE", ...overrides }));
@@ -177,14 +177,14 @@ it("rejects reuse of an idempotency key with a different new-player payload", as
   const first = { ...newInput, requesterUserId: "account-member", idempotencyKey: "new-player-key", proposedPlayerName: "First Name" };
   const entry = await admissionTransaction(db, tx => submitClubAdmission(tx, first));
   await expect(admissionTransaction(db, tx => submitClubAdmission(tx, { ...first, proposedPlayerName: "Changed Name", proposedGender: "MALE", note: "changed" }))).rejects.toMatchObject({ statusCode: 409 });
-  expect(await db.clubAdmissionRequest.findUnique({ where: { id: entry.id } })).toMatchObject({ proposedPlayerName: "First Name", proposedGender: "FEMALE" });
+  expect(await db.clubAdmissionRequest.findUnique({ where: { id: entry.id } })).toMatchObject({ proposedPlayerName: "Member", proposedGender: "FEMALE" });
   expect(await db.clubAdmissionRequest.count()).toBe(1);
 });
 it("rejects changing a pending new-player payload when the retry has no idempotency key", async () => {
   const first = { ...newInput, requesterUserId: "account-member", proposedPlayerName: "Pending Name" };
   const entry = await admissionTransaction(db, tx => submitClubAdmission(tx, first));
-  await expect(admissionTransaction(db, tx => submitClubAdmission(tx, { ...first, proposedPlayerName: "Changed Name" }))).rejects.toMatchObject({ statusCode: 409 });
-  expect(await db.clubAdmissionRequest.findUnique({ where: { id: entry.id } })).toMatchObject({ proposedPlayerName: "Pending Name", status: "PENDING" });
+  await expect(admissionTransaction(db, tx => submitClubAdmission(tx, { ...first, note: "Changed note" }))).rejects.toMatchObject({ statusCode: 409 });
+  expect(await db.clubAdmissionRequest.findUnique({ where: { id: entry.id } })).toMatchObject({ proposedPlayerName: "Member", status: "PENDING" });
   expect(await db.clubAdmissionRequest.count()).toBe(1);
 });
 it("blocks claiming a different identity already owned in the same club and does not move history", async () => {
@@ -427,7 +427,7 @@ it("rejects a missing target on the deprecated community alias without creating 
   );
 
   expect(response.status).toBe(400);
-  expect(await response.json()).toMatchObject({ error: "Choose an existing Player or enter a new Player's name and gender" });
+  expect(await response.json()).toMatchObject({ error: "Choose an existing Player or request a new Player" });
   expect(await db.clubAdmissionRequest.count({ where: { requesterUserId: "account-member" } })).toBe(0);
 });
 
@@ -642,4 +642,124 @@ it("marks HTTPS verification cookies secure and rejects malformed JSON before wr
   const broken = () => new Request("http://localhost/api/clubs/join-entry", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json" }, body: "{" });
   expect((await verifyEntry(broken())).status).toBe(400); expect((await POST(broken())).status).toBe(400);
   expect(await db.clubAdmissionRequest.count()).toBe(0);
+});
+it("uses account metadata when the new-player route omits legacy profile fields", async () => {
+  actor = { id: "account-member" };
+  const accountBefore = await db.user.findUniqueOrThrow({ where: { id: actor.id } });
+  const response = await POST(request({ ...newInput, note: "Please add me" }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ proposedPlayerName: "Member", proposedGender: "FEMALE", note: "Please add me" });
+  expect(await db.user.findUniqueOrThrow({ where: { id: actor.id } })).toEqual(accountBefore);
+  expect(await db.player.count()).toBe(1); expect(await db.clubMember.count()).toBe(1);
+});
+it("accepts legacy new-player fields without allowing them to override the account", async () => {
+  actor = { id: "account-member" };
+  const response = await POST(request({ ...newInput, proposedPlayerName: "Forged account name", proposedGender: "MALE" }));
+  expect(response.status).toBe(200);
+  const entry = await response.json();
+  expect(entry).toMatchObject({ proposedPlayerName: "Member", proposedGender: "FEMALE" });
+  const result = await approve(entry.id);
+  expect(await db.player.findUniqueOrThrow({ where: { id: result.approvedPlayerId! } })).toMatchObject({ name: "Member", gender: "FEMALE" });
+  expect(await db.user.findUniqueOrThrow({ where: { id: "account-member" } })).toMatchObject({ name: "Member", gender: "FEMALE" });
+});
+it("approves from current account details while preserving the original request snapshot and terminal audit", async () => {
+  const entry = await submit({ ...newInput, requesterUserId: "account-member", idempotencyKey: "canonical-new" });
+  await db.user.update({ where: { id: "account-member" }, data: { name: "Renamed Account", gender: "MALE" } });
+  const result = await approve(entry.id!);
+  expect(await db.player.findUniqueOrThrow({ where: { id: result.approvedPlayerId! } })).toMatchObject({ name: "Renamed Account", gender: "MALE" });
+  const terminal = await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } });
+  expect(terminal).toMatchObject({ status: "APPROVED", proposedPlayerName: "Member", proposedGender: "FEMALE" });
+  const events = await db.clubAdmissionEvent.findMany({ where: { admissionRequestId: entry.id }, orderBy: { revision: "asc" } });
+  await db.user.update({ where: { id: "account-member" }, data: { name: "Renamed Again", gender: "FEMALE" } });
+  const retried = await submit({ ...newInput, requesterUserId: "account-member", idempotencyKey: "canonical-new", proposedPlayerName: "Ignored retry", proposedGender: "MALE" });
+  expect(retried).toMatchObject({ id: entry.id, status: "APPROVED", proposedPlayerName: "Member", proposedGender: "FEMALE" });
+  expect(await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } })).toEqual(terminal);
+  expect(await db.clubAdmissionEvent.findMany({ where: { admissionRequestId: entry.id }, orderBy: { revision: "asc" } })).toEqual(events);
+  expect(await db.clubAdmissionRequest.count()).toBe(1); expect(await db.player.count()).toBe(2);
+});
+it("returns the same pending receipt after account changes and rejects meaningful request changes", async () => {
+  const input = { ...newInput, requesterUserId: "account-member", note: "Original note", idempotencyKey: "stable-canonical" };
+  const entry = await submit(input);
+  await db.user.update({ where: { id: "account-member" }, data: { name: "Current name", gender: "MALE" } });
+  const keyed = await submit({ ...input, proposedPlayerName: "Different legacy field", proposedGender: "MALE" });
+  const pending = await submit({ ...newInput, requesterUserId: input.requesterUserId, note: input.note });
+  expect(keyed).toMatchObject({ id: entry.id, proposedPlayerName: "Member", proposedGender: "FEMALE" });
+  expect(pending).toMatchObject({ id: entry.id, proposedPlayerName: "Member", proposedGender: "FEMALE" });
+  for (const changed of [{ note: "Changed note" }, { kind: "EXISTING_PLAYER" as const, requestedPlayerId: "historical-player" }, { requestedPlayerId: "historical-player" }, { clubId: "club-b" }]) {
+    await expect(submit({ ...input, ...changed })).rejects.toMatchObject({ statusCode: 409 });
+  }
+  expect(await db.clubAdmissionRequest.count()).toBe(1); expect(await db.clubAdmissionEvent.count()).toBe(1);
+});
+it.each([{ name: " ", gender: "FEMALE" }, { name: "Member", gender: "UNSPECIFIED" }])("rejects new requests for an incomplete account despite complete legacy fields: %j", async details => {
+  actor = { id: "account-member" };
+  await db.user.update({ where: { id: actor.id }, data: details });
+  const response = await POST(request({ ...newInput, proposedPlayerName: "Forged complete name", proposedGender: "MALE" }));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: "ACCOUNT_PROFILE_INCOMPLETE", error: expect.stringContaining("Account Settings") });
+  await expect(submit({ ...newInput, requesterUserId: actor.id })).rejects.toMatchObject({ code: "ACCOUNT_PROFILE_INCOMPLETE", statusCode: 400 });
+  expect(await db.clubAdmissionRequest.count()).toBe(0); expect(await db.player.count()).toBe(1); expect(await db.clubAccess.count()).toBe(2);
+});
+it("rolls back approval for a now-incomplete account and retains the pending request and event", async () => {
+  const entry = await submit({ ...newInput, requesterUserId: "account-member" });
+  await db.user.update({ where: { id: "account-member" }, data: { gender: "UNSPECIFIED" } });
+  const before = await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } });
+  const events = await db.clubAdmissionEvent.findMany();
+  await expect(approve(entry.id!)).rejects.toMatchObject({ statusCode: 400, code: "ACCOUNT_PROFILE_INCOMPLETE" });
+  expect(await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } })).toEqual(before);
+  expect(await db.clubAdmissionEvent.findMany()).toEqual(events);
+  expect(await db.player.count()).toBe(1); expect(await db.clubMember.count()).toBe(1); expect(await db.clubAccess.count()).toBe(2);
+});
+it("keeps legacy proposed metadata as audit-only when approving an older new-player request", async () => {
+  const entry = await db.clubAdmissionRequest.create({ data: { clubId: "club-a", requesterUserId: "account-member", kind: "NEW_PLAYER", proposedPlayerName: "Legacy form name", proposedGender: "MALE" } });
+  const approved = await approve(entry.id);
+  expect(await db.player.findUniqueOrThrow({ where: { id: approved.approvedPlayerId! } })).toMatchObject({ name: "Member", gender: "FEMALE" });
+  expect(await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } })).toMatchObject({ proposedPlayerName: "Legacy form name", proposedGender: "MALE", status: "APPROVED" });
+});
+it("preserves the legacy name join endpoint while deriving new-player metadata in the admission service", async () => {
+  actor = { id: "account-member" };
+  const response = await legacyNameJoin(request({ clubName: "Club A", proposedPlayerName: "Tampered legacy name", proposedGender: "MALE" }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ status: "PENDING", clubId: "club-a", clubName: "Club A", communityId: "club-a", proposedPlayerName: "Member", proposedGender: "FEMALE" });
+  expect(await db.clubAdmissionRequest.count()).toBe(1); expect(await db.player.count()).toBe(1);
+});
+it("shows the current account profile to admins while retaining the original pending request and audit snapshot", async () => {
+  const entry = await submit({ ...newInput, requesterUserId: "account-member" });
+  const savedRequest = await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } });
+  const savedEvents = await db.clubAdmissionEvent.findMany({ where: { admissionRequestId: entry.id } });
+  await db.user.update({ where: { id: "account-member" }, data: { name: "Current Account Name", gender: "MALE" } });
+  await db.player.create({ data: { id: "current-duplicate", name: "Current Account Name" } });
+  await db.clubMember.create({ data: { clubId: "club-a", playerId: "current-duplicate" } });
+  actor = { id: "account-owner" };
+  const response = await GET(new Request("http://localhost/api/clubs/club-a/join-requests"), context);
+  expect(response.status).toBe(200);
+  const current = (await response.json()).requests.find((value: { id: string }) => value.id === entry.id);
+  expect(current).toMatchObject({ proposedPlayerName: "Member", proposedGender: "FEMALE", requesterName: "Current Account Name", currentAccountProfile: { name: "Current Account Name", gender: "MALE", isComplete: true }, possibleDuplicates: [expect.objectContaining({ id: "current-duplicate" })] });
+  await db.user.update({ where: { id: "account-member" }, data: { gender: "UNSPECIFIED" } });
+  const incomplete = (await (await GET(new Request("http://localhost/api/clubs/club-a/join-requests"), context)).json()).requests[0];
+  expect(incomplete.currentAccountProfile).toEqual({ name: "Current Account Name", gender: "UNSPECIFIED", isComplete: false });
+  expect(await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } })).toEqual(savedRequest);
+  expect(await db.clubAdmissionEvent.findMany({ where: { admissionRequestId: entry.id } })).toEqual(savedEvents);
+});
+it("requires complete account details for fresh existing-player requests while preserving pending and terminal receipt retries", async () => {
+  const input = { clubId: "club-a", requesterUserId: "account-member", kind: "EXISTING_PLAYER" as const, requestedPlayerId: "historical-player", idempotencyKey: "existing-profile-receipt" };
+  const entry = await submit(input);
+  const pendingBefore = await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } });
+  const eventsBefore = await db.clubAdmissionEvent.findMany();
+  await db.user.update({ where: { id: "account-member" }, data: { name: " ", gender: "UNSPECIFIED" } });
+  expect(await submit(input)).toMatchObject({ id: entry.id, status: "PENDING" });
+  expect(await submit({ ...input, idempotencyKey: undefined })).toMatchObject({ id: entry.id, status: "PENDING" });
+  expect(await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } })).toEqual(pendingBefore);
+  expect(await db.clubAdmissionEvent.findMany()).toEqual(eventsBefore);
+  await approve(entry.id!, { action: "CANCEL", reviewerUserId: "account-member" });
+  const terminalBefore = await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } });
+  const terminalEvents = await db.clubAdmissionEvent.findMany();
+  expect(await submit(input)).toMatchObject({ id: entry.id, status: "CANCELLED" });
+  actor = { id: "account-member" };
+  const response = await POST(request({ clubId: "club-a", kind: "EXISTING_PLAYER", requestedPlayerId: "historical-player" }));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: "ACCOUNT_PROFILE_INCOMPLETE" });
+  await expect(submit({ ...input, idempotencyKey: undefined })).rejects.toMatchObject({ statusCode: 400, code: "ACCOUNT_PROFILE_INCOMPLETE" });
+  expect(await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id } })).toEqual(terminalBefore);
+  expect(await db.clubAdmissionEvent.findMany()).toEqual(terminalEvents);
+  expect(await db.clubAdmissionRequest.count()).toBe(1); expect(await db.player.count()).toBe(1); expect(await db.clubMember.count()).toBe(1); expect(await db.clubAccess.count()).toBe(2);
 });
