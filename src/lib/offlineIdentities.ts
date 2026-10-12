@@ -96,7 +96,6 @@ async function assertPlaceholderMembership(
         select: {
           id: true,
           name: true,
-          ownerUserId: true,
         },
       },
       club: {
@@ -112,11 +111,19 @@ async function assertPlaceholderMembership(
     throw new OfflineIdentityError(`${label} placeholder is not in that club`, 404);
   }
 
-  if (!isOfflineIdentityPlaceholder(membership.player)) {
+  if (membership.archivedAt || membership.retiredByAdmissionEventId || !isOfflineIdentityPlaceholder(membership)) {
     throw new OfflineIdentityError(
       `${label} must be an unclaimed placeholder without email`,
       400
     );
+  }
+
+  const connectedElsewhere = await tx.clubMember.findFirst({
+    where: { playerId, retiredByAdmissionEventId: null, ownerUserId: { not: null } },
+    select: { id: true },
+  });
+  if (connectedElsewhere) {
+    throw new OfflineIdentityError(`${label} is still connected to an account in another club`, 409);
   }
 
   return membership;

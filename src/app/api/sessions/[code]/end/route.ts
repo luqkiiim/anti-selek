@@ -1,6 +1,9 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
 import { captureAchievementEligibility } from "@/lib/clubAchievementService";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
@@ -62,7 +65,8 @@ export async function POST(
     }
 
     const endedAt = sessionData.endedAt ?? new Date();
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       await tx.queuedMatch.deleteMany({
         where: { sessionId: sessionData.id },
       });
@@ -116,7 +120,8 @@ export async function POST(
       updated
     );
     const playerIds = updated.players.map((p) => p.playerId);
-    const players =
+    const legacyPlayers =
+      updated.ratingPolicyVersion === 2 ? updated.players :
       linkedClubIds.length > 1 && updated.players.length > 0
         ? withPlayerClubBadges(
             updated.players,
@@ -130,6 +135,8 @@ export async function POST(
             )
           : updated.players;
 
+    const players = await withSessionProfileRatings(prisma, updated, legacyPlayers);
+
     return sportingJson({
       ...updated,
       players: players.map((player) => ({
@@ -139,6 +146,8 @@ export async function POST(
       queuedMatch: null,
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("End session error", error);
     return safeErrorResponse();
   }

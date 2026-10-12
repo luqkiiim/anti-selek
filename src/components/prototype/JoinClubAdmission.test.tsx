@@ -36,8 +36,6 @@ function makeDiscovery(overrides: Partial<AdmissionDiscovery> = {}): AdmissionDi
     club: { id: "club-1", name: "Riverside", allowJoinRequests: true },
     passwordProof: { status: "NOT_REQUIRED", expiresAt: null },
     players: [{ id: "player-1", name: "Ari Tan", elo: 1080, matchesPlayed: 12, lastPlayedAt: "2026-09-28T00:00:00.000Z" }],
-    ownedPlayers: [],
-    identityReviewRequired: false,
     requests: [],
     membership: null,
     access: null,
@@ -92,7 +90,7 @@ describe("JoinClubAdmission", () => {
       }
       if (url.pathname === "/api/clubs/join-requests" && init?.method === "POST" && expireProofOnSubmit) {
         proofIssued = false;
-        discovery = { ...discovery, passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null }, players: [], ownedPlayers: [] };
+        discovery = { ...discovery, passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null }, players: [] };
         return { ok: false, status: 428, json: async () => ({ code: "PASSWORD_REQUIRED", error: "Enter the club password to continue." }) } as Response;
       }
       if (url.pathname === "/api/clubs/join-requests" && init?.method !== "POST" && holdPasswordRelock && !proofIssued) {
@@ -107,7 +105,7 @@ describe("JoinClubAdmission", () => {
         }) } as Response;
       }
       const result = passwordProtected
-        ? { ...discovery, passwordProof: { status: proofIssued ? "VERIFIED" as const : "PASSWORD_REQUIRED" as const, expiresAt: proofIssued ? "2026-10-08T12:10:00.000Z" : null }, players: proofIssued ? discovery.players : [], ownedPlayers: proofIssued ? discovery.ownedPlayers : [] }
+        ? { ...discovery, passwordProof: { status: proofIssued ? "VERIFIED" as const : "PASSWORD_REQUIRED" as const, expiresAt: proofIssued ? "2026-10-08T12:10:00.000Z" : null }, players: proofIssued ? discovery.players : [] }
         : discovery;
       return { ok: true, json: async () => result } as Response;
     }));
@@ -126,8 +124,8 @@ describe("JoinClubAdmission", () => {
 
   it("submits a played-before claim against the selected Player ID", async () => {
     await openSheet();
-    expect(container.textContent).toContain("Have you played with this club before?");
-    await act(async () => button(container, "Yes, find my profile").click());
+    expect(container.textContent).toContain("Choose your profile for this club");
+    await act(async () => button(container, "Use an existing club profile").click());
     await act(async () => button(container, "Ari Tan").click());
     await act(async () => button(container, "Request to connect this Player").click());
     expect(submitted).toMatchObject({ clubId: "club-1", kind: "EXISTING_PLAYER", requestedPlayerId: "player-1" });
@@ -143,41 +141,16 @@ describe("JoinClubAdmission", () => {
     expect(container.textContent).toContain("Request sent");
   });
 
-  it("requires an account with existing Player profiles to choose one instead of requesting a duplicate", async () => {
-    discovery = makeDiscovery({ ownedPlayers: [{ id: "owned-player", name: "Ari Tan" }] });
+  it("keeps profile choices local to this club and has no account-owned profile picker", async () => {
     await openSheet();
-    await act(async () => button(container, "Use a Player you own").click());
-    expect(container.textContent).toContain("Use a Player profile you already own");
-    await act(async () => button(container, "Ari Tan").click());
-    await act(async () => button(container, "Request to use this Player").click());
-    expect(submitted).toMatchObject({ kind: "OWNED_PLAYER", requestedPlayerId: "owned-player" });
-    expect(submitted).not.toHaveProperty("proposedPlayerName");
-  });
-
-  it("requires admin review instead of offering a new Player when the only owned identity is inactive", async () => {
-    discovery = makeDiscovery({ identityReviewRequired: true });
-    await openSheet();
-
-    expect(container.textContent).toContain("An inactive Player identity on this account still needs admin review.");
-    const newPlayerChoice = button(container, "Admin review is needed before creating another Player");
-    expect(newPlayerChoice.disabled).toBe(true);
+    expect(container.textContent).toContain("Use an existing club profile");
+    expect(container.textContent).toContain("I’m new to this club");
+    expect(container.textContent).not.toContain("owned by this account");
+    expect(container.textContent).not.toContain("identity review");
+    await act(async () => button(container, "I’m new to this club").click());
+    expect(container.textContent).toContain("Request a new local profile");
     expect(container.textContent).not.toContain("Request a new Player profile");
     expect(submitted).toBeNull();
-  });
-
-  it("keeps active owned profiles selectable when an additional inactive identity needs review", async () => {
-    discovery = makeDiscovery({
-      identityReviewRequired: true,
-      ownedPlayers: [{ id: "active-owned-player", name: "Ari Tan" }],
-    });
-    await openSheet();
-
-    await act(async () => button(container, "Use a Player you own").click());
-    expect(container.textContent).toContain("An inactive Player identity also needs admin review.");
-    await act(async () => button(container, "Ari Tan").click());
-    await act(async () => button(container, "Request to use this Player").click());
-    expect(submitted).toMatchObject({ kind: "OWNED_PLAYER", requestedPlayerId: "active-owned-player" });
-    expect(submitted).not.toHaveProperty("proposedPlayerName");
   });
 
   it("shows existing pending, rejected, and approved admission status", async () => {
@@ -202,27 +175,25 @@ describe("JoinClubAdmission", () => {
     discovery = makeDiscovery({ access: { role: "MEMBER", status: "ACTIVE" }, membership: null });
     await openSheet();
     expect(container.textContent).toContain("Your account already has club access.");
-    expect(container.textContent).toContain("Have you played with this club before?");
+    expect(container.textContent).toContain("Choose your profile for this club");
   });
 
-  it("lets an account with revoked access request to connect its owned Player", async () => {
+  it("lets an account with revoked club access request to connect a local roster profile", async () => {
     discovery = makeDiscovery({
       access: { role: "MEMBER", status: "REVOKED" },
-      membership: { playerId: "owned-player" },
-      ownedPlayers: [{ id: "owned-player", name: "Ari Tan" }],
+      membership: null,
     });
     await openSheet();
 
     expect(container.textContent).not.toContain("You’re already a member.");
-    await act(async () => button(container, "Use a Player you own").click());
-    expect(container.textContent).toContain("Use a Player profile you already own");
+    await act(async () => button(container, "Use an existing club profile").click());
     await act(async () => button(container, "Ari Tan").click());
-    await act(async () => button(container, "Request to use this Player").click());
+    await act(async () => button(container, "Request to connect this Player").click());
 
     expect(submitted).toMatchObject({
       clubId: "club-1",
-      kind: "OWNED_PLAYER",
-      requestedPlayerId: "owned-player",
+      kind: "EXISTING_PLAYER",
+      requestedPlayerId: "player-1",
     });
     expect(container.textContent).toContain("Request sent");
   });
@@ -248,9 +219,9 @@ describe("JoinClubAdmission", () => {
     });
     await act(async () => button(container, "Continue").click());
 
-    expect(container.textContent).toContain("Have you played with this club before?");
+    expect(container.textContent).toContain("Choose your profile for this club");
     expect(container.textContent).not.toContain("Ari Tan");
-    await act(async () => button(container, "Yes, find my profile").click());
+    await act(async () => button(container, "Use an existing club profile").click());
     expect(container.textContent).toContain("Ari Tan");
     const calls = vi.mocked(fetch).mock.calls;
     const proofCall = calls.find(([input]) => new URL(String(input), window.location.origin).pathname === "/api/clubs/join-proof");
@@ -270,11 +241,9 @@ describe("JoinClubAdmission", () => {
     holdPasswordRelock = true;
     discovery = makeDiscovery({
       passwordProof: { status: "VERIFIED", expiresAt: "2026-10-08T12:10:00.000Z" },
-      ownedPlayers: [{ id: "owned-player", name: "Owned Alex" }],
     });
     await openSheet();
-    await act(async () => button(container, "Yes, find my profile").click());
-    expect(container.textContent).toContain("Owned Alex");
+    await act(async () => button(container, "Use an existing club profile").click());
     await act(async () => button(container, "Ari Tan").click());
     await act(async () => {
       button(container, "Request to connect this Player").click();
@@ -283,7 +252,6 @@ describe("JoinClubAdmission", () => {
 
     expect(passwordRelockStarted).toBe(true);
     expect(container.textContent).not.toContain("Ari Tan");
-    expect(container.textContent).not.toContain("Owned Alex");
     expect(container.textContent).toContain("Verify the club password to browse Player profiles.");
     expect(container.querySelector('input[type="password"]')).not.toBeNull();
     releasePasswordRelock?.();

@@ -1,5 +1,7 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import {
@@ -206,7 +208,8 @@ export async function POST(
     const arrivalPriorityAt =
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
 
-    const createdGuest = await prisma.$transaction(async (tx) => {
+    const createdGuest = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, allowContextlessParticipant: true });
       const user = await tx.player.create({
         data: {
           name: guestName,
@@ -266,6 +269,7 @@ export async function POST(
       queuedMatch,
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Create guest error", error);
     return safeErrorResponse();
   }

@@ -119,9 +119,9 @@ describe("user stats route", () => {
       team2Player2: { id: "player-3", name: "Player Three", avatarKey: null },
       session: {
         id: "session-1", code: "ABC123", name: "Morning", status: "COMPLETED",
-        clubId: null, isTest: false, type: "POINTS", createdAt: new Date(), endedAt: new Date(),
+        clubId: null, ratingPolicyVersion: 2, isTest: false, type: "POINTS", createdAt: new Date(), endedAt: new Date(),
         players: [
-          { playerId: "player-1", isGuest: false, sessionPoints: 3, player: alex },
+          { playerId: "player-1", profileClubId: "club-selected", isGuest: false, sessionPoints: 3, player: alex },
           { playerId: "guest-1", isGuest: true, sessionPoints: 3, player: guest },
         ],
         matches: [],
@@ -132,14 +132,17 @@ describe("user stats route", () => {
     expect(response.status).toBe(200);
     expect(mocks.matchFindMany).toHaveBeenCalledWith(expect.objectContaining({
       include: expect.objectContaining({ session: expect.objectContaining({
-        select: expect.objectContaining({ players: { select: expect.objectContaining({ isGuest: true }) } }),
+        select: expect.objectContaining({ ratingPolicyVersion: true, players: { select: expect.objectContaining({ profileClubId: true, isGuest: true }) } }),
       }) }),
     }));
     expect(mocks.buildPlayerProfileDerivedData).toHaveBeenCalledWith("player-1", [
-      expect.objectContaining({ session: expect.objectContaining({ players: expect.arrayContaining([
+      expect.objectContaining({ session: expect.objectContaining({ ratingPolicyVersion: 2, players: expect.arrayContaining([
+        expect.objectContaining({ playerId: "player-1", userId: "player-1", profileClubId: "club-selected" }),
         expect.objectContaining({ playerId: "guest-1", userId: "guest-1", isGuest: true }),
       ]) }) }),
     ]);
+    const query = mocks.matchFindMany.mock.calls[0][0];
+    expect(query.include.session.select.players.select).not.toHaveProperty("participantAccountId");
   });
 
   it("returns canonical and compatibility club context for an active viewer", async () => {

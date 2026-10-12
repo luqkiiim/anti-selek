@@ -156,3 +156,13 @@ describe("session end route", () => {
     });
   });
 });
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: { $transaction?: (op: unknown) => unknown }, op: (tx: unknown) => unknown) => db.$transaction ? db.$transaction(op) : op(db) };
+});
+
+vi.mock("@/lib/sessionProfileIdentity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sessionProfileIdentity")>();
+  return { ...actual, assertSessionMutationActor: vi.fn(async () => {}), assertSessionProfileContextsUnambiguous: vi.fn(async () => {}), withSessionProfileRatings: async (_db: unknown, _session: unknown, players: unknown) => players };
+});

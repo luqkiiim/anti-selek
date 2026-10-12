@@ -12,11 +12,14 @@ interface ProfileParticipant {
   id: string;
   name: string;
   avatarUrl?: string | null;
+  // Undefined retains legacy/viewer context; null means no safe local context.
+  profileClubId?: string | null;
 }
 
 interface ProfileSessionPlayerSource {
   userId: string;
   isGuest?: boolean;
+  profileClubId?: string | null;
   sessionPoints: number;
   user: ProfileParticipant;
 }
@@ -39,6 +42,7 @@ export interface ProfileMatchSource {
     id: string;
     code: string;
     name: string;
+    ratingPolicyVersion?: number;
     players?: ProfileSessionPlayerSource[];
     matches?: ProfileSessionMatchSource[];
   };
@@ -300,6 +304,12 @@ function updateConnectionAggregate(
     ratingChange: 0,
   };
 
+  if (existing.user.profileClubId !== participant.profileClubId) {
+    // Keep sporting aggregation by Player unchanged without selecting an
+    // arbitrary club for a Player represented in different historical contexts.
+    existing.user = { ...existing.user, profileClubId: null };
+  }
+
   existing.matches += 1;
   existing.pointDifferential += pointDifferential;
   existing.ratingChange += ratingChange;
@@ -311,6 +321,22 @@ function updateConnectionAggregate(
   }
 
   aggregates.set(participant.id, existing);
+}
+
+function participantWithStoredProfile(
+  participant: ProfileParticipant,
+  session: ProfileMatchSource["session"]
+): ProfileParticipant {
+  if (session.ratingPolicyVersion !== 2) return participant;
+  const seats = (session.players ?? []).filter((seat) => seat.userId === participant.id);
+  if (seats.length === 1 && seats[0].isGuest) return participant;
+  const profileClubId = seats.length === 1 ? seats[0].profileClubId : null;
+  return {
+    ...participant,
+    profileClubId: typeof profileClubId === "string" && profileClubId.length > 0
+      ? profileClubId
+      : null,
+  };
 }
 
 function getSessionGuestUserIds(
@@ -764,16 +790,18 @@ export function buildPlayerProfileDerivedData(
       (isTeam1 ? match.team1EloChange : match.team2EloChange) ?? 0;
     const pointDifferential = myScore - opponentScore;
     const scoreDifference = Math.abs(myScore - opponentScore);
-    const partner = isTeam1
+    const partnerSource = isTeam1
       ? match.team1User1Id === userId
         ? match.team1User2
         : match.team1User1
       : match.team2User1Id === userId
         ? match.team2User2
         : match.team2User1;
-    const opponents = isTeam1
+    const opponentSources = isTeam1
       ? [match.team2User1, match.team2User2]
       : [match.team1User1, match.team1User2];
+    const partner = participantWithStoredProfile(partnerSource, match.session);
+    const opponents = opponentSources.map((participant) => participantWithStoredProfile(participant, match.session));
     const sessionGuestUserIds = getSessionGuestUserIds(match.session);
 
     if (result === "WIN") {

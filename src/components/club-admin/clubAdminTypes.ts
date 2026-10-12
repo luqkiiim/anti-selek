@@ -8,7 +8,6 @@ import {
   PlayerGender,
   SessionPool,
 } from "@/types/enums";
-import type { RecoveryEligibility } from "@/types/playerRecovery";
 
 export interface ClubAdminClub {
   id: string;
@@ -54,11 +53,8 @@ export interface ClubAdminClaimRequest {
   targetEmail: string | null;
   status: ClaimRequestStatus;
   note?: string | null;
-  linkedClubNames?: string[];
   createdAt: string;
   revision?: number;
-  recovery?: RecoveryEligibility;
-  recoveryReviewAuthorized?: boolean;
 }
 
 export interface ClubAdminOfflineIdentityLink {
@@ -83,4 +79,4 @@ export interface ClubAdminOfflineIdentityLink {
   createdAt: string;
 }
 
-export type ClubAdminSection = "players" | "links" | "claims" | "settings";
+export type ClubAdminSection = "players" | "claims" | "settings";

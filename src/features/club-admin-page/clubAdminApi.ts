@@ -3,7 +3,6 @@
 import type {
   ClubAdminClaimRequest,
   ClubAdminClub,
-  ClubAdminOfflineIdentityLink,
   ClubAdminPlayer,
 } from "@/components/club-admin/clubAdminTypes";
 
@@ -34,28 +33,19 @@ export async function fetchClubAdminSnapshot(clubId: string) {
       club: currentClub,
       players: [],
       claimRequests: [],
-      offlineIdentityLinks: [],
     };
   }
 
-  const [playersRes, claimRequestsRes, offlineIdentityLinksRes] =
-    await Promise.all([
-      fetch(`/api/clubs/${clubId}/members`),
-      currentClub.isTutorial
-        ? Promise.resolve(null)
-        : fetch(`/api/clubs/${clubId}/claim-requests`),
-      currentClub.isTutorial
-        ? Promise.resolve(null)
-        : fetch(`/api/clubs/${clubId}/offline-identity-links`),
-    ]);
-  const [playersData, claimRequestsData, offlineIdentityLinksData] =
-    await Promise.all([
-      safeJson(playersRes),
-      claimRequestsRes ? safeJson(claimRequestsRes) : Promise.resolve([]),
-      offlineIdentityLinksRes
-        ? safeJson(offlineIdentityLinksRes)
-        : Promise.resolve([]),
-    ]);
+  const [playersRes, claimRequestsRes] = await Promise.all([
+    fetch(`/api/clubs/${clubId}/members`),
+    currentClub.isTutorial
+      ? Promise.resolve(null)
+      : fetch(`/api/clubs/${clubId}/claim-requests`),
+  ]);
+  const [playersData, claimRequestsData] = await Promise.all([
+    safeJson(playersRes),
+    claimRequestsRes ? safeJson(claimRequestsRes) : Promise.resolve([]),
+  ]);
 
   if (!playersRes.ok) {
     throw new Error(playersData.error || "Failed to load players");
@@ -63,12 +53,6 @@ export async function fetchClubAdminSnapshot(clubId: string) {
   if (claimRequestsRes && !claimRequestsRes.ok) {
     throw new Error(claimRequestsData.error || "Failed to load claim requests");
   }
-  if (offlineIdentityLinksRes && !offlineIdentityLinksRes.ok) {
-    throw new Error(
-      offlineIdentityLinksData.error || "Failed to load offline identity links"
-    );
-  }
-
   return {
     club: currentClub,
     players: Array.isArray(playersData)
@@ -79,14 +63,11 @@ export async function fetchClubAdminSnapshot(clubId: string) {
       : (claimRequestsData.requests ?? []).filter((entry: { kind: string }) => entry.kind === "EXISTING_PLAYER").map((entry: {
           id: string; requesterUserId: string; requesterName: string; requesterEmail: string | null;
           requestedPlayerId: string; targetName: string; status: ClubAdminClaimRequest["status"];
-          note?: string; createdAt: string; revision: number; recovery?: ClubAdminClaimRequest["recovery"]; recoveryReviewAuthorized?: boolean;
+          note?: string; createdAt: string; revision: number;
         }): ClubAdminClaimRequest => ({
           id: entry.id, requesterUserId: entry.requesterUserId, requesterName: entry.requesterName, requesterEmail: entry.requesterEmail,
           targetUserId: entry.requestedPlayerId, targetName: entry.targetName, targetEmail: null, status: entry.status,
-          note: entry.note, createdAt: entry.createdAt, revision: entry.revision, recovery: entry.recovery, recoveryReviewAuthorized: entry.recoveryReviewAuthorized,
+          note: entry.note, createdAt: entry.createdAt, revision: entry.revision,
         })),
-    offlineIdentityLinks: Array.isArray(offlineIdentityLinksData)
-      ? (offlineIdentityLinksData as ClubAdminOfflineIdentityLink[])
-      : [],
   };
 }

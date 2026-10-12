@@ -45,6 +45,7 @@ interface SessionHistoryData {
     name: string;
     status: string;
     isTest?: boolean;
+    ratingPolicyVersion?: number;
     type: string;
     mode: string;
     createdAt: string;
@@ -54,6 +55,11 @@ interface SessionHistoryData {
   canCorrectCompletedScores?: boolean;
   correctionBlockedReason?: string | null;
   undoableMatchId?: string | null;
+  playerProfiles?: Array<{
+    playerId: string;
+    profileClubId: string | null;
+    isGuest: boolean;
+  }>;
   matches: HistoryMatch[];
 }
 
@@ -467,10 +473,18 @@ export default function SessionHistoryPage() {
 
   const sessionTypeLabel = getSessionTypeLabel(data.session.type);
   const sessionModeLabel = getSessionModeLabel(data.session.mode);
+  const profileByPlayerId = new Map(
+    (data.playerProfiles ?? []).map((profile) => [profile.playerId, profile])
+  );
   const getProfileHref = (userId: string, clubId?: string | null) => {
-    const profileClubId = clubId ?? data.session.clubId ?? null;
-    return profileClubId
-      ? `/profile/${userId}?clubId=${encodeURIComponent(profileClubId)}`
+    const playerProfile = profileByPlayerId.get(userId);
+    const profileClubId = playerProfile?.profileClubId ?? null;
+    if (!profileClubId && !playerProfile?.isGuest && data.session.ratingPolicyVersion === 2) {
+      return `/profile/${userId}`;
+    }
+    const linkClubId = profileClubId ?? clubId ?? data.session.clubId ?? null;
+    return linkClubId
+      ? `/profile/${userId}?clubId=${encodeURIComponent(linkClubId)}`
       : `/profile/${userId}`;
   };
 

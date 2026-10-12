@@ -52,7 +52,7 @@ function mockRequesterAccess(role: "ADMIN" | "STAFF" = "ADMIN") {
 
 function mockClubMemberships(rows: Array<Record<string, unknown>>) {
   vi.mocked(prisma.clubMember.findMany).mockImplementation((args) => {
-    const memberships = args?.where?.player ? [] : rows;
+    const memberships = args?.where?.ownerUserId || args?.where?.player ? [] : rows;
     return Promise.resolve(memberships) as never;
   });
 }
@@ -139,6 +139,7 @@ describe("createSessionForUser", () => {
       })) as never
     );
     vi.mocked(prisma.offlineIdentityMember.findMany).mockResolvedValue([] as never);
+    const sessionPlayerCreateMany = vi.fn();
     const sessionCreate = vi.fn().mockResolvedValue({ id: "session-1" });
     vi.mocked(prisma.$transaction).mockImplementation(async (callback) =>
       callback({
@@ -153,7 +154,7 @@ describe("createSessionForUser", () => {
           }),
         },
         player: { create: vi.fn() },
-        sessionPlayer: { createMany: vi.fn() },
+        sessionPlayer: { createMany: sessionPlayerCreateMany },
       } as never)
     );
 
@@ -163,7 +164,7 @@ describe("createSessionForUser", () => {
       input,
     });
 
-    const createdPlayers = sessionCreate.mock.calls[0][0].data.players.create;
+    const createdPlayers = sessionPlayerCreateMany.mock.calls[0][0].data;
     expect(createdPlayers.map((player: { pool: SessionPool }) => player.pool)).toEqual([
       SessionPool.A,
       SessionPool.B,
@@ -255,6 +256,7 @@ describe("createSessionForUser", () => {
     vi.mocked(prisma.offlineIdentityMember.findMany).mockResolvedValue([] as never);
     vi.mocked(getClubEloByUserId).mockResolvedValue(new Map() as never);
 
+    const sessionPlayerCreateMany = vi.fn();
     const sessionCreate = vi.fn().mockResolvedValue({
       id: "session-1",
       code: "session-1",
@@ -305,7 +307,7 @@ describe("createSessionForUser", () => {
         },
         player: { create: vi.fn() },
         sessionPlayer: {
-          createMany: vi.fn(),
+          createMany: sessionPlayerCreateMany,
         },
       } as never)
     );
@@ -326,23 +328,11 @@ describe("createSessionForUser", () => {
           pairingMode: SessionPairingMode.OPEN,
           crossoverFrequency: SessionCrossoverFrequency.BALANCED,
           poolAssignmentsInitialized: true,
-          players: {
-            create: [
-              expect.objectContaining({
-                playerId: "player-2",
-                pool: SessionPool.B,
-              }),
-              expect.objectContaining({
-                playerId: "player-3",
-                pool: SessionPool.B,
-              }),
-            ],
-          },
+
         }),
       })
     );
-    const createdPlayers = sessionCreate.mock.calls[0]?.[0]?.data?.players
-      ?.create as Array<Record<string, unknown>>;
+    const createdPlayers = sessionPlayerCreateMany.mock.calls[0]?.[0]?.data as Array<Record<string, unknown>>;
     expect(
       createdPlayers.find((player) => player.playerId === "player-3")
     ).not.toHaveProperty("needsMoreRest");
@@ -361,3 +351,13 @@ describe("createSessionForUser", () => {
     );
   });
 });
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: { $transaction?: (op: unknown) => unknown }, op: (tx: unknown) => unknown) => db.$transaction ? db.$transaction(op) : op(db) };
+});
+
+vi.mock("@/lib/sessionProfileIdentity", () => ({
+  resolveSessionProfilePair: async (_db: unknown, args: { playerId: string; profileClubId?: string; clubIds: string[] }) => ({ playerId: args.playerId, profileClubId: args.profileClubId ?? args.clubIds[0], ownerUserId: null }),
+  withSessionProfileRatings: async (_db: unknown, _session: unknown, players: unknown) => players,
+}));

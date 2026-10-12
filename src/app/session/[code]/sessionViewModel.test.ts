@@ -50,6 +50,7 @@ function createSessionData(overrides: Partial<SessionData> = {}): SessionData {
     type: SessionType.ELO,
     mode: SessionMode.MIXICANO,
     status: SessionStatus.ACTIVE,
+    ratingPolicyVersion: 1,
     isTest: false,
     autoQueueEnabled: true,
     respectPlayerRest: true,
@@ -483,6 +484,54 @@ describe("buildSessionViewModel", () => {
     );
     expect(viewModel.getPlayerProfileHref(players[1])).toBe(
       "/profile/club-b-player?clubId=community-2"
+    );
+  });
+
+  it("uses the selected profile snapshot before representation, badges, or host context", () => {
+    const player = createPlayer("selected-club-b-player", "Selected Club B", {
+      profileClubId: "community-2",
+      representingClubId: "community-1",
+      communityBadges: [{ id: "community-1", name: "Northside", elo: 1000 }],
+    });
+    const viewModel = buildSessionViewModel({
+      sessionData: createSessionData({
+        ratingPolicyVersion: 2,
+        collabFormat: SessionCollabFormat.INTERCLUB,
+        clubs: [
+          { id: "community-1", name: "Northside", role: "HOST", status: "ACCEPTED" },
+          { id: "community-2", name: "Anti-SeleK", role: "PARTNER", status: "ACCEPTED" },
+        ],
+        players: [player],
+      }),
+      clubPlayers: [],
+      rosterSearch: "",
+      manualMatchForm: emptyManualMatchForm,
+      manualCourtId: null,
+      openPreferenceEditor: null,
+    });
+
+    expect(viewModel.getPlayerProfileHref(player)).toBe(
+      "/profile/selected-club-b-player?clubId=community-2"
+    );
+  });
+
+  it("does not infer a V2 profile link when its selected club snapshot is missing", () => {
+    const player = createPlayer("missing-profile-context", "Missing Context", {
+      profileClubId: null,
+      representingClubId: "community-1",
+      communityBadges: [{ id: "community-1", name: "Northside", elo: 1000 }],
+    });
+    const viewModel = buildSessionViewModel({
+      sessionData: createSessionData({ ratingPolicyVersion: 2, players: [player] }),
+      clubPlayers: [],
+      rosterSearch: "",
+      manualMatchForm: emptyManualMatchForm,
+      manualCourtId: null,
+      openPreferenceEditor: null,
+    });
+
+    expect(viewModel.getPlayerProfileHref(player)).toBe(
+      "/profile/missing-profile-context"
     );
   });
 

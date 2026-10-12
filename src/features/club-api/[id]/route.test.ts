@@ -186,8 +186,11 @@ describe("club settings rules", () => {
     expect(mocks.clubDelete).not.toHaveBeenCalled();
   });
 
-  it("turns a concurrent foreign-key failure into a retryable conflict", async () => {
-    mocks.clubDelete.mockRejectedValue(Object.assign(new Error("foreign key constraint failed"), { code: "P2003" }));
+  it.each([
+    Object.assign(new Error("foreign key constraint failed"), { code: "P2003" }),
+    new Error("SQLITE_CONSTRAINT: LOCAL_ROSTER_HISTORY_PRESERVED"),
+  ])("explains retained history when the database rejects club deletion", async (error) => {
+    mocks.clubDelete.mockRejectedValue(error);
 
     const response = await DELETE(
       new Request("http://localhost/api/clubs/club-1", {

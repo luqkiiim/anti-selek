@@ -133,3 +133,12 @@ describe("approve match route", () => {
     expect(mocks.finalizeMatchResult).not.toHaveBeenCalled();
   });
 });
+
+vi.mock("@/lib/sessionProfileIdentity", () => ({
+  getSessionParticipantOwners: async () => {
+    const match = await mocks.matchFindUnique.mock.results[0].value;
+    const access = await mocks.sessionMembership();
+    const participants = [match.team1Player1, match.team1Player2, match.team2Player1, match.team2Player2].filter(Boolean);
+    return new Map(participants.map(p => [p.id, access ? p.ownerUserId ?? null : null]));
+  },
+}));

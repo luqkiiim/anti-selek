@@ -121,3 +121,12 @@ describe("manual queue cancellation", () => {
     ).not.toHaveBeenCalled();
   });
 });
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: { $transaction: (op: unknown) => unknown }, op: unknown) => db.$transaction(op) };
+});
+vi.mock("@/lib/sessionProfileIdentity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sessionProfileIdentity")>();
+  return { ...actual, assertSessionMutationActor: vi.fn(async () => {}) };
+});

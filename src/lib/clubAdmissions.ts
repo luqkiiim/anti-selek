@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
-import { getOwnedClubPlayer, IdentityConflictError, linkUnownedPlayer, nonretiredPlayer } from "@/lib/playerIdentity";
+import { getOwnedClubPlayer, IdentityConflictError } from "@/lib/playerIdentity";
+import { assertLocalClaimAvailable, claimClubPlayer, ClubPlayerOwnershipError, clubOwnershipTransaction } from "@/lib/clubPlayerOwnership";
 import { normalizeClaimName } from "@/lib/clubClaimRules";
 
 type Db = Prisma.TransactionClient;
@@ -19,28 +20,12 @@ async function event(db: Db, requestId: string, actorUserId: string, action: str
   await db.clubAdmissionEvent.create({ data: { admissionRequestId: requestId, actorUserId, action, revision, detailsJson: JSON.stringify(details) } });
 }
 
-function retryable(error: unknown) {
-  const e = error as { code?: string; message?: string };
-  return e.code === "P2034" || e.code === "P2002" || /SQLITE_BUSY|database is locked|deadlock|write conflict/i.test(e.message ?? "");
-}
 export async function admissionTransaction<T>(db: PrismaClient, operation: (tx: Db) => Promise<T>): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    try { return await db.$transaction(async tx => {
-      // Prisma/libSQL begin deferred transactions. Reserve the SQLite writer before
-      // reading to avoid two clients deadlocking while upgrading shared snapshots.
-      // WHERE 0 changes no rows, revisions, timestamps, or audit records.
-      await tx.$executeRaw`UPDATE "ClubJoinRequest" SET "revision"="revision" WHERE 0`;
-      return operation(tx);
-    }); }
-    catch (error) {
-      if (retryable(error) && attempt < 3) {
-        await new Promise(resolve => setTimeout(resolve, 25 * 2 ** attempt));
-        continue;
-      }
-      if (error instanceof IdentityConflictError) throw new ClubAdmissionError(error.message, 409);
+  try { return await clubOwnershipTransaction(db, operation); }
+  catch (error) {
+      if (error instanceof IdentityConflictError || error instanceof ClubPlayerOwnershipError) throw new ClubAdmissionError(error.message, error.statusCode);
       if (/owned.*player|owner.*club|ownership.*conflict|same.club/i.test((error as Error).message ?? "")) throw new ClubAdmissionError("This account already owns a different Player in one of this Player's clubs. No history has been changed.", 409);
       throw error;
-    }
   }
 }
 
@@ -78,14 +63,16 @@ export async function submitClubAdmission(db: Db, input: SubmitAdmission) {
     if (pending.originInvitationId || !sameAdmissionPayload(pending, input)) throw new ClubAdmissionError("Cancel your pending request before changing its details", 409);
     return pending;
   }
-  if (!["EXISTING_PLAYER", "OWNED_PLAYER", "NEW_PLAYER"].includes(input.kind)) throw new ClubAdmissionError("Choose an existing profile or a new player");
+  if (input.kind === "OWNED_PLAYER") throw new ClubAdmissionError("Choose a profile in this club or create a new local profile. Profiles from another club cannot be reused.", 409);
+  if (!["EXISTING_PLAYER", "NEW_PLAYER"].includes(input.kind)) throw new ClubAdmissionError("Choose an existing profile or a new player");
   if (input.kind !== "NEW_PLAYER") {
     if (!input.requestedPlayerId) throw new ClubAdmissionError("Select a Player");
     const player = await db.player.findUnique({ where: { id: input.requestedPlayerId }, include: { clubMemberships: { where: { clubId: input.clubId } } } });
     if (!player?.isActive) throw new ClubAdmissionError("Player not found", 404);
-    if (input.kind === "EXISTING_PLAYER" && !player.clubMemberships.length) throw new ClubAdmissionError("Player not found in this club", 404);
-    if (player.ownerUserId && player.ownerUserId !== input.requesterUserId) throw new ClubAdmissionError("This Player already has an owner", 409);
-    if (input.kind === "OWNED_PLAYER" && player.ownerUserId !== input.requesterUserId) throw new ClubAdmissionError("Select one of your owned Player profiles", 403);
+    const member = player.clubMemberships.find(m => !m.retiredByAdmissionEventId);
+    if (!member) throw new ClubAdmissionError("Player not found in this club", 404);
+    if (member.ownerUserId && member.ownerUserId !== input.requesterUserId) throw new ClubAdmissionError("This club profile already has an owner", 409);
+    await assertLocalClaimAvailable(db, { clubId: input.clubId, playerId: player.id, userId: input.requesterUserId });
   } else if (!input.proposedPlayerName?.trim() || !["MALE", "FEMALE"].includes(input.proposedGender ?? "")) {
     throw new ClubAdmissionError("Enter the new Player's name and gender for Mixed pairing");
   }
@@ -117,11 +104,7 @@ export interface ReviewAdmission {
 export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
   const request = await db.clubAdmissionRequest.findUnique({ where: { id: input.requestId }, include: admissionInclude });
   if (!request || request.clubId !== input.clubId) throw new ClubAdmissionError("Request not found", 404);
-  if (request.originInvitationId) {
-    // Load after this module initializes: invitations share the admission error type.
-    const { reviewInvitationRecovery } = await import("./playerInvitationRecovery");
-    return reviewInvitationRecovery(db, input);
-  }
+  if (request.originInvitationId && request.status === "PENDING") throw new ClubAdmissionError("Legacy profile recovery is closed. Ask an admin for a new local invitation.", 410);
   if (input.confirmRestoreAccess !== undefined || input.retireEmptyPlayerId !== undefined) throw new ClubAdmissionError("Recovery confirmation requires an invitation-backed request", 400);
   if (input.action === "CANCEL") {
     if (request.requesterUserId !== input.reviewerUserId) throw new ClubAdmissionError("You can only cancel your own request", 403);
@@ -143,46 +126,36 @@ export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
   let approvedPlayerId: string | null = null;
   let decision: string = input.action;
   if (input.action === "APPROVE") {
+    if (request.kind === "OWNED_PLAYER") throw new ClubAdmissionError("Profiles from another club cannot be reused. Submit a new local request.", 409);
     const requester = await db.user.findUnique({ where: { id: request.requesterUserId } });
     if (!requester?.isActive) throw new ClubAdmissionError("The requesting account is no longer active", 409);
     const existingOwned = await getOwnedClubPlayer(db, { userId: request.requesterUserId, clubId: input.clubId });
     const targetId = input.asNew ? null : input.playerId ?? request.requestedPlayerId;
     if (targetId) {
-      const target = await db.player.findUnique({ where: { id: targetId }, include: { clubMemberships: { select: { clubId: true } } } });
+      const target = await db.player.findUnique({ where: { id: targetId }, include: { clubMemberships: { where: { clubId: input.clubId, retiredByAdmissionEventId: null } } } });
       if (!target?.isActive) throw new ClubAdmissionError("Player not found", 404);
-      const inClub = target.clubMemberships.some(m => m.clubId === input.clubId);
-      if (!inClub && target.ownerUserId !== request.requesterUserId) throw new ClubAdmissionError("Select an existing Player in this club", 400);
-      if (target.ownerUserId && target.ownerUserId !== request.requesterUserId) throw new ClubAdmissionError("This Player is already owned by another account", 409);
+      const member = target.clubMemberships[0];
+      if (!member) throw new ClubAdmissionError("Select an existing profile in this club", 400);
+      if (member.ownerUserId && member.ownerUserId !== request.requesterUserId) throw new ClubAdmissionError("This club profile is already owned by another account", 409);
       if (existingOwned && existingOwned.playerId !== target.id) throw new ClubAdmissionError("This account already owns another Player in this club. A future merge review is required", 409);
-      const targetClubIds = [...new Set([input.clubId, ...target.clubMemberships.map(m => m.clubId)])];
-      const conflict = await db.clubMember.findFirst({ where: { clubId: { in: targetClubIds }, retiredByAdmissionEventId: null, playerId: { not: target.id }, player: { ownerUserId: request.requesterUserId } } });
-      if (conflict) throw new ClubAdmissionError("This account already owns a different Player in one of the target's clubs. No history has been changed", 409);
-      if (target.ownerUserId === null) {
-        // Prisma's @updatedAt and Date serialization would normalize a legacy timestamp.
-        // This parameterized CAS writes only the new ownership column; triggers project it to rosters.
-        await linkUnownedPlayer(db, target.id, request.requesterUserId);
-      }
-      if (!inClub) await db.clubMember.create({ data: { clubId: input.clubId, playerId: target.id } });
-      else await db.clubMember.updateMany({ where: { clubId: input.clubId, playerId: target.id, archivedAt: { not: null } }, data: { archivedAt: null } });
+      if (member.ownerUserId === request.requesterUserId) {
+        const grant = await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: input.clubId, userId: request.requesterUserId } } });
+        if (member.archivedAt || grant?.status !== "ACTIVE") throw new ClubAdmissionError("Retained removed ownership requires an explicit local disconnect before a fresh invitation.", 409);
+      } else await claimClubPlayer(db, { clubId: input.clubId, playerId: target.id, userId: request.requesterUserId, actorUserId: input.reviewerUserId, admissionRequestId: request.id });
       approvedPlayerId = target.id;
-      decision = target.ownerUserId === request.requesterUserId ? "REUSE_OWNED" : "CONNECT_EXISTING";
+      decision = member.ownerUserId === request.requesterUserId ? "REUSE_LOCAL" : "CONNECT_EXISTING";
     } else {
       if (existingOwned) throw new ClubAdmissionError("This account already owns a Player in this club. Select that profile instead", 409);
-      // Avoid a new identity for an account already owning a global Player; admins must choose it explicitly.
-      const anyOwned = await db.player.findFirst({ where: { ownerUserId: request.requesterUserId, ...nonretiredPlayer } });
-      if (anyOwned) throw new ClubAdmissionError("This account already owns a Player. Select that profile to join the club", 409);
       const name = request.proposedPlayerName?.trim() || request.requester.name;
       const gender = request.proposedGender ?? requester.gender;
       if (!name || !["MALE", "FEMALE"].includes(gender ?? "")) throw new ClubAdmissionError("A name and gender are required before approving a new Player");
-      const player = await db.player.create({ data: { name, gender: gender!, ownerUserId: request.requesterUserId } });
+      const player = await db.player.create({ data: { name, gender: gender! } });
       await db.clubMember.create({ data: { clubId: input.clubId, playerId: player.id } });
+      await claimClubPlayer(db, { clubId: input.clubId, playerId: player.id, userId: request.requesterUserId, actorUserId: input.reviewerUserId, admissionRequestId: request.id });
       approvedPlayerId = player.id;
       decision = "CREATE_NEW";
     }
-    // Player ownership never supplies roles from the historical roster membership.
-    const access = await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: input.clubId, userId: request.requesterUserId } } });
-    if (!access) await db.clubAccess.create({ data: { clubId: input.clubId, userId: request.requesterUserId, role: "MEMBER" } });
-    else if (access.status !== "ACTIVE") await db.clubAccess.update({ where: { id: access.id }, data: { status: "ACTIVE", role: "MEMBER" } });
+    // The local claim event grants MEMBER access or preserves an active grant.
   }
   const result = await db.clubAdmissionRequest.update({ where: { id: request.id }, data: { status: desired, approvedPlayerId, decision, reviewedByUserId: input.reviewerUserId, reviewedAt: new Date() }, include: admissionInclude });
   await event(db, request.id, input.reviewerUserId, input.action, revision, { requestedPlayerId: request.requestedPlayerId, approvedPlayerId, decision, reason: input.reason ?? null });

@@ -45,9 +45,10 @@ export function withLegacySportingAliases<T>(value: T): LegacySportingAliases<T>
     if (canonical in result && !(legacy in result)) result[legacy] = result[canonical];
   }
   if ("ownerUserId" in result) {
-    result.isClaimed = result.ownerUserId !== null && result.ownerUserId !== undefined;
-    const owner = result.ownerUser as { email?: unknown } | null | undefined;
-    result.email = typeof owner?.email === "string" ? owner.email : null;
+    // Raw Player ownership is frozen provenance. Callers resolve claimed state
+    // from the exact club membership before crossing this compatibility boundary.
+    result.isClaimed = typeof result.isClaimed === "boolean" ? result.isClaimed : false;
+    result.email = typeof result.email === "string" ? result.email : null;
   }
   return result as LegacySportingAliases<T>;
 }

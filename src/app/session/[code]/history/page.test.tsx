@@ -61,6 +61,7 @@ function createHistoryData(overrides: Record<string, unknown> = {}) {
       clubId: "club-1",
       name: "Friday Night",
       status: SessionStatus.ACTIVE,
+      ratingPolicyVersion: 1,
       isTest: false,
       type: SessionType.POINTS,
       mode: "MEXICANO",
@@ -159,7 +160,7 @@ describe("SessionHistoryPage match admin actions", () => {
     document.body.innerHTML = "";
   });
 
-  async function renderPage(historyData = createHistoryData()) {
+  async function renderPage(historyData: unknown = createHistoryData()) {
     mocks.fetch.mockResolvedValueOnce(createJsonResponse(historyData));
 
     await act(async () => {
@@ -209,6 +210,55 @@ describe("SessionHistoryPage match admin actions", () => {
     expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
     expect(hasExactButtonText(container, "Correct score")).toBe(false);
     expect(hasExactButtonText(container, "Undo result")).toBe(false);
+  });
+
+  it("uses each V2 player's stored profile club instead of the historical team or host club", async () => {
+    const historyData = createHistoryData();
+    await renderPage(createHistoryData({
+      session: { ...historyData.session, ratingPolicyVersion: 2 },
+      playerProfiles: [
+        { playerId: "b1", profileClubId: "club-b", isGuest: false },
+      ],
+      matches: [
+        { ...historyData.matches[0], team2ClubId: "club-1" },
+      ],
+    }));
+
+    expect(container.querySelector('a[href="/profile/b1?clubId=club-b"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/profile/b1?clubId=club-1"]')).toBeNull();
+  });
+
+  it("does not infer a missing V2 player profile from team or host context", async () => {
+    const historyData = createHistoryData();
+    await renderPage(createHistoryData({
+      session: { ...historyData.session, ratingPolicyVersion: 2 },
+      playerProfiles: [
+        { playerId: "b1", profileClubId: null, isGuest: false },
+      ],
+      matches: [
+        { ...historyData.matches[0], team2ClubId: "club-b" },
+      ],
+    }));
+
+    expect(container.querySelector('a[href="/profile/b1"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/profile/b1?clubId=club-b"]')).toBeNull();
+    expect(container.querySelector('a[href="/profile/b1?clubId=club-1"]')).toBeNull();
+  });
+
+  it("keeps guest context and the V1 historical team/host fallback", async () => {
+    const historyData = createHistoryData();
+    await renderPage(createHistoryData({
+      session: { ...historyData.session, ratingPolicyVersion: 1 },
+      playerProfiles: [
+        { playerId: "b1", profileClubId: null, isGuest: true },
+      ],
+      matches: [
+        { ...historyData.matches[0], team2ClubId: "club-b" },
+      ],
+    }));
+
+    expect(container.querySelector('a[href="/profile/b1?clubId=club-b"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/profile/a1?clubId=club-1"]')).not.toBeNull();
   });
 
   it("opens the existing correction and undo modals from menu actions", async () => {

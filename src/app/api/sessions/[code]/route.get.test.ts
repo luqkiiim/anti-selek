@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getSessionOperatorMembership: vi.fn(),
   getClubEloByUserId: vi.fn(),
   withClubElo: vi.fn(),
+  getAcceptedSessionClubIds: vi.fn(async () => []),
   getPlayerClubBadges: vi.fn(),
   withPlayerClubBadges: vi.fn(),
   getQueuedMatchUserIds: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
+  getAcceptedSessionClubIds: vi.fn(async () => []),
   getPlayerClubBadges: mocks.getPlayerClubBadges,
   getSessionAdminMembership: mocks.getSessionAdminMembership,
   getSessionMembership: mocks.getSessionMembership,
@@ -671,3 +673,12 @@ describe("session route GET", () => {
     if (status === 'COMPLETED') expect(body.players[0].pausedAt).toBeNull();
   });
 });
+
+vi.mock("@/lib/sessionProfileIdentity", () => ({
+  getSessionParticipantOwners: async () => {
+    const session = await mocks.sessionFindUnique();
+    return new Map((session?.players ?? []).map((p: { playerId: string; player: { ownerUserId: string | null } }) => [p.playerId, p.player.ownerUserId]));
+  },
+  getEligibleSessionProfiles: async () => [],
+  withSessionProfileRatings: async (_db: unknown, _session: unknown, players: unknown) => players,
+}));

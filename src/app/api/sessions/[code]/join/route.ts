@@ -1,5 +1,7 @@
+import { assertSessionProfileContextsUnambiguous } from "@/lib/sessionProfileIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { resolveSessionProfilePair, assertSessionAccountSeatAvailable, withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import {
@@ -13,7 +15,7 @@ import {
   isValidSessionPool,
 } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
-import { IdentityConflictError, nonretiredPlayer, resolveOwnedSessionPlayer } from "@/lib/playerIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
   getAcceptedSessionClubIds,
@@ -23,7 +25,6 @@ import {
   withPlayerClubBadges,
 } from "@/lib/sessionCollab";
 import {
-  getAcceptedInterclubClubIds,
   isInterclubSession,
 } from "@/lib/sessionCollabFormat";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
@@ -69,6 +70,7 @@ export async function POST(
       mixedSideOverride: overrideMixedSideOverride,
       pool: overridePool,
       representingClubId,
+      profileClubId,
     } =
       body as {
         playerId?: unknown;
@@ -77,6 +79,7 @@ export async function POST(
         mixedSideOverride?: unknown;
         pool?: unknown;
         representingClubId?: unknown;
+        profileClubId?: unknown;
       };
     if (
       representingClubId !== undefined &&
@@ -88,6 +91,8 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    if (profileClubId != null && typeof profileClubId !== "string") return sportingJson({ error: "Invalid club profile" }, { status: 400 });
 
     // Determine who is joining
     // Resolve an explicitly owned Player profile below.
@@ -134,54 +139,10 @@ export async function POST(
       }
     }
 
-    const acceptedInterclubClubIds = isInterclubSession(sessionData)
-      ? getAcceptedInterclubClubIds(sessionData)
-      : [];
-    const ownedProfileClubIds = acceptedInterclubClubIds.length > 0
-      ? acceptedInterclubClubIds
-      : sessionData.clubId
-        ? [sessionData.clubId]
-        : acceptedSessionClubIds;
-    const requestedPlayerId =
-      typeof targetPlayerIdInput === "string" && targetPlayerIdInput.length > 0
-        ? targetPlayerIdInput
-        : null;
-    let playerIdToJoin: string;
-    let requesterOwnsTarget = false;
-
-    if (requestedPlayerId) {
-      const requestedPlayer = await prisma.player.findFirst({
-        where: { id: requestedPlayerId, ...nonretiredPlayer },
-        select: { ownerUserId: true },
-      });
-      if (!requestedPlayer) {
-        return sportingJson(
-          { error: "Player profile is not available for new sessions" },
-          { status: 409 }
-        );
-      }
-      requesterOwnsTarget = requestedPlayer.ownerUserId === session.user.id;
-      if (!requesterOwnsTarget && !session.user.isAdmin && !requesterOperatorMembership) {
-        return sportingJson(
-          { error: "Only club admins or staff can add other players" },
-          { status: 403 }
-        );
-      }
-      playerIdToJoin = requestedPlayerId;
-    } else {
-      const ownedPlayer = await resolveOwnedSessionPlayer(prisma, {
-        userId: session.user.id,
-        clubIds: ownedProfileClubIds,
-      });
-      if (!ownedPlayer) {
-        return sportingJson(
-          { error: "Choose a player profile before joining this tournament" },
-          { status: 400 }
-        );
-      }
-      playerIdToJoin = ownedPlayer.id;
-      requesterOwnsTarget = true;
-    }
+    const requestedPlayerId = typeof targetPlayerIdInput === "string" && targetPlayerIdInput ? targetPlayerIdInput : null;
+    const requestedProfileClubId = typeof profileClubId === "string" && profileClubId ? profileClubId : typeof representingClubId === "string" && representingClubId ? representingClubId : null;
+    const chosenPair = await resolveSessionProfilePair(prisma, { userId: session.user.id, clubIds: acceptedSessionClubIds, playerId: requestedPlayerId, profileClubId: requestedProfileClubId, isGlobalAdmin: !!session.user.isAdmin });
+    const playerIdToJoin = chosenPair.playerId;
 
     if (overridePool !== undefined && !isValidSessionPool(overridePool)) {
       return sportingJson(
@@ -211,9 +172,7 @@ export async function POST(
       },
     });
 
-    if (existing) {
-      return sportingJson(sessionData);
-    }
+    if (existing && existing.profileClubId !== chosenPair.profileClubId) throw new IdentityConflictError("This player already joined with another club profile. Remove the entry before choosing a different profile.");
 
     const userProfile = await prisma.player.findUnique({
       where: { id: playerIdToJoin },
@@ -264,182 +223,8 @@ export async function POST(
     const joinedAt = new Date();
     const arrivalPriorityAt =
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
-    let normalizedRepresentingClubId: string | null = null;
-    let targetPreferredPool = SessionPool.B;
-
-    if (isInterclubSession(sessionData)) {
-      const acceptedInterclubClubIds = getAcceptedInterclubClubIds(sessionData);
-      const clubBadges = await getPlayerClubBadges(
-        prisma,
-        acceptedInterclubClubIds,
-        [playerIdToJoin]
-      );
-      const eligibleClubIds = (clubBadges.get(playerIdToJoin) ?? [])
-        .map((badge) => badge.id)
-        .filter((clubId) => acceptedInterclubClubIds.includes(clubId));
-      const uniqueEligibleClubIds = Array.from(new Set(eligibleClubIds));
-
-      if (uniqueEligibleClubIds.length === 0) {
-        return sportingJson(
-          { error: "Player must belong to one of the two clubs" },
-          { status: 400 }
-        );
-      }
-
-      if (typeof representingClubId === "string" && representingClubId !== "") {
-        if (!uniqueEligibleClubIds.includes(representingClubId)) {
-          return sportingJson(
-            { error: "Player can only represent a club they belong to" },
-            { status: 400 }
-          );
-        }
-
-        normalizedRepresentingClubId = representingClubId;
-      } else if (uniqueEligibleClubIds.length === 1) {
-        normalizedRepresentingClubId = uniqueEligibleClubIds[0];
-      } else {
-        return sportingJson(
-          { error: "Choose which club this player represents" },
-          { status: 400 }
-        );
-      }
-
-      const representedClubId = normalizedRepresentingClubId;
-      if (!representedClubId) {
-        return sportingJson(
-          { error: "Choose which club this player represents" },
-          { status: 400 }
-        );
-      }
-
-      const targetMembership = await prisma.clubMember.findUnique({
-        where: {
-          clubId_playerId: {
-            clubId: representedClubId,
-            playerId: playerIdToJoin,
-          },
-          archivedAt: null,
-        },
-        select: {
-          preferredPool: true,
-        },
-      });
-      if (!targetMembership) {
-        return sportingJson(
-          { error: "Target player is not a member of this club" },
-          { status: 400 }
-        );
-      }
-      if (requesterOwnsTarget && !session.user.isAdmin) {
-        const representedClubAccess = await prisma.clubAccess.findUnique({
-          where: {
-            clubId_userId: {
-              clubId: representedClubId,
-              userId: session.user.id,
-            },
-          },
-          select: { status: true },
-        });
-        if (representedClubAccess?.status !== "ACTIVE") {
-          return sportingJson(
-            { error: "You need active access to the club this Player represents" },
-            { status: 403 }
-          );
-        }
-      }
-
-      targetPreferredPool =
-        targetMembership.preferredPool === SessionPool.A
-          ? SessionPool.A
-          : SessionPool.B;
-    } else if (sessionData.clubId) {
-      const targetMembership = await prisma.clubMember.findUnique({
-        where: {
-          clubId_playerId: {
-            clubId: sessionData.clubId,
-            playerId: playerIdToJoin,
-          },
-          archivedAt: null,
-        },
-        select: { preferredPool: true },
-      });
-      if (!targetMembership) {
-        return sportingJson({ error: "Target player is not a member of this club" }, { status: 400 });
-      }
-      if (requesterOwnsTarget && !session.user.isAdmin) {
-        const hostClubAccess = await prisma.clubAccess.findUnique({
-          where: {
-            clubId_userId: {
-              clubId: sessionData.clubId,
-              userId: session.user.id,
-            },
-          },
-          select: { status: true },
-        });
-        if (hostClubAccess?.status !== "ACTIVE") {
-          return sportingJson(
-            { error: "You need active access to this club to join with this Player" },
-            { status: 403 }
-          );
-        }
-      }
-      targetPreferredPool =
-        targetMembership.preferredPool === SessionPool.A
-          ? SessionPool.A
-          : SessionPool.B;
-    } else if (acceptedSessionClubIds.length > 0) {
-      let targetMembership: { preferredPool: string } | null = null;
-      let ownedRosterWithoutAccess = false;
-      for (const linkedClubId of acceptedSessionClubIds) {
-        const linkedTargetMembership = await prisma.clubMember.findUnique({
-          where: {
-            clubId_playerId: {
-              clubId: linkedClubId,
-              playerId: playerIdToJoin,
-            },
-            archivedAt: null,
-          },
-          select: { preferredPool: true },
-        });
-        if (!linkedTargetMembership) continue;
-
-        if (requesterOwnsTarget && !session.user.isAdmin) {
-          const linkedClubAccess = await prisma.clubAccess.findUnique({
-            where: {
-              clubId_userId: {
-                clubId: linkedClubId,
-                userId: session.user.id,
-              },
-            },
-            select: { status: true },
-          });
-          if (linkedClubAccess?.status !== "ACTIVE") {
-            ownedRosterWithoutAccess = true;
-            continue;
-          }
-        }
-
-        targetMembership = linkedTargetMembership;
-        break;
-      }
-
-      if (!targetMembership) {
-        if (ownedRosterWithoutAccess) {
-          return sportingJson(
-            { error: "You need active access to the club this Player represents" },
-            { status: 403 }
-          );
-        }
-        return sportingJson(
-          { error: "Target player is not a member of this club" },
-          { status: 400 }
-        );
-      }
-      targetPreferredPool =
-        targetMembership.preferredPool === SessionPool.A
-          ? SessionPool.A
-          : SessionPool.B;
-    }
+    const normalizedRepresentingClubId = isInterclubSession(sessionData) ? chosenPair.profileClubId : null;
+    const targetPreferredPool = chosenPair.preferredPool === SessionPool.A ? SessionPool.A : SessionPool.B;
 
     const targetPool =
       sessionData.poolsEnabled && isValidSessionPool(overridePool)
@@ -465,13 +250,26 @@ export async function POST(
           })
         : 0;
 
-    const updatedSession = await prisma.session.update({
+    const updatedSession = await admissionTransaction(prisma, async tx => {
+      const freshSession = await tx.session.findUnique({ where: { id: sessionData.id }, select: { status: true } });
+      if (!freshSession || freshSession.status === SessionStatus.COMPLETED) throw new IdentityConflictError("Tournament already ended");
+      await assertSessionProfileContextsUnambiguous(tx, sessionData);
+      const pair = await resolveSessionProfilePair(tx, { userId: session.user.id, clubIds: await getAcceptedSessionClubIds(tx, sessionData), playerId: playerIdToJoin, profileClubId: chosenPair.profileClubId, isGlobalAdmin: !!session.user.isAdmin });
+      await assertSessionAccountSeatAvailable(tx, sessionData.id, pair);
+      const existingSeat = await tx.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: sessionData.id, playerId: playerIdToJoin } } });
+      if (existingSeat) {
+        if (existingSeat.profileClubId !== pair.profileClubId) throw new IdentityConflictError("This player already joined with another club profile. Remove the entry before choosing a different profile.");
+        return tx.session.findUniqueOrThrow({ where: { id: sessionData.id }, include: { courts: { include: { currentMatch: true } }, players: { include: { player: true } } } });
+      }
+      return tx.session.update({
       where: { id: sessionData.id },
       data: {
         players: {
           create: {
             playerId: playerIdToJoin,
             isGuest: false,
+            profileClubId: pair.profileClubId,
+            participantAccountId: pair.ownerUserId,
             representingClubId: normalizedRepresentingClubId,
             gender: sessionGender,
             partnerPreference: resolvedMixedState.partnerPreference,
@@ -504,13 +302,15 @@ export async function POST(
         },
       },
     });
+    });
 
     const linkedClubIds = await getAcceptedSessionClubIds(
       prisma,
       updatedSession
     );
     const playerIds = updatedSession.players.map((p) => p.playerId);
-    const players =
+    const legacyPlayers =
+      updatedSession.ratingPolicyVersion === 2 ? updatedSession.players :
       linkedClubIds.length > 1 && updatedSession.players.length > 0
         ? withPlayerClubBadges(
             updatedSession.players,
@@ -523,6 +323,7 @@ export async function POST(
               await getClubEloByUserId(updatedSession.clubId, playerIds)
             )
           : updatedSession.players;
+    const players = await withSessionProfileRatings(prisma, updatedSession, legacyPlayers);
     const queuedMatch =
       sessionData.status === SessionStatus.ACTIVE
         ? await tryRebuildAutomaticQueuedMatchForSessionId(sessionData.id)
@@ -530,7 +331,7 @@ export async function POST(
 
     return sportingJson({ ...updatedSession, players, queuedMatch });
   } catch (error) {
-    if (error instanceof IdentityConflictError) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) {
       return sportingJson({ error: error.message }, { status: error.statusCode });
     }
     logError("Join session error", error);

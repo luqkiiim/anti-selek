@@ -1,5 +1,4 @@
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";

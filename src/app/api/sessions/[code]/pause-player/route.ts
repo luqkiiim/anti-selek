@@ -1,13 +1,13 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
-import { getOwnedPlayer } from "@/lib/playerIdentity";
+import { getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
 import {
-  getAcceptedSessionClubIds,
-  getSessionMembership,
   getSessionOperatorMembership,
 } from "@/lib/sessionCollab";
 import { getQueuedMatchUserIds, hasQueuedMatchUser } from "@/lib/sessionQueue";
@@ -86,23 +86,8 @@ export async function POST(
     });
 
     // Check if the requester is a manager or the player themselves
-    const ownedTarget = await getOwnedPlayer(prisma, {
-      userId: session.user.id,
-      playerId,
-    });
-    const [acceptedClubIds, requesterMembership] = ownedTarget
-      ? await Promise.all([
-          getAcceptedSessionClubIds(prisma, sessionData),
-          getSessionMembership(prisma, {
-            session: sessionData,
-            userId: session.user.id,
-            acceptedOnly: true,
-          }),
-        ])
-      : [[], null];
-    const canManageOwnedTarget =
-      !!ownedTarget &&
-      (acceptedClubIds.length === 0 || !!requesterMembership);
+    const owners = await getSessionParticipantOwners(prisma, sessionData, [playerId]);
+    const canManageOwnedTarget = owners.get(playerId) === session.user.id;
     if (!session.user.isAdmin && !operatorMembership && !canManageOwnedTarget) {
       return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
@@ -238,7 +223,8 @@ export async function POST(
     const shouldSetArrivalPriority =
       shouldResetResumeQueue && sessionData.status === SessionStatus.ACTIVE;
 
-    const { nextPlayer, queuedMatchAffected } = await prisma.$transaction(async (tx) => {
+    const { nextPlayer, queuedMatchAffected } = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId: isCourtPause ? undefined : playerId });
       if (courtPauseTarget) {
         const clearedCourt = await tx.court.updateMany({
           where: {
@@ -340,6 +326,7 @@ export async function POST(
     if (error instanceof CourtPauseConflictError) {
       return sportingJson({ error: error.message }, { status: 409 });
     }
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Pause player error", error);
     return safeErrorResponse();
   }

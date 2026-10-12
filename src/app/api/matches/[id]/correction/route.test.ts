@@ -133,6 +133,7 @@ describe("completed match score correction route", () => {
     });
     expect(mocks.correctCompletedMatchScore).toHaveBeenCalledWith({
       matchId: "match-1",
+      actorUserId: "admin-1", actorIsGlobalAdmin: false,
       finalTeam1Score: 21,
       finalTeam2Score: 16,
     });
@@ -166,6 +167,7 @@ describe("completed match score correction route", () => {
     expect(response.status).toBe(200);
     expect(mocks.correctCompletedMatchScore).toHaveBeenCalledWith({
       matchId: "match-1",
+      actorUserId: "admin-1", actorIsGlobalAdmin: false,
       finalTeam1Score: 21,
       finalTeam2Score: 16,
     });

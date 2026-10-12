@@ -1,312 +1,75 @@
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
-import {
-  buildAvatarObjectKey,
-  getAvatarFileSignatureValidationError,
-  getAvatarUploadValidationError,
-  isAvatarStorageConfigured,
-  resolveAvatarUrl,
-} from "@/lib/avatar";
-import {
-  cleanupSupersededAvatar,
-  rollbackUploadedAvatar,
-  uploadAvatarObject,
-} from "@/lib/avatarStorage";
+import { buildAvatarObjectKey, getAvatarFileSignatureValidationError, getAvatarUploadValidationError, isAvatarStorageConfigured, resolveAvatarUrl } from "@/lib/avatar";
+import { cleanupSupersededAvatar, rollbackUploadedAvatar, uploadAvatarObject } from "@/lib/avatarStorage";
 import { logError, safeErrorResponse } from "@/lib/errors";
-import {
-  ClubContractAliasConflictError,
-  readAliasedSearchParam,
-} from "@/lib/clubContractAliases";
+import { ClubContractAliasConflictError, readAliasedSearchParam } from "@/lib/clubContractAliases";
 import { prisma } from "@/lib/prisma";
 import { isClubAdminRole } from "@/lib/clubRoles";
-import { isQuickAccessSession } from "@/lib/quickAccess";
+import { getSessionAccountId } from "@/lib/quickAccess";
 import { nonretiredPlayer } from "@/lib/playerIdentity";
-import {
-  checkInvalidTargetRateLimit,
-  invalidTargetResponse,
-  rateLimit,
-} from "@/lib/rateLimit";
+import { checkInvalidTargetRateLimit, invalidTargetResponse, rateLimit } from "@/lib/rateLimit";
+import { admissionTransaction } from "@/lib/clubAdmissions";
+import { AccountProfileSyncError, syncAccountProfile } from "@/lib/accountProfileSync";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-async function getAvatarTargetUser(playerId: string) {
-  return prisma.player.findFirst({
-    where: { id: playerId, ...nonretiredPlayer },
-    select: {
-      id: true,
-      avatarKey: true,
-      ownerUserId: true,
-      name: true,
-    },
-  });
+async function authorizedTarget(tx: Prisma.TransactionClient, input: { clubId: string; playerId: string; userId: string; isAdmin: boolean }) {
+  const member = await tx.clubMember.findFirst({ where: { clubId: input.clubId, playerId: input.playerId, retiredByAdmissionEventId: null, player: nonretiredPlayer }, include: { player: { include: { clubMemberships: { select: { ownerUserId: true, retiredByAdmissionEventId: true } } } } } });
+  if (!member) throw new AccountProfileSyncError("Player unavailable", 404);
+  if (member.ownerUserId === input.userId) return { member, owned: true };
+  // Administrators may manage placeholder photos, never another person's canonical photo.
+  if (member.player.clubMemberships.some(link => link.ownerUserId !== null && link.retiredByAdmissionEventId === null)) throw new AccountProfileSyncError("Only the connected account can manage this photo", 403);
+  const access = await tx.clubAccess.findUnique({ where: { clubId_userId: { clubId: input.clubId, userId: input.userId } } });
+  if (!input.isAdmin && !(access?.status === "ACTIVE" && isClubAdminRole(access.role))) throw new AccountProfileSyncError("Not authorized", 403);
+  return { member, owned: false };
 }
 
-async function canManageAvatar({
-  clubId,
-  requesterId,
-  requesterIsAdmin,
-  requesterIsQuickAccess,
-  targetUserId,
-  targetOwnerUserId,
-}: {
-  clubId: string | null;
-  requesterId: string;
-  requesterIsAdmin: boolean;
-  requesterIsQuickAccess: boolean;
-  targetUserId: string;
-  targetOwnerUserId: string | null;
-}) {
-  if (requesterIsAdmin) {
-    return true;
-  }
-
-  if (requesterIsQuickAccess) {
-    return false;
-  }
-
-  if (requesterId === targetOwnerUserId) {
-    return true;
-  }
-
-  if (!clubId) {
-    return false;
-  }
-
-  const [requesterMembership, targetMembership] = await Promise.all([
-    prisma.clubAccess.findUnique({
-      where: {
-        clubId_userId: {
-          clubId,
-          userId: requesterId,
-        },
-      },
-      select: { role: true, status: true },
-    }),
-    prisma.clubMember.findUnique({
-      where: {
-        clubId_playerId: {
-          clubId,
-          playerId: targetUserId,
-        },
-      },
-      select: { id: true },
-    }),
-  ]);
-
-  return requesterMembership?.status === "ACTIVE" && isClubAdminRole(requesterMembership.role) && !!targetMembership;
-}
-
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  let uploadedAvatarUrl: string | null = null;
-
+async function mutate(request: Request, params: Promise<{ id: string }>, remove: boolean) {
+  let uploadedAvatarKey: string | null = null;
   try {
-    const rateLimitResponse = await rateLimit(
-      request,
-      "api:users:id:avatar:post",
-      { limit: 10, windowMs: 60_000 }
-    );
-    if (rateLimitResponse) return rateLimitResponse;
-
-    const session = await auth();
-    if (!session?.user?.id) {
-      return sportingJson({ error: "Not authenticated" }, { status: 401 });
+    const limited = await rateLimit(request, `api:users:id:avatar:${remove ? "delete" : "post"}`, { limit: 10, windowMs: 60000 }); if (limited) return limited;
+    const session = await auth(); const userId = getSessionAccountId(session);
+    if (!userId) return sportingJson({ error: "Not authenticated" }, { status: 401 });
+    const { id: playerId } = await params;
+    if (!playerId) return sportingJson({ error: "Invalid request parameters" }, { status: 400 });
+    const invalidLimit = await checkInvalidTargetRateLimit(request, "api:users:id:avatar"); if (invalidLimit) return invalidLimit;
+    const clubId = readAliasedSearchParam(new URL(request.url).searchParams, "clubId", "communityId", "club identifier", { canonicalRoute: "/api/users/[id]/avatar", request, surface: "api" });
+    if (!clubId) return sportingJson({ error: "Choose a club profile" }, { status: 400 });
+    const input = { clubId, playerId, userId, isAdmin: !!session?.user.isAdmin };
+    // Authenticate before uploading; ownership is rechecked under reservation before saving.
+    const initial = await admissionTransaction(prisma, tx => authorizedTarget(tx, input));
+    if (!remove) {
+      if (!isAvatarStorageConfigured()) return sportingJson({ error: "Avatar storage is not configured" }, { status: 503 });
+      const file = (await request.formData()).get("avatar");
+      if (!(file instanceof File)) return sportingJson({ error: "Choose an image file to upload" }, { status: 400 });
+      const error = getAvatarUploadValidationError({ mimeType: file.type, size: file.size }) ?? getAvatarFileSignatureValidationError({ mimeType: file.type, bytes: new Uint8Array(await file.slice(0, 16).arrayBuffer()) });
+      if (error) return sportingJson({ error }, { status: 400 });
+      uploadedAvatarKey = await uploadAvatarObject({ avatarPathname: buildAvatarObjectKey({ userId: initial.owned ? `accounts/${userId}` : playerId, mimeType: file.type as "image/jpeg" | "image/png" | "image/webp" }), body: file, contentType: file.type });
     }
-
-    const { id } = await params;
-    if (typeof id !== "string" || id.length === 0) {
-      return sportingJson(
-        { error: "Invalid request parameters" },
-        { status: 400 }
-      );
-    }
-
-    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(
-      request,
-      "api:users:id:avatar"
-    );
-    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const url = new URL(request.url);
-    const clubId = readAliasedSearchParam(
-      url.searchParams,
-      "clubId",
-      "communityId",
-      "club identifier",
-      {
-        canonicalRoute: "/api/users/[id]/avatar",
-        request,
-        surface: "api",
+    const key = uploadedAvatarKey;
+    const previousKeys = await admissionTransaction(prisma, async tx => {
+      const current = await authorizedTarget(tx, input);
+      if (current.member.player.avatarKey !== initial.member.player.avatarKey || current.member.ownerUserId !== initial.member.ownerUserId || current.member.ownershipRevision !== initial.member.ownershipRevision) throw new AccountProfileSyncError("Your profile changed. Refresh and try again");
+      if (current.owned) {
+        const result = await syncAccountProfile(tx, { userId, changes: { avatarKey: key } });
+        return result.previousAvatarKeys;
       }
-    );
-
-    const targetUser = await getAvatarTargetUser(id);
-    if (!targetUser) {
-      return invalidTargetResponse(request, "api:users:id:avatar");
-    }
-
-    const requesterIsQuickAccess = isQuickAccessSession(session);
-    const allowed = await canManageAvatar({
-      clubId,
-      requesterId: session.user.id,
-      requesterIsAdmin: !!session.user.isAdmin,
-      requesterIsQuickAccess,
-      targetUserId: targetUser.id,
-      targetOwnerUserId: targetUser.ownerUserId,
+      await tx.player.update({ where: { id: playerId }, data: { avatarKey: key } });
+      return [current.member.player.avatarKey];
     });
-    if (!allowed) {
-      return invalidTargetResponse(request, "api:users:id:avatar");
-    }
-
-    if (!isAvatarStorageConfigured()) {
-      return sportingJson(
-        { error: "Avatar storage is not configured" },
-        { status: 503 }
-      );
-    }
-
-    const formData = await request.formData();
-    const avatarFile = formData.get("avatar");
-    if (!(avatarFile instanceof File)) {
-      return sportingJson(
-        { error: "Choose an image file to upload" },
-        { status: 400 }
-      );
-    }
-
-    const validationError = getAvatarUploadValidationError({
-      mimeType: avatarFile.type,
-      size: avatarFile.size,
-    });
-    if (validationError) {
-      return sportingJson({ error: validationError }, { status: 400 });
-    }
-
-    const signatureValidationError = getAvatarFileSignatureValidationError({
-      bytes: new Uint8Array(await avatarFile.slice(0, 16).arrayBuffer()),
-      mimeType: avatarFile.type,
-    });
-    if (signatureValidationError) {
-      return sportingJson(
-        { error: signatureValidationError },
-        { status: 400 }
-      );
-    }
-
-    const avatarPathname = buildAvatarObjectKey({
-      userId: targetUser.id,
-      mimeType: avatarFile.type as "image/jpeg" | "image/png" | "image/webp",
-    });
-
-    uploadedAvatarUrl = await uploadAvatarObject({
-      avatarPathname,
-      body: avatarFile,
-      contentType: avatarFile.type,
-    });
-
-    const updatedUser = await prisma.player.update({
-      where: { id: targetUser.id },
-      data: { avatarKey: uploadedAvatarUrl },
-      select: { avatarKey: true },
-    });
-
-    await cleanupSupersededAvatar({
-      previousAvatarKey: targetUser.avatarKey,
-      nextAvatarKey: updatedUser.avatarKey,
-    });
-
-    return sportingJson({
-      avatarUrl: resolveAvatarUrl(updatedUser.avatarKey),
-    });
+    for (const previousAvatarKey of previousKeys) await cleanupSupersededAvatar({ previousAvatarKey, nextAvatarKey: key });
+    return sportingJson({ avatarUrl: resolveAvatarUrl(key) });
   } catch (error) {
-    if (error instanceof ClubContractAliasConflictError) {
-      return sportingJson({ error: error.message }, { status: 400 });
+    await rollbackUploadedAvatar({ uploadedAvatarKey });
+    if (error instanceof ClubContractAliasConflictError) return sportingJson({ error: error.message }, { status: 400 });
+    if (error instanceof AccountProfileSyncError) {
+      if (error.statusCode === 403 || error.statusCode === 404) return invalidTargetResponse(request, "api:users:id:avatar");
+      return sportingJson({ error: error.message }, { status: error.statusCode });
     }
-    await rollbackUploadedAvatar({
-      uploadedAvatarKey: uploadedAvatarUrl,
-    });
-    logError("Upload avatar error", error);
-    return safeErrorResponse();
+    logError("Manage avatar error", error); return safeErrorResponse();
   }
 }
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const rateLimitResponse = await rateLimit(
-      request,
-      "api:users:id:avatar:delete",
-      { limit: 10, windowMs: 60_000 }
-    );
-    if (rateLimitResponse) return rateLimitResponse;
-
-    const session = await auth();
-    if (!session?.user?.id) {
-      return sportingJson({ error: "Not authenticated" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    if (typeof id !== "string" || id.length === 0) {
-      return sportingJson(
-        { error: "Invalid request parameters" },
-        { status: 400 }
-      );
-    }
-
-    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(
-      request,
-      "api:users:id:avatar"
-    );
-    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const url = new URL(request.url);
-    const clubId = readAliasedSearchParam(
-      url.searchParams,
-      "clubId",
-      "communityId",
-      "club identifier",
-      {
-        canonicalRoute: "/api/users/[id]/avatar",
-        request,
-        surface: "api",
-      }
-    );
-
-    const targetUser = await getAvatarTargetUser(id);
-    if (!targetUser) {
-      return invalidTargetResponse(request, "api:users:id:avatar");
-    }
-
-    const allowed = await canManageAvatar({
-      clubId,
-      requesterId: session.user.id,
-      requesterIsAdmin: !!session.user.isAdmin,
-      requesterIsQuickAccess: isQuickAccessSession(session),
-      targetUserId: targetUser.id,
-      targetOwnerUserId: targetUser.ownerUserId,
-    });
-    if (!allowed) {
-      return invalidTargetResponse(request, "api:users:id:avatar");
-    }
-
-    await prisma.player.update({
-      where: { id: targetUser.id },
-      data: { avatarKey: null },
-    });
-
-    await cleanupSupersededAvatar({
-      previousAvatarKey: targetUser.avatarKey,
-      nextAvatarKey: null,
-    });
-
-    return sportingJson({ avatarUrl: null });
-  } catch (error) {
-    if (error instanceof ClubContractAliasConflictError) {
-      return sportingJson({ error: error.message }, { status: 400 });
-    }
-    logError("Delete avatar error", error);
-    return safeErrorResponse();
-  }
-}
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) { return mutate(request, params, false); }
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) { return mutate(request, params, true); }

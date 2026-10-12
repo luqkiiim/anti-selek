@@ -202,12 +202,12 @@ describe("avatar helpers", () => {
     await cleanupSupersededAvatar({
       previousAvatarKey: "https://blob.vercel-storage.com/avatars/old.jpg",
       nextAvatarKey: "https://blob.vercel-storage.com/avatars/new.jpg",
-      deleteObject,
+      deleteObject, isReferenced: async () => false,
     });
     await rollbackUploadedAvatar({
       uploadedAvatarKey: "https://blob.vercel-storage.com/avatars/new.jpg",
       persistedAvatarKey: null,
-      deleteObject,
+      deleteObject, isReferenced: async () => false,
     });
 
     expect(deleteObject).toHaveBeenNthCalledWith(

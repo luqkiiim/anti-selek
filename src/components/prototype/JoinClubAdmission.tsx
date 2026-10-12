@@ -7,7 +7,7 @@ import { formatProfileDate } from "./profileDate";
 import type { AdmissionCandidate, AdmissionDiscovery, AdmissionKind, AdmissionRequest, AdmissionRequestSummary } from "./admissionTypes";
 import "./admission.css";
 
-type Selection = { id: string; kind: "EXISTING_PLAYER" | "OWNED_PLAYER" } | null;
+type Selection = { id: string; kind: "EXISTING_PLAYER" } | null;
 
 function parseClubId(value: string) {
   const raw = value.trim();
@@ -53,7 +53,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
     setBusy(true);
     setError("");
     if (nextMode === "existing" && discovery) {
-      setDiscovery(current => current ? { ...current, players: [], ownedPlayers: [] } : current);
+      setDiscovery(current => current ? { ...current, players: [] } : current);
       setSelection(null);
     }
     try {
@@ -96,7 +96,6 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       ...current,
       passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null },
       players: [],
-      ownedPlayers: [],
     } : current);
     setSelection(null);
     setMode("start");
@@ -200,42 +199,28 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       </section> : !isMember && !currentPending && <>
         {!discovery.club.allowJoinRequests ? <div className="admission-status"><strong>Requests are closed.</strong><span>{discovery.club.name} is not accepting new members right now.</span></div>
           : !proofSatisfied ? null : mode === "start" ? <>
-            <h3 className="admission-question">Have you played with this club before?</h3>
-            <p className="muted">We’ll connect you to the right Player record so your match history stays together.</p>
-            {discovery.identityReviewRequired && <p className="admission-status" role="status">An inactive Player identity on this account still needs admin review. It will not be reactivated or replaced automatically.</p>}
+            <h3 className="admission-question">Choose your profile for this club</h3>
+            <p className="muted">Profiles and match history belong to each club separately.</p>
             <div className="admission-choice-grid">
-              <button type="button" className="admission-choice" onClick={openExisting}><strong>Yes, find my profile</strong><span>Search the club roster</span></button>
-              <button type="button" className="admission-choice" disabled={discovery.identityReviewRequired && discovery.ownedPlayers.length === 0} onClick={() => { setMode("new"); setSelection(null); setPlayerName(accountName); setGender(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : ""); }}><strong>{discovery.ownedPlayers.length ? "Use a Player you own" : "I’m new to this club"}</strong><span>{discovery.ownedPlayers.length ? "Choose an active profile and keep its history" : discovery.identityReviewRequired ? "Admin review is needed before creating another Player" : "Ask the admin to add a Player"}</span></button>
+              <button type="button" className="admission-choice" onClick={openExisting}><strong>Use an existing club profile</strong><span>Find a local placeholder on this roster</span></button>
+              <button type="button" className="admission-choice" onClick={() => { setMode("new"); setSelection(null); setPlayerName(accountName); setGender(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : ""); }}><strong>I’m new to this club</strong><span>Request a new local profile</span></button>
             </div>
           </> : mode === "existing" ? <>
-            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
+            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to profile choices</button>
             <h3>Find your Player profile</h3>
-            <p className="muted">Choose the profile that represents you in {discovery.club.name}.</p>
+            <p className="muted">Choose an unclaimed profile already on {discovery.club.name}’s roster.</p>
             <form className="admission-search" onSubmit={event => { event.preventDefault(); void loadClub(discovery.club.id, query, "existing"); }}>
               <label className="field-label">Search by name<input value={query} maxLength={64} onChange={event => setQuery(event.target.value)} placeholder="Player name" /></label>
               <button className="secondary" type="submit" disabled={busy}>{busy ? "Searching…" : "Search"}</button>
             </form>
             {!!discovery.players.length && <div className="admission-player-list" aria-label="Unclaimed Player profiles in this club">{discovery.players.map(player => <PlayerChoice key={player.id} player={player} selected={selection?.id === player.id} detail={playerMeta(player)} onClick={() => setSelection({ id: player.id, kind: "EXISTING_PLAYER" })} />)}</div>}
             {!discovery.players.length && <p className="admission-empty">No unclaimed Player profiles match this search.</p>}
-            {!!discovery.ownedPlayers.length && <section className="admission-owned"><h4>Your Player profiles</h4><p className="muted">If you already own a Player profile from another club, you can use it here.</p>{discovery.ownedPlayers.map(player => <button key={player.id} type="button" className={`admission-owned-choice${selection?.id === player.id ? " selected" : ""}`} aria-pressed={selection?.id === player.id} onClick={() => setSelection({ id: player.id, kind: "OWNED_PLAYER" })}><Avatar name={player.name} /><strong>{player.name}</strong><span>{selection?.id === player.id ? "Selected" : "Use this profile"}</span></button>)}</section>}
             <label className="field-label">Note for the admin <textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder="Optional context for your request" /></label>
             <button type="button" className="primary" disabled={!selection || busy} onClick={() => selection && void submit(selection.kind, selection.id)}>Request to connect this Player</button>
-          </> : discovery.ownedPlayers.length ? <>
-            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
-            <h3>Use a Player profile you already own</h3>
-            <p className="muted">This account already has Player profiles. Choose one to request access with its existing history.</p>
-            {discovery.identityReviewRequired && <p className="admission-status" role="status">An inactive Player identity also needs admin review. You can still choose one of your active profiles here.</p>}
-            <div className="admission-owned">{discovery.ownedPlayers.map(player => <button key={player.id} type="button" className={`admission-owned-choice${selection?.id === player.id ? " selected" : ""}`} aria-pressed={selection?.id === player.id} onClick={() => setSelection({ id: player.id, kind: "OWNED_PLAYER" })}><Avatar name={player.name} /><strong>{player.name}</strong><span>{selection?.id === player.id ? "Selected" : "Choose"}</span></button>)}</div>
-            <label className="field-label">Note for the admin <textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder="Optional context for your request" /></label>
-            <button type="button" className="primary" disabled={!selection || selection.kind !== "OWNED_PLAYER" || busy} onClick={() => selection?.kind === "OWNED_PLAYER" && void submit("OWNED_PLAYER", selection.id)}>Request to use this Player</button>
-          </> : discovery.identityReviewRequired ? <>
-            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
-            <h3>Identity review needed</h3>
-            <p className="admission-status" role="status">This account has an inactive Player identity that is not available for joining. Ask a club admin to review it before requesting another Player profile. No identity will be reactivated or changed automatically.</p>
           </> : <>
-            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
-            <h3>Request a new Player profile</h3>
-            <p className="muted">The admin will review your request before a Player profile is created.</p>
+            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to profile choices</button>
+            <h3>Request a new local profile</h3>
+            <p className="muted">The admin will review your request to create a Player profile for this club.</p>
             <label className="field-label">Player name<input value={playerName} maxLength={100} onChange={event => setPlayerName(event.target.value)} required /></label>
             <label className="field-label">Gender for mixed pairing<select value={gender} onChange={event => setGender(event.target.value)} required><option value="" disabled>Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>
             <p className="muted">This belongs to your new Player profile and does not change your account gender.</p>

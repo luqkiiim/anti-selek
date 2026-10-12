@@ -62,6 +62,7 @@ function queuedMatch(isAutomatic: boolean) {
 
 function setupTransaction(queue: ReturnType<typeof queuedMatch>) {
   const tx = {
+    match: { findFirst: vi.fn().mockResolvedValue(null) },
     queuedMatch: {
       findUnique: vi.fn().mockResolvedValue(queue),
       delete: vi.fn().mockResolvedValue({}),
@@ -146,4 +147,14 @@ describe("remove player queue cancellation", () => {
       "session-1"
     );
   });
+});
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: { $transaction?: (op: unknown) => unknown }, op: (tx: unknown) => unknown) => db.$transaction ? db.$transaction(op) : op(db) };
+});
+
+vi.mock("@/lib/sessionProfileIdentity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sessionProfileIdentity")>();
+  return { ...actual, assertSessionMutationActor: vi.fn(async () => {}), assertSessionProfileContextsUnambiguous: vi.fn(async () => {}), withSessionProfileRatings: async (_db: unknown, _session: unknown, players: unknown) => players };
 });

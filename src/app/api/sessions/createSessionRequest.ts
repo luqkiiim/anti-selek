@@ -88,6 +88,7 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
       mixedSideOverride?: unknown;
       pool?: unknown;
       representingClubId?: unknown;
+      profileClubId?: unknown;
     };
     if (typeof candidate.playerId !== "string") continue;
 
@@ -119,6 +120,7 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
       normalized.representingClubId = candidate.representingClubId;
     }
 
+    if (typeof candidate.profileClubId === "string" && candidate.profileClubId) normalized.profileClubId = candidate.profileClubId;
     playerConfigMap.set(candidate.playerId, normalized);
   }
 

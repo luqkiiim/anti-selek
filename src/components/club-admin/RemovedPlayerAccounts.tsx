@@ -11,7 +11,7 @@ export function RemovedPlayerAccounts({ clubId, onChanged }: { clubId: string; o
   return <section className="app-panel-muted space-y-3 p-4">
     <button type="button" className="text-button" aria-expanded={open} onClick={() => setOpen(!open)}>Removed players</button>
     {open && <>
-      <p>Disconnect an account from a removed Player, then invite them to their original profile. All Player history stays intact.</p>
+      <p>Disconnect an account from a removed local profile, then invite the correct profile. Its history and rating stay intact; memberships in other clubs are unchanged.</p>
       {(resource.error || action.error) && <p role="alert">{resource.error || action.error}</p>}
       {notice && <p role="status">{notice}</p>}
       {!resource.data && !resource.error && <p>Loading removed players…</p>}
@@ -21,7 +21,7 @@ export function RemovedPlayerAccounts({ clubId, onChanged }: { clubId: string; o
         <button type="button" className="app-button-secondary px-4 py-2" disabled={action.busy} onClick={() => setPending(player)}>Disconnect account</button>
       </div>)}
       {pending && <div role="group" aria-label="Confirm account disconnect" className="space-y-3">
-        <p>Disconnect the account from <strong>{pending.name}</strong>? This Player becomes unclaimed and keeps its history and rating. You must administer every club this Player belongs to.</p>
+        <p>Disconnect the account from <strong>{pending.name}</strong>? This local profile becomes unclaimed and keeps its history and rating. Other club profiles and memberships stay connected.</p>
         <div className="flex flex-wrap gap-3">
           <button type="button" className="app-button-danger px-4 py-2" disabled={action.busy} onClick={() => void action.run(async () => {
             await api(`${endpoint}/members/${encodeURIComponent(pending.id)}/ownership-release`, "POST", { confirm: true });

@@ -265,6 +265,7 @@ async function getUserStatsRoute(
           name: true,
           status: true,
           clubId: true,
+          ratingPolicyVersion: true,
           isTest: true,
           type: true,
           createdAt: true,
@@ -272,6 +273,7 @@ async function getUserStatsRoute(
           players: {
             select: {
               playerId: true,
+              profileClubId: true,
               isGuest: true,
               sessionPoints: true,
               player: { select: { id: true, name: true, avatarKey: true } },

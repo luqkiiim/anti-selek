@@ -1,163 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  auth: vi.fn(),
-  rateLimit: vi.fn(),
-  checkInvalidTargetRateLimit: vi.fn(),
-  invalidTargetResponse: vi.fn(),
-  userFindUnique: vi.fn(),
-  userUpdate: vi.fn(),
-}));
-
-vi.mock("@/lib/auth", () => ({
-  auth: mocks.auth,
-}));
-
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    player: {
-      findUnique: mocks.userFindUnique,
-      update: mocks.userUpdate,
-    },
-  },
-}));
-
-vi.mock("@/lib/rateLimit", () => ({
-  rateLimit: mocks.rateLimit,
-  checkInvalidTargetRateLimit: mocks.checkInvalidTargetRateLimit,
-  invalidTargetResponse: mocks.invalidTargetResponse,
-}));
-
-vi.mock("@/lib/avatar", () => ({
-  resolveAvatarUrl: (avatarKey: string | null | undefined) => avatarKey ?? null,
-}));
-
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), find: vi.fn(), update: vi.fn(), reservation: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
+vi.mock("@/lib/prisma", () => ({ prisma: { player: { findUnique: mocks.find, update: mocks.update } } }));
+vi.mock("@/lib/serverAudit", () => ({ logAuditEvent: vi.fn() }));
+vi.mock("@/lib/clubPlayerOwnership", async original => ({ ...await original<typeof import("@/lib/clubPlayerOwnership")>(), clubOwnershipTransaction: async (db: object, fn: (tx: object) => unknown) => { mocks.reservation(); return fn(db); } }));
+vi.mock("@/lib/rateLimit", () => ({ rateLimit: async () => null, checkInvalidTargetRateLimit: async () => null, invalidTargetResponse: () => Response.json({ error: "Unavailable" }, { status: 404 }) }));
 import { PATCH, DELETE } from "./route";
-
-function patchAdminPlayer(body: unknown) {
-  return PATCH(
-    new Request("http://localhost/api/admin/players/user-1", {
-      method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    }),
-    { params: Promise.resolve({ id: "user-1" }) }
-  );
-}
-
-describe("admin update player route", () => {
-  beforeEach(() => {
-    Object.values(mocks).forEach((mock) => mock.mockReset());
-    mocks.auth.mockResolvedValue({
-      user: { id: "global-admin-1", isAdmin: true },
-    });
-    mocks.rateLimit.mockResolvedValue(null);
-    mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
-    mocks.invalidTargetResponse.mockImplementation(() =>
-      Response.json({ error: "Unauthorized" }, { status: 403 })
-    );
+const context = { params: Promise.resolve({ id: "player" }) };
+const patch = (body: unknown) => PATCH(new Request("http://localhost/api/admin/players/player", { method: "PATCH", body: JSON.stringify(body) }), context);
+const remove = () => DELETE(new Request("http://localhost/api/admin/players/player", { method: "DELETE" }), context);
+const player = { id: "player", name: "Name", ownerUserId: "frozen-original", isActive: true, clubMemberships: [] };
+beforeEach(() => { vi.resetAllMocks(); mocks.auth.mockResolvedValue({ user: { id: "admin", isAdmin: true } }); mocks.find.mockResolvedValue(player); mocks.update.mockResolvedValue({ id: "player", name: "Changed", avatarKey: null, elo: 1100, isActive: true }); });
+describe("global Player administration uses current local ownership", () => {
+  it("renames disconnected legacy provenance without treating it as a claim", async () => {
+    const response = await patch({ name: "Changed" }); expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ isClaimed: false });
+    expect(mocks.reservation.mock.invocationCallOrder[0]).toBeLessThan(mocks.find.mock.invocationCallOrder[0]);
+    expect(mocks.find.mock.invocationCallOrder[0]).toBeLessThan(mocks.update.mock.invocationCallOrder[0]);
   });
-
-  it("rejects renaming claimed users", async () => {
-    mocks.userFindUnique.mockResolvedValue({
-      id: "user-1",
-      name: "Claimed Player",
-      email: "claimed@example.com",
-      ownerUserId: "account-other",
-      clubMemberships: [],
-    });
-
-    const response = await patchAdminPlayer({ name: "Renamed Claimed Player" });
-    const body = await response.json();
-
-    expect(response.status).toBe(403);
-    expect(body.error).toBe("Player owners manage their own player name");
-    expect(mocks.userUpdate).not.toHaveBeenCalled();
+  it("blocks another locally connected account even when global provenance is null", async () => {
+    mocks.find.mockResolvedValue({ ...player, ownerUserId: null, clubMemberships: [{ ownerUserId: "current-owner", retiredByAdmissionEventId: null }] });
+    expect((await patch({ name: "Changed" })).status).toBe(403); expect(mocks.update).not.toHaveBeenCalled();
   });
-
-  it("still allows renaming unclaimed placeholders", async () => {
-    mocks.userFindUnique.mockResolvedValue({
-      id: "user-1",
-      name: "Placeholder",
-      email: null,
-      ownerUserId: null,
-      clubMemberships: [],
-    });
-    mocks.userUpdate.mockResolvedValue({
-      id: "user-1",
-      name: "Renamed Placeholder",
-      email: null,
-      avatarKey: null,
-      elo: 1000,
-      isActive: true,
-      ownerUserId: null,
-      createdAt: new Date("2026-05-19T00:00:00.000Z"),
-    });
-
-    const response = await patchAdminPlayer({ name: "Renamed Placeholder" });
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body.name).toBe("Renamed Placeholder");
-    expect(mocks.userUpdate).toHaveBeenCalledWith({
-      where: { id: "user-1" },
-      data: {
-        name: "Renamed Placeholder",
-        elo: undefined,
-        isActive: undefined,
-      },
-      select: {
-        id: true,
-        name: true,
-        avatarKey: true,
-        elo: true,
-        isActive: true,
-        ownerUserId: true,
-        createdAt: true,
-      },
-    });
+  it.each([true, false])("requires local operations for connected isActive=%s", async isActive => {
+    mocks.find.mockResolvedValue({ ...player, clubMemberships: [{ ownerUserId: "current-owner", retiredByAdmissionEventId: null }] });
+    expect((await patch({ isActive })).status).toBe(409); expect((await remove()).status).toBe(409); expect(mocks.update).not.toHaveBeenCalled();
   });
-
-it("archives a durable Player instead of cascading historical deletion", async () => {
-  mocks.userFindUnique.mockResolvedValue({ id: "historical-player", name: "Historical Player", ownerUserId: "different-account", avatarKey: null, clubMemberships: [] });
-  const response = await DELETE(new Request("http://localhost/api/admin/players/historical-player", { method: "DELETE" }), { params: Promise.resolve({ id: "historical-player" }) });
-  expect(response.status).toBe(200);
-  expect(mocks.userUpdate).toHaveBeenCalledWith({ where: { id: "historical-player" }, data: { isActive: false } });
-});
-it("recognizes the actor's own Player using ownership when IDs differ", async () => {
-  mocks.userFindUnique.mockResolvedValue({ id: "historical-player", ownerUserId: "global-admin-1", clubMemberships: [] });
-  const response = await DELETE(new Request("http://localhost/api/admin/players/historical-player", { method: "DELETE" }), { params: Promise.resolve({ id: "historical-player" }) });
-  expect(response.status).toBe(400);
-  expect(mocks.userUpdate).not.toHaveBeenCalled();
-});
-
-it("rejects updates to a retired Player before writing", async () => {
-  mocks.userFindUnique.mockResolvedValue({
-    id: "retired-player",
-    name: "Retired Player",
-    ownerUserId: "account-1",
-    clubMemberships: [{ id: "retired-membership" }],
+  it("retains rating controls for connected players and reports their current claim", async () => {
+    mocks.find.mockResolvedValue({ ...player, clubMemberships: [{ ownerUserId: "current-owner", retiredByAdmissionEventId: null }] });
+    const response = await patch({ elo: 1100 }); expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ isClaimed: true });
   });
-  const response = await patchAdminPlayer({ elo: 1200 });
-  expect(response.status).toBe(409);
-  expect(await response.json()).toMatchObject({ error: "Retired player profiles cannot be changed" });
-  expect(mocks.userUpdate).not.toHaveBeenCalled();
-});
-
-it("rejects archiving a retired Player before writing", async () => {
-  mocks.userFindUnique.mockResolvedValue({
-    id: "retired-player",
-    name: "Retired Player",
-    ownerUserId: "account-1",
-    avatarKey: null,
-    clubMemberships: [{ id: "retired-membership" }],
+  it("archives disconnected durable profiles without deleting history", async () => {
+    expect((await remove()).status).toBe(200); expect(mocks.update).toHaveBeenCalledWith({ where: { id: "player" }, data: { isActive: false } });
   });
-  const response = await DELETE(new Request("http://localhost/api/admin/players/retired-player", { method: "DELETE" }), { params: Promise.resolve({ id: "retired-player" }) });
-  expect(response.status).toBe(409);
-  expect(await response.json()).toMatchObject({ error: "Retired player profiles cannot be changed" });
-  expect(mocks.userUpdate).not.toHaveBeenCalled();
-});
-
+  it("rechecks retirement under reservation for edit and archive", async () => {
+    mocks.find.mockResolvedValue({ ...player, clubMemberships: [{ ownerUserId: null, retiredByAdmissionEventId: "retired" }] });
+    expect((await patch({ elo: 1100 })).status).toBe(409); expect((await remove()).status).toBe(409); expect(mocks.update).not.toHaveBeenCalled();
+  });
 });

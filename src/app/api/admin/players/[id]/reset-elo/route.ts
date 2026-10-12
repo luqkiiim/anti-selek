@@ -5,6 +5,7 @@ import { nonretiredPlayer } from "@/lib/playerIdentity";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
+import { clubOwnershipTransaction, ClubPlayerOwnershipError } from "@/lib/clubPlayerOwnership";
 export const dynamic = "force-dynamic";
 
 export async function POST(
@@ -30,7 +31,8 @@ export async function POST(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const user = await prisma.player.findFirst({
+    return await clubOwnershipTransaction(prisma, async tx => {
+    const user = await tx.player.findFirst({
       where: { id, ...nonretiredPlayer },
     });
 
@@ -38,13 +40,13 @@ export async function POST(
       return invalidTargetResponse(request, "api:admin:players:id:reset-elo");
     }
 
-    const updated = await prisma.player.update({
+    const updated = await tx.player.update({
       where: { id },
       data: { elo: 1000 },
       select: {
         id: true,
         name: true,
-        ownerUserId: true,
+        clubMemberships: { where: { retiredByAdmissionEventId: null, ownerUserId: { not: null } }, select: { ownerUserId: true } },
         elo: true,
         isActive: true,
 
@@ -52,8 +54,11 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ ...updated, email: null, isClaimed: !!updated.ownerUserId });
+    const { clubMemberships, ...player } = updated;
+    return NextResponse.json({ ...player, email: null, isClaimed: clubMemberships.length > 0 });
+    });
   } catch (error: unknown) {
+    if (error instanceof ClubPlayerOwnershipError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
     logError("Reset ELO error", error);
     return safeErrorResponse();
   }

@@ -1,9 +1,10 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { PlayerInvitation, Prisma } from "@prisma/client";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
-import { assertNoOtherOwnedPlayer, getOwnedClubPlayer, linkUnownedPlayer } from "@/lib/playerIdentity";
+import { getOwnedClubPlayer } from "@/lib/playerIdentity";
+import { assertLocalClaimAvailable, claimClubPlayer } from "@/lib/clubPlayerOwnership";
 import { ClubAdmissionError } from "@/lib/clubAdmissions";
-import { claimReleaseAuthorization, recordReleaseClaim } from "@/lib/playerOwnershipRelease";
+import { claimReleaseAuthorization } from "@/lib/playerOwnershipRelease";
 
 type Db = Prisma.TransactionClient;
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -39,7 +40,7 @@ export async function expirePlayerInvitationReservations(db: Db, playerId: strin
 }
 async function eligibleTarget(db: Db, clubId: string, playerId: string, memberId?: string) {
   const member = await db.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId } }, include: { player: true, club: true } });
-  if (!member || (memberId && member.id !== memberId) || member.archivedAt || !member.player.isActive || member.player.ownerUserId || member.club.isTutorial) unavailable();
+  if (!member || (memberId && member.id !== memberId) || member.retiredByAdmissionEventId || member.archivedAt || !member.player.isActive || member.ownerUserId || member.club.isTutorial) unavailable();
   return member;
 }
 async function hasCurrentLocalAdminAuthority(db: Db, clubId: string, userId: string) {
@@ -79,8 +80,15 @@ export async function managePlayerInvitation(db: Db, input: {
   if (input.action === "CREATE" && active) return { invitation: invitationSummary(active) };
   await eligibleTarget(db, input.clubId, input.playerId);
   const member = await eligibleTarget(db, input.clubId, input.playerId);
+  // A newly issued invitation must be strictly later than local releases,
+  // including when consecutive reserved writers share the same millisecond.
+  const [latestRelease] = await db.$queryRaw<Array<{ releasedAt: bigint | number | null }>>`SELECT max(
+    CASE WHEN typeof("createdAt") IN ('integer','real') THEN "createdAt"
+      ELSE round((julianday("createdAt")-2440587.5)*86400000) END) AS releasedAt
+    FROM "ClubPlayerOwnershipEvent" WHERE "clubId"=${input.clubId} AND "action" IN ('REMOVE','DISCONNECT','LEAVE')`;
+  const issuedAt = new Date(Math.max(now.getTime(), latestRelease?.releasedAt == null ? now.getTime() : Number(latestRelease.releasedAt) + 1));
   const secret = newInvitationSecret();
-  const invitation = await db.playerInvitation.create({ data: { clubId: input.clubId, playerId: input.playerId, clubMemberId: member.id, createdByUserId: input.userId, tokenHash: hashInvitationSecret(secret), expiresAt: new Date(now.getTime() + INVITATION_TTL_MS) } });
+  const invitation = await db.playerInvitation.create({ data: { clubId: input.clubId, playerId: input.playerId, clubMemberId: member.id, targetOwnershipRevision: member.ownershipRevision, createdByUserId: input.userId, tokenHash: hashInvitationSecret(secret), expiresAt: new Date(issuedAt.getTime() + INVITATION_TTL_MS), createdAt: issuedAt } });
   return { invitation: invitationSummary(invitation), secret };
 }
 export async function activePlayerInvitation(db: Db, clubId: string, playerId: string, userId: string) {
@@ -92,33 +100,12 @@ export async function validInvitation(db: Db, id: string, now: Date) {
   const invite = await db.playerInvitation.findUnique({ where: { id } });
   if (!invite || invite.purpose !== "CLAIM" || invite.status !== "ACTIVE" || invite.expiresAt <= now) unavailable();
   if (!await hasCurrentLocalAdminAuthority(db, invite.clubId, invite.createdByUserId)) unavailable();
-  await eligibleTarget(db, invite.clubId, invite.playerId, invite.clubMemberId);
+  const member = await eligibleTarget(db, invite.clubId, invite.playerId, invite.clubMemberId);
+  if (member.ownershipRevision !== invite.targetOwnershipRevision) unavailable();
   return invite;
 }
 
-async function validAuthorizedInvitation(db: Db, id: string, now: Date) {
-  const invite = await db.playerInvitation.findUnique({ where: { id } });
-  if (!invite || invite.purpose === "CLAIM" || invite.status !== "ACTIVE" || invite.expiresAt <= now) unavailable();
-  const [issuer, access, recipient, target] = await Promise.all([
-    db.user.findUnique({ where: { id: invite.createdByUserId }, select: { isActive: true } }),
-    invite.authorizerAccessId ? db.clubAccess.findUnique({ where: { id: invite.authorizerAccessId } }) : null,
-    invite.targetAccountUserId ? db.user.findUnique({ where: { id: invite.targetAccountUserId }, select: { isActive: true } }) : null,
-    db.clubMember.findUnique({ where: { id: invite.clubMemberId }, include: { player: true, club: true } }),
-  ]);
-  if (!issuer?.isActive || !access || access.userId !== invite.createdByUserId || access.clubId !== invite.clubId
-    || access.status !== "ACTIVE" || !["ADMIN", "OWNER"].includes(access.role) || access.revision !== invite.authorizerAccessRevision
-    || !recipient?.isActive || !target || target.clubId !== invite.clubId || target.playerId !== invite.playerId
-    || target.retiredByAdmissionEventId || !target.player.isActive || target.club.isTutorial) unavailable();
-  if (invite.purpose === "CORRECTION") {
-    const source = invite.sourcePlayerId && invite.sourceMemberId ? await db.clubMember.findUnique({ where: { id: invite.sourceMemberId }, include: { player: true } }) : null;
-    if (!source || source.clubId !== invite.clubId || source.playerId !== invite.sourcePlayerId || source.retiredByAdmissionEventId
-      || source.player.ownerUserId !== invite.targetAccountUserId || target.archivedAt || target.player.ownerUserId) unavailable();
-  } else {
-    if (!invite.targetAccountUserId || target.player.ownerUserId !== invite.targetAccountUserId
-      || invite.restoreArchivedRoster !== !!target.archivedAt) unavailable();
-  }
-  return invite;
-}
+async function validAuthorizedInvitation(_db: Db, _id: string, _now: Date): Promise<never> { unavailable(); }
 export async function exchangeInvitationSecret(db: Db, id: string, secret: string, now = new Date()) {
   const existing = await db.playerInvitation.findUnique({ where: { id }, select: { purpose: true } });
   const invite = existing?.purpose === "CLAIM" ? await validInvitation(db, id, now) : await validAuthorizedInvitation(db, id, now);
@@ -167,20 +154,10 @@ export async function redeemPlayerInvitation(db: Db, id: string, handle: string 
     throw new PlayerInvitationError("Close your pending club request before claiming this invitation.", "PENDING_REQUEST_CONFLICT");
   const existingOwned = await getOwnedClubPlayer(db, { clubId: invite.clubId, userId });
   if (existingOwned && existingOwned.playerId !== invite.playerId) throw new PlayerInvitationError("You already own another Player in this club. Ask an admin to review your profiles.", "IDENTITY_CONFLICT");
-  const memberships = await db.clubMember.findMany({ where: { playerId: invite.playerId }, select: { clubId: true } });
-  const conflict = await db.clubMember.findFirst({ where: { clubId: { in: memberships.map(m => m.clubId) }, retiredByAdmissionEventId: null, playerId: { not: invite.playerId }, player: { ownerUserId: userId } } });
-  if (conflict) throw new PlayerInvitationError("You already own another Player in one of this profile's clubs. Ask an admin to review your profiles.", "IDENTITY_CONFLICT");
-  // The database guard is the final backstop; preflight globally so the HTTP
-  // path returns a typed conflict before attempting the guarded status update.
-  await assertNoOtherOwnedPlayer(db, userId, invite.playerId);
+  await assertLocalClaimAvailable(db, { clubId: invite.clubId, playerId: invite.playerId, userId });
   const consumed = await db.playerInvitation.updateMany({ where: { id, status: "ACTIVE", expiresAt: { gt: now } }, data: { status: "REDEEMED", redeemedByUserId: userId, redeemedAt: now } });
   if (consumed.count !== 1) unavailable();
-  await linkUnownedPlayer(db, invite.playerId, userId);
-  if (!access) await db.clubAccess.create({ data: { clubId: invite.clubId, userId, status: "ACTIVE", role: "MEMBER" } });
-  else if (releaseId) {
-    const restored = await db.clubAccess.updateMany({ where: { id: access.id, status: "REVOKED", revision: access.revision }, data: { status: "ACTIVE", role: "MEMBER" } });
-    if (restored.count !== 1) throw new PlayerInvitationError("Your club access changed. Ask the admin for a fresh invitation.", "ACCESS_REVIEW_REQUIRED");
-    await recordReleaseClaim(db, releaseId, invite.id, userId);
-  }
+  await claimClubPlayer(db, { clubId: invite.clubId, playerId: invite.playerId, userId, actorUserId: userId,
+    invitationId: invite.id, releaseEventId: releaseId, expectedOwnershipRevision: invite.targetOwnershipRevision, now });
   return result;
 }

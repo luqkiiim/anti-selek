@@ -86,6 +86,7 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         status?: unknown;
         representingClubId?: unknown;
         representingClubName?: unknown;
+        profileClubId?: unknown;
         preferredPool?: unknown;
       };
 
@@ -115,6 +116,10 @@ function parseClubPlayers(data: unknown): ClubUser[] {
 
       players.push({
         id: candidate.id,
+        profileClubId:
+          typeof candidate.profileClubId === "string"
+            ? candidate.profileClubId
+            : null,
         name: candidate.name,
         avatarUrl:
           typeof candidate.avatarUrl === "string" ? candidate.avatarUrl : null,
@@ -528,6 +533,11 @@ export function useSessionPlayerManagement({
 
   const addPlayerToSession = async (player: ClubUser) => {
     const rosterEntryId = `${player.id}:${player.representingClubId ?? ""}`;
+    const profileClubId =
+      player.profileClubId ??
+      player.representingClubId ??
+      sessionData?.clubId ??
+      null;
 
     setAddingPlayerId(rosterEntryId);
     try {
@@ -535,14 +545,15 @@ export function useSessionPlayerManagement({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: player.id,
+          playerId: player.id,
+          profileClubId,
           pool: sessionData?.poolsEnabled
             ? (rosterPlayerPools[player.id] ?? player.preferredPool)
             : SessionPool.A,
-          ...(sessionData?.collabFormat === SessionCollabFormat.INTERCLUB &&
-          player.representingClubId
-            ? { representingClubId: player.representingClubId }
-            : {}),
+          representingClubId:
+            sessionData?.collabFormat === SessionCollabFormat.INTERCLUB
+              ? profileClubId
+              : null,
         }),
       });
 

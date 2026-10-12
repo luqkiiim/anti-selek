@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { rateLimit } from "@/lib/rateLimit";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { ClubPlayerOwnershipError } from "@/lib/clubPlayerOwnership";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { activePlayerInvitation, continuationCookieName, exchangeInvitationSecret, invitationContext, managePlayerInvitation, PlayerInvitationError, redeemPlayerInvitation } from "@/lib/playerInvitations";
 import { getInvitationRecoveryStatus, invitationAvailability, submitInvitationRecovery } from "@/lib/playerInvitationRecovery";
@@ -36,6 +37,7 @@ const privacyHeaders = { "Cache-Control": "no-store, private", "Referrer-Policy"
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: privacyHeaders });
 function errorResponse(error: unknown) {
   if (error instanceof PlayerInvitationError) return json({ error: error.message, code: error.code }, error.statusCode);
+  if (error instanceof ClubPlayerOwnershipError) return json({ error: error.message, code: error.code }, error.statusCode);
   if (error instanceof ClubAdmissionError) return json({ error: error.message, code: "IDENTITY_CONFLICT" }, error.statusCode);
   // Never log errors/Prisma arguments, request bodies, URLs or cookie capabilities.
   console.error("Player invitation operation failed", { code: "INVITATION_INTERNAL_ERROR" });

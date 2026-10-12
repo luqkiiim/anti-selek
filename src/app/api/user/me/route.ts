@@ -3,32 +3,43 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { rateLimit } from "@/lib/rateLimit";
-import { getSessionAccountId, getQuickAccessPlayerId, normalizeNameLookupKey } from "@/lib/quickAccess";
+import { getSessionAccountId, getQuickAccessPlayerId } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { nonretiredPlayer } from "@/lib/playerIdentity";
+import { admissionTransaction } from "@/lib/clubAdmissions";
+import { AccountProfileSyncError, syncAccountProfile } from "@/lib/accountProfileSync";
 import { z } from "zod";
+import type { PlayerGender, MixedSide } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
-const accountSelect = { id: true, email: true, name: true, avatarKey: true, gender: true, isActive: true, selfNameChangedAt: true, selfGenderChangedAt: true, createdAt: true } as const;
-const ownedPlayerSelect = { id: true, name: true, avatarKey: true, gender: true, clubMemberships: { select: { clubId: true, club: { select: { name: true } } } } } as const;
+const accountSelect = { id: true, email: true, name: true, avatarKey: true, gender: true, mixedSideOverride: true, isActive: true, selfNameChangedAt: true, selfGenderChangedAt: true, createdAt: true } as const;
 function accountPayload<T extends { avatarKey: string | null; selfNameChangedAt: Date | null; selfGenderChangedAt: Date | null }>(user: T, isAdmin: boolean) {
   return { ...serializeAvatarEntity(user), isClaimed: true, isQuickAccess: false, isAdmin, canRenameName: user.selfNameChangedAt === null, canChangeGender: user.selfGenderChangedAt === null };
 }
 export async function GET(request: Request) {
   try {
     const limited = await rateLimit(request, "api:user:me:get", { limit: 30, windowMs: 60000 }); if (limited) return limited;
-    const session = await auth();
-    const userId = getSessionAccountId(session);
+    const session = await auth(); const userId = getSessionAccountId(session);
     if (!userId) {
-      const guestPlayerId = getQuickAccessPlayerId(session);
-      const player = guestPlayerId ? await prisma.player.findUnique({ where: { id: guestPlayerId }, select: { id: true, name: true, avatarKey: true, gender: true, ownerUserId: true, isActive: true } }) : null;
-      if (!player?.isActive || player.ownerUserId !== null) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-      return NextResponse.json({ user: { ...serializeAvatarEntity(player), id: session!.user.id, playerId: player.id, email: null, isClaimed: false, isQuickAccess: true, quickAccessClubId: session!.user.quickAccessClubId ?? null, quickAccessCommunityId: session!.user.quickAccessClubId ?? null, isAdmin: false, canRenameName: false, canChangeGender: false }, players: [] });
+      const playerId = getQuickAccessPlayerId(session); const clubId = session?.user.quickAccessClubId;
+      const membership = playerId && clubId ? await prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId } }, include: { player: true } }) : null;
+      if (!membership || membership.ownerUserId !== null || membership.archivedAt || membership.retiredByAdmissionEventId || !membership.player.isActive) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+      const { name, avatarKey, gender, isActive } = membership.player;
+      return NextResponse.json({ user: { ...serializeAvatarEntity({ name, avatarKey, gender, isActive }), id: session!.user.id, playerId, email: null, isClaimed: false, isQuickAccess: true, quickAccessClubId: clubId, quickAccessCommunityId: clubId, isAdmin: false, canRenameName: false, canChangeGender: false }, players: [], clubProfiles: [] });
     }
-    const [user, players] = await Promise.all([prisma.user.findUnique({ where: { id: userId }, select: accountSelect }), prisma.player.findMany({ where: { ownerUserId: userId, ...nonretiredPlayer }, select: ownedPlayerSelect })]);
+    const [user, memberships] = await Promise.all([
+      prisma.user.findUnique({ where: { id: userId }, select: accountSelect }),
+      prisma.clubMember.findMany({ where: { ownerUserId: userId, retiredByAdmissionEventId: null, player: nonretiredPlayer }, include: { player: true, club: { select: { name: true } } } }),
+    ]);
     if (!user?.isActive) return NextResponse.json({ error: "Account not found" }, { status: 404 });
-    return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), players: players.map(serializeAvatarEntity) });
+    const players = [...new Set(memberships.map(member => member.playerId))].map(id => {
+      const owned = memberships.filter(member => member.playerId === id);
+      const { id: playerId, name, avatarKey, gender } = owned[0].player;
+      return serializeAvatarEntity({ id: playerId, name, avatarKey, gender, clubMemberships: owned.map(member => ({ clubId: member.clubId, club: member.club })) });
+    });
+    const clubProfiles = memberships.map(member => serializeAvatarEntity({ memberId: member.id, clubId: member.clubId, clubName: member.club.name, playerId: member.playerId, name: member.player.name, avatarKey: member.player.avatarKey, status: member.status }));
+    return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), players, clubProfiles });
   } catch (error) { logError("Load account", error); return safeErrorResponse(); }
 }
 export async function PATCH(request: Request) {
@@ -36,22 +47,14 @@ export async function PATCH(request: Request) {
     const limited = await rateLimit(request, "api:user:me:patch", { limit: 15, windowMs: 60000 }); if (limited) return limited;
     const session = await auth(); const userId = getSessionAccountId(session);
     if (!userId) return NextResponse.json({ error: "Sign in with an account to edit account settings" }, { status: 403 });
-    const parsed = z.object({ name: z.string().trim().min(1).max(100).optional(), gender: z.enum(["MALE", "FEMALE"]).optional() }).strict().safeParse(await request.json().catch(() => null));
-    if (!parsed.success || (!parsed.data.name && !parsed.data.gender)) return NextResponse.json({ error: "Supply a valid name or gender" }, { status: 400 });
-    if (parsed.data.name && !normalizeNameLookupKey(parsed.data.name)) return NextResponse.json({ error: "Name must include letters or numbers" }, { status: 400 });
-    const current = await prisma.user.findUnique({ where: { id: userId }, select: accountSelect });
-    if (!current?.isActive) return NextResponse.json({ error: "Account not found" }, { status: 404 });
-    const nameChanged = parsed.data.name !== undefined && parsed.data.name !== current.name;
-    const genderChanged = parsed.data.gender !== undefined && parsed.data.gender !== current.gender;
-    if ((nameChanged && current.selfNameChangedAt) || (genderChanged && current.selfGenderChangedAt)) return NextResponse.json({ error: "This account field can only be changed once" }, { status: 409 });
-    const user = nameChanged || genderChanged ? await prisma.user.update({ where: { id: userId, ...(nameChanged ? { selfNameChangedAt: null } : {}), ...(genderChanged ? { selfGenderChangedAt: null } : {}) }, data: {
-      ...(nameChanged ? { name: parsed.data.name, selfNameChangedAt: new Date() } : {}), ...(genderChanged ? { gender: parsed.data.gender, selfGenderChangedAt: new Date() } : {}),
-    }, select: accountSelect }) : current;
-    // Account defaults never overwrite the sporting identity of an owned Player.
+    const parsed = z.object({ name: z.string().trim().min(1).max(100).optional(), gender: z.enum(["MALE", "FEMALE"]).optional(), mixedSideOverride: z.enum(["UPPER", "LOWER"]).nullable().optional() }).strict().safeParse(await request.json().catch(() => null));
+    if (!parsed.success || !Object.keys(parsed.data).length) return NextResponse.json({ error: "Supply valid account settings" }, { status: 400 });
+    const result = await admissionTransaction(prisma, tx => syncAccountProfile(tx, { userId, changes: { ...parsed.data, gender: parsed.data.gender as PlayerGender | undefined, mixedSideOverride: parsed.data.mixedSideOverride as MixedSide | null | undefined } }));
     logAuditEvent({ action: "user.update_account", actor: { userId }, outcome: "success", request, target: { id: userId, type: "account" } });
-    return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin) });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: accountSelect });
+    return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), synchronizedPlayerIds: result.playerIds });
   } catch (error) {
-    if ((error as { code?: string }).code === "P2025") return NextResponse.json({ error: "This account field can only be changed once" }, { status: 409 });
+    if (error instanceof AccountProfileSyncError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
     logError("Edit account", error); return safeErrorResponse();
   }
 }

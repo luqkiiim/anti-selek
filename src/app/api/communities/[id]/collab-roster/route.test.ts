@@ -74,6 +74,9 @@ describe("collab roster route", () => {
     mocks.clubMemberFindMany.mockResolvedValue([
       {
         playerId: "player-shared",
+        ownerUserId: null,
+        archivedAt: null,
+        retiredByAdmissionEventId: null,
         elo: 1200,
         status: ClubPlayerStatus.CORE,
         createdAt,
@@ -91,6 +94,9 @@ describe("collab roster route", () => {
       },
       {
         playerId: "player-shared",
+        ownerUserId: null,
+        archivedAt: null,
+        retiredByAdmissionEventId: null,
         elo: 1310,
         status: ClubPlayerStatus.OCCASIONAL,
         createdAt,
@@ -108,13 +114,18 @@ describe("collab roster route", () => {
       },
       {
         playerId: "player-duplicate-name",
+        ownerUserId: "account-duplicate",
+        archivedAt: null,
+        retiredByAdmissionEventId: null,
         elo: 980,
         status: ClubPlayerStatus.CORE,
         createdAt,
         club: { id: "community-2", name: "Partner Club" },
         player: {
           id: "player-duplicate-name",
-          ownerUserId: "account-duplicate",
+          // Player.ownerUserId is frozen provenance and does not establish
+          // who owns this profile in this club.
+          ownerUserId: null,
           name: "Alex Lee",
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.OPEN,
@@ -183,5 +194,14 @@ describe("collab roster route", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.clubMemberFindMany).toHaveBeenCalled();
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          clubId: { in: ["community-1", "community-2"] },
+          archivedAt: null,
+          retiredByAdmissionEventId: null,
+        },
+      })
+    );
   });
 });

@@ -1,3 +1,4 @@
+import { assertSelectedProfileLedger } from "@/lib/matchCompletion";
 import type { Prisma } from "@prisma/client";
 
 export interface CompletedMatchEloChange {
@@ -89,6 +90,7 @@ export async function reverseSessionEloChanges(
     clubId: string | null;
   }
 ): Promise<number> {
+  const policy = await tx.session.findUnique({ where: { id: sessionId }, select: { ratingPolicyVersion: true } });
   const sessionPlayers = await tx.sessionPlayer.findMany({
     where: { sessionId },
     select: { playerId: true, isGuest: true },
@@ -110,8 +112,11 @@ export async function reverseSessionEloChanges(
   });
   const ledgerAdjustments = await tx.matchEloAdjustment.findMany({
     where: { matchId: { in: completedMatches.map((match) => match.id) } },
-    select: { clubId: true, playerId: true, delta: true },
+    select: { matchId: true, clubId: true, playerId: true, delta: true },
   });
+  if (policy?.ratingPolicyVersion === 2) {
+    for (const match of completedMatches) await assertSelectedProfileLedger(tx, sessionId, [match.team1Player1Id, match.team1Player2Id, match.team2Player1Id, match.team2Player2Id], ledgerAdjustments.filter(a => a.matchId === match.id));
+  }
   const reversedPlayerKeys = new Set<string>();
 
   if (ledgerAdjustments.length > 0) {
@@ -138,7 +143,7 @@ export async function reverseSessionEloChanges(
       });
       reversedPlayerKeys.add(`${item.clubId}:${item.playerId}`);
     }
-  } else {
+  } else if (policy?.ratingPolicyVersion !== 2) {
     const eloReverseDeltaByUserId = computeRollbackEloDeltas(
       completedMatches,
       isGuestByUserId

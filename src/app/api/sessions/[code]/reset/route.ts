@@ -1,5 +1,8 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
@@ -69,7 +72,8 @@ export async function POST(
     }
 
     const resetAt = new Date();
-    const updatedSession = await prisma.$transaction(async (tx) => {
+    const updatedSession = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: targetSession, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       if (!targetSession.isTest) {
         await reverseSessionEloChanges(tx, {
           sessionId: targetSession.id,
@@ -191,7 +195,8 @@ export async function POST(
       });
     });
 
-    const players =
+    const legacyPlayers =
+      updatedSession.ratingPolicyVersion === 2 ? updatedSession.players :
       updatedSession.clubId && updatedSession.players.length > 0
         ? withClubElo(
             updatedSession.players,
@@ -201,6 +206,7 @@ export async function POST(
             )
           )
         : updatedSession.players;
+    const players = await withSessionProfileRatings(prisma, updatedSession, legacyPlayers);
     const serializedPlayers = players.map((player) => ({
       ...player,
       player: serializeAvatarEntity(player.player),
@@ -218,6 +224,7 @@ export async function POST(
         : null,
     }));
 
+
     return sportingJson({
       ...updatedSession,
       courts,
@@ -226,6 +233,8 @@ export async function POST(
       queuedMatch: null,
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Reset test session error", error);
     return safeErrorResponse();
   }

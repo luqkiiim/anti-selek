@@ -6,6 +6,8 @@ import { buildAvatarObjectKey, getAvatarFileSignatureValidationError, getAvatarU
 import { cleanupSupersededAvatar, rollbackUploadedAvatar, uploadAvatarObject } from "@/lib/avatarStorage";
 import { rateLimit } from "@/lib/rateLimit";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { admissionTransaction } from "@/lib/clubAdmissions";
+import { AccountProfileSyncError, syncAccountProfile } from "@/lib/accountProfileSync";
 
 async function target(request: Request) {
   const limited = await rateLimit(request, "api:account:avatar", { limit: 10, windowMs: 60000 });
@@ -28,15 +30,13 @@ export async function POST(request: Request) {
     const error = getAvatarUploadValidationError({ mimeType: file.type, size: file.size }) ?? getAvatarFileSignatureValidationError({ mimeType: file.type, bytes: new Uint8Array(await file.slice(0, 16).arrayBuffer()) });
     if (error) return NextResponse.json({ error }, { status: 400 });
     uploadedAvatarKey = await uploadAvatarObject({ avatarPathname: buildAvatarObjectKey({ userId: `accounts/${user.id}`, mimeType: file.type as "image/jpeg" | "image/png" | "image/webp" }), body: file, contentType: file.type });
-    const updated = await prisma.user.updateMany({ where: { id: user.id, avatarKey: user.avatarKey }, data: { avatarKey: uploadedAvatarKey } });
-    if (!updated.count) {
-      await rollbackUploadedAvatar({ uploadedAvatarKey });
-      return NextResponse.json({ error: "Your photo changed. Refresh and try again" }, { status: 409 });
-    }
-    await cleanupSupersededAvatar({ previousAvatarKey: user.avatarKey, nextAvatarKey: uploadedAvatarKey });
-    return NextResponse.json({ avatarUrl: resolveAvatarUrl(uploadedAvatarKey) });
+    const key = uploadedAvatarKey;
+    const result = await admissionTransaction(prisma, tx => syncAccountProfile(tx, { userId: user.id, changes: { avatarKey: key }, expectedAvatarKey: user.avatarKey }));
+    for (const previousAvatarKey of result.previousAvatarKeys) await cleanupSupersededAvatar({ previousAvatarKey, nextAvatarKey: key });
+    return NextResponse.json({ avatarUrl: resolveAvatarUrl(key) });
   } catch (error) {
     await rollbackUploadedAvatar({ uploadedAvatarKey });
+    if (error instanceof AccountProfileSyncError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
     logError("Account photo upload", error); return safeErrorResponse();
   }
 }
@@ -45,9 +45,11 @@ export async function DELETE(request: Request) {
   try {
     const access = await target(request); if (access.response) return access.response;
     const user = access.user!;
-    const updated = await prisma.user.updateMany({ where: { id: user.id, avatarKey: user.avatarKey }, data: { avatarKey: null } });
-    if (!updated.count) return NextResponse.json({ error: "Your photo changed. Refresh and try again" }, { status: 409 });
-    await cleanupSupersededAvatar({ previousAvatarKey: user.avatarKey, nextAvatarKey: null });
+    const result = await admissionTransaction(prisma, tx => syncAccountProfile(tx, { userId: user.id, changes: { avatarKey: null }, expectedAvatarKey: user.avatarKey }));
+    for (const previousAvatarKey of result.previousAvatarKeys) await cleanupSupersededAvatar({ previousAvatarKey, nextAvatarKey: null });
     return NextResponse.json({ avatarUrl: null });
-  } catch (error) { logError("Account photo removal", error); return safeErrorResponse(); }
+  } catch (error) {
+    if (error instanceof AccountProfileSyncError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    logError("Account photo removal", error); return safeErrorResponse();
+  }
 }

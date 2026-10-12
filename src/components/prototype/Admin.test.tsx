@@ -47,7 +47,7 @@ vi.mock("@phosphor-icons/react", () => {
   };
 });
 
-function makeRequest(ownedPlayers: Array<{ id: string; name: string }> = []) {
+function makeRequest() {
   return {
     id: "request-1",
     clubId: "club-1",
@@ -68,7 +68,6 @@ function makeRequest(ownedPlayers: Array<{ id: string; name: string }> = []) {
       elo: 1200,
       matchesPlayed: 8,
     },
-    ownedPlayers,
   };
 }
 
@@ -88,8 +87,8 @@ describe("Admin admission review", () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mocks.resourceData = {
       allowJoinRequests: true,
-      requests: [{ ...makeRequest(), conflict: "Another account already owns this Player." }],
-      candidates: [],
+      requests: [makeRequest()],
+      candidates: [{ id: "history-player", name: "Ari Old Profile", elo: 1200, matchesPlayed: 8 }],
     } satisfies AdminAdmissionList;
     mocks.actionRun.mockReset().mockImplementation(async (action: () => Promise<unknown>, success?: () => unknown) => {
       await action();
@@ -107,10 +106,10 @@ describe("Admin admission review", () => {
     container.remove();
   });
 
-  async function render() {
+  async function render({ pageSnapshot = snapshot, openRequests = true }: { pageSnapshot?: Snapshot; openRequests?: boolean } = {}) {
     await act(async () => root.render(
       <Admin
-        snapshot={snapshot}
+        snapshot={pageSnapshot}
         refresh={async () => undefined}
         onBack={() => undefined}
         onNavigate={() => undefined}
@@ -118,36 +117,104 @@ describe("Admin admission review", () => {
         onOpenProfile={() => undefined}
       />
     ));
-    await act(async () => {
-      Array.from(container.querySelectorAll("[role=tab]")).find((tab) => tab.textContent?.includes("Requests"))?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    if (openRequests) {
+      await act(async () => {
+        Array.from(container.querySelectorAll("[role=tab]")).find((tab) => tab.textContent?.includes("Requests"))?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+    }
   }
 
-  it("lets admins approve a conflicting existing Player claim as a new Player when the account owns none", async () => {
+  it("lets admins approve an ordinary local profile claim by its exact Player ID", async () => {
     await render();
-    const approveAsNew = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Approve as new Player");
+    const approve = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Approve Ari Old Profile");
 
-    expect(approveAsNew).toBeTruthy();
-    expect((approveAsNew as HTMLButtonElement).disabled).toBe(false);
-    await act(async () => approveAsNew?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(approve).toBeTruthy();
+    expect((approve as HTMLButtonElement).disabled).toBe(false);
+    await act(async () => approve?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
     expect(mocks.api).toHaveBeenCalledWith(
       "/api/clubs/club-1/join-requests/request-1",
       "PATCH",
-      { action: "APPROVE", asNew: true, revision: 3 }
+      { action: "APPROVE", playerId: "history-player", revision: 3 }
     );
   });
 
-  it("disables approval as new when the requester already owns a Player", async () => {
+  it("keeps local profile review available without showing global identity review controls", async () => {
     mocks.resourceData = {
       allowJoinRequests: true,
-      requests: [makeRequest([{ id: "owned-player", name: "Ari Current Profile" }])],
-      candidates: [],
+      requests: [makeRequest()],
+      candidates: [
+        { id: "history-player", name: "Ari Old Profile", elo: 1200, matchesPlayed: 8 },
+        { id: "local-placeholder", name: "Ari Local Placeholder", elo: 990, matchesPlayed: 0 },
+      ],
     } satisfies AdminAdmissionList;
     await render();
-    const approveAsNew = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Approve as new Player");
+    expect(container.textContent).not.toContain("owned by this account");
+    expect(container.textContent).not.toContain("identity review");
+    await act(async () => {
+      const change = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("Choose another Player"));
+      change?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const picker = container.querySelector("select[aria-label='Player for Ari Account']") as HTMLSelectElement;
+    expect(Array.from(picker.options).map((option) => option.textContent)).toEqual([
+      "Select a Player",
+      "Ari Local Placeholder · 990 rating",
+      "Ari Old Profile · 1200 rating",
+    ]);
+    await act(async () => {
+      picker.value = "local-placeholder";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const approve = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Approve Ari Local Placeholder");
 
-    expect(approveAsNew).toBeTruthy();
-    expect((approveAsNew as HTMLButtonElement).disabled).toBe(true);
+    expect(approve).toBeTruthy();
+    await act(async () => approve?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(mocks.api).toHaveBeenCalledWith(
+      "/api/clubs/club-1/join-requests/request-1",
+      "PATCH",
+      { action: "APPROVE", playerId: "local-placeholder", revision: 3 }
+    );
+  });
+
+  it("removes a member from this club with automatic local disconnect and no optional checkbox", async () => {
+    const pageSnapshot = {
+      ...snapshot,
+      clubMembers: [{
+        id: "local-player",
+        name: "Alex Local",
+        avatarUrl: null,
+        status: "CORE",
+        preferredPool: "B",
+        gender: "MALE",
+        partnerPreference: "OPEN",
+        mixedSideOverride: null,
+        elo: 1100,
+        wins: 0,
+        losses: 0,
+        isClaimed: true,
+        isOwner: false,
+        role: "MEMBER",
+      }],
+    } as unknown as Snapshot;
+    await render({ pageSnapshot, openRequests: false });
+
+    await act(async () => {
+      const edit = Array.from(container.querySelectorAll("button")).find((button) => button.getAttribute("aria-label") === "Edit Alex Local");
+      edit?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => {
+      Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Remove player")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("archives the local membership and disconnects their account from this club");
+    expect(container.textContent).toContain("Player history, rating, and memberships in other clubs stay intact");
+    expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+    await act(async () => {
+      Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Remove player")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(mocks.api).toHaveBeenCalledWith(
+      "/api/clubs/club-1/members/local-player",
+      "DELETE"
+    );
   });
 });

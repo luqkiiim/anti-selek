@@ -47,3 +47,14 @@ export function getOwnedMatchParticipant(participants: Array<{ id: string; owner
   const owned = participants.filter(player => player.ownerUserId === accountUserId);
   return owned.length === 1 ? owned[0] : null;
 }
+
+/** Public participant labels come from current exact session ownership. */
+export function withMatchLocalClaimLabels<T>(match: T, owners: Map<string, string | null>): T {
+  if (!match || typeof match !== "object") return match;
+  const result: Record<string, unknown> = { ...(match as Record<string, unknown>) };
+  for (const key of ["team1Player1", "team1Player2", "team2Player1", "team2Player2"]) {
+    const player = result[key] as { id?: string } | undefined;
+    if (player?.id) result[key] = { ...player, isClaimed: !!owners.get(player.id), email: null };
+  }
+  return result as T;
+}

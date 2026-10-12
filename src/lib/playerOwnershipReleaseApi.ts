@@ -6,12 +6,13 @@ import { rateLimit } from "./rateLimit";
 import { isQuickAccessSession } from "./quickAccess";
 import { admissionTransaction, ClubAdmissionError } from "./clubAdmissions";
 import { disconnectRemovedPlayer, PlayerReleaseError, removedOwnedPlayers } from "./playerOwnershipRelease";
+import { ClubPlayerOwnershipError } from "./clubPlayerOwnership";
 const headers = { "Cache-Control": "no-store, private", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" };
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers });
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 function failure(error: unknown) {
   if (error instanceof PlayerReleaseError) return json({ error: error.message, code: error.code }, error.statusCode);
-  if (error instanceof ClubAdmissionError) return json({ error: error.message }, error.statusCode);
+  if (error instanceof ClubAdmissionError || error instanceof ClubPlayerOwnershipError) return json({ error: error.message }, error.statusCode);
   console.error("Player disconnect failed", { code: "PLAYER_RELEASE_INTERNAL_ERROR" });
   return json({ error: "Unable to disconnect this account. Refresh and try again." }, 500);
 }

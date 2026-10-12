@@ -20,6 +20,11 @@ describe("admin Player list", () => {
     mocks.playerFindMany.mockResolvedValue([]);
   });
 
+  it("uses current local claims rather than frozen provenance", async () => {
+    mocks.playerFindMany.mockResolvedValue([{ id: "claimed", name: "A", avatarKey: null, clubMemberships: [{ ownerUserId: "current" }] }, { id: "released", name: "B", avatarKey: null, clubMemberships: [] }]);
+    const response = await GET(new Request("http://localhost/api/admin/players"));
+    expect(await response.json()).toMatchObject([{ id: "claimed", isClaimed: true }, { id: "released", isClaimed: false }]);
+  });
   it("keeps retired sporting identities out of the editable management list", async () => {
     const response = await GET(new Request("http://localhost/api/admin/players"));
     expect(response.status).toBe(200);

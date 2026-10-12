@@ -1,9 +1,26 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
-import { toOfflineIdentityLinkResponse } from "@/lib/offlineIdentities";
+import {
+  isOfflineIdentityPlaceholder,
+  toOfflineIdentityLinkResponse,
+} from "@/lib/offlineIdentities";
 
 describe("offline identity response contracts", () => {
+  it("uses local ClubMember ownership rather than frozen Player provenance", () => {
+    const legacyPlaceholder = {
+      ownerUserId: null,
+      player: { ownerUserId: "former-account" },
+    };
+    const locallyOwned = {
+      ownerUserId: "current-account",
+      player: { ownerUserId: null },
+    };
+
+    expect(isOfflineIdentityPlaceholder(legacyPlaceholder)).toBe(true);
+    expect(isOfflineIdentityPlaceholder(locallyOwned)).toBe(false);
+  });
+
   it("returns canonical source/target club fields with legacy aliases", () => {
     const response = toOfflineIdentityLinkResponse({
       id: "request-1",

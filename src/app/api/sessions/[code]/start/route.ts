@@ -1,5 +1,8 @@
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { assertSessionMutationActor, assertSessionProfileContextsUnambiguous } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
@@ -126,7 +129,14 @@ export async function POST(
     }
 
     const startedAt = new Date();
-    const updated = await prisma.session.update({
+    const updated = await admissionTransaction(prisma, async tx => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      const fresh = await tx.session.findUnique({ where: { id: sessionData.id }, select: { status: true } });
+      if (fresh?.status !== SessionStatus.WAITING) throw new IdentityConflictError("Tournament already started");
+      const links = await getSessionClubLinks(tx, sessionData);
+      if (links.some(link => link.status !== SessionClubStatus.ACCEPTED)) throw new IdentityConflictError("Partner club must approve this collab before it can start");
+      await assertSessionProfileContextsUnambiguous(tx, sessionData);
+      return tx.session.update({
       where: { code },
       data: {
         status: SessionStatus.ACTIVE,
@@ -151,9 +161,12 @@ export async function POST(
       },
     });
 
+    });
+
     const linkedClubIds = clubLinks.map((link) => link.clubId);
     const playerIds = updated.players.map((p) => p.playerId);
-    const players =
+    const legacyPlayers =
+      updated.ratingPolicyVersion === 2 ? updated.players :
       linkedClubIds.length > 1 && updated.players.length > 0
         ? withPlayerClubBadges(
             updated.players,
@@ -166,10 +179,12 @@ export async function POST(
               await getClubEloByUserId(updated.clubId, playerIds)
             )
           : updated.players;
+    const players = await withSessionProfileRatings(prisma, updated, legacyPlayers);
     const serializedPlayers = players.map((player) => ({
       ...player,
       player: serializeAvatarEntity(player.player),
     }));
+
 
     return sportingJson({ ...updated, players: serializedPlayers });
   } catch (error) {
@@ -180,6 +195,7 @@ export async function POST(
       );
     }
 
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Start session error", error);
     return safeErrorResponse();
   }

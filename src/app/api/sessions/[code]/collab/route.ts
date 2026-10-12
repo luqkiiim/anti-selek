@@ -1,5 +1,6 @@
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
@@ -100,7 +101,12 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code:collab");
     }
 
-    const updated = await prisma.sessionClub.update({
+    const updated = await admissionTransaction(prisma, async tx => {
+      const freshContext = await getAccountClubContext(tx, { userId: session.user.id, clubId: partnerLink.clubId, isGlobalAdmin: !!session.user.isAdmin });
+      if (!freshContext.canAdmin) throw new IdentityConflictError("Your partner club access changed. Refresh before reviewing this tournament.");
+      const freshLink = await tx.sessionClub.findUnique({ where: { id: partnerLink.id }, select: { status: true } });
+      if (freshLink?.status !== SessionClubStatus.PENDING) throw new IdentityConflictError("This collaboration invitation was already reviewed.");
+      return tx.sessionClub.update({
       where: { id: partnerLink.id },
       data: {
         status,
@@ -112,6 +118,7 @@ export async function PATCH(
       },
     });
 
+    });
     return sportingJson(withLegacyClubAliases({
       id: updated.id,
       clubId: updated.clubId,
@@ -121,6 +128,7 @@ export async function PATCH(
       reviewedAt: updated.reviewedAt,
     }));
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Review collab session error", error);
     return safeErrorResponse();
   }

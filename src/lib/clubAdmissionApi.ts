@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { joinRequestAccess } from "@/lib/clubJoinRequests";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
-import { getOwnedClubPlayer, nonretiredPlayer } from "@/lib/playerIdentity";
+import { getOwnedClubPlayer } from "@/lib/playerIdentity";
+import { ClubPlayerOwnershipError } from "@/lib/clubPlayerOwnership";
 import { admissionInclude, admissionTransaction, ClubAdmissionError, reviewClubAdmission, submitClubAdmission } from "@/lib/clubAdmissions";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { normalizeClaimName } from "@/lib/clubClaimRules";
@@ -11,7 +12,7 @@ import { clubJoinProofState, ClubJoinProofRequiredError, ClubJoinProofUnavailabl
 import { z } from "zod";
 
 const submitSchema = z.object({
-  clubId: z.string().min(1).max(100), kind: z.enum(["EXISTING_PLAYER", "NEW_PLAYER", "OWNED_PLAYER"]),
+  clubId: z.string().min(1).max(100), kind: z.enum(["EXISTING_PLAYER", "NEW_PLAYER"]),
   requestedPlayerId: z.string().min(1).max(100).nullable().optional(), proposedPlayerName: z.string().trim().min(1).max(100).nullable().optional(),
   proposedGender: z.enum(["MALE", "FEMALE"]).nullable().optional(), note: z.string().max(1000).nullable().optional(), idempotencyKey: z.string().min(1).max(100).optional(),
 }).strict().refine(input => input.kind === "NEW_PLAYER" || !!input.requestedPlayerId, { message: "Select a Player" });
@@ -24,7 +25,7 @@ export function admissionError(error: unknown) {
   if (error instanceof ClubJoinProofRequiredError) {
     return NextResponse.json({ error: error.message, code: error.code }, { status: error.statusCode, headers: { "Cache-Control": "no-store, private" } });
   }
-  if (error instanceof ClubAdmissionError) {
+  if (error instanceof ClubAdmissionError || error instanceof ClubPlayerOwnershipError) {
     const code = "code" in error ? error.code : undefined;
     return NextResponse.json({ error: error.message, ...(typeof code === "string" ? { code } : {}) }, { status: error.statusCode, headers: { "Cache-Control": "no-store, private" } });
   }
@@ -137,14 +138,6 @@ export async function admissionDiscoveryApi(request: Request, onlyClubId?: strin
       passwordProtected: club.isPasswordProtected,
       passwordHash: club.passwordHash,
     });
-    // NEW_PLAYER approval is blocked by any nonretired identity owned by this
-    // account, even if that Player is inactive and therefore not selectable.
-    // Return only a boolean so the UI can route the user to admin review without
-    // disclosing an inactive profile as a reusable choice.
-    const identityReviewRequired = !!await prisma.player.findFirst({
-      where: { ownerUserId: access.userId, isActive: false, ...nonretiredPlayer },
-      select: { id: true },
-    });
     const requests = passwordProof.status === "PASSWORD_REQUIRED"
       ? await prisma.clubAdmissionRequest.findMany({
           where: { requesterUserId: access.userId, clubId },
@@ -157,6 +150,7 @@ export async function admissionDiscoveryApi(request: Request, onlyClubId?: strin
       prisma.clubAccess.findUnique({ where: { clubId_userId: { clubId, userId: access.userId } } }),
       getOwnedClubPlayer(prisma, { clubId, userId: access.userId }),
     ]);
+    const identityReviewRequired = !!membership && (!!membership.archivedAt || !membership.player.isActive);
     // Retained ownership still blocks duplicate identities, but an archived roster is not active admission.
     const activeMembership = membership && !membership.archivedAt && membership.player.isActive ? { playerId: membership.playerId } : null;
     const clubSummary = { id: club.id, name: club.name, allowJoinRequests: club.allowJoinRequests };
@@ -167,17 +161,13 @@ export async function admissionDiscoveryApi(request: Request, onlyClubId?: strin
     const adminAccess = await getClubAdminAccess(prisma, { clubId, userId: access.userId, isGlobalAdmin: access.isGlobalAdmin });
     if (!club.allowJoinRequests && !adminAccess?.canAdmin && clubAccess?.status !== "ACTIVE") {
       // The requester can still inspect their request status after the club disables admissions.
-      const ownedPlayers = await prisma.player.findMany({ where: { ownerUserId: access.userId, isActive: true }, select: { id: true, name: true }, take: 50 });
-      return privateJson({ club: { ...clubSummary, allowJoinRequests: false }, passwordProof, identityReviewRequired, players: [], ownedPlayers, requests, membership: activeMembership, access: accountAccess });
+      return privateJson({ club: { ...clubSummary, allowJoinRequests: false }, passwordProof, identityReviewRequired, players: [], ownedPlayers: [], requests, membership: activeMembership, access: accountAccess });
     }
     const q = (url.searchParams.get("q") ?? "").trim();
     if (q.length > 64) throw new ClubAdmissionError("Search must be 64 characters or fewer");
-    const [ownedPlayers, members] = await Promise.all([
-      prisma.player.findMany({ where: { ownerUserId: access.userId, isActive: true }, select: { id: true, name: true }, take: 50 }),
-      prisma.clubMember.findMany({ where: { clubId, archivedAt: null, player: { ownerUserId: null, isActive: true, ...(q ? { name: { contains: q } } : {}) } }, include: { player: true }, orderBy: { player: { name: "asc" } }, take: 30 }),
-    ]);
+    const members = await prisma.clubMember.findMany({ where: { clubId, archivedAt: null, retiredByAdmissionEventId: null, ownerUserId: null, player: { isActive: true, ...(q ? { name: { contains: q } } : {}), clubMemberships: { none: { retiredByAdmissionEventId: null, ownerUserId: { not: null, notIn: [access.userId] } } } } }, include: { player: true }, orderBy: { player: { name: "asc" } }, take: 30 });
     const players = await Promise.all(members.map(m => playerSummary(clubId, m.player, m.elo)));
-    return privateJson({ club: clubSummary, passwordProof, identityReviewRequired, players, ownedPlayers, requests, membership: activeMembership, access: accountAccess });
+    return privateJson({ club: clubSummary, passwordProof, identityReviewRequired, players, ownedPlayers: [], requests, membership: activeMembership, access: accountAccess });
   } catch (error) { return admissionError(error); }
 }
 
@@ -187,25 +177,17 @@ export async function adminAdmissionListApi(request: Request, { params }: { para
     const [club, entries, members] = await Promise.all([
       prisma.club.findUnique({ where: { id: clubId }, select: { allowJoinRequests: true } }),
       prisma.clubAdmissionRequest.findMany({ where: { clubId, status: "PENDING" }, include: { ...admissionInclude, events: { orderBy: { revision: "asc" } } }, orderBy: { createdAt: "asc" } }),
-      prisma.clubMember.findMany({ where: { clubId, archivedAt: null, player: { ownerUserId: null, isActive: true } }, include: { player: true }, take: 100 }),
+      prisma.clubMember.findMany({ where: { clubId, archivedAt: null, retiredByAdmissionEventId: null, ownerUserId: null, player: { isActive: true } }, include: { player: true }, take: 100 }),
     ]);
-    // The club page can display global administrators as ADMIN. Recovery controls
-    // must instead reflect current local authority and active account status.
-    const [reviewer, reviewerAccess] = entries.some(entry => entry.originInvitationId) ? await Promise.all([
-      prisma.user.findUnique({ where: { id: access.userId }, select: { isActive: true } }),
-      prisma.clubAccess.findUnique({ where: { clubId_userId: { clubId, userId: access.userId } } }),
-    ]) : [null, null];
-    const recoveryReviewAuthorized = !!reviewer?.isActive && reviewerAccess?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(reviewerAccess.role);
     const requests = await Promise.all(entries.map(async entry => {
       const member = entry.requestedPlayerId ? await prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId: entry.requestedPlayerId } } }) : null;
       const summary = entry.requestedPlayer && member ? await playerSummary(clubId, entry.requestedPlayer, member.elo) : null;
-      const owned = await prisma.player.findMany({ where: { ownerUserId: entry.requesterUserId, ...nonretiredPlayer }, select: { id: true, name: true, clubMemberships: { select: { clubId: true } } } });
-      const targetClubs = entry.requestedPlayerId ? await prisma.clubMember.findMany({ where: { playerId: entry.requestedPlayerId }, select: { clubId: true } }) : [];
-      const ownedConflict = owned.find(p => p.id !== entry.requestedPlayerId && p.clubMemberships.some(m => m.clubId === clubId || targetClubs.some(t => t.clubId === m.clubId)));
-      const conflict = entry.requestedPlayer?.ownerUserId && entry.requestedPlayer.ownerUserId !== entry.requesterUserId ? "Player already belongs to another account" : ownedConflict ? "Account already owns another Player in one of this Player's clubs. Merging is unavailable." : null;
+      const owned = await prisma.clubMember.findMany({ where: { clubId, ownerUserId: entry.requesterUserId, retiredByAdmissionEventId: null }, include: { player: { select: { id: true, name: true } } } });
+      const ownedConflict = owned.find(m => m.playerId !== entry.requestedPlayerId);
+      const sharedConflict = entry.requestedPlayerId ? await prisma.clubMember.findFirst({ where: { playerId: entry.requestedPlayerId, retiredByAdmissionEventId: null, ownerUserId: { not: null, notIn: [entry.requesterUserId] } }, select: { id: true } }) : null;
+      const conflict = (member?.ownerUserId && member.ownerUserId !== entry.requesterUserId) || sharedConflict ? "Player already belongs to another account" : ownedConflict ? "Remove and disconnect the account's other profile in this club first." : entry.kind === "OWNED_PLAYER" || entry.originInvitationId ? "This old request is no longer supported. Send a normal claim invitation or request a profile in this club." : null;
       const proposedName = entry.proposedPlayerName ?? entry.requester.name;
-      const recovery = entry.originInvitationId ? await (await import("./playerInvitationRecovery")).recoveryEligibility(prisma, entry) : undefined;
-      return { ...entry, ...(recovery ? { recovery, recoveryReviewAuthorized } : {}), name: entry.requester.name, requesterName: entry.requester.name, requesterEmail: entry.requester.email, targetName: entry.requestedPlayer?.name ?? null, history: summary, currentRating: member?.elo ?? null, conflict, ownedPlayers: owned.map(p => ({ id: p.id, name: p.name })), possibleDuplicates: members.filter(m => normalizeClaimName(m.player.name) === normalizeClaimName(proposedName)).map(m => ({ id: m.playerId, name: m.player.name, elo: m.elo })) };
+      return { ...entry, recoveryReviewAuthorized: false, name: entry.requester.name, requesterName: entry.requester.name, requesterEmail: entry.requester.email, targetName: entry.requestedPlayer?.name ?? null, history: summary, currentRating: member?.elo ?? null, conflict, ownedPlayers: [], possibleDuplicates: members.filter(m => normalizeClaimName(m.player.name) === normalizeClaimName(proposedName)).map(m => ({ id: m.playerId, name: m.player.name, elo: m.elo })) };
     }));
     return NextResponse.json({ allowJoinRequests: club?.allowJoinRequests ?? false, requests, candidates: members.map(m => ({ id: m.playerId, name: m.player.name, elo: m.elo })) }, { headers: { "Cache-Control": "no-store, private" } });
   } catch (error) { return admissionError(error); }

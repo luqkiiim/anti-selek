@@ -1,938 +1,107 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  MixedSide,
-  PartnerPreference,
-  PlayerGender,
-  SessionClubRole,
-  SessionClubStatus,
-  SessionCollabFormat,
-  SessionMode,
-  SessionPool,
-  SessionStatus,
-} from "@/types/enums";
-
-const mocks = vi.hoisted(() => ({
-  auth: vi.fn(),
-  invalidTargetResponse: vi.fn(),
-  rateLimit: vi.fn(),
-  checkInvalidTargetRateLimit: vi.fn(),
-  sessionFindUnique: vi.fn(),
-  sessionUpdate: vi.fn(),
-  sessionClubFindMany: vi.fn(),
-  sessionPlayerFindUnique: vi.fn(),
-  clubMemberFindUnique: vi.fn(),
-  clubMemberFindMany: vi.fn(),
-  clubAccessFindUnique: vi.fn(),
-  offlineIdentityMemberFindMany: vi.fn(),
-  playerFindMany: vi.fn(),
-  playerFindFirst: vi.fn(),
-  playerFindUnique: vi.fn(),
-  getAcceptedSessionClubIds: vi.fn(),
-  getPlayerClubBadges: vi.fn(),
-  getSessionMembership: vi.fn(),
-  getSessionOperatorMembership: vi.fn(),
-  withPlayerClubBadges: vi.fn(),
-  getClubEloByUserId: vi.fn(),
-  withClubElo: vi.fn(),
-  getAcceptedInterclubClubIds: vi.fn(),
-  isInterclubSession: vi.fn(),
-  canQuickAccessClub: vi.fn(),
-  isQuickAccessSession: vi.fn(),
-  tryRebuildAutomaticQueuedMatchForSessionId: vi.fn(),
+import { SessionMode, SessionStatus } from "@/types/enums";
+const state = vi.hoisted(() => ({
+  auth: vi.fn(), reserve: vi.fn(), update: vi.fn(),
+  accepted: ["a", "b"],
+  session: { id: "s", clubId: "a", code: "ABC", ratingPolicyVersion: 2, status: "WAITING", mode: "MEXICANO", poolsEnabled: false, players: [] as Array<{ playerId: string; pool: string; matchesPlayed: number; matchmakingMatchesCredit: number; isPaused: boolean }> },
+  members: [] as Array<{ clubId: string; playerId: string; ownerUserId: string | null; archivedAt: Date | null; retiredByAdmissionEventId: string | null; preferredPool: string; elo: number; club: { name: string }; player: { name: string; isActive: boolean } }>,
+  accesses: [] as Array<{ clubId: string; userId: string; status: string; role: string }>,
+  seats: [] as Array<{ playerId: string; profileClubId: string | null; participantAccountId: string | null; representingClubId: string | null; isGuest: boolean }>,
 }));
-
-vi.mock("@/lib/auth", () => ({
-  auth: mocks.auth,
+vi.mock("@/lib/auth", () => ({ auth: state.auth }));
+vi.mock("@/lib/rateLimit", () => ({ rateLimit: vi.fn(async () => null), checkInvalidTargetRateLimit: vi.fn(async () => null), invalidTargetResponse: vi.fn(async () => Response.json({ error: "Unauthorized" }, { status: 403 })) }));
+vi.mock("../queue-match/shared", () => ({ tryRebuildAutomaticQueuedMatchForSessionId: vi.fn(async () => null) }));
+vi.mock("@/lib/sessionCollab", () => ({
+  getAcceptedSessionClubIds: async () => state.accepted,
+  getSessionMembership: async () => state.accesses.find(a => a.userId === "actor" && a.status === "ACTIVE" && state.accepted.includes(a.clubId)) ?? null,
+  getSessionOperatorMembership: async () => state.accesses.find(a => a.userId === "actor" && a.status === "ACTIVE" && ["OWNER", "ADMIN", "STAFF"].includes(a.role) && state.accepted.includes(a.clubId)) ?? null,
+  getPlayerClubBadges: vi.fn(async () => new Map()), withPlayerClubBadges: (players: unknown) => players,
 }));
-
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    clubMember: {
-      findUnique: mocks.clubMemberFindUnique,
-      findMany: mocks.clubMemberFindMany,
+vi.mock("@/lib/prisma", () => {
+  const db = {
+    $executeRaw: state.reserve,
+    $transaction: async (operation: (tx: unknown) => unknown) => operation(db),
+    session: { findUnique: async () => state.session, update: state.update },
+    sessionPlayer: {
+      findUnique: async ({ where }: { where: { sessionId_playerId: { playerId: string } } }) => state.seats.find(p => p.playerId === where.sessionId_playerId.playerId) ?? null,
+      findMany: async ({ where }: { where: { playerId?: { in?: string[]; not?: string } } }) => state.seats.filter(p => !where.playerId || (!where.playerId.in || where.playerId.in.includes(p.playerId)) && p.playerId !== where.playerId.not),
     },
     clubAccess: {
-      findUnique: mocks.clubAccessFindUnique,
+      findUnique: async ({ where }: { where: { clubId_userId: { clubId: string; userId: string } } }) => state.accesses.find(a => a.clubId === where.clubId_userId.clubId && a.userId === where.clubId_userId.userId) ?? null,
+      findMany: async ({ where }: { where: { userId: string; status: string; clubId?: { in: string[] }; role?: { in: string[] } } }) => state.accesses.filter(a => a.userId === where.userId && a.status === where.status && (!where.clubId || where.clubId.in.includes(a.clubId)) && (!where.role || where.role.in.includes(a.role))),
     },
-    session: {
-      findUnique: mocks.sessionFindUnique,
-      update: mocks.sessionUpdate,
+    clubMember: {
+      findMany: async ({ where }: { where: { ownerUserId?: string; playerId?: string; clubId?: string | { in: string[] }; archivedAt?: null; retiredByAdmissionEventId?: null } }) => state.members.filter(m => (!where.ownerUserId || m.ownerUserId === where.ownerUserId) && (!where.playerId || m.playerId === where.playerId) && (!where.clubId || (typeof where.clubId === "string" ? m.clubId === where.clubId : where.clubId.in.includes(m.clubId))) && (where.archivedAt === undefined || m.archivedAt === null) && m.retiredByAdmissionEventId === null && m.player.isActive),
+      findUnique: async ({ where }: { where: { clubId_playerId: { clubId: string; playerId: string } } }) => state.members.find(m => m.clubId === where.clubId_playerId.clubId && m.playerId === where.clubId_playerId.playerId) ?? null,
     },
-    sessionClub: {
-      findMany: mocks.sessionClubFindMany,
-    },
-    sessionPlayer: {
-      findUnique: mocks.sessionPlayerFindUnique,
-    },
-    offlineIdentityMember: {
-      findMany: mocks.offlineIdentityMemberFindMany,
-    },
-    player: {
-      findMany: mocks.playerFindMany,
-      findFirst: mocks.playerFindFirst,
-      findUnique: mocks.playerFindUnique,
-    },
-  },
-}));
-
-vi.mock("@/lib/sessionCollab", () => ({
-  getAcceptedSessionClubIds: mocks.getAcceptedSessionClubIds,
-  getPlayerClubBadges: mocks.getPlayerClubBadges,
-  getSessionMembership: mocks.getSessionMembership,
-  getSessionOperatorMembership: mocks.getSessionOperatorMembership,
-  withPlayerClubBadges: mocks.withPlayerClubBadges,
-}));
-
-vi.mock("@/lib/clubElo", () => ({
-  getClubEloByUserId: mocks.getClubEloByUserId,
-  withClubElo: mocks.withClubElo,
-}));
-
-vi.mock("@/lib/sessionCollabFormat", () => ({
-  getAcceptedInterclubClubIds: mocks.getAcceptedInterclubClubIds,
-  isInterclubSession: mocks.isInterclubSession,
-}));
-
-vi.mock("@/lib/quickAccess", () => ({
-  canQuickAccessClub: mocks.canQuickAccessClub,
-  isQuickAccessSession: mocks.isQuickAccessSession,
-}));
-
-vi.mock("@/lib/rateLimit", () => ({
-  checkInvalidTargetRateLimit: mocks.checkInvalidTargetRateLimit,
-  invalidTargetResponse: mocks.invalidTargetResponse,
-  rateLimit: mocks.rateLimit,
-}));
-
-vi.mock("../queue-match/shared", () => ({
-  tryRebuildAutomaticQueuedMatchForSessionId:
-    mocks.tryRebuildAutomaticQueuedMatchForSessionId,
-}));
-
+    player: { findUnique: async () => ({ gender: "FEMALE", partnerPreference: "OPEN", mixedSideOverride: "UPPER" }) },
+  };
+  return { prisma: db };
+});
 import { POST } from "./route";
-
-function postJoin(body: unknown = {}) {
-  return POST(
-    new Request("http://localhost/api/sessions/ABC/join", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    }),
-    { params: Promise.resolve({ code: "ABC" }) }
-  );
+function post(body: unknown = {}) { return POST(new Request("http://localhost/api/sessions/ABC/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { params: Promise.resolve({ code: "ABC" }) }); }
+function member(playerId: string, clubId: string, ownerUserId: string | null = "actor") {
+  return { playerId, clubId, ownerUserId, archivedAt: null, retiredByAdmissionEventId: null, preferredPool: "B", elo: clubId === "a" ? 1400 : 800, club: { name: clubId }, player: { name: playerId, isActive: true } };
 }
-
-describe("join session route", () => {
+describe("join exact local club profile", () => {
   beforeEach(() => {
-    Object.values(mocks).forEach((mock) => mock.mockReset());
-    mocks.rateLimit.mockResolvedValue(null);
-    mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
-    mocks.tryRebuildAutomaticQueuedMatchForSessionId.mockResolvedValue(null);
-    mocks.invalidTargetResponse.mockImplementation(() =>
-      Response.json({ error: "Unauthorized" }, { status: 403 })
-    );
-    mocks.clubMemberFindUnique.mockResolvedValue(null);
-    mocks.clubMemberFindMany.mockResolvedValue([]);
-    mocks.clubAccessFindUnique.mockResolvedValue({ status: "ACTIVE" });
-    mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
-    mocks.sessionClubFindMany.mockResolvedValue([]);
-    mocks.playerFindMany.mockImplementation(async (args: { where: { ownerUserId: string } }) => [
-      { id: args.where.ownerUserId.replace(/^account-/, "") },
-    ]);
-    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-other" });
-    mocks.playerFindUnique.mockResolvedValue({
-      ownerUserId: "account-other",
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.getAcceptedSessionClubIds.mockResolvedValue([]);
-    mocks.getPlayerClubBadges.mockResolvedValue(new Map());
-    mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
-    mocks.getSessionOperatorMembership.mockResolvedValue(null);
-    mocks.withPlayerClubBadges.mockImplementation((players) => players);
-    mocks.getClubEloByUserId.mockResolvedValue(new Map());
-    mocks.withClubElo.mockImplementation((players) => players);
-    mocks.getAcceptedInterclubClubIds.mockImplementation((session: { sessionClubs?: Array<{ clubId: string; status: string }> }) =>
-      (session.sessionClubs ?? []).filter((club) => club.status === SessionClubStatus.ACCEPTED).map((club) => club.clubId)
-    );
-    mocks.isInterclubSession.mockImplementation((session: { collabFormat?: string }) => session.collabFormat === SessionCollabFormat.INTERCLUB);
-    mocks.canQuickAccessClub.mockReturnValue(true);
-    mocks.isQuickAccessSession.mockImplementation((session: { user?: { isQuickAccess?: boolean } } | null | undefined) => session?.user?.isQuickAccess === true);
+    state.auth.mockReset().mockResolvedValue({ user: { id: "actor", isAdmin: false } });
+    state.reserve.mockReset().mockResolvedValue(0);
+    state.update.mockReset().mockImplementation(async args => ({ ...state.session, courts: [], players: [{ ...args.data.players.create, player: { id: args.data.players.create.playerId, name: "Person", elo: 9999 } }] }));
+    state.accepted = ["a", "b"];
+    Object.assign(state.session, { ratingPolicyVersion: 2, status: SessionStatus.WAITING, mode: SessionMode.MEXICANO, poolsEnabled: false, players: [] });
+    state.members = [member("pa", "a")]; state.seats = [];
+    state.accesses = [{ clubId: "a", userId: "actor", status: "ACTIVE", role: "MEMBER" }, { clubId: "b", userId: "actor", status: "ACTIVE", role: "MEMBER" }];
   });
-
-  it.each([
-    {
-      label: "an explicit Default mixed side",
-      input: { mixedSideOverride: null },
-      expectedSide: null,
-      expectedPreference: PartnerPreference.FEMALE_FLEX,
-    },
-    {
-      label: "a legacy preference-only Default request",
-      input: { partnerPreference: PartnerPreference.FEMALE_FLEX },
-      expectedSide: null,
-      expectedPreference: PartnerPreference.FEMALE_FLEX,
-    },
-    {
-      label: "an explicit Upper Side over a conflicting legacy preference",
-      input: {
-        mixedSideOverride: MixedSide.UPPER,
-        partnerPreference: PartnerPreference.FEMALE_FLEX,
-      },
-      expectedSide: MixedSide.UPPER,
-      expectedPreference: PartnerPreference.OPEN,
-    },
-  ])("uses $label when joining", async ({ input, expectedSide, expectedPreference }) => {
-    mocks.auth.mockResolvedValue({ user: { id: "account-player-1", isAdmin: false } });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: null,
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MIXICANO,
-      poolsEnabled: false,
-      players: [],
-    });
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.playerFindUnique.mockResolvedValue({
-      gender: PlayerGender.FEMALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: MixedSide.UPPER,
-    });
-    mocks.sessionUpdate.mockResolvedValue({
-      id: "session-1",
-      clubId: null,
-      courts: [],
-      players: [],
-    });
-
-    const response = await postJoin(input);
-
-    expect(response.status).toBe(200);
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          players: {
-            create: expect.objectContaining({
-              playerId: "player-1",
-              gender: PlayerGender.FEMALE,
-              mixedSideOverride: expectedSide,
-              partnerPreference: expectedPreference,
-            }),
-          },
-        },
-      })
-    );
+  it("auto-selects the only eligible local pair and snapshots the Account separately from Player", async () => {
+    const response = await post(); expect(response.status).toBe(200);
+    expect(state.update.mock.calls[0][0].data.players.create).toMatchObject({ playerId: "pa", profileClubId: "a", participantAccountId: "actor", isGuest: false });
+    expect((await response.json()).players[0].player.elo).toBe(1400); expect(state.reserve).toHaveBeenCalledOnce();
   });
-
-  it("blocks quick-access users from joining sessions", async () => {
-    mocks.auth.mockResolvedValue({
-      user: {
-        id: "guest:player-1",
-        isAdmin: false,
-        isQuickAccess: true,
-        guestPlayerId: "player-1",
-        quickAccessClubId: "community-1",
-      },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      status: SessionStatus.WAITING,
-      players: [],
-    });
-
-    const response = await postJoin();
-
-    expect(response.status).toBe(403);
-    expect(mocks.sessionPlayerFindUnique).not.toHaveBeenCalled();
-    expect(mocks.playerFindUnique).not.toHaveBeenCalled();
-    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
+  it("requires a pair choice for two owned profiles and accepts the chosen partner in ordinary collaboration", async () => {
+    state.members.push(member("pb", "b"));
+    const ambiguous = await post(); expect(ambiguous.status).toBe(409); expect((await ambiguous.json()).error).toContain("Choose which club profile");
+    const selected = await post({ playerId: "pb", profileClubId: "b" }); expect(selected.status).toBe(200);
+    expect(state.update.mock.calls[0][0].data.players.create).toMatchObject({ playerId: "pb", profileClubId: "b", participantAccountId: "actor", representingClubId: null });
+    expect((await selected.json()).players[0].player.elo).toBe(800);
   });
-
-  it("requires active club access before a Player owner can join a club session", async () => {
-    mocks.auth.mockResolvedValue({
-      user: { id: "account-owner", isAdmin: false },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      players: [],
-    });
-    mocks.getAcceptedSessionClubIds.mockResolvedValue(["community-1"]);
-    mocks.getSessionMembership.mockResolvedValue(null);
-    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
-    mocks.playerFindUnique.mockResolvedValue({
-      ownerUserId: "account-owner",
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-
-    const response = await postJoin({ playerId: "player-profile-9" });
-
-    expect(response.status).toBe(403);
-    expect(mocks.sessionPlayerFindUnique).not.toHaveBeenCalled();
-    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
+  it("requires club selection even when one legacy physical Player belongs to both clubs", async () => {
+    state.members.push(member("pa", "b")); expect((await post({ playerId: "pa" })).status).toBe(409);
+    expect((await post({ playerId: "pa", profileClubId: "b" })).status).toBe(200);
   });
-
-  it("lets an active MEMBER join their owned Player when account and Player ids differ", async () => {
-    mocks.auth.mockResolvedValue({
-      user: { id: "account-owner", isAdmin: false },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      players: [],
-    });
-    mocks.getAcceptedSessionClubIds.mockResolvedValue(["community-1"]);
-    mocks.getSessionMembership.mockResolvedValue({
-      clubId: "community-1",
-      role: "MEMBER",
-    });
-    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
-    mocks.playerFindUnique.mockResolvedValue({
-      ownerUserId: "account-owner",
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.clubMemberFindUnique.mockResolvedValue({
-      preferredPool: SessionPool.A,
-    });
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.sessionUpdate.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      courts: [],
-      players: [],
-    });
-
-    const response = await postJoin({ playerId: "player-profile-9" });
-
-    expect(response.status).toBe(200);
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          players: {
-            create: expect.objectContaining({ playerId: "player-profile-9" }),
-          },
-        },
-      })
-    );
+  it("rejects revoked or archived local profiles while another club remains active", async () => {
+    state.accesses[0].status = "REVOKED";
+    expect((await post({ playerId: "pa", profileClubId: "a" })).status).toBe(409);
+    state.accesses[0].status = "ACTIVE"; state.members[0].archivedAt = new Date();
+    expect((await post({ playerId: "pa", profileClubId: "a" })).status).toBe(409); expect(state.update).not.toHaveBeenCalled();
   });
-
-  it("rejects an archived roster row for an explicitly selected Player in a linked-club session", async () => {
-    mocks.auth.mockResolvedValue({
-      user: { id: "account-owner", isAdmin: false },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: null,
-      collabFormat: SessionCollabFormat.FREE_PLAY,
-      sessionClubs: [
-        { clubId: "linked-club", role: SessionClubRole.HOST, status: SessionClubStatus.ACCEPTED },
-      ],
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      players: [],
-    });
-    mocks.getAcceptedSessionClubIds.mockResolvedValue(["linked-club"]);
-    mocks.getSessionMembership.mockResolvedValue({
-      clubId: "linked-club",
-      role: "MEMBER",
-    });
-    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
-    mocks.playerFindUnique.mockResolvedValue({
-      ownerUserId: "account-owner",
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.clubMemberFindUnique.mockResolvedValue(null);
-
-    const response = await postJoin({ playerId: "player-profile-9" });
-
-    expect(response.status).toBe(400);
-    expect(mocks.clubMemberFindUnique).toHaveBeenCalledWith({
-      where: {
-        clubId_playerId: {
-          clubId: "linked-club",
-          playerId: "player-profile-9",
-        },
-        archivedAt: null,
-      },
-      select: { preferredPool: true },
-    });
-    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
+  it("allows staff to add an unclaimed local placeholder only in their exact operator club", async () => {
+    state.accesses[0].role = "STAFF"; state.members.push(member("unclaimed", "a", null), member("other", "b", null));
+    expect((await post({ playerId: "unclaimed", profileClubId: "a" })).status).toBe(200);
+    expect(state.update.mock.calls[0][0].data.players.create.participantAccountId).toBeNull();
+    expect((await post({ playerId: "other", profileClubId: "b" })).status).toBe(409);
   });
-
-  it.each([
-    { accessStatus: "REVOKED", expectedStatus: 403 },
-    { accessStatus: "ACTIVE", expectedStatus: 200 },
-  ])(
-    "requires access to the selected interclub side when joining an owned Player ($accessStatus)",
-    async ({ accessStatus, expectedStatus }) => {
-      const sessionClubs = [
-        {
-          clubId: "club-a",
-          role: SessionClubRole.HOST,
-          status: SessionClubStatus.ACCEPTED,
-        },
-        {
-          clubId: "club-b",
-          role: SessionClubRole.PARTNER,
-          status: SessionClubStatus.ACCEPTED,
-        },
-      ];
-      mocks.auth.mockResolvedValue({
-        user: { id: "account-owner", isAdmin: false },
-      });
-      mocks.sessionFindUnique.mockResolvedValue({
-        id: "session-1",
-        clubId: "club-a",
-        collabFormat: SessionCollabFormat.INTERCLUB,
-        sessionClubs,
-        status: SessionStatus.WAITING,
-        mode: SessionMode.MEXICANO,
-        poolsEnabled: false,
-        players: [],
-      });
-      mocks.getAcceptedSessionClubIds.mockResolvedValue(["club-a", "club-b"]);
-      mocks.getSessionMembership.mockResolvedValue({
-        clubId: "club-a",
-        role: "MEMBER",
-      });
-      mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
-      mocks.playerFindUnique.mockResolvedValue({ ownerUserId: "account-owner" });
-      mocks.getPlayerClubBadges.mockResolvedValue(
-        new Map([["player-profile-9", [{ id: "club-b" }]]])
-      );
-      mocks.clubMemberFindUnique.mockResolvedValue({ preferredPool: SessionPool.B });
-      mocks.clubAccessFindUnique.mockResolvedValue({ status: accessStatus });
-      mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-      mocks.sessionUpdate.mockResolvedValue({
-        id: "session-1",
-        clubId: "club-a",
-        courts: [],
-        players: [],
-      });
-
-      const response = await postJoin({
-        playerId: "player-profile-9",
-        representingClubId: "club-b",
-      });
-
-      expect(response.status).toBe(expectedStatus);
-      expect(mocks.clubAccessFindUnique).toHaveBeenCalledWith({
-        where: {
-          clubId_userId: { clubId: "club-b", userId: "account-owner" },
-        },
-        select: { status: true },
-      });
-      if (expectedStatus === 200) {
-        expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-          expect.objectContaining({
-            data: {
-              players: {
-                create: expect.objectContaining({
-                  playerId: "player-profile-9",
-                  representingClubId: "club-b",
-                }),
-              },
-            },
-          })
-        );
-      } else {
-        expect(mocks.sessionUpdate).not.toHaveBeenCalled();
-      }
-    }
-  );
-
-  it("sets no-catch-up credit and arrival priority for active-session joins", async () => {
-    const now = new Date("2026-05-08T04:10:00.000Z");
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    mocks.auth.mockResolvedValue({
-      user: {
-        id: "account-late-player",
-        isAdmin: false,
-      },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: null,
-      status: SessionStatus.ACTIVE,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      players: [
-        { isPaused: false, matchesPlayed: 4, matchmakingMatchesCredit: 0 },
-        { isPaused: false, matchesPlayed: 5, matchmakingMatchesCredit: 0 },
-      ],
-    });
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.playerFindUnique.mockResolvedValue({
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.sessionUpdate.mockImplementation(async (args) => ({
-      id: "session-1",
-      clubId: null,
-      courts: [],
-      players: [
-        {
-          playerId: "late-player",
-          ...args.data.players.create,
-          player: {
-            id: "late-player",
-            name: "Late Player",
-            elo: 1000,
-            gender: PlayerGender.MALE,
-            partnerPreference: PartnerPreference.OPEN,
-            mixedSideOverride: null,
-          },
-        },
-      ],
-    }));
-
-    const response = await postJoin();
-
-    expect(response.status).toBe(200);
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          players: {
-            create: expect.objectContaining({
-              playerId: "late-player",
-              matchmakingMatchesCredit: 4,
-              joinedAt: now,
-              ladderEntryAt: now,
-              availableSince: now,
-              arrivalPriorityAt: now,
-            }),
-          },
-        },
-      })
-    );
-    expect(mocks.tryRebuildAutomaticQueuedMatchForSessionId).toHaveBeenCalledWith(
-      "session-1"
-    );
-
-    vi.useRealTimers();
+  it("rejects a second account seat and revalidates ownership after acquiring the writer", async () => {
+    state.members.push(member("pb", "b")); state.seats.push({ playerId: "pb", profileClubId: "b", participantAccountId: "actor", representingClubId: null, isGuest: false });
+    expect((await post({ playerId: "pa", profileClubId: "a" })).status).toBe(409); expect(state.update).not.toHaveBeenCalled();
+    state.seats = []; state.reserve.mockImplementation(async () => { state.members[0].ownerUserId = null; return 0; });
+    expect((await post({ playerId: "pa", profileClubId: "a" })).status).toBe(409); expect(state.update).not.toHaveBeenCalled();
   });
-
-  it("uses the joining player's group baseline in active grouped sessions", async () => {
-    mocks.auth.mockResolvedValue({
-      user: { id: "account-late-player", isAdmin: true },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: null,
-      status: SessionStatus.ACTIVE,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: true,
-      players: [
-        { isPaused: false, pool: SessionPool.A, matchesPlayed: 6, matchmakingMatchesCredit: 0 },
-        { isPaused: false, pool: SessionPool.B, matchesPlayed: 2, matchmakingMatchesCredit: 0 },
-      ],
-    });
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.playerFindUnique.mockResolvedValue({
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.sessionUpdate.mockResolvedValue({ id: "session-1", clubId: null, courts: [], players: [] });
-
-    const response = await postJoin({ pool: SessionPool.A });
-
-    expect(response.status).toBe(200);
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          players: {
-            create: expect.objectContaining({
-              pool: SessionPool.A,
-              matchmakingMatchesCredit: 6,
-            }),
-          },
-        },
-      })
-    );
+  it("cannot switch an existing entry to another club profile", async () => {
+    state.members.push(member("pa", "b")); state.seats.push({ playerId: "pa", profileClubId: "a", participantAccountId: "actor", representingClubId: null, isGuest: false });
+    expect((await post({ playerId: "pa", profileClubId: "b" })).status).toBe(409); expect(state.update).not.toHaveBeenCalled();
   });
-
-  it("does not set arrival priority for waiting-session joins", async () => {
-    const now = new Date("2026-05-08T04:10:00.000Z");
-    vi.useFakeTimers();
-    vi.setSystemTime(now);
-
-    mocks.auth.mockResolvedValue({
-      user: {
-        id: "account-early-player",
-        isAdmin: false,
-      },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: null,
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      players: [],
-    });
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.playerFindUnique.mockResolvedValue({
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.sessionUpdate.mockImplementation(async (args) => ({
-      id: "session-1",
-      clubId: null,
-      courts: [],
-      players: [
-        {
-          playerId: "early-player",
-          ...args.data.players.create,
-          player: {
-            id: "early-player",
-            name: "Early Player",
-            elo: 1000,
-            gender: PlayerGender.MALE,
-            partnerPreference: PartnerPreference.OPEN,
-            mixedSideOverride: null,
-          },
-        },
-      ],
-    }));
-
-    const response = await postJoin();
-
-    expect(response.status).toBe(200);
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          players: {
-            create: expect.objectContaining({
-              matchmakingMatchesCredit: 0,
-              arrivalPriorityAt: null,
-            }),
-          },
-        },
-      })
-    );
-    expect(
-      mocks.tryRebuildAutomaticQueuedMatchForSessionId
-    ).not.toHaveBeenCalled();
-
-    vi.useRealTimers();
+  it.each([{ input: { mixedSideOverride: null }, expected: null }, { input: { mixedSideOverride: "UPPER" }, expected: "UPPER" }])("keeps mixed-side overrides when selecting a local profile: $expected", async ({ input, expected }) => {
+    expect((await post(input)).status).toBe(200); expect(state.update.mock.calls[0][0].data.players.create).toMatchObject({ gender: "FEMALE", mixedSideOverride: expected });
   });
-
-  it("copies the saved game group and ignores a legacy more-rest value", async () => {
-    mocks.auth.mockResolvedValue({
-      user: {
-        id: "account-rest-player",
-        isAdmin: false,
-      },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: true,
-      players: [],
-    });
-    mocks.clubMemberFindUnique.mockResolvedValue({
-      clubId: "community-1",
-      role: "MEMBER",
-      needsMoreRest: true,
-      preferredPool: SessionPool.A,
-    });
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.playerFindUnique.mockResolvedValue({
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.sessionUpdate.mockResolvedValue({
-      id: "session-1",
-      players: [],
-      courts: [],
-    });
-
-    const response = await postJoin();
-
-    expect(response.status).toBe(200);
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          players: {
-            create: expect.objectContaining({
-              playerId: "rest-player",
-              pool: SessionPool.A,
-            }),
-          },
-        },
-      })
-    );
+  it("keeps saved player group and arrival credit for active joins, and denies self group override", async () => {
+    Object.assign(state.session, { status: SessionStatus.ACTIVE, poolsEnabled: true, players: [{ playerId: "waiting", pool: "B", matchesPlayed: 4, matchmakingMatchesCredit: 0, isPaused: false }] });
+    expect((await post({ pool: "A" })).status).toBe(403);
+    expect((await post()).status).toBe(200); expect(state.update.mock.calls[0][0].data.players.create).toMatchObject({ pool: "B", matchmakingMatchesCredit: 4, arrivalPriorityAt: expect.any(Date) });
   });
-
-  it("does not let a self-joining member override the saved game group", async () => {
-    mocks.auth.mockResolvedValue({
-      user: { id: "account-member-1", isAdmin: false },
-    });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: true,
-      players: [],
-    });
-    mocks.clubMemberFindUnique.mockResolvedValue({
-      clubId: "community-1",
-      role: "MEMBER",
-      preferredPool: SessionPool.A,
-    });
-
-    const response = await postJoin({ pool: SessionPool.B });
-
-    expect(response.status).toBe(403);
-    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
-  });
-
-  it("lets a Club B admin add a Club B player with Club B representation", async () => {
-    mocks.auth.mockResolvedValue({
-      user: {
-        id: "account-club-b-admin",
-        isAdmin: false,
-      },
-    });
-    const sessionClubs = [
-      {
-        id: "session-club-host",
-        sessionId: "session-1",
-        clubId: "community-1",
-        role: SessionClubRole.HOST,
-        status: SessionClubStatus.ACCEPTED,
-        createdAt: new Date("2026-05-08T04:00:00.000Z"),
-        club: { id: "community-1", name: "Club A" },
-      },
-      {
-        id: "session-club-partner",
-        sessionId: "session-1",
-        clubId: "community-2",
-        role: SessionClubRole.PARTNER,
-        status: SessionClubStatus.ACCEPTED,
-        createdAt: new Date("2026-05-08T04:01:00.000Z"),
-        club: { id: "community-2", name: "Club B" },
-      },
-    ];
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      collabFormat: SessionCollabFormat.INTERCLUB,
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      sessionClubs,
-      players: [],
-    });
-    mocks.sessionClubFindMany.mockResolvedValue(sessionClubs);
-    mocks.getSessionOperatorMembership.mockResolvedValue({ clubId: "community-2", role: "ADMIN" });
-    mocks.clubMemberFindUnique.mockResolvedValue({ preferredPool: SessionPool.B });
-    mocks.getPlayerClubBadges.mockResolvedValue(new Map([["club-b-player", [{ id: "community-2" }]]]));
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.playerFindUnique.mockResolvedValue({
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.sessionUpdate.mockImplementation(async (args) => ({
-      id: "session-1",
-      clubId: null,
-      courts: [],
-      players: [
-        {
-          playerId: "club-b-player",
-          ...args.data.players.create,
-          player: {
-            id: "club-b-player",
-            name: "Club B Player",
-            elo: 1110,
-            gender: PlayerGender.MALE,
-            partnerPreference: PartnerPreference.OPEN,
-            mixedSideOverride: null,
-          },
-        },
-      ],
-    }));
-
-    const response = await postJoin({
-      playerId: "club-b-player",
-      representingClubId: "community-2",
-    });
-
-    expect(response.status).toBe(200);
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          players: {
-            create: expect.objectContaining({
-              playerId: "club-b-player",
-              representingClubId: "community-2",
-            }),
-          },
-        },
-      })
-    );
-  });
-
-  it("requires a represented club for dual-club interclub players", async () => {
-    mocks.auth.mockResolvedValue({
-      user: {
-        id: "account-club-a-admin",
-        isAdmin: true,
-      },
-    });
-    const sessionClubs = [
-      {
-        id: "session-club-host",
-        sessionId: "session-1",
-        clubId: "community-1",
-        role: SessionClubRole.HOST,
-        status: SessionClubStatus.ACCEPTED,
-        createdAt: new Date("2026-05-08T04:00:00.000Z"),
-        club: { id: "community-1", name: "Club A" },
-      },
-      {
-        id: "session-club-partner",
-        sessionId: "session-1",
-        clubId: "community-2",
-        role: SessionClubRole.PARTNER,
-        status: SessionClubStatus.ACCEPTED,
-        createdAt: new Date("2026-05-08T04:01:00.000Z"),
-        club: { id: "community-2", name: "Club B" },
-      },
-    ];
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      collabFormat: SessionCollabFormat.INTERCLUB,
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      sessionClubs,
-      players: [],
-    });
-    mocks.sessionClubFindMany.mockResolvedValue(sessionClubs);
-    mocks.clubMemberFindUnique.mockResolvedValue({
-      clubId: "community-1",
-      role: "ADMIN",
-    });
-    mocks.getPlayerClubBadges.mockResolvedValue(new Map([["dual-player", [{ id: "community-1" }, { id: "community-2" }]]]));
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.playerFindUnique.mockResolvedValue({
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-
-    const response = await postJoin({ playerId: "dual-player" });
-    const body = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(body.error).toBe("Choose which club this player represents");
-    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
-  });
-
-  it("rejects a retired explicit Player before joining an unscoped session", async () => {
-    mocks.auth.mockResolvedValue({ user: { id: "account-owner", isAdmin: false } });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-global",
-      clubId: null,
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      players: [],
-    });
-    mocks.playerFindFirst.mockResolvedValue(null);
-
-    const response = await postJoin({ playerId: "retired-duplicate" });
-
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({
-      error: "Player profile is not available for new sessions",
-    });
-    expect(mocks.playerFindFirst).toHaveBeenCalledWith({
-      where: {
-        id: "retired-duplicate",
-        clubMemberships: {
-          none: { retiredByAdmissionEventId: { not: null } },
-        },
-      },
-      select: { ownerUserId: true },
-    });
-    expect(mocks.sessionPlayerFindUnique).not.toHaveBeenCalled();
-    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
-  });
-
-  it("joins the active original Player by explicit ID in an unscoped session", async () => {
-    mocks.auth.mockResolvedValue({ user: { id: "account-owner", isAdmin: false } });
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-global",
-      clubId: null,
-      status: SessionStatus.WAITING,
-      mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
-      players: [],
-    });
-    mocks.playerFindFirst.mockResolvedValue({ ownerUserId: "account-owner" });
-    mocks.playerFindUnique.mockResolvedValue({
-      gender: PlayerGender.FEMALE,
-      partnerPreference: PartnerPreference.OPEN,
-      mixedSideOverride: null,
-    });
-    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
-    mocks.sessionUpdate.mockResolvedValue({
-      id: "session-global",
-      clubId: null,
-      courts: [],
-      players: [],
-    });
-
-    const response = await postJoin({ playerId: "historical-player" });
-
-    expect(response.status).toBe(200);
-    expect(mocks.playerFindFirst).toHaveBeenCalledWith({
-      where: {
-        id: "historical-player",
-        clubMemberships: {
-          none: { retiredByAdmissionEventId: { not: null } },
-        },
-      },
-      select: { ownerUserId: true },
-    });
-    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: {
-          players: {
-            create: expect.objectContaining({ playerId: "historical-player" }),
-          },
-        },
-      })
-    );
+  it("rejects joining ended sessions and quick-access identities", async () => {
+    state.session.status = SessionStatus.COMPLETED; expect((await post()).status).toBe(400);
+    state.session.status = SessionStatus.WAITING; state.auth.mockResolvedValue({ user: { id: "guest:pa", isQuickAccess: true, guestPlayerId: "pa", quickAccessClubId: "a" } });
+    expect((await post()).status).toBe(403); expect(state.update).not.toHaveBeenCalled();
   });
 });

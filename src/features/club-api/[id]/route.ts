@@ -41,7 +41,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       getClubRoster(prisma, id),
       prisma.match.findMany({ where: { status: "COMPLETED", session: { isTest: false, OR: [{ clubId: id }, { sessionClubs: { some: { clubId: id, status: "ACCEPTED" } } }] } }, include: { team1Player1: true, team1Player2: true, team2Player1: true, team2Player2: true, eloAdjustments: { where: { clubId: id } }, session: true } }),
       listSessionsForClub({ clubId: id, viewerId: actorId, viewerIsAdmin: canAdmin, ...(quick ? { quickAccessPlayerId: session.user.guestPlayerId ?? "" } : {}) }),
-      quick ? Promise.resolve(0) : prisma.clubNotification.count({ where: { clubId: id, recipientPlayer: { ownerUserId: actorId }, readAt: null } }),
+      quick ? Promise.resolve(0) : prisma.clubNotification.count({ where: { clubId: id, recipientPlayer: { clubMemberships: { some: { clubId: id, ownerUserId: actorId, archivedAt: null, retiredByAdmissionEventId: null } } }, readAt: null } }),
     ]);
     const matches = withLegacySportingAliases(storedMatches);
     const resolve = await getClubStatUserResolver(prisma, { clubId: id, memberUserIds: roster.map(p => p.id) });
@@ -407,7 +407,8 @@ export async function DELETE(
       typeof error === "object" && error !== null && "code" in error
         ? (error as { code?: unknown }).code
         : undefined;
-    if (["P2003", "P2004", "P2014"].includes(String(code))) {
+    if (["P2003", "P2004", "P2014"].includes(String(code))
+      || (error instanceof Error && error.message.includes("LOCAL_ROSTER_HISTORY_PRESERVED"))) {
       return NextResponse.json(
         { error: "This club has linked history that must be retained and cannot be deleted." },
         { status: 409 },

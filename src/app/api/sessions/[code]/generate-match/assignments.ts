@@ -1,3 +1,4 @@
+import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { prisma } from "@/lib/prisma";
 import { CourtGroupType, MatchStatus } from "@/types/enums";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
@@ -240,9 +241,10 @@ export async function createMatchesForAssignments(
     courtGroupType?: CourtGroupType | string | null;
     poolASeatCount?: number | null;
     poolBSeatCount?: number | null;
-  }>
+  }>,
+  actor?: SessionMutationActor
 ) {
-  return prisma.$transaction(async (tx) => {
+  return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
     await assertAssignmentsAvailable(tx, sessionId, assignments);
 
     const matches = [];
@@ -265,6 +267,7 @@ export async function createMatchesForAssignments(
 
 export async function replaceCurrentCourtMatchAssignment({
   sessionId,
+  actor,
   courtId,
   currentMatchId,
   selectedIds,
@@ -281,6 +284,7 @@ export async function replaceCurrentCourtMatchAssignment({
   releasePendingUserIds,
 }: {
   sessionId: string;
+  actor?: SessionMutationActor;
   courtId: string;
   currentMatchId: string;
   selectedIds: string[];
@@ -296,7 +300,7 @@ export async function replaceCurrentCourtMatchAssignment({
   creditRestUserIds?: string[];
   releasePendingUserIds?: string[];
 }) {
-  return prisma.$transaction(async (tx) => {
+  return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
     const matchTimingDelegate = tx.match as unknown as MatchTimingDelegate;
     const replacedMatch = matchTimingDelegate.findUnique
       ? await matchTimingDelegate.findUnique({
@@ -382,6 +386,7 @@ export async function replaceCurrentCourtMatchAssignment({
 
 export async function createQueuedMatchAssignment({
   sessionId,
+  actor,
   queuedMatchId,
   courtId,
   partition,
@@ -395,6 +400,7 @@ export async function createQueuedMatchAssignment({
   consumeSkipNextUserIds,
 }: {
   sessionId: string;
+  actor?: SessionMutationActor;
   queuedMatchId: string;
   courtId: string;
   partition: ManualMatchTeams;
@@ -407,7 +413,7 @@ export async function createQueuedMatchAssignment({
   isAutomatic?: boolean;
   consumeSkipNextUserIds?: string[];
 }) {
-  return prisma.$transaction(async (tx) => {
+  return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
     await assertAssignmentsAvailable(tx, sessionId, [
       {
         selectedIds: [

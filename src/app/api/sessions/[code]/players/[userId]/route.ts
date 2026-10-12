@@ -1,5 +1,7 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
@@ -245,7 +247,10 @@ export async function DELETE(
       );
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      const recorded = await tx.match.findFirst({ where: playerMatchWhere, select: { id: true } });
+      if (recorded) throw new Error("This player has match history and cannot be removed.");
       const queuedMatch = await tx.queuedMatch.findUnique({
         where: { sessionId: sessionData.id },
       });
@@ -294,6 +299,7 @@ export async function DELETE(
       ...(result.queuedMatchAffected ? { queuedMatch } : {}),
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Remove player from session error", error);
     return safeErrorResponse();
   }

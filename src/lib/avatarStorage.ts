@@ -4,6 +4,27 @@ import { logError } from "@/lib/errors";
 
 type DeleteAvatarObject = (avatarUrl: string) => Promise<boolean>;
 
+/** Includes disconnected, archived and retired rows: historical photos remain valid. */
+export async function isAvatarReferenced(avatarKey: string) {
+  const { prisma } = await import("./prisma");
+  const counts = await Promise.all([
+    prisma.user.count({ where: { avatarKey } }),
+    prisma.player.count({ where: { avatarKey } }),
+    prisma.club.count({ where: { avatarKey } }),
+  ]);
+  return counts.some(count => count > 0);
+}
+
+async function deleteUnreferencedAvatar(key: string, deleteObject: DeleteAvatarObject, isReferenced: (key: string) => Promise<boolean>) {
+  try {
+    if (await isReferenced(key)) return false;
+    return await deleteObject(key);
+  } catch (error) {
+    logError("Check avatar references", error);
+    return false;
+  }
+}
+
 export async function uploadAvatarObject({
   avatarPathname,
   body,
@@ -55,30 +76,34 @@ export async function cleanupSupersededAvatar({
   previousAvatarKey,
   nextAvatarKey,
   deleteObject = deleteAvatarObjectBestEffort,
+  isReferenced = isAvatarReferenced,
 }: {
   previousAvatarKey: string | null | undefined;
   nextAvatarKey?: string | null;
   deleteObject?: DeleteAvatarObject;
+  isReferenced?: (key: string) => Promise<boolean>;
 }) {
   if (!previousAvatarKey || previousAvatarKey === nextAvatarKey) {
     return false;
   }
 
-  return deleteObject(previousAvatarKey);
+  return deleteUnreferencedAvatar(previousAvatarKey, deleteObject, isReferenced);
 }
 
 export async function rollbackUploadedAvatar({
   uploadedAvatarKey,
   persistedAvatarKey,
   deleteObject = deleteAvatarObjectBestEffort,
+  isReferenced = isAvatarReferenced,
 }: {
   uploadedAvatarKey: string | null | undefined;
   persistedAvatarKey?: string | null;
   deleteObject?: DeleteAvatarObject;
+  isReferenced?: (key: string) => Promise<boolean>;
 }) {
   if (!uploadedAvatarKey || uploadedAvatarKey === persistedAvatarKey) {
     return false;
   }
 
-  return deleteObject(uploadedAvatarKey);
+  return deleteUnreferencedAvatar(uploadedAvatarKey, deleteObject, isReferenced);
 }

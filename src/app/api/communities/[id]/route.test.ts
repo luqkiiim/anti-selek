@@ -31,8 +31,8 @@ vi.mock("@/lib/prisma", () => ({
       findMany: async () => [{ userId: "account-viewer-1", role: "ADMIN" }],
     },
     clubMember: {
-      findFirst: async () => ({ playerId: "viewer-1", elo: 1120, player: { ...(await mocks.userFindUnique()), id: "viewer-1", ownerUserId: "account-viewer-1" } }),
-      findMany: async () => (await mocks.clubMemberFindMany()).map((m: { player: { id: string; isClaimed: boolean }; [key: string]: unknown }) => ({ ...m, id: `cm-${m.player.id}`, playerId: m.player.id, player: { ...m.player, ownerUserId: m.player.isClaimed ? "account-viewer-1" : null } })),
+      findFirst: async () => ({ ownerUserId: "account-viewer-1", playerId: "viewer-1", elo: 1120, player: { ...(await mocks.userFindUnique()), id: "viewer-1", ownerUserId: null } }),
+      findMany: async () => (await mocks.clubMemberFindMany()).map((m: { player: { id: string }; [key: string]: unknown }) => ({ ...m, id: `cm-${m.player.id}`, playerId: m.player.id, player: { ...m.player } })),
     },
     club: {
       findUnique: mocks.clubFindUnique,
@@ -128,6 +128,7 @@ describe("club snapshot route", () => {
     });
     mocks.clubMemberFindMany.mockResolvedValue([
       {
+        ownerUserId: "account-viewer-1",
         role: "ADMIN",
         status: "CORE",
         elo: 1120,
@@ -140,11 +141,11 @@ describe("club snapshot route", () => {
           partnerPreference: "OPEN",
           mixedSideOverride: null,
           isActive: true,
-          isClaimed: true,
           createdAt: new Date("2026-05-18T00:00:00.000Z"),
         },
       },
       {
+        ownerUserId: null,
         role: "MEMBER",
         status: "CORE",
         elo: 1010,
@@ -157,7 +158,6 @@ describe("club snapshot route", () => {
           partnerPreference: "OPEN",
           mixedSideOverride: null,
           isActive: true,
-          isClaimed: false,
           createdAt: new Date("2026-05-17T00:00:00.000Z"),
         },
       },
@@ -285,8 +285,8 @@ describe("club snapshot route", () => {
     expect(body.club.viewerIsOwner).toBe(true);
     expect(body.clubMembers).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: "viewer-1", isOwner: true }),
-        expect.objectContaining({ id: "player-2", isOwner: false }),
+        expect.objectContaining({ id: "viewer-1", ownerUserId: "account-viewer-1", isClaimed: true, isOwner: true }),
+        expect.objectContaining({ id: "player-2", ownerUserId: null, isClaimed: false, isOwner: false }),
       ])
     );
   });

@@ -74,6 +74,14 @@ describe("isolated production rehearsal credentials", () => {
     const before = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
     const fixture = protectedCredentialFixture(makeJwt({ a: "ro" }));
 
+    if (process.platform === "win32") {
+      // This historical credential loader validates POSIX permissions. chmod
+      // does not establish Windows ACL privacy; rejection must remain closed.
+      expect(() => loadProductionRehearsalCredentials(fixture)).toThrow("must be private to the current user");
+      expect(Object.fromEntries(envNames.map((name) => [name, process.env[name]]))).toEqual(before);
+      return;
+    }
+
     const credentials = loadProductionRehearsalCredentials(fixture);
 
     expect(credentials).toEqual({

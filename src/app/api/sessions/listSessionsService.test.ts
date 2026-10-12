@@ -34,7 +34,7 @@ describe("listSessionsForClub", () => {
     await listSessionsForClub({ clubId: "club-1", viewerId: "guest:player-1", viewerIsAdmin: false, quickAccessPlayerId: "player-1" });
     expect(mocks.clubAccessFindUnique).not.toHaveBeenCalled();
     expect(mocks.clubMemberFindFirst).toHaveBeenCalledWith({
-      where: { clubId: "club-1", playerId: "player-1", archivedAt: null, player: { isActive: true, ownerUserId: null } },
+      where: { clubId: "club-1", playerId: "player-1", archivedAt: null, ownerUserId: null, retiredByAdmissionEventId: null, player: { isActive: true } },
       select: { id: true },
     });
     expect(mocks.sessionFindMany).toHaveBeenCalledWith(expect.objectContaining({

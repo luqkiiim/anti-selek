@@ -1,6 +1,8 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { assertSessionProfileContextsUnambiguous, resolveSessionProfilePair, withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
 import { randomUUID } from "crypto";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
@@ -9,7 +11,7 @@ import {
 } from "@/lib/matchCompletion";
 import { isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
-import { getAccountClubContext } from "@/lib/playerIdentity";
+import { getAccountClubContext, IdentityConflictError } from "@/lib/playerIdentity";
 import {
   DEFAULT_SESSION_POOL_A_NAME,
   DEFAULT_SESSION_POOL_B_NAME,
@@ -56,6 +58,7 @@ export async function POST(
     const sourceSession = await prisma.session.findUnique({
       where: { code },
       include: {
+        sessionClubs: true,
         courts: {
           select: {
             id: true,
@@ -247,7 +250,25 @@ export async function POST(
 
     const createdAt = new Date();
     const nextSessionId = randomUUID();
-    const createdSession = await prisma.$transaction(async (tx) => {
+    const createdSession = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sourceSession, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, hostOnly: true, adminOnly: true });
+      if (includeResults) {
+        await assertSessionProfileContextsUnambiguous(tx, sourceSession, undefined, { historical: true });
+        if (!allowDuplicateResults && await tx.session.findFirst({ where: { sourceSessionId: sourceSession.id, isTest: false, matches: { some: { status: MatchStatus.COMPLETED } } }, select: { id: true } })) throw new IdentityConflictError("This test tournament already has a real copy with results. Use that tournament to avoid double-counting standings or ratings.");
+      }
+      const profileByPlayerId = new Map<string, { profileClubId: string | null; participantAccountId: string | null }>();
+      const copiedAccountIds = new Set<string>();
+      for (const player of sourceSession.players.filter(p => !p.isGuest)) {
+        if (includeResults) {
+          if (sourceSession.ratingPolicyVersion === 2 && !player.profileClubId) throw new IdentityConflictError("Source tournament has ambiguous club profile context; results cannot be copied.");
+          profileByPlayerId.set(player.playerId, { profileClubId: player.profileClubId, participantAccountId: player.participantAccountId });
+        } else {
+          const pair = await resolveSessionProfilePair(tx, { userId: session.user.id, clubIds: [...new Set([...(sourceSession.clubId ? [sourceSession.clubId] : []), ...sourceSession.sessionClubs.filter(c => c.status === "ACCEPTED").map(c => c.clubId)])], playerId: player.playerId, profileClubId: player.profileClubId ?? player.representingClubId, isGlobalAdmin: !!session.user.isAdmin });
+          if (pair.ownerUserId && copiedAccountIds.has(pair.ownerUserId)) throw new IdentityConflictError("This account appears more than once in the source tournament; select one club profile before copying.");
+          if (pair.ownerUserId) copiedAccountIds.add(pair.ownerUserId);
+          profileByPlayerId.set(player.playerId, { profileClubId: pair.profileClubId, participantAccountId: pair.ownerUserId });
+        }
+      }
       const courtIdBySourceCourtId = new Map(
         sourceSession.courts.map((court) => [court.id, randomUUID()])
       );
@@ -262,6 +283,10 @@ export async function POST(
         data: {
           id: nextSessionId,
           code: nextSessionId,
+          ratingPolicyVersion: includeResults ? sourceSession.ratingPolicyVersion : 2,
+          collabFormat: sourceSession.collabFormat,
+          sessionClubs: { create: sourceSession.sessionClubs.map(link => ({ clubId: link.clubId, role: link.role, status: link.status, requestedById: link.requestedById, reviewedById: link.reviewedById, reviewedAt: link.reviewedAt })) },
+
           clubId: sourceSession.clubId,
           name: sourceSession.name,
           type: sourceSession.type,
@@ -324,6 +349,9 @@ export async function POST(
           sessionId: nextSession.id,
           playerId: userIdBySourceUserId.get(player.playerId) ?? player.playerId,
           isGuest: player.isGuest,
+          representingClubId: player.representingClubId,
+          profileClubId: player.isGuest ? null : profileByPlayerId.get(player.playerId)?.profileClubId,
+          participantAccountId: player.isGuest ? null : profileByPlayerId.get(player.playerId)?.participantAccountId,
           gender: player.gender,
           partnerPreference: player.partnerPreference,
           mixedSideOverride: player.mixedSideOverride,
@@ -404,6 +432,7 @@ export async function POST(
               clubId: nextSession.clubId,
               type: nextSession.type,
               balanceMetric: nextSession.balanceMetric,
+              ratingPolicyVersion: nextSession.ratingPolicyVersion,
               isTest: false,
             },
           };
@@ -459,7 +488,8 @@ export async function POST(
       return safeErrorResponse();
     }
 
-    const players =
+    const legacyPlayers =
+      createdSession.ratingPolicyVersion === 2 ? createdSession.players :
       createdSession.clubId && createdSession.players.length > 0
         ? withClubElo(
             createdSession.players,
@@ -470,11 +500,14 @@ export async function POST(
           )
         : createdSession.players;
 
+    const players = await withSessionProfileRatings(prisma, createdSession, legacyPlayers);
+
     return sportingJson({
       ...createdSession,
       players,
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Create real session from test error", error);
     return safeErrorResponse();
   }

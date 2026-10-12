@@ -272,8 +272,7 @@ export function useClubAdminClubActions({
 
   const handleReviewClaimRequest = async (
     claimRequest: ClubAdminClaimRequest,
-    action: "APPROVE" | "REJECT",
-    recoveryDecision?: { confirmRestoreAccess?: boolean; retireEmptyPlayerId?: string; reason?: string }
+    action: "APPROVE" | "REJECT"
   ) => {
     setReviewingClaimRequestId(claimRequest.id);
     setError("");
@@ -285,7 +284,7 @@ export function useClubAdminClubActions({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, revision: claimRequest.revision, ...recoveryDecision }),
+          body: JSON.stringify({ action, revision: claimRequest.revision }),
         }
       );
       const data = await safeJson(res);

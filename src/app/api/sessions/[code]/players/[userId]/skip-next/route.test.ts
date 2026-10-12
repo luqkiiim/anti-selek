@@ -8,7 +8,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
     sessionPlayer: { findUnique: vi.fn() },
-    player: { findFirst: vi.fn() },
+    clubMember: { findFirst: vi.fn() },
     queuedMatch: { findUnique: vi.fn(), delete: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -79,7 +79,7 @@ describe("skip next match route", () => {
     vi.mocked(auth).mockResolvedValue({
       user: { id: "account-player", isAdmin: false },
     } as never);
-    vi.mocked(prisma.player.findFirst).mockResolvedValue({
+    vi.mocked(prisma.clubMember.findFirst).mockResolvedValue({
       id: "p1",
       ownerUserId: "account-player",
     } as never);
@@ -146,7 +146,7 @@ describe("skip next match route", () => {
     vi.mocked(auth).mockResolvedValue({
       user: { id: "staff-account", isAdmin: false },
     } as never);
-    vi.mocked(prisma.player.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.clubMember.findFirst).mockResolvedValue(null as never);
     vi.mocked(getSessionOperatorMembership).mockResolvedValue({ clubId: "club-1", role: "STAFF" } as never);
     mockTransactions();
 
@@ -161,7 +161,7 @@ describe("skip next match route", () => {
     vi.mocked(auth).mockResolvedValue({
       user: { id: "global-admin-account", isAdmin: true },
     } as never);
-    vi.mocked(prisma.player.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.clubMember.findFirst).mockResolvedValue(null as never);
     mockTransactions();
 
     const response = await PATCH(createRequest(true), {
@@ -175,7 +175,7 @@ describe("skip next match route", () => {
     vi.mocked(auth).mockResolvedValue({
       user: { id: "stranger-account", isAdmin: false },
     } as never);
-    vi.mocked(prisma.player.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.clubMember.findFirst).mockResolvedValue(null as never);
 
     const response = await PATCH(createRequest(true), {
       params: Promise.resolve({ code: "ABC", userId: "p1" }),
@@ -277,4 +277,22 @@ describe("skip next match route", () => {
     );
     expect(tryRebuildQueuedMatchForSessionId).toHaveBeenCalledWith("session-1");
   });
+});
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: { $transaction?: (op: unknown) => unknown }, op: (tx: unknown) => unknown) => db.$transaction ? db.$transaction(op) : op(db) };
+});
+
+vi.mock("@/lib/sessionProfileIdentity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sessionProfileIdentity")>();
+  return { ...actual,
+    assertSessionMutationActor: vi.fn(async () => {}),
+    getSessionParticipantOwners: async (_db: unknown, session: { id: string; clubId: string }, ids: string[]) => {
+      const member = await prisma.clubMember.findFirst({ where: { playerId: ids[0], clubId: session.clubId } });
+      const actor = await auth();
+      const access = await getSessionMembership(prisma, { session, userId: actor!.user!.id!, acceptedOnly: true });
+      return new Map(ids.map(id => [id, access ? member?.ownerUserId ?? null : null]));
+    },
+  };
 });

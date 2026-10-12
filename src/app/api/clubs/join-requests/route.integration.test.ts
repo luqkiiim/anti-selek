@@ -8,6 +8,7 @@ import path from "node:path";
 import { admissionTransaction, reviewClubAdmission, submitClubAdmission } from "@/lib/clubAdmissions";
 import { getOwnedClubPlayer, resolveOwnedSessionPlayer } from "@/lib/playerIdentity";
 import { CLUB_COMMUNITY_COMPAT_COOKIE_PATH, CLUB_JOIN_COOKIE_PATH, CLUB_JOIN_PROOF_TTL_SECONDS, clubJoinProofCookieName, issueClubJoinProof } from "@/lib/clubJoinProof";
+import { claimClubPlayer, removeClubPlayerOwnership } from "@/lib/clubPlayerOwnership";
 let db: PrismaClient;
 let actor: { id: string; isAdmin?: boolean; isQuickAccess?: boolean; guestPlayerId?: string } | null;
 vi.mock("@/lib/prisma", () => ({ get prisma() { return db; } }));
@@ -28,6 +29,8 @@ const proofRequest = (body: unknown) => new Request("http://localhost/api/clubs/
 const newInput = { clubId: "club-a", kind: "NEW_PLAYER" as const, proposedPlayerName: "New Player", proposedGender: "FEMALE" };
 const submit = (input: Parameters<typeof submitClubAdmission>[1] = { clubId: "club-a", requesterUserId: "account-member", kind: "EXISTING_PLAYER" as const, requestedPlayerId: "historical-player" }) => admissionTransaction(db, tx => submitClubAdmission(tx, input));
 const approve = (requestId: string, overrides: Partial<Parameters<typeof reviewClubAdmission>[1]> = {}) => admissionTransaction(db, tx => reviewClubAdmission(tx, { clubId: "club-a", requestId, reviewerUserId: "account-owner", action: "APPROVE", ...overrides }));
+const claim = (clubId = "club-a", playerId = "historical-player", userId = "account-member") => admissionTransaction(db, tx => claimClubPlayer(tx, { clubId, playerId, userId, actorUserId: "account-owner" }));
+const remove = (playerId = "historical-player") => admissionTransaction(db, tx => removeClubPlayerOwnership(tx, { clubId: "club-a", playerId, actorUserId: "account-owner" }));
 beforeAll(async () => {
   const url = "file:" + baseline.replaceAll("\\", "/");
   // Prisma's Windows SQLite engine cannot initialize a database that does not exist yet.
@@ -71,7 +74,8 @@ it("creates an account admission without creating sporting identity until approv
   const ctx = { params: Promise.resolve({ id: "club-a", requestId: first.id }) };
   const approved = await (await review(request({ action: "APPROVE" }), ctx)).json();
   expect(approved.approvedPlayerId).not.toBe("account-member");
-  expect(await db.player.findUnique({ where: { id: approved.approvedPlayerId } })).toMatchObject({ ownerUserId: "account-member" });
+  expect(await db.player.findUnique({ where: { id: approved.approvedPlayerId } })).toMatchObject({ ownerUserId: null, name: "Member", avatarKey: null });
+  expect(await db.clubMember.findUnique({ where: { clubId_playerId: { clubId: "club-a", playerId: approved.approvedPlayerId } } })).toMatchObject({ ownerUserId: "account-member" });
   expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } })).toMatchObject({ role: "MEMBER" });
   expect((await review(request({ action: "APPROVE" }), ctx)).status).toBe(200);
   expect(await db.player.count()).toBe(2);
@@ -86,19 +90,16 @@ it("lets an admin retarget a request to another Player without altering the requ
   expect(result).toMatchObject({ requestedPlayerId: "historical-player", approvedPlayerId: "retarget-player", decision: "CONNECT_EXISTING" });
   expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null, name: "Known Name" });
   expect(await db.clubMember.findUnique({ where: { id: "historic-membership" } })).toMatchObject({ playerId: "historical-player", elo: 1455 });
-  expect(await db.player.findUnique({ where: { id: "retarget-player" } })).toMatchObject({ ownerUserId: "account-member", name: "Retarget Player" });
+  expect(await db.player.findUnique({ where: { id: "retarget-player" } })).toMatchObject({ ownerUserId: null, name: "Member", avatarKey: null });
 });
-it("re-admits an archived owned Player by restoring the same roster row", async () => {
-  const archivedAt = new Date("2025-01-02T03:04:05.000Z");
-  await db.player.update({ where: { id: "historical-player" }, data: { ownerUserId: "account-member" } });
-  await db.clubMember.update({ where: { id: "historic-membership" }, data: { archivedAt } });
-  await db.clubAccess.create({ data: { clubId: "club-a", userId: "account-member", role: "ADMIN", status: "REVOKED" } });
-  const entry = await submit({ clubId: "club-a", requesterUserId: "account-member", kind: "OWNED_PLAYER", requestedPlayerId: "historical-player" });
-  const result = await approve(entry.id!);
-  expect(result).toMatchObject({ approvedPlayerId: "historical-player", decision: "REUSE_OWNED" });
-  expect(await db.clubMember.count({ where: { clubId: "club-a", playerId: "historical-player" } })).toBe(1);
-  expect(await db.clubMember.findUnique({ where: { id: "historic-membership" } })).toMatchObject({ id: "historic-membership", playerId: "historical-player", archivedAt: null, elo: 1455, preferredPool: "B", achievementPreferencesJson: '{"showcase":["win"]}' });
-  expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } })).toMatchObject({ role: "MEMBER", status: "ACTIVE" });
+it("rejects OWNED_PLAYER reuse after local removal and preserves the original roster row", async () => {
+  await claim(); await remove();
+  const member = await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } });
+  const access = await db.clubAccess.findUniqueOrThrow({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } });
+  await expect(submit({ clubId: "club-a", requesterUserId: "account-member", kind: "OWNED_PLAYER", requestedPlayerId: "historical-player" })).rejects.toMatchObject({ statusCode: 409 });
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: member.id } })).toEqual(member);
+  expect(member).toMatchObject({ ownerUserId: null, archivedAt: expect.any(Date), elo: 1455, preferredPool: "B", achievementPreferencesJson: '{"showcase":["win"]}' });
+  expect(await db.clubAccess.findUniqueOrThrow({ where: { id: access.id } })).toEqual(access);
 });
 it("allows an admin to approve an existing Player request as a new Player", async () => {
   const entry = await submit();
@@ -108,24 +109,17 @@ it("allows an admin to approve an existing Player request as a new Player", asyn
   expect(result).toMatchObject({ requestedPlayerId: "historical-player", decision: "CREATE_NEW" });
   expect(result.approvedPlayerId).not.toBe("historical-player");
   expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null, name: "Known Name" });
-  expect(await db.player.findUnique({ where: { id: result.approvedPlayerId } })).toMatchObject({ ownerUserId: "account-member", name: "Member", gender: "FEMALE" });
+  expect(await db.player.findUnique({ where: { id: result.approvedPlayerId } })).toMatchObject({ ownerUserId: null, name: "Member", gender: "FEMALE" });
   expect(await db.clubMember.findUnique({ where: { clubId_playerId: { clubId: "club-a", playerId: "historical-player" } } })).toMatchObject({ elo: 1455 });
 });
-it("requires approval to restore an archived roster even when account access remains active", async () => {
-  await db.player.update({ where: { id: "historical-player" }, data: { ownerUserId: "account-member" } });
-  const archivedAt = new Date("2025-01-02T03:04:05.000Z");
-  await db.clubMember.update({ where: { id: "historic-membership" }, data: { archivedAt } });
-  await db.clubAccess.create({ data: { clubId: "club-a", userId: "account-member", role: "MEMBER" } });
+it("does not offer locally removed profiles through OWNED_PLAYER even with a later active access grant", async () => {
+  await claim(); await remove();
+  await db.clubAccess.update({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } }, data: { status: "ACTIVE" } });
   actor = { id: "account-member" };
   const data = await (await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"))).json();
-  expect(data.membership).toBeNull();
-  expect(data.ownedPlayers).toContainEqual({ id: "historical-player", name: "Known Name" });
-  const entry = await submit({ clubId: "club-a", requesterUserId: "account-member", kind: "OWNED_PLAYER", requestedPlayerId: "historical-player" });
-  expect(entry.status).toBe("PENDING");
-  expect(await db.clubMember.findUnique({ where: { id: "historic-membership" } })).toMatchObject({ archivedAt });
-  await approve(entry.id!);
-  expect(await db.clubMember.findUnique({ where: { id: "historic-membership" } })).toMatchObject({ archivedAt: null, playerId: "historical-player", elo: 1455 });
-  expect(await db.player.count()).toBe(1);
+  expect(data.membership).toBeNull(); expect(data.ownedPlayers).toEqual([]);
+  await expect(submit({ clubId: "club-a", requesterUserId: "account-member", kind: "OWNED_PLAYER", requestedPlayerId: "historical-player" })).rejects.toMatchObject({ statusCode: 409 });
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } })).toMatchObject({ archivedAt: expect.any(Date), ownerUserId: null });
 });
 it("links a historical player without changing any match, session or rating history or importing legacy roles", async () => {
   await db.player.createMany({ data: ["p2", "p3", "p4"].map(id => ({ id, name: id })) });
@@ -141,7 +135,7 @@ it("links a historical player without changing any match, session or rating hist
   expect(await db.sessionPlayer.findUnique({ where: { id: participation.id } })).toEqual(participation);
   expect(await db.session.findUnique({ where: { id: session.id } })).toEqual(session);
   expect(await db.clubMember.findUnique({ where: { id: "historic-membership" } })).toMatchObject({ playerId: "historical-player", ownerUserId: "account-member", elo: 1455, achievementPreferencesJson: '{"showcase":["win"]}' });
-  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: "account-member", name: "Known Name", avatarKey: "historic-avatar", updatedAt: originalPlayerUpdatedAt });
+  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null, name: "Member", avatarKey: null, updatedAt: originalPlayerUpdatedAt });
   expect(await db.user.findUnique({ where: { id: "account-member" } })).toMatchObject({ name: "Member", avatarKey: null });
   expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } })).toMatchObject({ role: "MEMBER" });
   expect(await db.clubAdmissionEvent.count({ where: { admissionRequestId: entry.id } })).toBe(2);
@@ -151,11 +145,12 @@ it("does not change existing account role on claim", async () => {
   const entry = await submit(); await approve(entry.id!);
   expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } })).toMatchObject({ role: "STAFF" });
 });
-it("reactivates a revoked admin only as a regular member after approval", async () => {
+it("ordinary admission cannot bypass revoked access without an exact local release", async () => {
   await db.clubAccess.create({ data: { clubId: "club-a", userId: "account-member", role: "ADMIN", status: "REVOKED" } });
-  const entry = await submit();
-  await approve(entry.id!);
-  expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } })).toMatchObject({ role: "MEMBER", status: "ACTIVE" });
+  const entry = await submit(); const before = await db.clubAccess.findMany();
+  await expect(approve(entry.id!)).rejects.toMatchObject({ statusCode: 409 });
+  expect(await db.clubAccess.findMany()).toEqual(before);
+  expect(await db.clubAdmissionRequest.findUniqueOrThrow({ where: { id: entry.id! } })).toMatchObject({ status: "PENDING" });
 });
 it("retains rejected attempts and creates a new attempt instead of reopening a reviewed row", async () => {
   const entry = await submit();
@@ -187,56 +182,48 @@ it("rejects changing a pending new-player payload when the retry has no idempote
   expect(await db.clubAdmissionRequest.count()).toBe(1);
 });
 it("blocks claiming a different identity already owned in the same club and does not move history", async () => {
-  await db.player.create({ data: { id: "member-player", ownerUserId: "account-member", name: "Member Player" } });
+  await db.player.create({ data: { id: "member-player", name: "Member Player" } });
   await db.clubMember.create({ data: { clubId: "club-a", playerId: "member-player" } });
-  const entry = await submit();
-  await expect(approve(entry.id!)).rejects.toMatchObject({ statusCode: 409 });
+  await claim("club-a", "member-player");
+  await expect(submit()).rejects.toMatchObject({ statusCode: 409 });
   expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null });
-  expect(await db.clubAdmissionRequest.findUnique({ where: { id: entry.id } })).toMatchObject({ status: "PENDING", revision: 0 });
+  expect(await db.clubAdmissionRequest.count()).toBe(0);
 });
-it("checks ownership clashes in every club of the target", async () => {
+it("blocks assigning a shared physical Player to a different retained local owner", async () => {
   await db.clubMember.create({ data: { clubId: "club-b", playerId: "historical-player" } });
-  await db.player.create({ data: { id: "owned-b", ownerUserId: "account-member", name: "Owned B" } });
-  await db.clubMember.create({ data: { clubId: "club-b", playerId: "owned-b" } });
-  const entry = await submit(); await expect(approve(entry.id!)).rejects.toMatchObject({ statusCode: 409 });
-  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null });
+  await claim("club-b", "historical-player", "account-other");
+  await expect(submit()).rejects.toMatchObject({ statusCode: 409 });
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } })).toMatchObject({ ownerUserId: null });
+  expect(await getOwnedClubPlayer(db, { clubId: "club-b", userId: "account-other" })).toMatchObject({ playerId: "historical-player" });
 });
-it("blocks acquiring a second nonretired owned identity across disjoint clubs without changing either profile", async () => {
-  const legacyPlayer = await db.player.create({ data: { id: "legacy-b", ownerUserId: "account-member", name: "Legacy B" } });
-  await db.clubMember.create({ data: { clubId: "club-b", playerId: "legacy-b", elo: 1275 } });
-  const legacyMember = await db.clubMember.findUniqueOrThrow({ where: { clubId_playerId: { clubId: "club-b", playerId: "legacy-b" } } });
-  const historicalPlayer = await db.player.findUniqueOrThrow({ where: { id: "historical-player" } });
-  const historicalMember = await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } });
-  const entry = await submit();
-  await expect(approve(entry.id!)).rejects.toMatchObject({ statusCode: 409 });
-  expect(await db.player.findMany({ where: { ownerUserId: "account-member" } })).toEqual([legacyPlayer]);
-  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toEqual(historicalPlayer);
-  expect(await db.clubMember.findUnique({ where: { id: legacyMember.id } })).toMatchObject({ ...legacyMember, ownerUserId: "account-member" });
-  expect(await db.clubMember.findUnique({ where: { id: historicalMember.id } })).toEqual(historicalMember);
-  expect(await db.clubAdmissionRequest.findUnique({ where: { id: entry.id } })).toMatchObject({ status: "PENDING", revision: 0, approvedPlayerId: null });
+it("allows separate local Players in disjoint clubs while preserving the first profile", async () => {
+  await db.player.create({ data: { id: "local-b", name: "Local B" } });
+  await db.clubMember.create({ data: { clubId: "club-b", playerId: "local-b", elo: 1275 } });
+  await claim("club-b", "local-b");
+  const before = await db.clubMember.findUniqueOrThrow({ where: { clubId_playerId: { clubId: "club-b", playerId: "local-b" } } });
+  const entry = await submit(); await approve(entry.id!);
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: before.id } })).toEqual(before);
+  expect(await getOwnedClubPlayer(db, { clubId: "club-a", userId: "account-member" })).toMatchObject({ playerId: "historical-player" });
+  expect(await getOwnedClubPlayer(db, { clubId: "club-b", userId: "account-member" })).toMatchObject({ playerId: "local-b" });
+  await expect(resolveOwnedSessionPlayer(db, { userId: "account-member", clubIds: ["club-a", "club-b"] })).rejects.toThrow();
 });
-it("reuses an explicitly selected owned Player without consolidating a different legacy placeholder", async () => {
-  const legacyPlayer = await db.player.create({ data: { id: "legacy-b", ownerUserId: "account-member", name: "Legacy B" } });
-  await db.clubMember.create({ data: { id: "legacy-b-club-membership", clubId: "club-b", playerId: "legacy-b", elo: 1275 } });
-  const historicalPlayer = await db.player.findUniqueOrThrow({ where: { id: "historical-player" } });
-  const historicalMember = await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } });
-  const entry = await submit({ clubId: "club-a", requesterUserId: "account-member", kind: "OWNED_PLAYER", requestedPlayerId: "legacy-b" });
-  const result = await approve(entry.id!);
-  expect(result).toMatchObject({ approvedPlayerId: "legacy-b", decision: "REUSE_OWNED" });
-  expect(await db.player.count({ where: { ownerUserId: "account-member" } })).toBe(1);
-  expect(await db.player.findUnique({ where: { id: legacyPlayer.id } })).toEqual(legacyPlayer);
-  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toEqual(historicalPlayer);
-  expect(await db.clubMember.findUnique({ where: { id: historicalMember.id } })).toEqual(historicalMember);
-  expect(await db.clubMember.findUnique({ where: { clubId_playerId: { clubId: "club-a", playerId: "legacy-b" } } })).toMatchObject({ playerId: "legacy-b", elo: 1000 });
-  expect(await getOwnedClubPlayer(db, { clubId: "club-a", userId: "account-member" })).toMatchObject({ playerId: "legacy-b" });
-  await expect(resolveOwnedSessionPlayer(db, { userId: "account-member", clubIds: ["club-a", "club-b"] })).resolves.toMatchObject({ id: "legacy-b" });
+it("rejects cross-club OWNED_PLAYER reuse without consolidating the local placeholder", async () => {
+  await db.player.create({ data: { id: "local-b", name: "Local B" } });
+  await db.clubMember.create({ data: { clubId: "club-b", playerId: "local-b", elo: 1275 } }); await claim("club-b", "local-b");
+  const before = await db.clubMember.findMany({ orderBy: { id: "asc" } });
+  await expect(submit({ clubId: "club-a", requesterUserId: "account-member", kind: "OWNED_PLAYER", requestedPlayerId: "local-b" })).rejects.toMatchObject({ statusCode: 409 });
+  expect(await db.clubMember.findMany({ orderBy: { id: "asc" } })).toEqual(before);
+  expect(await db.clubAdmissionRequest.count()).toBe(0);
 });
-it("reuses an owned global player for a new club instead of creating another identity", async () => {
-  await db.player.update({ where: { id: "historical-player" }, data: { ownerUserId: "account-member" } });
-  const entry = await admissionTransaction(db, tx => submitClubAdmission(tx, { clubId: "club-b", requesterUserId: "account-member", kind: "OWNED_PLAYER", requestedPlayerId: "historical-player" }));
-  await approve(entry.id!, { clubId: "club-b" });
-  expect(await db.player.count()).toBe(1);
-  expect(await db.clubMember.count()).toBe(2);
+it("new admission in another club creates a distinct locally connected Player", async () => {
+  await claim();
+  const original = await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } });
+  const entry = await admissionTransaction(db, tx => submitClubAdmission(tx, { clubId: "club-b", requesterUserId: "account-member", kind: "NEW_PLAYER", proposedPlayerName: "Member", proposedGender: "FEMALE" }));
+  const result = await approve(entry.id!, { clubId: "club-b" });
+  expect(result.approvedPlayerId).not.toBe("historical-player");
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: original.id } })).toEqual(original);
+  expect(await db.player.count()).toBe(2);
+  expect(await getOwnedClubPlayer(db, { clubId: "club-b", userId: "account-member" })).toMatchObject({ playerId: result.approvedPlayerId });
 });
 it("enforces admin authorization, self approval restrictions, invite switch, and request club", async () => {
   actor = { id: "account-other" }; expect((await GET(request({}), context)).status).toBe(403);
@@ -255,8 +242,8 @@ it("allows only one winner when two accounts concurrently claim the same player"
   expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
   const failure = results.find(r => r.status === "rejected") as PromiseRejectedResult;
   expect(failure.reason.statusCode).toBe(409);
-  const target = await db.player.findUnique({ where: { id: "historical-player" } });
-  expect(["account-member", "account-other"]).toContain(target!.ownerUserId);
+  expect((await db.player.findUniqueOrThrow({ where: { id: "historical-player" } })).ownerUserId).toBeNull();
+  expect(["account-member", "account-other"]).toContain((await db.clubMember.findUniqueOrThrow({ where: { id: "historic-membership" } })).ownerUserId);
   expect(await db.clubAdmissionRequest.count({ where: { status: "APPROVED" } })).toBe(1);
 }, 60000);
 it("candidate discovery omits emails and makes account roles separate from target profile identity", async () => {
@@ -267,7 +254,7 @@ it("candidate discovery omits emails and makes account roles separate from targe
   expect(data.membership).toBeNull(); expect(data.access).toBeNull();
 });
 it("hides archived roster Players from public discovery and the admin candidate list", async () => {
-  await db.clubMember.update({ where: { id: "historic-membership" }, data: { archivedAt: new Date("2025-01-02T03:04:05.000Z") } });
+  await remove();
   actor = { id: "account-member" };
   const discoveryData = await (await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"))).json();
   expect(discoveryData.players).not.toContainEqual(expect.objectContaining({ id: "historical-player" }));
@@ -292,7 +279,7 @@ it("writes only ownership while preserving a legacy text timestamp representatio
   const entry = await submit(); await approve(entry.id!);
   expect(await rawTimestamp()).toEqual(before);
   expect(before[0].storageType).toBe("text");
-  expect(await db.player.findUnique({ where: { id: "historical-player" }, select: { ownerUserId: true } })).toEqual({ ownerUserId: "account-member" });
+  expect(await db.player.findUnique({ where: { id: "historical-player" }, select: { ownerUserId: true } })).toEqual({ ownerUserId: null });
 });
 
 it("requires current account-bound password proof for protected candidate discovery and admission", async () => {
@@ -342,7 +329,7 @@ it("requires current account-bound password proof for protected candidate discov
     const unlocked = await unlockedResponse.json();
     expect(unlocked).toMatchObject({ passwordProof: { status: "VERIFIED", expiresAt: expect.any(String) } });
     expect(unlocked.players).toContainEqual(expect.objectContaining({ id: "historical-player", name: "Known Name", elo: 1455 }));
-    expect(unlocked.ownedPlayers).toContainEqual({ id: "member-owned-player", name: "Owned Profile" });
+    expect(unlocked.ownedPlayers).toEqual([]);
 
     const submitted = await POST(new Request("http://localhost/api/clubs/join-requests", {
       method: "POST",
@@ -509,7 +496,7 @@ it("signals an inactive owned identity without exposing or offering that Player"
 
     const lockedResponse = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"));
     const locked = await lockedResponse.json();
-    expect(locked).toMatchObject({ identityReviewRequired: true, passwordProof: { status: "PASSWORD_REQUIRED" }, players: [], ownedPlayers: [] });
+    expect(locked).toMatchObject({ identityReviewRequired: false, passwordProof: { status: "PASSWORD_REQUIRED" }, players: [], ownedPlayers: [] });
     expect(JSON.stringify(locked)).not.toContain("inactive-owned-hidden");
     expect(JSON.stringify(locked)).not.toContain("Private Inactive Profile");
 
@@ -518,7 +505,7 @@ it("signals an inactive owned identity without exposing or offering that Player"
     const cookie = issued.headers.get("set-cookie")!.split(/,\s*(?=[A-Za-z0-9_]+=)/).find(value => value.startsWith("club_join_proof_"))!.split(";", 1)[0];
     const unlockedResponse = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a", { headers: { Cookie: cookie } }));
     const unlocked = await unlockedResponse.json();
-    expect(unlocked).toMatchObject({ identityReviewRequired: true, passwordProof: { status: "VERIFIED" }, ownedPlayers: [] });
+    expect(unlocked).toMatchObject({ identityReviewRequired: false, passwordProof: { status: "VERIFIED" }, ownedPlayers: [] });
     expect(JSON.stringify(unlocked)).not.toContain("inactive-owned-hidden");
     expect(JSON.stringify(unlocked)).not.toContain("Private Inactive Profile");
   } finally {
@@ -532,10 +519,10 @@ it("does not let an active club member browse protected candidates without passw
   process.env.AUTH_SECRET = "local-test-secret-for-club-join-proof-0123456789";
   try {
     await db.club.update({ where: { id: "club-a" }, data: { isPasswordProtected: true, passwordHash: await bcrypt.hash("MemberPasswordForTest", 4) } });
-    await db.player.update({ where: { id: "historical-player" }, data: { ownerUserId: "account-member" } });
+    await claim();
     await db.player.create({ data: { id: "another-unclaimed-player", name: "Other Candidate" } });
     await db.clubMember.create({ data: { clubId: "club-a", playerId: "another-unclaimed-player", elo: 1600 } });
-    await db.clubAccess.create({ data: { clubId: "club-a", userId: "account-member", role: "MEMBER", status: "ACTIVE" } });
+    expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } })).toMatchObject({ role: "MEMBER", status: "ACTIVE" });
     actor = { id: "account-member" };
 
     const response = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a&q=Other"));

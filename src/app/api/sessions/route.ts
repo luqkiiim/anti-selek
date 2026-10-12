@@ -1,5 +1,6 @@
+import { ClubAdmissionError } from "@/lib/clubAdmissions";
+import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseCreateSessionRequest } from "./createSessionRequest";
 import { createSessionForUser } from "./createSessionService";
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
 
     return sportingJson(withLegacyClubAliases(createdSession));
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: error.statusCode });
     if (error instanceof SessionRouteError) {
       return sportingJson({ error: error.message }, { status: error.status });
     }

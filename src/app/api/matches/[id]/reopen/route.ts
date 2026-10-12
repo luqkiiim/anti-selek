@@ -1,3 +1,6 @@
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { assertSessionMutationActor, assertSessionProfileContextsUnambiguous } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -40,6 +43,7 @@ export async function POST(
         session: {
           select: {
             clubId: true,
+            ratingPolicyVersion: true,
           },
         },
       },
@@ -64,7 +68,10 @@ export async function POST(
       return sportingJson({ error: "Only admins or staff can reopen score entry" }, { status: 403 });
     }
 
-    const updatedResult = await prisma.match.updateMany({
+    const updatedResult = await admissionTransaction(prisma, async tx => {
+      await assertSessionMutationActor(tx, { session: { id: match.sessionId, ...match.session }, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      await assertSessionProfileContextsUnambiguous(tx, { id: match.sessionId, ...match.session });
+      return tx.match.updateMany({
       where: { id, status: MatchStatus.PENDING_APPROVAL },
       data: {
         status: MatchStatus.IN_PROGRESS,
@@ -77,6 +84,8 @@ export async function POST(
         scoreSubmittedByUserId: null,
         scoreSubmittedByPlayerId: null,
       },
+    });
+
     });
 
     if (updatedResult.count === 0) {
@@ -98,6 +107,7 @@ export async function POST(
 
     return sportingJson(updatedMatch);
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Reopen score error", error);
     return safeErrorResponse();
   }

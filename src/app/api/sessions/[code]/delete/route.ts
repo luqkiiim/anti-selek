@@ -1,5 +1,7 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent } from "@/lib/serverAudit";
@@ -75,7 +77,8 @@ export async function DELETE(
       );
     }
 
-    await prisma.$transaction(async (tx) => {
+    await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: targetSession, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, hostOnly: true });
       const sessionPlayers = await tx.sessionPlayer.findMany({
         where: { sessionId: targetSession.id },
         select: { playerId: true, isGuest: true },
@@ -131,6 +134,8 @@ export async function DELETE(
       clubId: targetSession.clubId,
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Delete session error", error);
     return safeErrorResponse();
   }

@@ -17,6 +17,8 @@ import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
 
 export interface Player {
   userId: string;
+  /** Exact club-local profile selected for this session participant. */
+  profileClubId?: string | null;
   representingClubId?: string | null;
   sessionPoints: number;
   ladderEntryAt?: string;
@@ -102,6 +104,7 @@ export interface Court {
 
 export interface ClubUser {
   id: string;
+  profileClubId?: string | null;
   name: string;
   avatarUrl?: string | null;
   elo: number;
@@ -119,6 +122,8 @@ export interface SessionData {
   code: string;
   viewerUserId?: string | null;
   viewerPlayerId?: string | null;
+  eligibleProfiles?: EligibleSessionProfile[];
+  selectedSelf?: Pick<EligibleSessionProfile, "playerId" | "profileClubId"> | null;
   clubId?: string | null;
   name: string;
   type: string;
@@ -129,6 +134,7 @@ export interface SessionData {
   balanceMetric?: SessionBalanceMetric;
   pairingMode?: SessionPairingMode;
   status: string;
+  ratingPolicyVersion?: number;
   isTest: boolean;
   sourceSessionId?: string | null;
   autoQueueEnabled: boolean;
@@ -161,6 +167,16 @@ export interface SessionData {
   players: Player[];
   matches?: CompletedMatchInfo[];
   queuedMatch?: QueuedMatch | null;
+}
+
+export interface EligibleSessionProfile {
+  playerId: string;
+  profileClubId: string;
+  clubName: string;
+  playerName: string;
+  ownerUserId: string;
+  elo: number;
+  preferredPool: SessionPool;
 }
 
 export interface CurrentUser {

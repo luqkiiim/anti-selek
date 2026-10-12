@@ -360,3 +360,9 @@ describe("player-group assignment lifecycle", () => {
     );
   });
 });
+
+// Local database integration covers writer/access guards; these fixtures cover assignment mechanics.
+vi.mock("@/lib/sessionProfileIdentity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sessionProfileIdentity")>();
+  return { ...actual, sessionMatchMutationTransaction: async (db: { $transaction: (op: unknown) => unknown }, _sessionId: string, _actor: unknown, op: unknown) => db.$transaction(op) };
+});

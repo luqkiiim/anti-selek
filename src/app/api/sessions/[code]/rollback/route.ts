@@ -1,5 +1,8 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { assertSelectedProfileLedger } from "@/lib/matchCompletion";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccountClubContext } from "@/lib/playerIdentity";
@@ -92,7 +95,8 @@ export async function POST(
       return sportingJson({ error: "Admin only" }, { status: 403 });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: targetSession, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, hostOnly: true, adminOnly: true });
       const freshTarget = await tx.session.findUnique({
         where: { id: targetSession.id },
         select: {
@@ -104,6 +108,7 @@ export async function POST(
           endedAt: true,
           createdAt: true,
           isTest: true,
+          ratingPolicyVersion: true,
           club: {
             select: {
               isTutorial: true,
@@ -170,12 +175,16 @@ export async function POST(
           matchId: { in: completedMatches.map((match) => match.id) },
         },
         select: {
+          matchId: true,
           clubId: true,
           playerId: true,
           delta: true,
         },
       });
 
+      if (freshTarget.ratingPolicyVersion === 2) {
+        for (const match of completedMatches) await assertSelectedProfileLedger(tx, freshTarget.id, [match.team1Player1Id, match.team1Player2Id, match.team2Player1Id, match.team2Player2Id], ledgerAdjustments.filter(a => a.matchId === match.id));
+      }
       const reversedPlayerKeys = new Set<string>();
       if (ledgerAdjustments.length > 0) {
         const reverseDeltaByClubAndUserId = new Map<
@@ -206,7 +215,7 @@ export async function POST(
           });
           reversedPlayerKeys.add(`${item.clubId}:${item.playerId}`);
         }
-      } else {
+      } else if (freshTarget.ratingPolicyVersion !== 2) {
         const eloReverseDeltaByUserId = computeRollbackEloDeltas(
           completedMatches,
           isGuestByUserId
@@ -314,6 +323,8 @@ export async function POST(
       );
     }
 
+    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Rollback tournament error", error);
     return safeErrorResponse();
   }

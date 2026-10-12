@@ -82,6 +82,7 @@ describe("session lifecycle rollback", () => {
   it("reverses club rating ledger entries before a live session is cleared", async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const tx = {
+      session: { findUnique: vi.fn().mockResolvedValue({ ratingPolicyVersion: 1 }) },
       sessionPlayer: {
         findMany: vi.fn().mockResolvedValue([
           { playerId: "A", isGuest: false },

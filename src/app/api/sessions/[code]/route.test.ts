@@ -23,6 +23,7 @@ vi.mock("@/lib/playerGroupPreferences", () => ({
   applyPendingPlayerGroupChangesInTransaction: vi.fn(),
 }));
 vi.mock("@/lib/sessionCollab", () => ({
+  getAcceptedSessionClubIds: vi.fn(async () => []),
   getPlayerClubBadges: vi.fn(async () => new Map()),
   getSessionAdminMembership: vi.fn(async () => null),
   getSessionMembership: vi.fn(async () => null),
@@ -414,4 +415,19 @@ describe("session settings route", () => {
       data: { pool: "A", pendingPool: null },
     });
   });
+});
+
+vi.mock("@/lib/sessionProfileIdentity", () => ({
+  assertSessionMutationActor: vi.fn(async () => {}),
+  getSessionParticipantOwners: async () => {
+    const session = await prisma.session.findUnique({ where: { id: "session-1" }, include: { players: { include: { player: true } } } });
+    return new Map((session?.players ?? []).map((p: { playerId: string; player: { ownerUserId: string | null } }) => [p.playerId, p.player.ownerUserId]));
+  },
+  getEligibleSessionProfiles: async () => [],
+  withSessionProfileRatings: async (_db: unknown, _session: unknown, players: unknown) => players,
+}));
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: { $transaction: (op: unknown) => unknown }, op: unknown) => db.$transaction(op) };
 });

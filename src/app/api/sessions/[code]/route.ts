@@ -1,3 +1,8 @@
+import { withMatchLocalClaimLabels } from "@/lib/matchApprovalRules";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { getSessionParticipantOwners, getEligibleSessionProfiles, withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -6,6 +11,7 @@ import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPr
 import { prisma } from "@/lib/prisma";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
+  getAcceptedSessionClubIds,
   getPlayerClubBadges,
   getSessionAdminMembership,
   isAccountSessionPlayer,
@@ -213,7 +219,6 @@ async function getSessionRoute(
           player: {
             select: {
               id: true,
-              ownerUserId: true,
               name: true,
               avatarKey: true,
               elo: true,
@@ -293,9 +298,10 @@ async function getSessionRoute(
     ? sessionData.players.some((player) => player.playerId === quickPlayerId)
     : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
+  const participantOwners = await getSessionParticipantOwners(prisma, sessionData);
   const viewerOwnedPlayers = isQuickAccess
     ? []
-    : sessionData.players.filter((player) => player.player.ownerUserId === session.user.id);
+    : sessionData.players.filter((player) => participantOwners.get(player.playerId) === session.user.id);
   const viewerPlayerId = quickPlayerId
     ? sessionData.players.some((player) => player.playerId === quickPlayerId) ? quickPlayerId : null
     : viewerOwnedPlayers.length === 1 ? viewerOwnedPlayers[0].playerId : null;
@@ -334,7 +340,8 @@ async function getSessionRoute(
     )
   );
   const playerIds = sessionData.players.map((p) => p.playerId);
-  const players =
+  const legacyPlayers =
+      sessionData.ratingPolicyVersion === 2 ? sessionData.players :
     linkedClubIds.length > 1 && sessionData.players.length > 0
       ? withPlayerClubBadges(
           sessionData.players,
@@ -347,6 +354,10 @@ async function getSessionRoute(
             await getClubEloByUserId(sessionData.clubId, playerIds)
           )
         : sessionData.players;
+  const players = await withSessionProfileRatings(prisma, sessionData, legacyPlayers);
+  const eligibleProfiles = isQuickAccess ? [] : await getEligibleSessionProfiles(prisma, { userId: session.user.id, clubIds: await getAcceptedSessionClubIds(prisma, sessionData) });
+  const selectedSeat = viewerOwnedPlayers.length === 1 ? viewerOwnedPlayers[0] : null;
+  const selectedSelf = selectedSeat ? { ...eligibleProfiles.find(p => p.playerId === selectedSeat.playerId && (!selectedSeat.profileClubId || p.profileClubId === selectedSeat.profileClubId)), playerId: selectedSeat.playerId, profileClubId: selectedSeat.profileClubId ?? selectedSeat.representingClubId ?? (eligibleProfiles.length === 1 ? eligibleProfiles[0].profileClubId : null) } : null;
   const serializedPlayers = players.map((player) => ({
     ...player,
     ...(sessionData.status === SessionStatus.COMPLETED
@@ -354,6 +365,8 @@ async function getSessionRoute(
       : {}),
     player: serializeAvatarEntity({
       id: player.player.id,
+      isClaimed: !!participantOwners.get(player.playerId),
+      email: null,
       name: player.player.name,
       avatarKey: player.player.avatarKey,
       elo: player.player.elo,
@@ -404,7 +417,8 @@ async function getSessionRoute(
       return court;
     }
 
-    const { matchmakingReasonJson, ...currentMatch } = court.currentMatch;
+    const { matchmakingReasonJson, ...rawCurrentMatch } = court.currentMatch;
+    const currentMatch = withMatchLocalClaimLabels(rawCurrentMatch, participantOwners);
 
     return {
       ...court,
@@ -422,11 +436,14 @@ async function getSessionRoute(
   return sportingJson(withLegacyClubAliases({
     ...sessionData,
     courts,
+    matches: sessionData.matches.map(match => withMatchLocalClaimLabels(match, participantOwners)),
     players: serializedPlayers,
     queuedMatch,
     viewerClubRole: clubRole,
     viewerUserId,
     viewerPlayerId,
+    eligibleProfiles,
+    selectedSelf,
     viewerIsQuickAccess: isQuickAccess,
     viewerCanManage:
       !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
@@ -458,6 +475,7 @@ export async function GET(...args: Parameters<typeof getSessionRoute>) {
   try {
     return privateNoStore(await getSessionRoute(...args));
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Load session error", error);
     return privateNoStore(safeErrorResponse());
   }
@@ -588,7 +606,8 @@ export async function PATCH(
       );
     }
 
-    await prisma.$transaction(async (tx) => {
+    await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       let initializeLegacyPools = false;
       if (
         gameplaySettings?.poolsEnabled &&
@@ -772,6 +791,7 @@ export async function PATCH(
         : null,
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof SessionRouteError) {
       return sportingJson(
         { error: error.message },

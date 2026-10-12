@@ -1,5 +1,4 @@
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { COMMUNITY_OPERATOR_ROLES } from "@/lib/clubRoles";
@@ -134,6 +133,7 @@ export async function GET(
       where: {
         clubId: { in: uniqueManageableClubIds },
         retiredByAdmissionEventId: null,
+        archivedAt: null,
       },
       include: {
         club: {
@@ -185,12 +185,13 @@ export async function GET(
               : null,
           elo: membership.elo,
           isActive: membership.player.isActive,
-          isClaimed: !!membership.player.ownerUserId,
-          ownerUserId: membership.player.ownerUserId,
+          isClaimed: !!membership.ownerUserId,
+          ownerUserId: membership.ownerUserId,
           createdAt: membership.player.createdAt,
           wins: 0,
           losses: 0,
           role: "MEMBER",
+          profileClubId: membership.clubId,
           representingClubId: membership.clubId,
           representingClubName:
             membership.club.name ??

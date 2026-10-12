@@ -62,6 +62,9 @@ function createMigratedLegacyFixture() {
     db.exec(fs.readFileSync(path.join(migrationRoot, "20261005190000_cleanup_player_invitation_continuations", "migration.sql"), "utf8"));
     db.exec(fs.readFileSync(path.join(migrationRoot, "20261008120000_placeholder_claim_recovery", "migration.sql"), "utf8"));
     db.exec(fs.readFileSync(path.join(migrationRoot, "20261008140000_authorized_identity_transitions", "migration.sql"), "utf8"));
+    for (const name of fs.readdirSync(migrationRoot).filter(name => name > "20261008140000_authorized_identity_transitions" && fs.existsSync(path.join(migrationRoot, name, "migration.sql"))).sort()) {
+      db.exec(fs.readFileSync(path.join(migrationRoot, name, "migration.sql"), "utf8"));
+    }
   } finally {
     db.close();
   }
@@ -127,7 +130,8 @@ describe("club deletion and immutable admission history", () => {
       orderBy: { id: "asc" },
     });
     expect(beforeRequests).toHaveLength(2);
-    expect(beforeEvents).toHaveLength(2);
+    expect(beforeEvents).toHaveLength(3);
+    expect(beforeEvents.map(event => event.action)).toContain("LOCAL_OWNERSHIP_MIGRATION_CANCEL");
 
     const response = await requestDelete("club-with-admission-history");
 
@@ -148,13 +152,22 @@ describe("club deletion and immutable admission history", () => {
     })).toEqual(beforeEvents);
   });
 
-  it("still deletes a migrated club with no admission history", async () => {
-    mockedAuth.mockResolvedValue({ user: { id: "account-a", email: "owner@example.invalid", isAdmin: false } } as never);
-
+it("preserves a migrated ordinary club even without admission history", async () => {
+    mockedAuth.mockResolvedValue({ user: { id: "account-a", isAdmin: false } } as never);
+    const before = await prisma.clubMember.findMany({ where: { clubId: "club-without-admission-history" } });
+    expect(before).toEqual([]);
     const response = await requestDelete("club-without-admission-history");
+    expect(response.status).toBe(409);
+    expect(await prisma.clubMember.findMany({ where: { clubId: "club-without-admission-history" } })).toEqual(before);
+});
+});
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ success: true });
-    expect(await prisma.club.findUnique({ where: { id: "club-without-admission-history" } })).toBeNull();
-  });
+it("applies the ordinary-club preservation guard to a newly empty club", async () => {
+  mockedAuth.mockResolvedValue({ user: { id: "account-a", isAdmin: false } } as never);
+  await prisma.club.create({ data: { id: "empty-local-club", name: "Empty", createdById: "account-a" } });
+  await prisma.clubAccess.create({ data: { clubId: "empty-local-club", userId: "account-a", role: "OWNER" } });
+  const response = await requestDelete("empty-local-club");
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ error: expect.stringContaining("history") });
+  expect(await prisma.club.findUnique({ where: { id: "empty-local-club" } })).not.toBeNull();
 });

@@ -18,7 +18,6 @@ import { MemberPhotoEditor } from "./MemberPhotoEditor";
 import { ClubSettings } from "./ClubSettings";
 import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
 import { RemovedPlayerAccounts } from "@/components/club-admin/RemovedPlayerAccounts";
-import { PlayerRecoveryReview, type RecoveryReviewDecision } from "@/components/club-admin/PlayerRecoveryReview";
 import "./manage-club.css";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 export default function Admin({
@@ -41,7 +40,6 @@ export default function Admin({
     [query, setQuery] = useState(""),
     [sheet, setSheet] = useState("");
   const [alternatePicker, setAlternatePicker] = useState<Record<string, boolean>>({});
-  const [disconnectOnRemove, setDisconnectOnRemove] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Record<string, string>>({});
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
   const [edit, setEdit] = useState<ClubPageMember | null>(null),
@@ -64,9 +62,6 @@ export default function Admin({
       : location.origin + "/?join=" + encodeURIComponent(club.id);
   function candidatesFor(request: AdmissionRequest): AdmissionCandidate[] {
     const candidates = [...(joins.data?.candidates ?? [])];
-    for (const owned of request.ownedPlayers ?? []) {
-      if (!candidates.some(candidate => candidate.id === owned.id)) candidates.push({ id: owned.id, name: owned.name });
-    }
     if (request.history && request.requestedPlayerId && !candidates.some(candidate => candidate.id === request.requestedPlayerId)) {
       candidates.push({ ...request.history, id: request.requestedPlayerId });
     }
@@ -76,7 +71,7 @@ export default function Admin({
     const id = selectedCandidate[request.id] ?? request.requestedPlayerId ?? "";
     return candidatesFor(request).find(candidate => candidate.id === id) ?? null;
   }
-  function reviewAdmission(request: AdmissionRequest, body: RecoveryReviewDecision & { playerId?: string; asNew?: boolean }) {
+  function reviewAdmission(request: AdmissionRequest, body: { action: "APPROVE" | "REJECT"; playerId?: string; asNew?: boolean; reason?: string }) {
     void action.run(() => api(endpoint + "/join-requests/" + request.id, "PATCH", { ...body, revision: request.revision }));
   }
   function editor(player: ClubPageMember | null) {
@@ -193,25 +188,22 @@ export default function Admin({
                     <Avatar name={r.requesterName ?? r.requester?.name ?? r.name ?? "Member"} />
                     <div><strong>{r.requesterName ?? r.requester?.name ?? r.name ?? "Member"}</strong><small>{r.requesterEmail ?? r.requester?.email ?? "Email unavailable"} · requested {new Date(r.createdAt).toLocaleDateString()}</small></div>
                   </div>
-                  <p className="admission-review-kind">{r.kind === "NEW_PLAYER" ? "New Player request" : r.kind === "OWNED_PLAYER" ? "Existing owned Player" : "Claim an existing Player"}</p>
+                  <p className="admission-review-kind">{r.kind === "NEW_PLAYER" ? "New local profile request" : "Claim a local profile"}</p>
                   {r.kind === "NEW_PLAYER" ? <div className="admission-review-player"><strong>{r.proposedPlayerName ?? r.requesterName ?? "New Player"}</strong><span>{r.proposedGender === "FEMALE" ? "Female" : r.proposedGender === "MALE" ? "Male" : "Gender not provided"} · no Player profile has been created</span></div> : <div className="admission-review-player"><strong>Claim candidate: {r.targetName ?? r.history?.name ?? "Player unavailable"}</strong><span>{r.history ? `${r.history.elo} rating · ${r.history.matchesPlayed} matches` : "No completed match history found"}{r.history?.lastPlayedAt ? ` · last played ${new Date(r.history.lastPlayedAt).toLocaleDateString()}` : ""}</span></div>}
-                  {r.conflict && !r.recovery && <p className="admission-review-conflict" role="alert">{r.conflict} No Player records or match history will be merged.</p>}
-                  {!r.recovery && !!r.possibleDuplicates?.length && <div className="admission-duplicate-list"><strong>Possible matching Players</strong>{r.possibleDuplicates.map(candidate => <button key={candidate.id} type="button" className="text-button" onClick={() => { setAlternatePicker(current => ({ ...current, [r.id]: true })); setSelectedCandidate(current => ({ ...current, [r.id]: candidate.id })); }}>{candidate.name} · {candidate.elo} rating</button>)}</div>}
+                  {r.conflict && <p className="admission-review-conflict" role="alert">{r.conflict}</p>}
                   {r.note && <blockquote className="admission-review-note">“{r.note}”</blockquote>}
                   {r.events?.length ? <small className="admission-review-events">Request history: {r.events.map(event => event.action.toLowerCase()).join(" → ")}</small> : null}
 
-                  {r.recovery ? <PlayerRecoveryReview key={`${r.id}:${r.revision}`} recovery={r.recovery} busy={action.busy} authorized={r.recoveryReviewAuthorized === true} selfApproval={r.requester?.id === snapshot.viewer.id} onReview={body => reviewAdmission(r, body)} /> : <>
                   {r.requestedPlayerId && !alternatePicker[r.id] ? <button type="button" className="text-button admission-change-candidate" onClick={() => setAlternatePicker(current => ({ ...current, [r.id]: true }))}>Choose another Player</button> : null}
                   {!r.requestedPlayerId && !alternatePicker[r.id] ? <button type="button" className="text-button admission-change-candidate" onClick={() => setAlternatePicker(current => ({ ...current, [r.id]: true }))}>Choose an existing Player instead</button> : null}
-                  {alternatePicker[r.id] && <label className="field-label admission-candidate-picker">Player to connect<select aria-label={`Player for ${r.requesterName ?? r.name ?? "request"}`} value={selectedCandidate[r.id] ?? r.requestedPlayerId ?? ""} onChange={event => setSelectedCandidate(current => ({ ...current, [r.id]: event.target.value }))}><option value="">Select a Player</option>{candidatesFor(r).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}{r.ownedPlayers?.some(owned => owned.id === candidate.id) ? " · owned by this account" : ""}{candidate.elo !== undefined ? ` · ${candidate.elo} rating` : ""}</option>)}</select></label>}
+                  {alternatePicker[r.id] && <label className="field-label admission-candidate-picker">Local profile to connect<select aria-label={`Player for ${r.requesterName ?? r.name ?? "request"}`} value={selectedCandidate[r.id] ?? r.requestedPlayerId ?? ""} onChange={event => setSelectedCandidate(current => ({ ...current, [r.id]: event.target.value }))}><option value="">Select a Player</option>{candidatesFor(r).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}{candidate.elo !== undefined ? ` · ${candidate.elo} rating` : ""}</option>)}</select></label>}
                   {chosenPlayer(r) && <p className="admission-selected-candidate">Selected: <strong>{chosenPlayer(r)?.name}</strong>{chosenPlayer(r)?.matchesPlayed !== undefined ? ` · ${chosenPlayer(r)?.matchesPlayed} matches` : ""}</p>}
                   <label className="field-label admission-rejection-reason">Rejection note (optional)<textarea rows={2} maxLength={1000} value={rejectionReasons[r.id] ?? ""} onChange={event => setRejectionReasons(current => ({ ...current, [r.id]: event.target.value }))} placeholder="Explain what the requester can correct" /></label>
                   <div className="admission-review-actions">
                     {chosenPlayer(r) && <button type="button" className="primary" disabled={action.busy || (!!r.conflict && (selectedCandidate[r.id] ?? r.requestedPlayerId) === r.requestedPlayerId)} onClick={() => reviewAdmission(r, { action: "APPROVE", playerId: selectedCandidate[r.id] ?? r.requestedPlayerId! })}>Approve {chosenPlayer(r)?.name}</button>}
-                    <button type="button" className="secondary" disabled={action.busy || !!r.ownedPlayers?.length} onClick={() => reviewAdmission(r, { action: "APPROVE", asNew: true })}>Approve as new Player</button>
+                    <button type="button" className="secondary" disabled={action.busy} onClick={() => reviewAdmission(r, { action: "APPROVE", asNew: true })}>Approve as new local profile</button>
                     <button type="button" className="secondary admission-reject" disabled={action.busy} onClick={() => reviewAdmission(r, { action: "REJECT", reason: rejectionReasons[r.id]?.trim() || undefined })}>Reject request</button>
                   </div>
-                  </>}
                 </article>
               ))}
               {joins.data && !requests.length && (
@@ -239,7 +231,7 @@ export default function Admin({
                 ? "Remove player?"
                 : sheet === "invite"
                   ? "Invite to your club"
-                  : "Connect profiles"
+                  : "Manage club"
           }
           busy={action.busy}
           onClose={() => setSheet("")}
@@ -298,7 +290,7 @@ export default function Admin({
               {edit && !edit.isOwner && (
                 <button
                   className="danger text-button"
-                  onClick={() => { setDisconnectOnRemove(false); setSheet("remove"); }}
+                onClick={() => setSheet("remove")}
                 >
                   Remove player
                 </button>
@@ -307,17 +299,13 @@ export default function Admin({
           ) : sheet === "remove" ? (
             <>
               <p>
-                Remove {edit?.name} from {club.name}?
+                Remove {edit?.name} from {club.name}? This archives the local membership{edit?.isClaimed ? " and disconnects their account from this club" : ""}. Their Player history, rating, and memberships in other clubs stay intact.
               </p>
-              {edit?.isClaimed && <label className="flex items-start gap-3">
-                <input type="checkbox" checked={disconnectOnRemove} onChange={event => setDisconnectOnRemove(event.target.checked)} />
-                <span>Also disconnect the account. The Player becomes unclaimed and keeps all history. This requires removal and admin access in every linked club.</span>
-              </label>}
               <button
                 className="primary"
                 onClick={() =>
                   void action.run(
-                    () => api(endpoint + "/members/" + edit?.id, "DELETE", disconnectOnRemove ? { disconnectAccount: true } : undefined),
+                    () => api(endpoint + "/members/" + edit?.id, "DELETE"),
                     () => setSheet(""),
                   )
                 }
@@ -350,27 +338,7 @@ export default function Admin({
               <p className="muted">An admin approves each request.</p>
             </>
           ) : (
-            <>
-              <p>Find a player without an account.</p>
-              {players
-                .filter((p) => !p.isClaimed)
-                .map((p) => (
-                  <button
-                    key={p.id}
-                    className="secondary"
-                    onClick={() => {
-                      setTab("Players");
-                      setQuery(p.name);
-                      setSheet("");
-                    }}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              <p className="muted">
-                Cross-club connection is not available in this interface yet.
-              </p>
-            </>
+            <p className="muted">Choose a player or club setting to continue.</p>
           )}
         </Sheet>
     </div>

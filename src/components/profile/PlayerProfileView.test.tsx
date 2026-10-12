@@ -61,11 +61,13 @@ function buildMatch(id: string, overrides?: Partial<{
     id: string;
     name: string;
     avatarUrl: string | null;
+    profileClubId?: string | null;
   };
   opponents: Array<{
     id: string;
     name: string;
     avatarUrl: string | null;
+    profileClubId?: string | null;
   }>;
   score: string;
   result: "WIN" | "LOSS";
@@ -343,25 +345,6 @@ describe("PlayerProfileView", () => {
         );
       }
 
-      if (url.includes("/identity-options?purpose=ACCESS_RESTORE")) {
-        return Promise.resolve(createJsonResponse({
-          purpose: "ACCESS_RESTORE",
-          target: {
-            playerId: "player-1",
-            name: "Alex Lee",
-            rating: 1320,
-            isActive: true,
-            ownerAccount: { accountId: "account-owner", accountRef: "A-91F2", displayName: "Alex Lee", maskedEmail: "a•••@example.test", isActive: true },
-            member: { memberId: "archived-member", archivedAt: "2026-05-01T00:00:00.000Z", retiredByAdmissionEventId: null },
-            clubAccess: { accessId: "access-revoked", status: "REVOKED", role: "MEMBER", revision: 2 },
-            history: { matchesPlayed: 12, lastPlayedAt: "2026-05-20T00:00:00.000Z", blockers: [] },
-            activeInvitation: null,
-            accessRestoreBlockers: [],
-          },
-          correctionCandidates: [],
-        }));
-      }
-
       return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     });
 
@@ -372,6 +355,25 @@ describe("PlayerProfileView", () => {
       await Promise.resolve();
     });
   }
+
+  it("links historical and relationship participants to exact local context or an unscoped profile", async () => {
+    const profileResponse = buildProfileResponse({ matchHistory: [buildMatch("context-match", {
+      partner: { id: "exact", name: "Exact partner", avatarUrl: null, profileClubId: "club-a" },
+      opponents: [
+        { id: "uncertain", name: "Uncertain opponent", avatarUrl: null, profileClubId: null },
+        { id: "legacy", name: "Legacy opponent", avatarUrl: null },
+      ],
+    })] });
+    profileResponse.partners.best = [{ user: { id: "summary-exact", name: "Exact summary", profileClubId: "club-a" }, matches: 1, wins: 1, losses: 0, winRate: 100, pointDifferential: 2, ratingChange: 0 }];
+    profileResponse.opponents.toughest = [{ user: { id: "summary-mixed", name: "Mixed summary", profileClubId: null }, matches: 2, wins: 1, losses: 1, winRate: 50, pointDifferential: 0, ratingChange: 0 }];
+    await renderView({ clubId: "viewer-club", profileResponse });
+    const hrefFor = (name: string) => Array.from(container.querySelectorAll("a")).find((link) => link.textContent === name)?.getAttribute("href");
+    expect(hrefFor("Exact partner")).toBe("/profile/exact?clubId=club-a");
+    expect(hrefFor("Uncertain opponent")).toBe("/profile/uncertain");
+    expect(hrefFor("Legacy opponent")).toBe("/profile/legacy?clubId=viewer-club");
+    expect(hrefFor("Exact summary")).toBe("/profile/summary-exact?clubId=club-a");
+    expect(hrefFor("Mixed summary")).toBe("/profile/summary-mixed");
+  });
 
   it("opens and closes an enlarged profile photo from the read-only hero avatar", async () => {
     await renderView();
@@ -742,6 +744,7 @@ describe("PlayerProfileView", () => {
 
   it("does not show the long avatar upload helper text for admins", async () => {
     await renderView({
+      clubId: "club-1",
       currentUser: {
         id: "viewer-1",
         isAdmin: true,
@@ -773,6 +776,7 @@ describe("PlayerProfileView", () => {
 
   it("opens the enlarged photo viewer from the editable self avatar menu", async () => {
     await renderView({
+      clubId: "club-1",
       currentUser: {
         id: "account-1",
         isAdmin: false,
@@ -848,7 +852,7 @@ describe("PlayerProfileView", () => {
     expect(Array.from(container.querySelectorAll("button")).some(button => button.textContent?.trim() === "Add to club")).toBe(false);
   });
 
-  it("offers access restoration from a manageable nonretired profile, including its archived exact member", async () => {
+  it("does not expose the retired legacy access-restoration flow from a manageable profile", async () => {
     await renderView({
       clubId: "club-1",
       profileResponse: buildProfileResponse({
@@ -860,14 +864,15 @@ describe("PlayerProfileView", () => {
       }),
     });
 
-    expect(mocks.fetch.mock.calls.some(([input]) => String(input).includes("/api/clubs/club-1/players/player-1/identity-options?purpose=ACCESS_RESTORE"))).toBe(true);
-    expect(container.querySelector('[aria-label="Restore access to an owned Player"]')).toBeTruthy();
-    expect(container.textContent).toContain("archived-member");
-    expect(container.textContent).toContain("Exact Account");
+    expect(mocks.fetch.mock.calls.some(([input]) => String(input).includes("identity-options"))).toBe(false);
+    expect(container.querySelector('[aria-label="Restore access to an owned Player"]')).toBeNull();
+    expect(container.textContent).not.toContain("archived-member");
+    expect(container.textContent).not.toContain("Exact Account");
   });
 
   it("uses owned Player IDs to manage a profile photo, never the account ID", async () => {
     await renderView({
+      clubId: "club-1",
       currentUser: {
         id: "account-1",
         isAdmin: false,
@@ -894,7 +899,7 @@ describe("PlayerProfileView", () => {
       await Promise.resolve();
     });
 
-    expect(mocks.deletePlayerAvatar).toHaveBeenCalledWith("player-1", undefined);
+    expect(mocks.deletePlayerAvatar).toHaveBeenCalledWith("player-1", "club-1");
   });
 
   it("does not treat a matching account ID as ownership of a Player", async () => {

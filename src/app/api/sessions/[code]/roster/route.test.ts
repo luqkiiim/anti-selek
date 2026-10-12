@@ -95,6 +95,7 @@ function makeMembership({
     clubId,
     club: { id: clubId, name: clubName },
     playerId,
+    ownerUserId: `${playerId}-owner-account`,
     elo: 1100,
     status: ClubPlayerStatus.CORE,
     createdAt: new Date("2026-06-02T00:00:00.000Z"),
@@ -150,7 +151,7 @@ describe("session roster route", () => {
     });
     expect(mocks.clubMemberFindMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        where: { clubId: { in: ["club-b"] }, retiredByAdmissionEventId: null },
+        where: { clubId: { in: ["club-b"] }, retiredByAdmissionEventId: null, archivedAt: null },
       })
     );
   });
@@ -173,7 +174,7 @@ describe("session roster route", () => {
     });
     expect(mocks.clubMemberFindMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        where: { clubId: { in: ["club-b"] }, retiredByAdmissionEventId: null },
+        where: { clubId: { in: ["club-b"] }, retiredByAdmissionEventId: null, archivedAt: null },
       })
     );
   });
@@ -235,7 +236,7 @@ describe("session roster route", () => {
     expect(mocks.clubMemberFindMany).toHaveBeenCalledTimes(1);
     expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { clubId: { in: ["club-a", "club-b"] }, retiredByAdmissionEventId: null },
+        where: { clubId: { in: ["club-a", "club-b"] }, retiredByAdmissionEventId: null, archivedAt: null },
       })
     );
   });
@@ -273,7 +274,7 @@ describe("session roster route", () => {
     expect(mocks.clubMemberFindMany).toHaveBeenCalledTimes(1);
     expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { clubId: { in: ["club-a", "club-b"] }, retiredByAdmissionEventId: null },
+        where: { clubId: { in: ["club-a", "club-b"] }, retiredByAdmissionEventId: null, archivedAt: null },
       })
     );
   });

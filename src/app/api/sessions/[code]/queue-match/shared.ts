@@ -1,3 +1,4 @@
+import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
@@ -26,7 +27,7 @@ import {
 
 export type QueueSessionRecord = NonNullable<
   Awaited<ReturnType<typeof loadSessionRecordById>>
->;
+> & { mutationActor?: SessionMutationActor };
 type QueueRecord = Prisma.QueuedMatchGetPayload<Record<string, never>>;
 
 export function buildQueuedMatchResponse(
@@ -117,6 +118,7 @@ async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
 }
 
 interface QueuedMatchRecordInput {
+  actor?: SessionMutationActor;
   sessionId: string;
   partition: ManualMatchTeams;
   targetPool?: string | null;
@@ -205,6 +207,7 @@ async function resolveQueuedGroupSnapshot(
 
 async function createQueuedMatchRecord({
   sessionId,
+  actor,
   partition,
   targetPool,
   courtGroupType,
@@ -216,7 +219,7 @@ async function createQueuedMatchRecord({
   consumeSkipNextUserIds = [],
 }: QueuedMatchRecordInput) {
   try {
-    return await prisma.$transaction(async (tx) => {
+    return await sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
       const groupSnapshot = await resolveQueuedGroupSnapshot(tx, {
         sessionId,
         partition,
@@ -318,6 +321,7 @@ export async function selectAutomaticMatchForSession(
 
 async function updateQueuedMatchRecord({
   sessionId,
+  actor,
   queuedMatchId,
   partition,
   targetPool,
@@ -333,6 +337,7 @@ async function updateQueuedMatchRecord({
 }: {
   sessionId: string;
   queuedMatchId: string;
+  actor?: SessionMutationActor;
   partition: ManualMatchTeams;
   targetPool?: string | null;
   courtGroupType?: CourtGroupType | string | null;
@@ -345,7 +350,7 @@ async function updateQueuedMatchRecord({
   consumeSkipNextUserIds?: string[];
   releasePendingUserIds?: string[];
 }) {
-  return prisma.$transaction(async (tx) => {
+  return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
     const groupSnapshot = await resolveQueuedGroupSnapshot(tx, {
       sessionId,
       partition,
@@ -423,6 +428,7 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
   const selection = await selectAutomaticMatchForSession(sessionData);
   const queuedMatch = await createQueuedMatchRecord({
     sessionId: sessionData.id,
+    actor: sessionData.mutationActor,
     partition: selection.partition,
     targetPool: selection.targetPool,
     courtGroupType: selection.courtGroupType,
@@ -505,6 +511,7 @@ export async function reshuffleQueuedMatchForSession(
   });
   const queuedMatch = await updateQueuedMatchRecord({
     sessionId: sessionData.id,
+    actor: sessionData.mutationActor,
     queuedMatchId: sessionData.queuedMatch.id,
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
@@ -601,6 +608,7 @@ export async function replaceQueuedMatchPlayerForSession(
 
   const queuedMatch = await updateQueuedMatchRecord({
     sessionId: sessionData.id,
+    actor: sessionData.mutationActor,
     queuedMatchId: sessionData.queuedMatch.id,
     partition: replacementSelection.partition,
     targetPool: sessionData.queuedMatch.targetPool ?? null,
@@ -654,6 +662,7 @@ export async function createManualQueuedMatchForSession(
     : null;
   const queuedMatch = await createQueuedMatchRecord({
     sessionId: sessionData.id,
+    actor: sessionData.mutationActor,
     partition,
     targetPool: null,
     courtGroupType: groupSnapshot?.courtGroupType ?? null,

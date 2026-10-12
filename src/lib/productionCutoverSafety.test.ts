@@ -12,6 +12,7 @@ import { tursoEndpointFingerprint } from "../../scripts/turso-local-target-guard
 const root = process.cwd();
 const bundle = committedMigrationBundle(root, APPROVED_FEATURE_COMMIT);
 const directories: string[] = [];
+const pinnedNativeDirectories = new Set<string>();
 function temporaryDirectory() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "anti-selek-cutover-"));
   fs.chmodSync(directory, 0o700);
@@ -51,7 +52,14 @@ function credentials(writer = jwt({ a: "rw", exp: now / 1000 + 3600 }), reader =
   const approval = { productionEndpointSha256: testPolicy.productionEndpointSha256, writerTokenSha256: sha256(writer), readerTokenSha256: sha256(reader) };
   return { entries, approval };
 }
-afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const directory of directories.splice(0)) {
+    // libSQL retains native Windows handles until worker exit despite close().
+    if (process.platform === "win32" && pinnedNativeDirectories.has(directory)) continue;
+    if (!path.resolve(directory).startsWith(path.resolve(os.tmpdir()) + path.sep)) throw new Error("Unsafe fixture cleanup path");
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 describe("committed Phase 1 production cutover preparation", () => {
   it("applies all four reviewed migrations atomically and preserves the original database values", () => {
@@ -91,6 +99,7 @@ describe("committed Phase 1 production cutover preparation", () => {
 
   it("uses the same atomic batch through the libSQL client and can roll back a failed batch", async () => {
     const filename = path.join(temporaryDirectory(), "libsql.db");
+    pinnedNativeDirectories.add(path.dirname(filename));
     fixture(filename).close();
     const client = createClient({ url: `file:${filename}` });
     try {
@@ -134,7 +143,12 @@ describe("committed Phase 1 production cutover preparation", () => {
     expect(JSON.stringify(report)).not.toContain("fixture@example.invalid");
     expect(JSON.stringify(report)).not.toContain("fixture-hash");
     expect(report.preservation.rawValuesIncluded).toBe(false);
-    expect(fs.statSync(path.join(output, "before-manifest.json")).mode & 0o077).toBe(0);
+    const manifest = path.join(output, "before-manifest.json");
+    if (process.platform === "win32") {
+      // This historical writer only supports POSIX mode privacy; Windows must
+      // remain rejected by its authorization boundary, not treated as private.
+      expect(fs.statSync(manifest).mode & 0o077).not.toBe(0);
+    } else expect(fs.statSync(manifest).mode & 0o077).toBe(0);
     await expect(rehearseSnapshot(source, output, bundle)).rejects.toThrow("OUTPUT_ALREADY_EXISTS");
   });
 
@@ -189,7 +203,7 @@ describe("production cutover authorization boundaries", () => {
     const directory = temporaryDirectory();
     fs.mkdirSync(path.join(directory, "private"), { mode: 0o700 });
     fs.writeFileSync(path.join(directory, "private/production-cutover-approval.json"), JSON.stringify({ version: 1, rotationVerified: false }), { mode: 0o600 });
-    expect(() => loadCutoverAuthorization(directory, ["--production-cutover"], { NODE_ENV: "development" })).toThrow("CUTOVER_PREREQUISITES_UNVERIFIED");
+    expect(() => loadCutoverAuthorization(directory, ["--production-cutover"], { NODE_ENV: "development" })).toThrow(process.platform === "win32" ? "PRIVATE_DIRECTORY_REQUIRED" : "CUTOVER_PREREQUISITES_UNVERIFIED");
   });
   it("refuses unprotected files and symlinks outside the ignored private directory", () => {
     const directory = temporaryDirectory();
@@ -197,6 +211,11 @@ describe("production cutover authorization boundaries", () => {
     fs.mkdirSync(privateDirectory, { mode: 0o700 });
     const filename = path.join(privateDirectory, "credential.env");
     fs.writeFileSync(filename, "fixture", { mode: 0o600 });
+    if (process.platform === "win32") {
+      expect(() => protectedPath(directory, filename)).toThrow("PRIVATE_DIRECTORY_REQUIRED");
+      expect(() => protectedPath(directory, path.join(directory, "tracked.env"), false)).toThrow("PRIVATE_DIRECTORY_REQUIRED");
+      return;
+    }
     expect(protectedPath(directory, filename)).toBe(filename);
     fs.chmodSync(filename, 0o644);
     expect(() => protectedPath(directory, filename)).toThrow("PRIVATE_FILE_REQUIRED");

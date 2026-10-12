@@ -74,14 +74,13 @@ export async function POST(
           },
         },
         data: { elo: 1000 },
-        select: { elo: true },
+        select: { elo: true, ownerUserId: true },
       }),
       prisma.player.findUniqueOrThrow({
         where: { id: userId },
         select: {
           id: true,
           name: true,
-          ownerUserId: true,
           isActive: true,
 
           createdAt: true,
@@ -91,7 +90,7 @@ export async function POST(
 
     return NextResponse.json({
       ...updatedUser,
-      role: "MEMBER", email: null, isClaimed: !!updatedUser.ownerUserId,
+      ownerUserId: updatedMembership.ownerUserId, role: "MEMBER", email: null, isClaimed: !!updatedMembership.ownerUserId,
       elo: updatedMembership.elo,
     });
   } catch (error: unknown) {

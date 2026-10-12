@@ -1,3 +1,4 @@
+import { withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { isClubAdminRole } from "@/lib/clubRoles";
 import { prisma } from "@/lib/prisma";
@@ -29,7 +30,9 @@ export async function listSessionsForClub({
           clubId,
           playerId: quickAccessPlayerId,
           archivedAt: null,
-          player: { isActive: true, ownerUserId: null },
+          ownerUserId: null,
+          retiredByAdmissionEventId: null,
+          player: { isActive: true },
         },
         select: { id: true },
       })
@@ -87,12 +90,12 @@ export async function listSessionsForClub({
   }
 
   const userIds = Array.from(
-    new Set(sessions.flatMap((session) => session.players.map((player) => player.playerId)))
+    new Set(sessions.filter(session => session.ratingPolicyVersion !== 2).flatMap((session) => session.players.map((player) => player.playerId)))
   );
   const clubEloByUserId = await getClubEloByUserId(clubId, userIds);
   const clubIds = Array.from(
     new Set(
-      sessions.flatMap((session) => [
+      sessions.filter(session => session.ratingPolicyVersion !== 2).flatMap((session) => [
         ...(session.clubId ? [session.clubId] : []),
         ...session.sessionClubs.map((link) => link.clubId),
       ])
@@ -104,7 +107,7 @@ export async function listSessionsForClub({
     userIds
   );
 
-  return sessions.map((session) => {
+  return Promise.all(sessions.map(async (session) => {
     const currentClubLink = session.sessionClubs.find(
       (link) => link.clubId === clubId
     );
@@ -115,15 +118,15 @@ export async function listSessionsForClub({
     return withLegacyClubAliases({
       ...session,
       players:
-        (
-          session.sessionClubs.length > 1
+        (await withSessionProfileRatings(prisma, session, (
+          session.ratingPolicyVersion === 2 ? session.players : session.sessionClubs.length > 1
             ? withPlayerClubBadges(
                 session.players,
                 badgesByUserId,
                 clubId
               )
             : withClubElo(session.players, clubEloByUserId)
-        ).map((player) => ({
+        ))).map((player) => ({
           ...player,
           player: serializeAvatarEntity(player.player),
         })),
@@ -138,5 +141,5 @@ export async function listSessionsForClub({
         status: link.status,
       })),
     });
-  });
+  }));
 }

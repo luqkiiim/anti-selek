@@ -1,3 +1,6 @@
+import { PrismaClient } from "@prisma/client";
+import { vi } from "vitest";
+import { clubOwnershipTransaction, claimClubPlayer } from "./clubPlayerOwnership";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
@@ -40,6 +43,7 @@ const previousEnv = {
 
 let prisma: PrismaInstance;
 let tutorialPlayground: TutorialPlaygroundModule;
+vi.mock("@/lib/prisma", () => ({ get prisma() { return prisma; } }));
 
 function getPrismaBinary() {
   return path.join(
@@ -58,44 +62,9 @@ async function removeDatabaseFiles() {
   );
 }
 
-async function createOwner(id = "owner-1") {
-  const account = await prisma.user.create({
-    data: {
-      id,
-      email: `${id}@example.com`,
-      passwordHash: "test-password-hash",
-      name: "Owner",
-    },
-  });
-  const player = await prisma.player.create({
-    data: {
-      id: `${id}-player`,
-      ownerUserId: account.id,
-      name: account.name,
-      gender: PlayerGender.MALE,
-      partnerPreference: PartnerPreference.OPEN,
-    },
-  });
-  return { ...account, playerId: player.id };
-}
+async function createOwner(id = "owner-1") { return prisma.user.create({ data: { id, email: `${id}@example.com`, passwordHash: "fixture", name: "Owner", gender: PlayerGender.MALE } }); }
 
-async function clearDatabase() {
-  await prisma.tutorialProgress.deleteMany();
-  await prisma.matchEloAdjustment.deleteMany();
-  await prisma.match.deleteMany();
-  await prisma.court.deleteMany();
-  await prisma.sessionPlayer.deleteMany();
-  await prisma.sessionClub.deleteMany();
-  await prisma.session.deleteMany();
-  await prisma.claimRequest.deleteMany();
-  await prisma.offlineIdentityLinkRequest.deleteMany();
-  await prisma.offlineIdentityMember.deleteMany();
-  await prisma.offlineIdentity.deleteMany();
-  await prisma.clubMember.deleteMany();
-  await prisma.club.deleteMany();
-  await prisma.player.deleteMany();
-  await prisma.user.deleteMany();
-}
+async function clearDatabase() { await prisma?.$disconnect(); await fs.copyFile(`${tempDatabaseFile}.baseline`, tempDatabaseFile); prisma = new PrismaClient({ datasources: { db: { url: tempDatabaseUrl } } }); }
 
 function expectSeededNames(expectFn: typeof expect, names: string[]) {
   expectFn(names).toEqual(
@@ -197,22 +166,19 @@ beforeAll(async () => {
     execFileSync("cmd.exe", ["/c", prismaBinary, "migrate", "deploy"], {
       cwd: process.cwd(),
       env: process.env as NodeJS.ProcessEnv,
-      stdio: "inherit",
+      stdio: "pipe",
     });
   } else {
     execFileSync(prismaBinary, ["migrate", "deploy"], {
       cwd: process.cwd(),
       env: process.env as NodeJS.ProcessEnv,
-      stdio: "inherit",
+      stdio: "pipe",
     });
   }
 
-  (globalThis as { prisma?: PrismaInstance }).prisma = undefined;
-
-  const prismaModule = await import("@/lib/prisma");
-  prisma = prismaModule.prisma;
+  await fs.copyFile(tempDatabaseFile, `${tempDatabaseFile}.baseline`);
   tutorialPlayground = await import("./tutorialPlayground");
-});
+}, 60000);
 
 beforeEach(async () => {
   await clearDatabase();
@@ -228,6 +194,7 @@ afterAll(async () => {
   mutableEnv.NODE_ENV = previousEnv.NODE_ENV;
 
   await removeDatabaseFiles();
+  await fs.rm(`${tempDatabaseFile}.baseline`, { force: true });
 });
 
 describe("tutorial playground service", () => {
@@ -270,7 +237,7 @@ describe("tutorial playground service", () => {
     expect(ownerAccess).toMatchObject({ role: "OWNER", status: "ACTIVE" });
 
     const fakeMembers =
-      club?.members.filter((member) => member.playerId !== owner.playerId) ?? [];
+      club?.members.filter((member) => member.ownerUserId !== owner.id) ?? [];
     expect(fakeMembers).toHaveLength(13);
     expectSeededNames(
       expect,
@@ -323,7 +290,7 @@ describe("tutorial playground service", () => {
 
     const rankedNames =
       club?.members
-        .filter((member) => member.playerId !== owner.playerId)
+        .filter((member) => member.ownerUserId !== owner.id)
         .slice()
         .sort((left, right) => right.elo - left.elo)
         .slice(0, 5)
@@ -364,7 +331,7 @@ describe("tutorial playground service", () => {
       await prisma.clubMember.findMany({
         where: {
           clubId: firstSummary.clubId,
-          playerId: { not: owner.playerId },
+          ownerUserId: null,
         },
         select: { playerId: true },
       })
@@ -407,7 +374,7 @@ describe("tutorial playground service", () => {
       await prisma.clubMember.findMany({
         where: {
           clubId: resetSummary.clubId,
-          playerId: { not: owner.playerId },
+          ownerUserId: null,
         },
         include: { player: true },
       })
@@ -436,4 +403,57 @@ describe("tutorial playground service", () => {
       })
     ).toBe(18);
   }, 15_000);
+});
+
+
+
+async function createExistingClubProfile(ownerId: string, suffix: string) {
+  const club = await prisma.club.create({ data: { id: `existing-${suffix}`, name: `Existing ${suffix}`, createdById: ownerId } });
+  await prisma.clubAccess.create({ data: { clubId: club.id, userId: ownerId, role: "OWNER", status: "ACTIVE" } });
+  const player = await prisma.player.create({ data: { id: `existing-player-${suffix}`, name: `Placeholder ${suffix}`, gender: PlayerGender.MALE, elo: 1275 } });
+  await prisma.clubMember.create({ data: { clubId: club.id, playerId: player.id, elo: 1337 } });
+  await clubOwnershipTransaction(prisma, tx => claimClubPlayer(tx, { clubId: club.id, playerId: player.id, userId: ownerId, actorUserId: ownerId }));
+  return { clubId: club.id, playerId: player.id };
+}
+
+async function existingProfileSnapshot(ids: { clubId: string; playerId: string }[]) {
+  return Promise.all(ids.map(async id => ({
+    club: await prisma.club.findUnique({ where: { id: id.clubId } }),
+    player: await prisma.player.findUnique({ where: { id: id.playerId } }),
+    member: await prisma.clubMember.findUnique({ where: { clubId_playerId: id } }),
+    access: await prisma.clubAccess.findMany({ where: { clubId: id.clubId } }),
+    events: await prisma.clubPlayerOwnershipEvent.findMany({ where: { clubId: id.clubId } }),
+  })));
+}
+
+describe("tutorial profile isolation", () => {
+  it.each([0, 2])("creates, resets and deletes an isolated profile with %i existing owned club profiles", async count => {
+    const owner = await createOwner(`owner-${count}`);
+    const profiles = [];
+    for (let index = 0; index < count; index++) profiles.push(await createExistingClubProfile(owner.id, `${count}-${index}`));
+    const before = await existingProfileSnapshot(profiles);
+    const accountBefore = await prisma.user.findUnique({ where: { id: owner.id } });
+    const first = await tutorialPlayground.ensureTutorialPlayground(owner.id);
+    const ownMember = await prisma.clubMember.findFirstOrThrow({ where: { clubId: first.clubId, ownerUserId: owner.id }, include: { player: true } });
+    expect(ownMember.playerId).not.toBe(owner.id);
+    expect(profiles.map(profile => profile.playerId)).not.toContain(ownMember.playerId);
+    expect(ownMember.player).toMatchObject({ name: "Owner", ownerUserId: null });
+    const seeded = await prisma.session.findMany({ where: { clubId: first.clubId }, include: { players: true } });
+    expect(seeded).toHaveLength(4);
+    expect(seeded.every(session => session.ratingPolicyVersion === 2)).toBe(true);
+    expect(seeded.flatMap(session => session.players).every(player => player.profileClubId === first.clubId && player.participantAccountId === null && !player.isGuest)).toBe(true);
+    const repeat = await tutorialPlayground.ensureTutorialPlayground(owner.id);
+    expect(repeat).toEqual(first);
+    expect(await existingProfileSnapshot(profiles)).toEqual(before);
+    const reset = await tutorialPlayground.resetTutorialPlayground(owner.id);
+    expect(reset.clubId).toBe(first.clubId); expect(reset.sessionCode).not.toBe(first.sessionCode);
+    expect(await prisma.clubMember.findUnique({ where: { id: ownMember.id } })).toMatchObject({ playerId: ownMember.playerId, ownerUserId: owner.id });
+    expect(await existingProfileSnapshot(profiles)).toEqual(before);
+    await expect(tutorialPlayground.deleteTutorialPlayground(`wrong-${count}`, first.clubId)).rejects.toThrow("Tutorial playground not found");
+    await tutorialPlayground.deleteTutorialPlayground(owner.id, first.clubId);
+    expect(await prisma.club.findUnique({ where: { id: first.clubId } })).toBeNull();
+    expect(await prisma.session.count({ where: { clubId: first.clubId } })).toBe(0);
+    expect(await existingProfileSnapshot(profiles)).toEqual(before);
+    expect(await prisma.user.findUnique({ where: { id: owner.id } })).toEqual(accountBefore);
+  }, 30000);
 });

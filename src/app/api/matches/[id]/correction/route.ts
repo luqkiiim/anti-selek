@@ -1,5 +1,5 @@
+import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -180,6 +180,8 @@ export async function POST(
 
     const result = await correctCompletedMatchScore({
       matchId: match.id,
+      actorUserId: session.user.id,
+      actorIsGlobalAdmin: !!session.user.isAdmin,
       finalTeam1Score: team1Score,
       finalTeam2Score: team2Score,
     });
@@ -224,6 +226,7 @@ export async function POST(
       "Correct completed match score error",
       getUnknownCorrectionErrorDetails(error)
     );
+    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Correct completed match score error", error);
     return safeErrorResponse();
   }

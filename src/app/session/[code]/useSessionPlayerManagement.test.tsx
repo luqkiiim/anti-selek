@@ -61,6 +61,7 @@ function createSessionData(
 
 const interclubPlayer: ClubUser = {
   id: "club-b-player",
+  profileClubId: "club-b",
   name: "Club B Player",
   avatarUrl: null,
   elo: 1110,
@@ -258,7 +259,8 @@ describe("useSessionPlayerManagement", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          userId: "club-b-player",
+          playerId: "club-b-player",
+          profileClubId: "club-b",
           pool: SessionPool.A,
           representingClubId: "club-b",
         }),
@@ -296,8 +298,10 @@ describe("useSessionPlayerManagement", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          userId: "club-b-player",
+          playerId: "club-b-player",
+          profileClubId: "club-b",
           pool: SessionPool.A,
+          representingClubId: null,
         }),
       })
     );
@@ -312,7 +316,7 @@ describe("useSessionPlayerManagement", () => {
       root.render(
         <Harness
           sessionData={createSessionData({ poolsEnabled: true })}
-          playerToAdd={interclubPlayer}
+          playerToAdd={{ ...interclubPlayer, profileClubId: "club-a" }}
         />
       );
     });
@@ -329,8 +333,10 @@ describe("useSessionPlayerManagement", () => {
       "/api/sessions/ABC/join",
       expect.objectContaining({
         body: JSON.stringify({
-          userId: "club-b-player",
+          playerId: "club-b-player",
+          profileClubId: "club-a",
           pool: SessionPool.B,
+          representingClubId: null,
         }),
       })
     );

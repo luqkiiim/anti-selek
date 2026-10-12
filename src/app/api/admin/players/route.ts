@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   try {
     const limited = await rateLimit(request, "api:admin:players:get", { limit: 20, windowMs: 60000 }); if (limited) return limited;
     const session = await auth(); if (!session?.user?.isAdmin) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    const players = await prisma.player.findMany({ where: nonretiredPlayer, orderBy: { name: "asc" }, select: { id: true, name: true, avatarKey: true, elo: true, ownerUserId: true, isActive: true, createdAt: true } });
-    return NextResponse.json(players.map(player => ({ ...serializeAvatarEntity(player), email: null, isClaimed: !!player.ownerUserId })));
+    const players = await prisma.player.findMany({ where: nonretiredPlayer, orderBy: { name: "asc" }, select: { id: true, name: true, avatarKey: true, elo: true, clubMemberships: { where: { retiredByAdmissionEventId: null, ownerUserId: { not: null } }, select: { ownerUserId: true } }, isActive: true, createdAt: true } });
+    return NextResponse.json(players.map(({ clubMemberships, ...player }) => ({ ...serializeAvatarEntity(player), email: null, isClaimed: clubMemberships.length > 0 })));
   } catch (error) { logError("Admin list players", error); return safeErrorResponse(); }
 }

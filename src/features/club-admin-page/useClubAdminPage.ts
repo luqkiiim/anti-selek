@@ -8,7 +8,6 @@ import { getClubAdminGenderPillLabel } from "@/components/club-admin/clubAdminDi
 import { ClubPlayerStatus } from "@/types/enums";
 import { useClubAdminClubActions } from "./useClubAdminClubActions";
 import { useClubAdminData } from "./useClubAdminData";
-import { useClubAdminOfflineIdentityLinks } from "./useClubAdminOfflineIdentityLinks";
 import { useClubAdminPlayerActions } from "./useClubAdminPlayerActions";
 
 export function useClubAdminPage() {
@@ -27,9 +26,8 @@ export function useClubAdminPage() {
     router,
   });
 
-  const currentAccountId = session?.user?.id;
   const currentPlayerId = adminData.players.find(
-    (player) => player.ownerUserId === currentAccountId
+    (player) => player.ownerUserId === session?.user?.id
   )?.id ?? null;
 
   const playerActions = useClubAdminPlayerActions({
@@ -48,14 +46,6 @@ export function useClubAdminPage() {
     club: adminData.club,
     refreshClubData: adminData.fetchClubAndPlayers,
     router,
-    setError: adminData.setError,
-    setSuccess: adminData.setSuccess,
-  });
-
-  const offlineIdentityLinkActions = useClubAdminOfflineIdentityLinks({
-    clubId,
-    players: adminData.players,
-    refreshClubData: adminData.fetchClubAndPlayers,
     setError: adminData.setError,
     setSuccess: adminData.setSuccess,
   });
@@ -102,6 +92,5 @@ export function useClubAdminPage() {
     ...adminData,
     ...playerActions,
     ...clubActions,
-    ...offlineIdentityLinkActions,
   };
 }

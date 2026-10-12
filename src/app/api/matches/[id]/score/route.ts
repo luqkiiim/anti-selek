@@ -1,11 +1,14 @@
+import { withMatchLocalClaimLabels } from "@/lib/matchApprovalRules";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { finalizeMatchResult } from "@/lib/matchCompletion";
-import { getOwnedMatchParticipant, shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
+import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
-import { getSessionMembership, getSessionOperatorMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { MatchStatus, SessionClubStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
@@ -62,6 +65,7 @@ export async function POST(
             },
             type: true,
             balanceMetric: true,
+            ratingPolicyVersion: true,
             isTest: true,
           },
         },
@@ -72,16 +76,16 @@ export async function POST(
         team2Player1Id: true,
         team2Player2Id: true,
         team1Player1: {
-          select: { id: true, name: true, elo: true, ownerUserId: true },
+          select: { id: true, name: true, elo: true },
         },
         team1Player2: {
-          select: { id: true, name: true, elo: true, ownerUserId: true },
+          select: { id: true, name: true, elo: true },
         },
         team2Player1: {
-          select: { id: true, name: true, elo: true, ownerUserId: true },
+          select: { id: true, name: true, elo: true },
         },
         team2Player2: {
-          select: { id: true, name: true, elo: true, ownerUserId: true },
+          select: { id: true, name: true, elo: true },
         },
       },
     });
@@ -104,47 +108,10 @@ export async function POST(
 
     const isOperator =
       !!session.user.isAdmin || !!operatorMembership;
-    const participant = getOwnedMatchParticipant([
-      match.team1Player1, match.team1Player2, match.team2Player1, match.team2Player2,
-    ], session.user.id);
-    let isParticipant = false;
-    if (participant) {
-      const sessionClubIds = new Set([
-        ...(match.session.clubId ? [match.session.clubId] : []),
-        ...(match.session.sessionClubs ?? []).map((link) => link.clubId),
-      ]);
-      if (match.team1ClubId || match.team2ClubId) {
-        const isTeam1Participant = [
-          match.team1Player1Id,
-          match.team1Player2Id,
-        ].includes(participant.id);
-        const participantClubId = isTeam1Participant
-          ? match.team1ClubId
-          : match.team2ClubId;
-        if (participantClubId && sessionClubIds.has(participantClubId)) {
-          const participantClubAccess = await prisma.clubAccess.findUnique({
-            where: {
-              clubId_userId: {
-                clubId: participantClubId,
-                userId: session.user.id,
-              },
-            },
-            select: { status: true },
-          });
-          isParticipant = participantClubAccess?.status === "ACTIVE";
-        }
-      } else if (sessionClubIds.size === 0) {
-        // Legacy clubless sessions have no ClubAccess rows to check.
-        isParticipant = true;
-      } else {
-        const participantMembership = await getSessionMembership(prisma, {
-          session: { id: match.sessionId, clubId: match.session.clubId },
-          userId: session.user.id,
-          acceptedOnly: true,
-        });
-        isParticipant = !!participantMembership;
-      }
-    }
+    const participantOwners = await getSessionParticipantOwners(prisma, { id: match.sessionId, clubId: match.session.clubId }, [match.team1Player1Id, match.team1Player2Id, match.team2Player1Id, match.team2Player2Id]);
+    const ownedIds = [...participantOwners].filter(([, owner]) => owner === session.user.id).map(([id]) => id);
+    const participant = ownedIds.length === 1 ? { id: ownedIds[0] } : null;
+    const isParticipant = !!participant;
 
     if (!isOperator && !isParticipant) {
       return invalidTargetResponse(request, "api:matches:id:score");
@@ -161,12 +128,7 @@ export async function POST(
     }
 
     const winnerTeam = team1Score > team2Score ? 1 : 2;
-    const claimedByUserId = new Map<string, boolean>([
-      [match.team1Player1.id, !!match.team1Player1.ownerUserId],
-      [match.team1Player2.id, !!match.team1Player2.ownerUserId],
-      [match.team2Player1.id, !!match.team2Player1.ownerUserId],
-      [match.team2Player2.id, !!match.team2Player2.ownerUserId],
-    ]);
+    const claimedByUserId = new Map([...participantOwners].map(([id, owner]) => [id, !!owner]));
     const requiresApproval = shouldRequireOpponentApproval({
       match,
       submitterUserId: session.user.id,
@@ -179,6 +141,8 @@ export async function POST(
       try {
         const updated = await finalizeMatchResult({
           match,
+          actorUserId: session.user.id,
+          actorIsGlobalAdmin: !!session.user.isAdmin,
           expectedStatus: MatchStatus.IN_PROGRESS,
           finalTeam1Score: team1Score,
           finalTeam2Score: team2Score,
@@ -196,7 +160,7 @@ export async function POST(
               })
             : reconcileSessionQueueAfterCourtChange(match.sessionId));
         return sportingJson({
-          ...updated,
+          ...withMatchLocalClaimLabels(updated, participantOwners),
           autoAssignedMatch,
           queuedMatchCleared,
           queuedMatch,
@@ -213,7 +177,11 @@ export async function POST(
       }
     }
 
-    const updatedResult = await prisma.match.updateMany({
+    const updatedResult = await admissionTransaction(prisma, async tx => {
+      const freshOperator = session.user.isAdmin || await getSessionOperatorMembership(tx, { session: { id: match.sessionId, clubId: match.session.clubId }, userId: session.user.id, acceptedOnly: true });
+      const freshOwners = await getSessionParticipantOwners(tx, { id: match.sessionId, clubId: match.session.clubId }, [match.team1Player1Id, match.team1Player2Id, match.team2Player1Id, match.team2Player2Id]);
+      if (!freshOperator && (!participant || freshOwners.get(participant.id) !== session.user.id)) throw new IdentityConflictError("Your ownership or club access changed. Refresh before submitting the score.");
+      return tx.match.updateMany({
       where: { id, status: MatchStatus.IN_PROGRESS },
       data: {
         team1Score,
@@ -224,6 +192,8 @@ export async function POST(
         scoreSubmittedByUserId: session.user.id,
         scoreSubmittedByPlayerId: participant?.id ?? null,
       },
+    });
+
     });
 
     if (updatedResult.count === 0) {
@@ -249,8 +219,9 @@ export async function POST(
       },
     });
 
-    return sportingJson(updated);
+    return sportingJson(withMatchLocalClaimLabels(updated, participantOwners));
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Score submission error", error);
     return safeErrorResponse();
   }

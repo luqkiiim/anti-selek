@@ -36,6 +36,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.sessionFindUnique,
     },
     sessionClub: {
+      findUnique: vi.fn(async () => ({ status: "PENDING" })),
       update: mocks.sessionClubUpdate,
     },
   },
@@ -122,4 +123,9 @@ describe("session collab review route", () => {
     expectAliasPair(body, "clubId", "communityId");
     expectAliasPair(body, "clubName", "communityName");
   });
+});
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: unknown, op: (tx: unknown) => unknown) => op(db) };
 });

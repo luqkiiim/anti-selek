@@ -174,6 +174,33 @@ describe("session history route correction availability", () => {
     expect(body.correctionBlockedReason).toBeNull();
   });
 
+  it("preserves each player's represented club without exposing account snapshots", async () => {
+    mocks.sessionFindUnique.mockResolvedValue({
+      ...createHistorySession(),
+      ratingPolicyVersion: 2,
+      players: [
+        { playerId: "player-a1", profileClubId: "community-2", isGuest: false, participantAccountId: "private-account" },
+        { playerId: "legacy-ambiguous", profileClubId: null, isGuest: false },
+      ],
+    });
+    const response = await getHistory();
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.session.ratingPolicyVersion).toBe(2);
+    // Sporting userId aliases remain Player IDs for existing clients.
+    expect(body.playerProfiles).toEqual([
+      { playerId: "player-a1", userId: "player-a1", profileClubId: "community-2", isGuest: false },
+      { playerId: "legacy-ambiguous", userId: "legacy-ambiguous", profileClubId: null, isGuest: false },
+    ]);
+    expect(JSON.stringify(body)).not.toContain("private-account");
+    expect(mocks.sessionFindUnique).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({
+        ratingPolicyVersion: true,
+        players: { select: { playerId: true, profileClubId: true, isGuest: true } },
+      }),
+    }));
+  });
+
   it("uses a separate authenticated read bucket for viewers behind the same IP", async () => {
     const url = "http://localhost/api/sessions/ABC123/history";
     const headers = {

@@ -7,7 +7,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
-    player: { findFirst: vi.fn() },
+    clubMember: { findFirst: vi.fn() },
     match: { findFirst: vi.fn() },
     sessionPlayer: { findUnique: vi.fn(), findMany: vi.fn() },
     queuedMatch: { findUnique: vi.fn(), delete: vi.fn() },
@@ -82,7 +82,7 @@ describe("pause player route", () => {
     vi.mocked(auth).mockResolvedValue({
       user: { id: "global-admin-account", isAdmin: true },
     } as never);
-    vi.mocked(prisma.player.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.clubMember.findFirst).mockResolvedValue(null as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session-1",
       clubId: null,
@@ -263,8 +263,8 @@ describe("pause player route", () => {
       type: "POINTS",
       status: "ACTIVE",
     } as never);
-    vi.mocked(prisma.player.findFirst).mockResolvedValue({
-      id: "player-profile-1",
+    vi.mocked(prisma.clubMember.findFirst).mockResolvedValue({
+      id: "player-profile-1", ownerUserId: "account-owner",
     } as never);
     vi.mocked(getAcceptedSessionClubIds).mockResolvedValue(["club-1"] as never);
     vi.mocked(getSessionMembership).mockResolvedValue(null as never);
@@ -288,8 +288,8 @@ describe("pause player route", () => {
       type: "POINTS",
       status: "ACTIVE",
     } as never);
-    vi.mocked(prisma.player.findFirst).mockResolvedValue({
-      id: "player-profile-1",
+    vi.mocked(prisma.clubMember.findFirst).mockResolvedValue({
+      id: "player-profile-1", ownerUserId: "account-owner",
     } as never);
     vi.mocked(getAcceptedSessionClubIds).mockResolvedValue(["club-1"] as never);
     vi.mocked(getSessionMembership).mockResolvedValue({
@@ -463,7 +463,7 @@ describe("pause player route", () => {
     vi.mocked(auth).mockResolvedValue({
       user: { id: "account-owner", isAdmin: false },
     } as never);
-    vi.mocked(prisma.player.findFirst).mockResolvedValue({
+    vi.mocked(prisma.clubMember.findFirst).mockResolvedValue({
       id: "active-player",
       ownerUserId: "account-owner",
     } as never);
@@ -710,4 +710,22 @@ describe("pause player route", () => {
     expect(response.status).toBe(400);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+});
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: { $transaction?: (op: unknown) => unknown }, op: (tx: unknown) => unknown) => db.$transaction ? db.$transaction(op) : op(db) };
+});
+
+vi.mock("@/lib/sessionProfileIdentity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sessionProfileIdentity")>();
+  return { ...actual,
+    assertSessionMutationActor: vi.fn(async () => {}),
+    getSessionParticipantOwners: async (_db: unknown, session: { id: string; clubId: string }, ids: string[]) => {
+      const member = await prisma.clubMember.findFirst({ where: { playerId: ids[0], clubId: session.clubId } });
+      const actor = await auth();
+      const access = await getSessionMembership(prisma, { session, userId: actor!.user!.id!, acceptedOnly: true });
+      return new Map(ids.map(id => [id, access ? member?.ownerUserId ?? null : null]));
+    },
+  };
 });

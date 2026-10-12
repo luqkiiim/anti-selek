@@ -42,6 +42,9 @@ export interface ClubPageClub {
 
 export interface ClubPageMember {
   id: string;
+  /** The club-local profile selected for tournament history. */
+  profileClubId?: string | null;
+  ownerUserId?: string | null;
   name: string;
   email?: string | null;
   avatarUrl?: string | null;

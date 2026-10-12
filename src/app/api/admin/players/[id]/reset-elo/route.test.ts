@@ -1,3 +1,4 @@
+vi.mock("@/lib/clubPlayerOwnership", async original => ({ ...await original<typeof import("@/lib/clubPlayerOwnership")>(), clubOwnershipTransaction: async (db: object, fn: (tx: object) => unknown) => fn(db) }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -39,5 +40,10 @@ describe("admin Player reset ELO route", () => {
       },
     });
     expect(mocks.playerUpdate).not.toHaveBeenCalled();
+  });
+  it("reports current local claims while preserving rating reset", async () => {
+    mocks.playerFindFirst.mockResolvedValue({ id: "historical-player", ownerUserId: null });
+    mocks.playerUpdate.mockResolvedValue({ id: "historical-player", elo: 1000, clubMemberships: [{ ownerUserId: "current" }] });
+    const response = await POST(request(), context); expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ elo: 1000, isClaimed: true });
   });
 });

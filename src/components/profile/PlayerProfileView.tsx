@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { AdjustClubRating } from "./AdjustClubRating";
 import { AddGuestToClub } from "./AddGuestToClub";
-import { PlayerIdentityInvitationActions } from "@/components/club-admin/PlayerIdentityInvitationActions";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -982,7 +981,7 @@ function ConnectionRow({
       </span>
       <Avatar name={summary.user.name} avatarUrl={summary.user.avatarUrl} size="xs" />
       <div className="min-w-0 truncate text-sm font-bold text-gray-950">
-        <ProfileLink href={getPlayerProfileHref(summary.user.id, clubId)}>
+        <ProfileLink href={getPlayerProfileHref(summary.user.id, summary.user.profileClubId === undefined ? clubId : summary.user.profileClubId ?? "")}>
           {summary.user.name}
         </ProfileLink>
       </div>
@@ -1398,7 +1397,7 @@ function MatchParticipantCell({
           {participants.map((participant, index) => (
             <span key={participant.id}>
               {index > 0 ? " / " : ""}
-              <ProfileLink href={getPlayerProfileHref(participant.id, clubId)}>
+              <ProfileLink href={getPlayerProfileHref(participant.id, participant.profileClubId === undefined ? clubId : participant.profileClubId ?? "")}>
                 {participant.name}
               </ProfileLink>
             </span>
@@ -1804,12 +1803,10 @@ export function PlayerProfileView({
   }, [playerId, session, clubId, ratingRevision]);
 
   const handleUploadAvatar = async (file: File) => {
-    const canUseClubAdminRoute =
-      clubId.length > 0 && data?.context?.viewerCanManageClub;
     const response = await uploadPlayerAvatar(
       playerId,
       file,
-      canUseClubAdminRoute ? clubId : undefined
+      clubId
     );
 
     setData((current) =>
@@ -1829,12 +1826,7 @@ export function PlayerProfileView({
   };
 
   const handleRemoveAvatar = async () => {
-    const canUseClubAdminRoute =
-      clubId.length > 0 && data?.context?.viewerCanManageClub;
-    await deletePlayerAvatar(
-      playerId,
-      canUseClubAdminRoute ? clubId : undefined
-    );
+    await deletePlayerAvatar(playerId, clubId);
 
     setData((current) =>
       current
@@ -1938,6 +1930,7 @@ export function PlayerProfileView({
       : `${data.recentForm.currentStreak.result === "WIN" ? "W" : "L"}${data.recentForm.currentStreak.count}`;
   const canManageAvatar =
     data.user.isRetired !== true &&
+    clubId.length > 0 &&
     !!currentUser &&
     (currentUser.isAdmin === true ||
       (currentUser.playerIds?.includes(playerId) === true &&
@@ -1974,7 +1967,7 @@ export function PlayerProfileView({
       ) : null}
       {data.user.isRetired !== true && clubId && data.context?.viewerCanManageClub ? (
         <div className="px-4 sm:px-0">
-          <PlayerIdentityInvitationActions clubId={clubId} playerId={playerId} connected />
+          <p className="text-sm text-gray-600">To connect a different profile, remove this player from the club, then invite the correct profile.</p>
         </div>
       ) : null}
 

@@ -1,15 +1,15 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
-import { getOwnedPlayer } from "@/lib/playerIdentity";
+import { getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { checkInvalidTargetRateLimit, invalidTargetResponse, rateLimit } from "@/lib/rateLimit";
 import {
-  getAcceptedSessionClubIds,
-  getSessionMembership,
   getSessionOperatorMembership,
 } from "@/lib/sessionCollab";
 import { getQueuedMatchUserIds, hasQueuedMatchUser } from "@/lib/sessionQueue";
@@ -101,23 +101,8 @@ export async function PATCH(
       acceptedOnly: true,
     });
 
-    const ownedTarget = await getOwnedPlayer(prisma, {
-      userId: session.user.id,
-      playerId,
-    });
-    const [acceptedClubIds, requesterMembership] = ownedTarget
-      ? await Promise.all([
-          getAcceptedSessionClubIds(prisma, sessionData),
-          getSessionMembership(prisma, {
-            session: sessionData,
-            userId: session.user.id,
-            acceptedOnly: true,
-          }),
-        ])
-      : [[], null];
-    const canManageOwnedTarget =
-      !!ownedTarget &&
-      (acceptedClubIds.length === 0 || !!requesterMembership);
+    const owners = await getSessionParticipantOwners(prisma, sessionData, [playerId]);
+    const canManageOwnedTarget = owners.get(playerId) === session.user.id;
     if (!session.user.isAdmin && !operatorMembership && !canManageOwnedTarget) {
       return invalidTargetResponse(
         request,
@@ -144,7 +129,8 @@ export async function PATCH(
       );
     }
 
-    const queuedMatchAffected = await prisma.$transaction(async (tx) => {
+    const queuedMatchAffected = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId });
       const queuedMatch = await tx.queuedMatch.findUnique({
         where: { sessionId: sessionData.id },
       });
@@ -218,6 +204,7 @@ export async function PATCH(
       ...(queuedMatchAffected ? { queuedMatch } : {}),
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Skip next match error", error);
     return safeErrorResponse();
   }

@@ -26,6 +26,7 @@ import {
   undoCompletedMatchResult,
   UndoCompletedMatchError,
   type FinalizableMatch,
+  assertSelectedProfileLedger,
 } from "./matchCompletion";
 
 const finalizableMatch: FinalizableMatch = {
@@ -944,5 +945,42 @@ describe("correctCompletedMatchScore", () => {
     } satisfies Partial<CorrectCompletedMatchScoreError>);
     expect(tx.match.update).not.toHaveBeenCalled();
     expect(tx.matchEloAdjustment.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("selected club rating policy", () => {
+  it("writes one selected local ledger and never expands into another club or offline profile", async () => {
+    const tx = createTransactionMock({ id: "match-1", status: MatchStatus.COMPLETED });
+    const seats = [
+      { playerId: "a1", profileClubId: "club-b", isGuest: false },
+      { playerId: "a2", profileClubId: "club-a", isGuest: false },
+      { playerId: "b1", profileClubId: "club-b", isGuest: false },
+      { playerId: "b2", profileClubId: null, isGuest: true },
+    ];
+    tx.sessionPlayer.findMany.mockResolvedValue(seats);
+    const findUnique = vi.fn().mockImplementation(async ({ where }) => ({ elo: where.clubId_playerId.clubId === "club-b" ? 800 : 1400 }));
+    const update = vi.fn();
+    const createMany = vi.fn();
+    const fullTx = { ...tx, clubMember: { ...tx.clubMember, findUnique, update }, matchEloAdjustment: { createMany } };
+    mocks.transaction.mockImplementation(callback => callback(fullTx));
+    await finalizeMatchResult({ match: { ...finalizableMatch, session: { ...finalizableMatch.session, clubId: "club-a", isTest: false, ratingPolicyVersion: 2 } }, expectedStatus: MatchStatus.IN_PROGRESS, finalTeam1Score: 21, finalTeam2Score: 15 });
+    expect(createMany.mock.calls[0][0].data.map((a: { clubId: string; playerId: string }) => [a.clubId, a.playerId])).toEqual([["club-b", "a1"], ["club-a", "a2"], ["club-b", "b1"]]);
+    expect(tx.clubMember.findMany).not.toHaveBeenCalled();
+    expect(tx.offlineIdentityMember.findMany).not.toHaveBeenCalled();
+    expect(tx.player.updateMany).not.toHaveBeenCalled();
+    expect(tx.clubMember.updateMany).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(3);
+    expect(createMany.mock.calls[0][0].data).toEqual([
+      { matchId: "match-1", clubId: "club-b", playerId: "a1", delta: 7, beforeElo: 800, afterElo: 807 },
+      { matchId: "match-1", clubId: "club-a", playerId: "a2", delta: 7, beforeElo: 1400, afterElo: 1407 },
+      { matchId: "match-1", clubId: "club-b", playerId: "b1", delta: -7, beforeElo: 800, afterElo: 793 },
+    ]);
+  });
+  it("rejects a missing selected ledger instead of falling back to the host or global rating", async () => {
+    const tx = { clubMember: { findUnique: vi.fn().mockResolvedValue({ id: "member" }) }, sessionPlayer: { findMany: vi.fn().mockResolvedValue([{ playerId: "p", profileClubId: "club-b", isGuest: false }]) } };
+    await expect(assertSelectedProfileLedger(tx as never, "s", ["p"], [])).rejects.toThrow("ledger is missing");
+    await expect(assertSelectedProfileLedger(tx as never, "s", ["p"], [{ playerId: "p", clubId: "club-a" }])).rejects.toThrow("ledger is missing");
+    await expect(assertSelectedProfileLedger(tx as never, "s", ["p"], [{ playerId: "p", clubId: "club-b" }])).resolves.toBeUndefined();
   });
 });

@@ -1,3 +1,4 @@
+import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { reconcileSessionQueueAfterCourtChange } from "@/app/api/matches/_lib/reconcileSessionQueue";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
@@ -96,7 +97,7 @@ export async function loadGenerateMatchContext({
       : null;
 
   return {
-    sessionData,
+    sessionData: { ...sessionData, mutationActor: { userId: requesterAccountId, isGlobalAdmin: requesterIsAdmin } },
     orderedTargetCourts,
     targetCourt,
     freedCourtIds: new Set<string>(),
@@ -104,7 +105,7 @@ export async function loadGenerateMatchContext({
   };
 }
 
-export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt) {
+export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt, actor?: SessionMutationActor) {
   if (!targetCourt.currentMatch) {
     throw new GenerateMatchError(400, "No active match to undo.");
   }
@@ -114,7 +115,7 @@ export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt) {
     throw new GenerateMatchError(400, "Only unscored matches can be undone.");
   }
 
-  const pendingPlayerGroupChanges = await prisma.$transaction(async (tx) => {
+  const pendingPlayerGroupChanges = await sessionMatchMutationTransaction(prisma, targetCourt.sessionId, actor, async (tx) => {
     await tx.match.delete({ where: { id: targetCourt.currentMatch!.id } });
     await tx.court.update({
       where: { id: targetCourt.id },
@@ -162,13 +163,10 @@ export async function reshuffleCurrentCourtMatch(
     );
   }
 
-  await prisma.$transaction([
-    prisma.match.delete({ where: { id: targetCourt.currentMatch.id } }),
-    prisma.court.update({
-      where: { id: targetCourt.id },
-      data: { currentMatchId: null },
-    }),
-  ]);
+  await sessionMatchMutationTransaction(prisma, sessionData.id, sessionData.mutationActor, async tx => {
+    await tx.match.delete({ where: { id: targetCourt.currentMatch!.id } });
+    await tx.court.update({ where: { id: targetCourt.id }, data: { currentMatchId: null } });
+  });
 
   sessionData.matches = sessionData.matches.filter(
     (match) => match.id !== targetCourt.currentMatch!.id

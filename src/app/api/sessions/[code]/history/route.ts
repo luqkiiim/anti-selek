@@ -174,6 +174,7 @@ async function getSessionHistory(
       id: true,
       code: true,
       clubId: true,
+      ratingPolicyVersion: true,
       name: true,
       status: true,
       isTest: true,
@@ -195,6 +196,8 @@ async function getSessionHistory(
       players: {
         select: {
           playerId: true,
+          profileClubId: true,
+          isGuest: true,
         },
       },
       matches: {
@@ -309,6 +312,7 @@ async function getSessionHistory(
       id: sessionData.id,
       code: sessionData.code,
       clubId: sessionData.clubId,
+      ratingPolicyVersion: sessionData.ratingPolicyVersion,
       name: sessionData.name,
       status: sessionData.status,
       isTest: sessionData.isTest,
@@ -326,6 +330,11 @@ async function getSessionHistory(
     canCorrectCompletedScores,
     correctionBlockedReason,
     undoableMatchId,
+    playerProfiles: sessionData.players.map(({ playerId, profileClubId, isGuest }) => ({
+      playerId,
+      profileClubId,
+      isGuest,
+    })),
     matches: sessionData.matches,
   });
 }

@@ -155,7 +155,6 @@ export async function GET(
           select: {
             id: true,
             name: true,
-            ownerUserId: true,
             avatarKey: true,
             gender: true,
             partnerPreference: true,
@@ -183,6 +182,7 @@ export async function GET(
           id: string;
           name: string;
           userId: string;
+          ownerUserId: string | null;
           elo: number;
           status: string;
           role: string;
@@ -195,7 +195,7 @@ export async function GET(
       const offlineIdentityInfo = offlineIdentityInfoByUserId.get(
         membership.playerId
       );
-      const groupKey = offlineIdentityInfo?.offlineIdentityId ?? membership.playerId;
+      const groupKey = membership.ownerUserId ? `account:${membership.ownerUserId}` : offlineIdentityInfo?.offlineIdentityId ?? membership.playerId;
       const current =
         byIdentityKey.get(groupKey) ??
         {
@@ -207,6 +207,7 @@ export async function GET(
         id: membership.club.id,
         name: membership.club.name,
         userId: membership.playerId,
+        ownerUserId: membership.ownerUserId,
         elo: membership.elo,
         status: membership.status,
         role: "MEMBER",
@@ -251,7 +252,8 @@ export async function GET(
               ? preferred.preferredPool
               : SessionPool.B,
             isActive: user.isActive,
-            isClaimed: !!user.ownerUserId,
+            profileClubId: preferred.id,
+            isClaimed: !!preferred.ownerUserId,
             createdAt: user.createdAt,
             wins: 0,
             losses: 0,

@@ -192,8 +192,12 @@ function makeTransaction(sessionData: GenerateMatchSession) {
     createdAt: now,
   }));
   return {
+    $executeRaw: vi.fn(async () => 0),
     session: {
       findUnique: vi.fn(async () => ({
+        id: sessionData.id,
+        clubId: sessionData.clubId,
+        status: sessionData.status,
         poolsEnabled: Boolean(sessionData.poolsEnabled),
         type: sessionData.type,
         mode: sessionData.mode,
@@ -426,6 +430,7 @@ describe("Balanced recurrence integration paths", () => {
         callback(tx as never));
       const created = await createQueuedMatchForSession(queueSession as never);
       expect(created.isAutomatic).toBe(true);
+      expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
       expect(tx.queuedMatch.create).toHaveBeenCalledTimes(1);
       const createReason = tx.queuedMatch.create.mock.calls[0]?.[0].data.matchmakingReasonJson;
       expect(JSON.parse(String(createReason)).balancedPolicyDecision?.requestedPolicy).toBe("strict-replay-rescue");
@@ -438,6 +443,7 @@ describe("Balanced recurrence integration paths", () => {
       database.loadSessionRecordById.mockResolvedValue(rebuildSession);
       const rebuilt = await tryRebuildAutomaticQueuedMatchForSessionId(rebuildSession.id);
       expect(rebuilt?.isAutomatic).toBe(true);
+      expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
       expect(tx.queuedMatch.update).toHaveBeenCalledTimes(1);
       const rebuildReason = tx.queuedMatch.update.mock.calls[0]?.[0].data.matchmakingReasonJson;
       expect(JSON.parse(String(rebuildReason)).balancedPolicyDecision?.requestedPolicy).toBe("strict-replay-rescue");
@@ -449,6 +455,7 @@ describe("Balanced recurrence integration paths", () => {
         callback(tx as never));
       const reshuffled = await reshuffleQueuedMatchForSession(reshuffleSession as never);
       expect(reshuffled.isAutomatic).toBe(true);
+      expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
       expect(tx.queuedMatch.update).toHaveBeenCalledTimes(1);
       const reshuffleReason = tx.queuedMatch.update.mock.calls[0]?.[0].data.matchmakingReasonJson;
       expect(JSON.parse(String(reshuffleReason)).balancedPolicyDecision?.requestedPolicy).toBe("strict-replay-rescue");
@@ -460,6 +467,7 @@ describe("Balanced recurrence integration paths", () => {
         callback(tx as never));
       const replaced = await replaceQueuedMatchPlayerForSession(replacementSession as never, "P8");
       expect(replaced.isAutomatic).toBe(true);
+      expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
       expect(tx.queuedMatch.update).toHaveBeenCalledTimes(1);
       const replacementReason = tx.queuedMatch.update.mock.calls[0]?.[0].data.matchmakingReasonJson;
       expect(JSON.parse(String(replacementReason)).balancedPolicyDecision?.requestedPolicy).toBe("strict-replay-rescue");

@@ -39,6 +39,7 @@ export interface PlayerConfigOverride {
   mixedSideOverride?: MixedSide | null;
   pool?: SessionPool;
   representingClubId?: string | null;
+  profileClubId?: string | null;
 }
 
 export interface NormalizedGuestConfig {

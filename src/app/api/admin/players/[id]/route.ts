@@ -6,6 +6,7 @@ import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
+import { clubOwnershipTransaction, ClubPlayerOwnershipError } from "@/lib/clubPlayerOwnership";
 export const dynamic = "force-dynamic";
 
 export async function PATCH(
@@ -65,14 +66,13 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid isActive value" }, { status: 400 });
     }
 
-    // Check if user exists
-    const user = await prisma.player.findUnique({
+    const result = await clubOwnershipTransaction(prisma, async tx => {
+    // Revalidate current ownership and retirement while holding the writer.
+    const user = await tx.player.findUnique({
       where: { id },
       include: {
         clubMemberships: {
-          where: { retiredByAdmissionEventId: { not: null } },
-          select: { id: true },
-          take: 1,
+          select: { id: true, ownerUserId: true, retiredByAdmissionEventId: true },
         },
       },
     });
@@ -80,12 +80,12 @@ export async function PATCH(
     if (!user) {
       return invalidTargetResponse(request, "api:admin:players:id");
     }
-    if (user.clubMemberships.length > 0) {
+    if (user.clubMemberships.some(member => member.retiredByAdmissionEventId !== null)) {
       return NextResponse.json({ error: "Retired player profiles cannot be changed" }, { status: 409 });
     }
     if (
       typeof name === "string" &&
-      user.ownerUserId &&
+      user.clubMemberships.some(member => member.ownerUserId !== null) &&
       name.trim() !== user.name
     ) {
       return NextResponse.json(
@@ -94,7 +94,8 @@ export async function PATCH(
       );
     }
 
-    const updated = await prisma.player.update({
+    if (isActive !== undefined && user.clubMemberships.some(member => member.ownerUserId !== null)) return NextResponse.json({ error: "Manage connected profile activation and removal in its club" }, { status: 409 });
+    const updated = await tx.player.update({
       where: { id },
       data: {
         name: name !== undefined ? name.trim() : undefined,
@@ -105,7 +106,6 @@ export async function PATCH(
       select: {
         id: true,
         name: true,
-        ownerUserId: true,
         avatarKey: true,
         elo: true,
         isActive: true,
@@ -117,9 +117,12 @@ export async function PATCH(
     const { avatarKey, ...rest } = updated;
     return NextResponse.json({
       ...rest,
-      avatarUrl: resolveAvatarUrl(avatarKey), email: null, isClaimed: !!updated.ownerUserId,
+      avatarUrl: resolveAvatarUrl(avatarKey), email: null, isClaimed: user.clubMemberships.some(member => member.ownerUserId !== null),
     });
+    });
+    return result;
   } catch (error) {
+    if (error instanceof ClubPlayerOwnershipError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
     logError("Admin update player error details", error);
     return safeErrorResponse();
   }
@@ -148,14 +151,13 @@ export async function DELETE(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    // Check the target and retirement state before attempting to archive it.
-    const user = await prisma.player.findUnique({
+    const result = await clubOwnershipTransaction(prisma, async tx => {
+    // Revalidate current ownership and retirement before archiving.
+    const user = await tx.player.findUnique({
       where: { id },
       include: {
         clubMemberships: {
-          where: { retiredByAdmissionEventId: { not: null } },
-          select: { id: true },
-          take: 1,
+          select: { id: true, ownerUserId: true, retiredByAdmissionEventId: true },
         },
       },
     });
@@ -163,15 +165,13 @@ export async function DELETE(
     if (!user) {
       return invalidTargetResponse(request, "api:admin:players:id");
     }
-    if (user.clubMemberships.length > 0) {
+    if (user.clubMemberships.some(member => member.retiredByAdmissionEventId !== null)) {
       return NextResponse.json({ error: "Retired player profiles cannot be changed" }, { status: 409 });
     }
-    if (user.ownerUserId === session.user.id) {
-      return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
-    }
+    if (user.clubMemberships.some(member => member.ownerUserId !== null)) { return NextResponse.json({ error: "Remove connected profiles in their club" }, { status: 409 }); }
 
     // Archive the durable sporting identity; all historical references remain intact.
-    await prisma.player.update({ where: { id }, data: { isActive: false } });
+    await tx.player.update({ where: { id }, data: { isActive: false } });
 
 
 
@@ -195,7 +195,10 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true });
+    });
+    return result;
   } catch (error) {
+    if (error instanceof ClubPlayerOwnershipError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
     logError("Admin delete player error details", error);
     return safeErrorResponse();
   }

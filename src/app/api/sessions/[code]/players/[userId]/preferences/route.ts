@@ -1,5 +1,7 @@
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   isValidMixedSide,
@@ -109,6 +111,7 @@ export async function PATCH(
         id: true,
         clubId: true,
         collabFormat: true,
+        ratingPolicyVersion: true,
         mode: true,
         status: true,
         poolsEnabled: true,
@@ -173,6 +176,7 @@ export async function PATCH(
         pool: true,
         pendingPool: true,
         representingClubId: true,
+        profileClubId: true,
         isGuest: true,
       },
     });
@@ -287,7 +291,8 @@ export async function PATCH(
               : existing.partnerPreference,
     });
 
-    const mutation = await prisma.$transaction(async (tx) => {
+    const mutation = await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       const [freshSession, freshPlayer] = await Promise.all([
         tx.session.findUnique({
           where: { id: sessionData.id },
@@ -369,6 +374,10 @@ export async function PATCH(
         ) {
           return { kind: "manual-queue-conflict" } as const;
         }
+      }
+
+      if (hasRepresentingClubInput && nextRepresentingClubId !== existing.representingClubId) {
+        throw new IdentityConflictError("Remove this player and join again to choose another club profile before any match is recorded.");
       }
 
       const updated = await tx.sessionPlayer.update({
@@ -459,6 +468,7 @@ export async function PATCH(
       ...(queuedMatch !== undefined ? { queuedMatch } : {}),
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Update session preference error", error);
     return safeErrorResponse();
   }

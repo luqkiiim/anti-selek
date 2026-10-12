@@ -1,5 +1,6 @@
+import { ClubAdmissionError } from "@/lib/clubAdmissions";
+import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getSideSpecificCourtCreateLabel } from "@/lib/courtCreate";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
@@ -87,7 +88,7 @@ export async function POST(
     }
 
     if (undoCurrentMatch) {
-      return sportingJson(await undoCurrentCourtMatch(targetCourt));
+      return sportingJson(await undoCurrentCourtMatch(targetCourt, sessionData.mutationActor));
     }
 
     ensureInterclubSessionReady(sessionData);
@@ -125,7 +126,7 @@ export async function POST(
           matchmakingReasonJson: null,
           clearArrivalPriority: false,
         },
-      ]);
+      ], sessionData.mutationActor);
 
       return sportingJson({
         ...createdMatch,
@@ -191,6 +192,7 @@ export async function POST(
 
       const replacementMatch = await replaceCurrentCourtMatchAssignment({
           sessionId: sessionData.id,
+          actor: sessionData.mutationActor,
           courtId: targetCourt.id,
           currentMatchId: targetCourt.currentMatch.id,
           selectedIds: [...replacementSelection.ids],
@@ -283,6 +285,7 @@ export async function POST(
 
       const newMatch = await replaceCurrentCourtMatchAssignment({
         sessionId: sessionData.id,
+        actor: sessionData.mutationActor,
         courtId: targetCourt.id,
         currentMatchId: targetCourt.currentMatch.id,
         selectedIds: [...bestSelection.ids],
@@ -379,7 +382,7 @@ export async function POST(
           clearArrivalPriority: true,
           consumeSkipNextUserIds: consumedSkipUserIds,
         },
-      ]);
+      ], sessionData.mutationActor);
 
       return sportingJson({
         ...newMatch,
@@ -439,7 +442,8 @@ export async function POST(
           clearArrivalPriority: true,
           consumeSkipNextUserIds: consumedSkipUserIds,
         };
-      })
+      }),
+      sessionData.mutationActor
     );
     const requestedCourtOrder = new Map(
       requestedOpenCourts.map((court, index) => [court.id, index])
@@ -455,6 +459,7 @@ export async function POST(
       queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
     });
   } catch (error: unknown) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof GenerateMatchError) {
       if (error.status === 403 || error.status === 404) {
         return invalidTargetResponse(request, "api:sessions:code:generate-match");

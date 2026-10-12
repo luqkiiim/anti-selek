@@ -1,3 +1,4 @@
+import { type SessionMutationActor, withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { prisma } from "@/lib/prisma";
 import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
@@ -43,17 +44,15 @@ const sessionRecordInclude = {
 };
 
 export async function loadSessionRecord(code: string) {
-  return withLegacySportingAliases(await prisma.session.findUnique({
-    where: { code },
-    include: sessionRecordInclude,
-  }));
+  const session = await prisma.session.findUnique({ where: { code }, include: sessionRecordInclude });
+  if (!session) return null;
+  return withLegacySportingAliases({ ...session, players: await withSessionProfileRatings(prisma, session, session.players) });
 }
 
 export async function loadSessionRecordById(id: string) {
-  return withLegacySportingAliases(await prisma.session.findUnique({
-    where: { id },
-    include: sessionRecordInclude,
-  }));
+  const session = await prisma.session.findUnique({ where: { id }, include: sessionRecordInclude });
+  if (!session) return null;
+  return withLegacySportingAliases({ ...session, players: await withSessionProfileRatings(prisma, session, session.players) });
 }
 
 export async function loadCourtRecords(
@@ -71,7 +70,7 @@ export async function loadCourtRecords(
 
 export type GenerateMatchSession = NonNullable<
   Awaited<ReturnType<typeof loadSessionRecordById>>
->;
+> & { mutationActor?: SessionMutationActor };
 
 export type GenerateMatchCourt = Awaited<
   ReturnType<typeof loadCourtRecords>

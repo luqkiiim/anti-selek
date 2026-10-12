@@ -87,7 +87,7 @@ afterAll(async () => {
 
 describe("score and approval identity integration", () => {
   it("requires active access to the represented club for owned participants while keeping actor and Player IDs separate", async () => {
-    const allAccounts = [...accountIds, "player-cross-club"];
+    const allAccounts = [...accountIds, "player-cross-club", "score-admin"];
     await prisma.user.createMany({
       data: allAccounts.map((id) => ({ id, email: `${id}@example.test`, passwordHash: "test-hash", name: id })),
     });
@@ -104,11 +104,11 @@ describe("score and approval identity integration", () => {
     });
     await prisma.clubMember.createMany({
       data: [
-        { clubId: clubAId, playerId: playerIds[0], ownerUserId: accountIds[0] },
-        { clubId: clubBId, playerId: playerIds[0], ownerUserId: accountIds[0] },
-        { clubId: clubAId, playerId: playerIds[1], ownerUserId: accountIds[1] },
-        { clubId: clubAId, playerId: playerIds[2], ownerUserId: accountIds[2] },
-        { clubId: clubBId, playerId: playerIds[3], ownerUserId: accountIds[3] },
+        { clubId: clubAId, playerId: playerIds[0] },
+        { clubId: clubBId, playerId: playerIds[0] },
+        { clubId: clubAId, playerId: playerIds[1] },
+        { clubId: clubAId, playerId: playerIds[2] },
+        { clubId: clubBId, playerId: playerIds[3] },
       ],
     });
     await prisma.clubAccess.createMany({
@@ -119,6 +119,12 @@ describe("score and approval identity integration", () => {
         { clubId: clubBId, userId: accountIds[3], role: "MEMBER", status: "ACTIVE" },
       ],
     });
+    await prisma.clubAccess.createMany({ data: [clubAId, clubBId].map(clubId => ({ clubId, userId: "score-admin", role: "ADMIN" })) });
+    const { clubOwnershipTransaction, claimClubPlayer } = await import("@/lib/clubPlayerOwnership");
+    for (const [clubId, playerId, userId] of [[clubAId, playerIds[0], accountIds[0]], [clubBId, playerIds[0], accountIds[0]], [clubAId, playerIds[1], accountIds[1]], [clubAId, playerIds[2], accountIds[2]], [clubBId, playerIds[3], accountIds[3]]]) {
+      await clubOwnershipTransaction(prisma, tx => claimClubPlayer(tx, { clubId, playerId, userId, actorUserId: "score-admin" }));
+    }
+    await prisma.clubAccess.update({ where: { clubId_userId: { clubId: clubBId, userId: accountIds[0] } }, data: { status: "REVOKED" } });
     await prisma.session.create({
       data: {
         id: sessionId,
@@ -181,14 +187,7 @@ describe("score and approval identity integration", () => {
     });
     expect(await prisma.matchEloAdjustment.count({ where: { matchId } })).toBe(0);
 
-    await prisma.clubAccess.create({
-      data: {
-        clubId: clubBId,
-        userId: accountIds[0],
-        role: "MEMBER",
-        status: "REVOKED",
-      },
-    });
+    await prisma.clubAccess.update({ where: { clubId_userId: { clubId: clubBId, userId: accountIds[0] } }, data: { status: "REVOKED" } });
     const revokedClubBAccess = await postScore();
     expect(revokedClubBAccess.status).toBe(403);
     const unchangedAfterRevokedAccess = await prisma.match.findUniqueOrThrow({ where: { id: matchId } });
@@ -289,7 +288,7 @@ describe("score and approval identity integration", () => {
     });
   });
 
-  it("keeps owned-player score entry available only in a genuinely clubless legacy session", async () => {
+  it("denies ambiguous context in a clubless legacy session without borrowing global ownership", async () => {
     const legacySessionId = "score-integration-legacy-session";
     const legacyCourtId = "score-integration-legacy-court";
     const legacyMatchId = "score-integration-legacy-match";
@@ -325,11 +324,22 @@ describe("score and approval identity integration", () => {
     mockedAuth.mockResolvedValue({ user: { id: accountIds[0], isAdmin: false } } as never);
     const response = await postScore(legacyMatchId);
 
-    expect(response.status).toBe(200);
-    expect(await prisma.match.findUniqueOrThrow({ where: { id: legacyMatchId } })).toMatchObject({
-      status: MatchStatus.PENDING_APPROVAL,
-      scoreSubmittedByUserId: accountIds[0],
-      scoreSubmittedByPlayerId: playerIds[0],
-    });
+    expect(response.status).toBe(403);
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: legacyMatchId } })).toMatchObject({ status: MatchStatus.IN_PROGRESS, scoreSubmittedByUserId: null, scoreSubmittedByPlayerId: null });
+
   });
+  it("supports an explicit exact profile in a clubless legacy session without adding club rating effects", async () => {
+    const localSession = "legacy-explicit-session"; const localCourt = "legacy-explicit-court"; const localMatch = "legacy-explicit-match";
+    await prisma.session.create({ data: { id: localSession, code: localSession, name: "Legacy exact pair", status: SessionStatus.ACTIVE, players: { create: playerIds.map((playerId, i) => ({ playerId, profileClubId: i === 0 || i === 3 ? clubBId : clubAId, participantAccountId: accountIds[i] })) }, courts: { create: { id: localCourt, courtNumber: 1 } } } });
+    await prisma.match.create({ data: { id: localMatch, sessionId: localSession, courtId: localCourt, status: MatchStatus.IN_PROGRESS, team1Player1Id: playerIds[0], team1Player2Id: playerIds[1], team2Player1Id: playerIds[2], team2Player2Id: playerIds[3] } });
+    await prisma.court.update({ where: { id: localCourt }, data: { currentMatchId: localMatch } });
+    const localRatings = await prisma.clubMember.findMany({ orderBy: { id: "asc" }, select: { id: true, elo: true } });
+    mockedAuth.mockResolvedValue({ user: { id: accountIds[0], isAdmin: false } } as never);
+    expect((await postScore(localMatch)).status).toBe(200);
+    mockedAuth.mockResolvedValue({ user: { id: accountIds[2], isAdmin: false } } as never);
+    expect((await postApproval(localMatch)).status).toBe(200);
+    expect(await prisma.matchEloAdjustment.count({ where: { matchId: localMatch } })).toBe(0);
+    expect(await prisma.clubMember.findMany({ orderBy: { id: "asc" }, select: { id: true, elo: true } })).toEqual(localRatings);
+  });
+
 });

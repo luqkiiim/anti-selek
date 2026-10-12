@@ -28,7 +28,7 @@ export async function POST(
     await prisma.clubNotification.updateMany({
       where: {
         clubId: id,
-        recipientPlayer: { ownerUserId: access.context.viewerId },
+        recipientPlayer: { clubMemberships: { some: { clubId: id, ownerUserId: access.context.viewerId, archivedAt: null, retiredByAdmissionEventId: null } } },
         readAt: null,
       },
       data: {

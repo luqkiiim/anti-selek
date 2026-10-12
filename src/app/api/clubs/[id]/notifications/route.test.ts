@@ -71,7 +71,10 @@ describe("club notifications route", () => {
         id: "membership-viewer",
         clubId: "club-1",
         playerId: "player-viewer",
-        player: { id: "player-viewer", ownerUserId: "account-viewer" },
+        ownerUserId: "account-viewer",
+        archivedAt: null,
+        retiredByAdmissionEventId: null,
+        player: { id: "player-viewer" },
       },
     ]);
     mocks.clubFindUnique.mockResolvedValue({
@@ -125,10 +128,35 @@ describe("club notifications route", () => {
       expect.objectContaining({
         where: {
           clubId: "club-1",
-          recipientPlayer: { ownerUserId: "account-viewer" },
+          recipientPlayer: {
+            clubMemberships: {
+              some: {
+                clubId: "club-1",
+                ownerUserId: "account-viewer",
+                archivedAt: null,
+                retiredByAdmissionEventId: null,
+              },
+            },
+          },
         },
       })
     );
+    expect(mocks.clubNotificationCount).toHaveBeenCalledWith({
+      where: {
+        clubId: "club-1",
+        recipientPlayer: {
+          clubMemberships: {
+            some: {
+              clubId: "club-1",
+              ownerUserId: "account-viewer",
+              archivedAt: null,
+              retiredByAdmissionEventId: null,
+            },
+          },
+        },
+        readAt: null,
+      },
+    });
     expect(body.unreadCount).toBe(2);
     expect(body.notifications[0]).toMatchObject({
       id: "notification-1",
@@ -181,7 +209,16 @@ describe("club notifications route", () => {
     expect(mocks.clubNotificationUpdateMany).toHaveBeenCalledWith({
       where: {
         clubId: "club-1",
-        recipientPlayer: { ownerUserId: "account-viewer" },
+        recipientPlayer: {
+          clubMemberships: {
+            some: {
+              clubId: "club-1",
+              ownerUserId: "account-viewer",
+              archivedAt: null,
+              retiredByAdmissionEventId: null,
+            },
+          },
+        },
         readAt: null,
       },
       data: {

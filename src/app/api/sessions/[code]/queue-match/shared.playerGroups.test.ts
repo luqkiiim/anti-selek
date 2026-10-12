@@ -577,3 +577,9 @@ describe("queued player-group lifecycle", () => {
     expect(metadata.source).toBeUndefined();
   });
 });
+
+// These fixtures exercise queue/assignment mechanics; local DB tests cover the writer guard.
+vi.mock("@/lib/sessionProfileIdentity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sessionProfileIdentity")>();
+  return { ...actual, sessionMatchMutationTransaction: async (db: { $transaction: (op: unknown) => unknown }, _sessionId: string, _actor: unknown, op: unknown) => db.$transaction(op) };
+});

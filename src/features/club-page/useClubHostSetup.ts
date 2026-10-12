@@ -495,15 +495,42 @@ export function useClubHostSetup({
           clubId,
           collabFormat,
           partnerClubId: partnerClubId || undefined,
-          playerIds: selectedPlayerIds,
-          playerConfigs: selectedPlayerIds.map((userId) => ({
-            userId,
-            pool: selectedPlayerPools[userId] ?? getPreferredPool(userId),
-            representingClubId: isInterclub
-              ? (selectedPlayerRepresentingClubs[userId] ??
-                getDefaultRepresentingClubId(userId))
-              : null,
-          })),
+          playerIds: selectedPlayerIds.map((selectionId) => {
+            const player = effectiveSelectablePlayers.find(
+              (candidate) => candidate.id === selectionId
+            );
+            const profileClubId = isInterclub
+              ? selectedPlayerRepresentingClubs[selectionId] ??
+                getDefaultRepresentingClubId(selectionId)
+              : player?.profileClubId ?? clubId;
+            const membership = player?.linkedClubBadges?.find(
+              (badge) => badge.id === profileClubId
+            );
+            return membership?.userId ?? player?.id ?? selectionId;
+          }),
+          playerConfigs: selectedPlayerIds.map((selectionId) => {
+            const player = effectiveSelectablePlayers.find(
+              (candidate) => candidate.id === selectionId
+            );
+            const representingClubId = isInterclub
+              ? selectedPlayerRepresentingClubs[selectionId] ??
+                getDefaultRepresentingClubId(selectionId)
+              : null;
+            const profileClubId = representingClubId ??
+              player?.profileClubId ??
+              clubId;
+            const membership = player?.linkedClubBadges?.find(
+              (badge) => badge.id === profileClubId
+            );
+            return {
+              playerId: membership?.userId ?? player?.id ?? selectionId,
+              profileClubId,
+              pool:
+                selectedPlayerPools[selectionId] ??
+                getPreferredPool(selectionId),
+              representingClubId,
+            };
+          }),
           guestConfigs,
           poolsEnabled,
           crossoverFrequency,

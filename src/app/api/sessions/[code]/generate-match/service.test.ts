@@ -127,6 +127,8 @@ function createSessionPlayer(
     id: `seat-${userId}`,
     sessionId: "session-1",
     pendingPool: null,
+    profileClubId: null,
+    participantAccountId: null,
     lastPlayedAt: null,
     pausedAt: null,
     ladderEntryAt: options.joinedAt ?? new Date("2026-01-01T00:00:00Z"),
@@ -2505,4 +2507,10 @@ describe("generate match service", () => {
       );
     });
   });
+});
+
+// These fixtures exercise queue/assignment mechanics; local DB tests cover the writer guard.
+vi.mock("@/lib/sessionProfileIdentity", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/sessionProfileIdentity")>();
+  return { ...actual, sessionMatchMutationTransaction: async (db: { $transaction: (op: unknown) => unknown }, _sessionId: string, _actor: unknown, op: unknown) => db.$transaction(op) };
 });

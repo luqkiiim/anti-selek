@@ -70,7 +70,7 @@ describe("avatar storage mutation boundary", () => {
       "Avatar storage mutations are disabled"
     );
     await expect(
-      cleanupSupersededAvatar({ previousAvatarKey: avatarUrl, nextAvatarKey: null })
+      cleanupSupersededAvatar({ previousAvatarKey: avatarUrl, nextAvatarKey: null, isReferenced: async () => false })
     ).resolves.toBe(false);
 
     expect(blobMocks.put).not.toHaveBeenCalled();
@@ -139,7 +139,7 @@ describe("avatar storage mutation boundary", () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       await expect(deleteAvatarObject(url)).rejects.toThrow("outside the isolated store");
-      await expect(cleanupSupersededAvatar({ previousAvatarKey: url, nextAvatarKey: previewUrl })).resolves.toBe(false);
+      await expect(cleanupSupersededAvatar({ previousAvatarKey: url, nextAvatarKey: previewUrl, isReferenced: async () => false })).resolves.toBe(false);
       expect(blobMocks.del).not.toHaveBeenCalled();
     } finally { errorLog.mockRestore(); }
   });

@@ -12,7 +12,6 @@ import { ClubPlayerEditorModal } from "@/components/club-admin/ClubPlayerEditorM
 import { ClubPlayersPanel } from "@/components/club-admin/ClubPlayersPanel";
 import { ClubSettingsPanel } from "@/components/club-admin/ClubSettingsPanel";
 import { CreateClubPlayerModal } from "@/components/club-admin/CreateClubPlayerModal";
-import { OfflineIdentityLinksPanel } from "@/components/club-admin/OfflineIdentityLinksPanel";
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { ClubAdminSection } from "@/components/club-admin/clubAdminTypes";
@@ -23,17 +22,12 @@ import styles from "./ClubAdminPage.module.css";
 const tabs: Array<{
   key: ClubAdminSection;
   label: string;
-  detail: (counts: { players: number; claims: number; links: number }) => string;
+  detail: (counts: { players: number; claims: number }) => string;
 }> = [
   {
     key: "players",
     label: "Players",
     detail: ({ players }) => `${players} total`,
-  },
-  {
-    key: "links",
-    label: "Links",
-    detail: ({ links }) => `${links} active`,
   },
   {
     key: "claims",
@@ -73,9 +67,7 @@ function getPlayerActionDialogCopy(action: {
             {action.player.email || "No email on file"}
           </p>
           <p className="text-sm text-gray-600">
-            {isSelfRemoval
-              ? "You will no longer see this club in your admin tools unless another admin adds you again."
-              : "They will no longer appear in this club unless added again."}
+            This archives the local membership and disconnects the account from this club. Match history and ratings stay intact, and other club profiles and memberships remain connected.
           </p>
         </div>
       ),
@@ -206,7 +198,6 @@ export default function ClubAdminPage() {
     club,
     players,
     claimRequests,
-    offlineIdentityLinks,
     loading,
     error,
     success,
@@ -243,25 +234,6 @@ export default function ClubAdminPage() {
     savingPreferences,
     removingPlayer,
     reviewingClaimRequestId,
-    linkSourceUserId,
-    setLinkSourceUserId,
-    targetClubSearch,
-    setTargetClubSearch,
-    selectedTargetClub,
-    targetClubCandidates,
-    loadingTargetClubs,
-    loadingTargetRoster,
-    linkTargetUserId,
-    setLinkTargetUserId,
-    sourcePlaceholderOptions,
-    targetPlaceholderOptions,
-    submittingOfflineIdentityLink,
-    reviewingOfflineIdentityLinkId,
-    selectTargetClub,
-    clearTargetClub,
-    submitOfflineIdentityLink,
-    reviewOfflineIdentityLink,
-    unlinkOfflineIdentity,
     resettingClub,
     deletingClub,
     passwordResetTarget,
@@ -325,7 +297,6 @@ export default function ClubAdminPage() {
     const requestedTab = searchParams.get("tab");
     if (
       requestedTab === "players" ||
-      requestedTab === "links" ||
       requestedTab === "claims" ||
       requestedTab === "settings"
     ) {
@@ -336,7 +307,7 @@ export default function ClubAdminPage() {
   useEffect(() => {
     if (
       isTutorialPlayground &&
-      (activeSection === "claims" || activeSection === "links")
+      activeSection === "claims"
     ) {
       setActiveSection("players");
     }
@@ -493,9 +464,6 @@ export default function ClubAdminPage() {
               const detail = tab.detail({
                 players: players.length,
                 claims: claimRequests.length,
-                links: offlineIdentityLinks.filter(
-                  (link) => link.status === "ACCEPTED"
-                ).length,
               });
 
               return (
@@ -555,35 +523,6 @@ export default function ClubAdminPage() {
               reviewingClaimRequestId={reviewingClaimRequestId}
               currentUserId={currentUserId}
               onReviewClaimRequest={handleReviewClaimRequest}
-            />
-          ) : null}
-
-          {!isTutorialPlayground && activeSection === "links" ? (
-            <OfflineIdentityLinksPanel
-              links={offlineIdentityLinks}
-              currentClubId={clubId}
-              currentUserId={currentUserId}
-              sourcePlaceholderOptions={sourcePlaceholderOptions}
-              sourceUserId={linkSourceUserId}
-              onSourceUserIdChange={setLinkSourceUserId}
-              targetClubSearch={targetClubSearch}
-              onTargetClubSearchChange={setTargetClubSearch}
-              selectedTargetClub={selectedTargetClub}
-              targetClubCandidates={targetClubCandidates}
-              loadingTargetClubs={loadingTargetClubs}
-              loadingTargetRoster={loadingTargetRoster}
-              targetPlaceholderOptions={targetPlaceholderOptions}
-              targetUserId={linkTargetUserId}
-              onTargetUserIdChange={setLinkTargetUserId}
-              submitting={submittingOfflineIdentityLink}
-              reviewingLinkId={reviewingOfflineIdentityLinkId}
-              onSelectTargetClub={selectTargetClub}
-              onClearTargetClub={clearTargetClub}
-              onSubmitLink={() => {
-                void submitOfflineIdentityLink();
-              }}
-              onReviewLink={reviewOfflineIdentityLink}
-              onUnlink={unlinkOfflineIdentity}
             />
           ) : null}
 

@@ -1,5 +1,5 @@
+import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   undoCompletedMatchResult,
@@ -90,7 +90,7 @@ export async function POST(
       return invalidTargetResponse(_request, "api:matches:id:undo");
     }
 
-    const result = await undoCompletedMatchResult({ matchId: match.id });
+    const result = await undoCompletedMatchResult({ matchId: match.id, actorUserId: session.user.id, actorIsGlobalAdmin: !!session.user.isAdmin });
     return sportingJson(result);
   } catch (error: unknown) {
     if (error instanceof UndoCompletedMatchError) {
@@ -105,6 +105,7 @@ export async function POST(
       return sportingJson({ error: error.message }, { status: 400 });
     }
 
+    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Undo completed match error", error);
     return safeErrorResponse();
   }

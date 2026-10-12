@@ -53,10 +53,10 @@ async function findQuickAccessProfile({
 
   const club = matchingClubs[0];
   const members = await prisma.clubMember.findMany({
-    where: { clubId: club.id, archivedAt: null },
+    where: { clubId: club.id, archivedAt: null, retiredByAdmissionEventId: null, ownerUserId: null },
     include: {
       player: {
-        select: { id: true, name: true, ownerUserId: true, isActive: true },
+        select: { id: true, name: true, isActive: true },
       },
     },
   });
@@ -65,7 +65,6 @@ async function findQuickAccessProfile({
     .filter(
       (user) =>
         user.isActive &&
-        user.ownerUserId === null &&
         normalizeNameLookupKey(user.name) === playerKey
     );
 
@@ -381,9 +380,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (typeof token.guestPlayerId !== "string" || typeof token.quickAccessClubId !== "string") return null;
         const guest = await prisma.clubMember.findUnique({
           where: { clubId_playerId: { clubId: token.quickAccessClubId, playerId: token.guestPlayerId } },
-          include: { player: { select: { ownerUserId: true, isActive: true } } },
+          include: { player: { select: { isActive: true } } },
         });
-        if (!guest || guest.archivedAt || guest.player.ownerUserId !== null || !guest.player.isActive) return null;
+        if (!guest || guest.archivedAt || guest.retiredByAdmissionEventId || guest.ownerUserId !== null || !guest.player.isActive) return null;
         token.isAdmin = false;
       } else {
         if (typeof token.id !== "string") return null;

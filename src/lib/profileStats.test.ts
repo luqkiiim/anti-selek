@@ -90,6 +90,60 @@ function getAchievement(
 }
 
 describe("profileStats", () => {
+  function contextualMatch(id: string, profileClubId: string | null = "club-a", policy = 2): ProfileMatchSource {
+    const match = createMatch(id, {
+      sessionId: id, sessionCode: id, sessionName: id, completedAt: "2026-10-12T00:00:00Z",
+      team1: [{ id: "self", name: "Self" }, { id: "partner", name: "Partner" }],
+      team2: [{ id: "opponent", name: "Opponent" }, { id: "guest", name: "Guest" }],
+      team1Score: 21, team2Score: 19, winnerTeam: 1,
+    });
+    match.session.ratingPolicyVersion = policy;
+    match.session.players = [
+      { userId: "partner", user: match.team1User2, profileClubId, sessionPoints: 0 },
+      { userId: "opponent", user: match.team2User1, profileClubId: "club-b", sessionPoints: 0 },
+      { userId: "guest", user: match.team2User2, isGuest: true, profileClubId: null, sessionPoints: 0 },
+    ];
+    return match;
+  }
+
+  it("uses each V2 participant's stored profile context without changing guest links or sporting summaries", () => {
+    const result = buildPlayerProfileDerivedData("self", [contextualMatch("v2")]);
+    expect(result.matchHistory[0].partner.profileClubId).toBe("club-a");
+    expect(result.matchHistory[0].opponents[0].profileClubId).toBe("club-b");
+    expect(result.matchHistory[0].opponents[1]).not.toHaveProperty("profileClubId");
+    expect(result.partners.best[0]).toMatchObject({ user: { profileClubId: "club-a" }, matches: 1, wins: 1, pointDifferential: 2 });
+    expect(result.opponents.toughest.map((entry) => entry.user.id)).toEqual(["opponent"]);
+    expect(result.stats).toMatchObject({ totalMatches: 1, wins: 1, pointsScored: 21, pointsConceded: 19 });
+  });
+
+  it("keeps V1 participant context undefined even when source seats contain local metadata", () => {
+    const result = buildPlayerProfileDerivedData("self", [contextualMatch("v1", "club-a", 1)]);
+    expect(result.matchHistory[0].partner).not.toHaveProperty("profileClubId");
+    expect(result.partners.best[0].user).not.toHaveProperty("profileClubId");
+  });
+
+  it("leaves missing or duplicate V2 seat context unscoped", () => {
+    const missing = contextualMatch("missing");
+    missing.session.players = [];
+    const duplicate = contextualMatch("duplicate");
+    duplicate.session.players!.push({ ...duplicate.session.players![0], profileClubId: "club-b" });
+    const result = buildPlayerProfileDerivedData("self", [missing, duplicate]);
+    expect(result.matchHistory.every((entry) => entry.partner.profileClubId === null)).toBe(true);
+    expect(result.partners.best[0].user.profileClubId).toBeNull();
+  });
+
+  it("keeps a shared Player's aggregate unscoped across different or uncertain contexts", () => {
+    for (const older of [contextualMatch("older", "club-b"), contextualMatch("older", null), contextualMatch("older", "club-a", 1)]) {
+      const exact = contextualMatch("exact");
+      const result = buildPlayerProfileDerivedData("self", [exact, older, contextualMatch("another")]);
+      expect(result.partners.best[0]).toMatchObject({ user: { profileClubId: null }, matches: 3, wins: 3, pointDifferential: 6 });
+      expect(result.matchHistory[0].partner.profileClubId).toBe("club-a");
+      expect(exact.team1User2).not.toHaveProperty("profileClubId");
+    }
+    const agreement = buildPlayerProfileDerivedData("self", [contextualMatch("first"), contextualMatch("second")]);
+    expect(agreement.partners.best[0].user.profileClubId).toBe("club-a");
+  });
+
   it("builds profile summaries across recent form, partners, opponents, and sessions", () => {
     const user = { id: "u1", name: "Alice" };
     const partner1 = { id: "u2", name: "Ben" };

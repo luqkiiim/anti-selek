@@ -58,6 +58,8 @@ export interface MatchPayload {
 export interface SessionSnapshotLike {
   viewerUserId?: string | null;
   viewerPlayerId?: string | null;
+  selectedSelf?: SessionData["selectedSelf"];
+  eligibleProfiles?: SessionData["eligibleProfiles"];
   status?: string;
   type?: string;
   mode?: SessionData["mode"];
@@ -436,6 +438,11 @@ export function mergeSessionSnapshot(
       snapshot.queuedMatch !== undefined
         ? buildQueuedMatch(matchContext, snapshot.queuedMatch)
         : current.queuedMatch,
+    eligibleProfiles: snapshot.eligibleProfiles ?? current.eligibleProfiles,
+    selectedSelf:
+      snapshot.selectedSelf !== undefined
+        ? snapshot.selectedSelf
+        : current.selectedSelf,
     viewerCanManage: current.viewerCanManage,
     viewerCanUseAdminSessionControls: current.viewerCanUseAdminSessionControls,
     viewerIsQuickAccess: current.viewerIsQuickAccess,

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   ClubAdminClaimRequest,
   ClubAdminClub,
-  ClubAdminOfflineIdentityLink,
   ClubAdminPlayer,
 } from "@/components/club-admin/clubAdminTypes";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
@@ -29,9 +28,6 @@ export function useClubAdminData({
   const [claimRequests, setClaimRequests] = useState<
     ClubAdminClaimRequest[]
   >([]);
-  const [offlineIdentityLinks, setOfflineIdentityLinks] = useState<
-    ClubAdminOfflineIdentityLink[]
-  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -48,7 +44,6 @@ export function useClubAdminData({
     setClub(snapshot.club);
     setPlayers(snapshot.players);
     setClaimRequests(snapshot.claimRequests);
-    setOfflineIdentityLinks(snapshot.offlineIdentityLinks);
   }, [clubId, router]);
 
   useEffect(() => {
@@ -81,8 +76,6 @@ export function useClubAdminData({
     setPlayers,
     claimRequests,
     setClaimRequests,
-    offlineIdentityLinks,
-    setOfflineIdentityLinks,
     loading,
     error,
     setError,

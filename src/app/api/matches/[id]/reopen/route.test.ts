@@ -123,3 +123,9 @@ describe("reopen pending match route", () => {
     expect(mocks.matchUpdateMany).toHaveBeenCalledTimes(1);
   });
 });
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: unknown, op: (tx: unknown) => unknown) => op(db) };
+});
+vi.mock("@/lib/sessionProfileIdentity", () => ({ assertSessionMutationActor: vi.fn(async () => {}), assertSessionProfileContextsUnambiguous: vi.fn(async () => {}) }));

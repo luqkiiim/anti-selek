@@ -1,5 +1,7 @@
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
@@ -110,14 +112,10 @@ export async function PATCH(
       });
     }
 
-    await prisma.$transaction(
-      updates.map((court) =>
-        prisma.court.update({
-          where: { id: court.courtId },
-          data: { label: court.label },
-        })
-      )
-    );
+    await admissionTransaction(prisma, async tx => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      for (const court of updates) await tx.court.update({ where: { id: court.courtId }, data: { label: court.label } });
+    });
 
     const updatedCourts = await prisma.court.findMany({
       where: { sessionId: sessionData.id },
@@ -133,6 +131,7 @@ export async function PATCH(
       courts: updatedCourts,
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Update court labels error", error);
     return safeErrorResponse();
   }

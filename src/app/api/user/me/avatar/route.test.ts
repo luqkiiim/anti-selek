@@ -1,120 +1,38 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-const mocks = vi.hoisted(() => ({
-  auth: vi.fn(),
-  accountFindUnique: vi.fn(),
-  accountUpdateMany: vi.fn(),
-  playerUpdateMany: vi.fn(),
-  uploadAvatarObject: vi.fn(),
-  cleanupSupersededAvatar: vi.fn(),
-  rollbackUploadedAvatar: vi.fn(),
-  logError: vi.fn(),
-}));
-
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), find: vi.fn(), sync: vi.fn(), upload: vi.fn(), cleanup: vi.fn(), rollback: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    user: {
-      findUnique: mocks.accountFindUnique,
-      updateMany: mocks.accountUpdateMany,
-    },
-    player: { updateMany: mocks.playerUpdateMany },
-  },
-}));
-vi.mock("@/lib/avatarStorage", () => ({
-  uploadAvatarObject: mocks.uploadAvatarObject,
-  cleanupSupersededAvatar: mocks.cleanupSupersededAvatar,
-  rollbackUploadedAvatar: mocks.rollbackUploadedAvatar,
-}));
-vi.mock("@/lib/errors", () => ({
-  logError: mocks.logError,
-  safeErrorResponse: vi.fn(() =>
-    Response.json({ error: "Internal server error" }, { status: 500 })
-  ),
-}));
-vi.mock("@/lib/rateLimit", () => ({ rateLimit: vi.fn(async () => null) }));
-
-import { POST } from "./route";
-
-const PNG_BYTES = new Uint8Array([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-]);
-
-function createRequest() {
-  const formData = new FormData();
-  formData.append(
-    "avatar",
-    new File([PNG_BYTES], "account-photo.png", { type: "image/png" })
-  );
-  return new Request("http://localhost/api/user/me/avatar", {
-    method: "POST",
-    body: formData,
-  });
+vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: mocks.find } } }));
+vi.mock("@/lib/rateLimit", () => ({ rateLimit: async () => null }));
+vi.mock("@/lib/clubAdmissions", () => ({ admissionTransaction: async (_db: unknown, fn: (tx: object) => unknown) => fn({}) }));
+vi.mock("@/lib/accountProfileSync", async original => ({ ...await original<typeof import("@/lib/accountProfileSync")>(), syncAccountProfile: mocks.sync }));
+vi.mock("@/lib/avatarStorage", () => ({ uploadAvatarObject: mocks.upload, cleanupSupersededAvatar: mocks.cleanup, rollbackUploadedAvatar: mocks.rollback }));
+import { AccountProfileSyncError } from "@/lib/accountProfileSync";
+import { POST, DELETE } from "./route";
+function request() {
+  const body = new FormData(); body.append("avatar", new File([new Uint8Array([137,80,78,71,13,10,26,10])], "photo.png", { type: "image/png" }));
+  return new Request("http://localhost/api/user/me/avatar", { method: "POST", body });
 }
-
-describe("current account avatar route", () => {
-  const previousBlobToken = process.env.BLOB_READ_WRITE_TOKEN;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.BLOB_READ_WRITE_TOKEN = "blob_rw_token";
-    mocks.auth.mockResolvedValue({
-      user: {
-        id: "account-avatar-owner",
-        playerId: "player-avatar-owner",
-        isQuickAccess: false,
-      },
-    });
-    mocks.accountFindUnique.mockResolvedValue({
-      id: "account-avatar-owner",
-      avatarKey: "https://blob.vercel-storage.com/avatars/accounts/old.png",
-      isActive: true,
-    });
-    mocks.accountUpdateMany.mockResolvedValue({ count: 1 });
-    mocks.uploadAvatarObject.mockResolvedValue(
-      "https://blob.vercel-storage.com/avatars/accounts/account-avatar-owner/new.png"
-    );
+beforeEach(() => {
+  vi.resetAllMocks(); vi.stubEnv("BLOB_READ_WRITE_TOKEN", "local-token");
+  mocks.auth.mockResolvedValue({ user: { id: "account" } }); mocks.find.mockResolvedValue({ id: "account", isActive: true, avatarKey: "old" });
+  mocks.upload.mockResolvedValue("https://blob.vercel-storage.com/avatars/new.png"); mocks.sync.mockResolvedValue({ previousAvatarKeys: ["old", "archived-old"] });
+});
+afterEach(() => vi.unstubAllEnvs());
+describe("canonical account avatar", () => {
+  it("uploads before synchronization and cleans all superseded photos after commit", async () => {
+    expect((await POST(request())).status).toBe(200);
+    expect(mocks.sync).toHaveBeenCalledWith({}, { userId: "account", changes: { avatarKey: "https://blob.vercel-storage.com/avatars/new.png" }, expectedAvatarKey: "old" });
+    expect(mocks.upload.mock.invocationCallOrder[0]).toBeLessThan(mocks.sync.mock.invocationCallOrder[0]);
+    expect(mocks.sync.mock.invocationCallOrder[0]).toBeLessThan(mocks.cleanup.mock.invocationCallOrder[0]);
+    expect(mocks.cleanup).toHaveBeenCalledTimes(2);
   });
-
-  afterAll(() => {
-    process.env.BLOB_READ_WRITE_TOKEN = previousBlobToken;
+  it("rolls back the uploaded object on transactional conflict", async () => {
+    mocks.sync.mockRejectedValue(new AccountProfileSyncError("Changed"));
+    expect((await POST(request())).status).toBe(409);
+    expect(mocks.rollback).toHaveBeenCalledWith({ uploadedAvatarKey: "https://blob.vercel-storage.com/avatars/new.png" }); expect(mocks.cleanup).not.toHaveBeenCalled();
   });
-
-  it("updates the authenticated Account avatar without writing to its owned Player", async () => {
-    const response = await POST(createRequest());
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      avatarUrl:
-        "https://blob.vercel-storage.com/avatars/accounts/account-avatar-owner/new.png",
-    });
-    expect(mocks.accountFindUnique).toHaveBeenCalledWith({
-      where: { id: "account-avatar-owner" },
-      select: { id: true, avatarKey: true, isActive: true },
-    });
-    expect(mocks.uploadAvatarObject).toHaveBeenCalledWith(
-      expect.objectContaining({
-        avatarPathname: expect.stringMatching(
-          /^avatars\/accounts\/account-avatar-owner\/\d+-[a-f0-9]+\.png$/
-        ),
-        contentType: "image/png",
-      })
-    );
-    expect(mocks.accountUpdateMany).toHaveBeenCalledWith({
-      where: {
-        id: "account-avatar-owner",
-        avatarKey: "https://blob.vercel-storage.com/avatars/accounts/old.png",
-      },
-      data: {
-        avatarKey:
-          "https://blob.vercel-storage.com/avatars/accounts/account-avatar-owner/new.png",
-      },
-    });
-    expect(mocks.playerUpdateMany).not.toHaveBeenCalled();
-    expect(mocks.cleanupSupersededAvatar).toHaveBeenCalledWith({
-      previousAvatarKey: "https://blob.vercel-storage.com/avatars/accounts/old.png",
-      nextAvatarKey:
-        "https://blob.vercel-storage.com/avatars/accounts/account-avatar-owner/new.png",
-    });
+  it("removes canonical photo through the same owner synchronization", async () => {
+    expect((await DELETE(new Request("http://localhost/api/user/me/avatar", { method: "DELETE" }))).status).toBe(200);
+    expect(mocks.sync).toHaveBeenCalledWith({}, { userId: "account", changes: { avatarKey: null }, expectedAvatarKey: "old" });
   });
 });

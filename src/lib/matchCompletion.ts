@@ -1,7 +1,10 @@
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
 import { isValidMatchScore } from "@/lib/matchRules";
 import { getLinkedClubUserResolver } from "@/lib/offlineIdentities";
-import { getAcceptedSessionClubIds } from "@/lib/sessionCollab";
+import { assertSessionMutationActor, getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
+import { getAcceptedSessionClubIds, getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import {
@@ -62,6 +65,7 @@ export interface FinalizableMatch {
     clubId: string | null;
     type: string;
     balanceMetric?: string;
+    ratingPolicyVersion?: number;
     isTest: boolean;
   };
   team1Player1: MatchUserSnapshot;
@@ -78,6 +82,8 @@ interface FinalizeMatchResultArgs {
   scoreSubmittedByUserId?: string | null;
   scoreSubmittedByPlayerId?: string | null;
   completedAt?: Date;
+  actorUserId?: string;
+  actorIsGlobalAdmin?: boolean;
 }
 
 export class UndoCompletedMatchError extends Error {
@@ -95,6 +101,8 @@ export class UndoCompletedMatchError extends Error {
 }
 
 interface UndoCompletedMatchResultArgs {
+  actorUserId?: string;
+  actorIsGlobalAdmin?: boolean;
   matchId: string;
   undoneAt?: Date;
 }
@@ -118,6 +126,8 @@ export class CorrectCompletedMatchScoreError extends Error {
 }
 
 interface CorrectCompletedMatchScoreArgs {
+  actorUserId?: string;
+  actorIsGlobalAdmin?: boolean;
   matchId: string;
   finalTeam1Score: number;
   finalTeam2Score: number;
@@ -305,6 +315,31 @@ async function buildClubEloAdjustments({
   guestImpactMultiplier: number;
   userEloByUserId: Map<string, number>;
 }) {
+  if (match.session.ratingPolicyVersion === 2) {
+    const seats = await tx.sessionPlayer.findMany({ where: { sessionId: match.sessionId, playerId: { in: playerIds } }, select: { playerId: true, profileClubId: true, isGuest: true } });
+    const sourceEloByUserId = new Map<string, number>();
+    const contexts = new Map<string, string>();
+    for (const playerId of playerIds) {
+      const seat = seats.find(p => p.playerId === playerId);
+      if (!seat) throw new IdentityConflictError("Selected session player is missing; rating completion is blocked.");
+      if (seat.isGuest) { sourceEloByUserId.set(playerId, userEloByUserId.get(playerId) ?? getPlayerSnapshotElo(match, playerId)); continue; }
+      if (!seat.profileClubId) throw new IdentityConflictError("Selected club profile is missing; rating completion is blocked.");
+      const member = await tx.clubMember.findUnique({ where: { clubId_playerId: { clubId: seat.profileClubId, playerId } }, select: { elo: true } });
+      if (!member) throw new IdentityConflictError("Selected club rating is missing; rating completion is blocked.");
+      contexts.set(playerId, seat.profileClubId);
+      sourceEloByUserId.set(playerId, member.elo);
+    }
+    const deltas = calculateTeamEloDeltas({ winnerTeam, team1AvgElo: (sourceEloByUserId.get(match.team1Player1Id)! + sourceEloByUserId.get(match.team1Player2Id)!) / 2, team2AvgElo: (sourceEloByUserId.get(match.team2Player1Id)! + sourceEloByUserId.get(match.team2Player2Id)!) / 2, team1Points, team2Points, guestImpactMultiplier });
+    const adjustments: EloAdjustmentInput[] = [];
+    for (const playerId of playerIds) {
+      const clubId = contexts.get(playerId);
+      if (!clubId) continue;
+      const beforeElo = sourceEloByUserId.get(playerId)!;
+      const delta = [match.team1Player1Id, match.team1Player2Id].includes(playerId) ? deltas.team1Delta : deltas.team2Delta;
+      adjustments.push({ matchId: match.id, playerId, sourceUserId: playerId, clubId, beforeElo, afterElo: beforeElo + delta, delta });
+    }
+    return { adjustments, sourceEloByUserId, teamDeltasByClubId: new Map([...contexts.values()].map(clubId => [clubId, deltas])) };
+  }
   const clubIds = match.session.clubId
     ? await getAcceptedSessionClubIds(tx, {
         id: match.sessionId,
@@ -610,11 +645,15 @@ async function applyRatingOutcomeInTransaction(
       });
     }
 
-    await getMatchEloAdjustmentDelegate(tx)?.createMany?.({
+    const ledger = getMatchEloAdjustmentDelegate(tx);
+    if (match.session.ratingPolicyVersion === 2 && !ledger?.createMany) throw new IdentityConflictError("Selected club rating ledger is unavailable; completion is blocked.");
+    await ledger?.createMany?.({
       data: outcome.clubEloResult.adjustments.map(toPersistedEloAdjustment),
     });
     return;
   }
+
+  if (match.session.ratingPolicyVersion === 2) return;
 
   if (match.session.clubId) {
     const team1ClubMemberIds = team1Ids.filter(
@@ -676,8 +715,27 @@ export async function finalizeMatchResultInTransaction(
     scoreSubmittedByUserId,
     scoreSubmittedByPlayerId,
     completedAt,
+    actorUserId,
+    actorIsGlobalAdmin,
   }: FinalizeMatchResultArgs
 ) {
+  if (actorUserId) {
+    await tx.$executeRaw`UPDATE "ClubJoinRequest" SET "revision"="revision" WHERE 0`;
+    const operator = actorIsGlobalAdmin || await getSessionOperatorMembership(tx, { session: { id: match.sessionId, clubId: match.session.clubId }, userId: actorUserId, acceptedOnly: true });
+    if (!operator) {
+      const owners = await getSessionParticipantOwners(tx, { id: match.sessionId, clubId: match.session.clubId }, [match.team1Player1Id, match.team1Player2Id, match.team2Player1Id, match.team2Player2Id]);
+      const participantIds = [...owners].filter(([, owner]) => owner === actorUserId).map(([id]) => id);
+      if (participantIds.length !== 1) throw new IdentityConflictError("Your ownership or access to this club profile changed. Refresh before recording the score.");
+      if (expectedStatus === MatchStatus.IN_PROGRESS && shouldRequireOpponentApproval({ match, submitterUserId: actorUserId, submitterPlayerId: participantIds[0], submitterIsAdmin: false, claimedByUserId: new Map([...owners].map(([id, owner]) => [id, !!owner])) })) throw new IdentityConflictError("Opponent ownership changed. Refresh and submit this score for confirmation.");
+      if (expectedStatus === MatchStatus.PENDING_APPROVAL) {
+        const pending = await tx.match.findUnique({ where: { id: match.id }, select: { scoreSubmittedByUserId: true, scoreSubmittedByPlayerId: true } });
+        if (pending?.scoreSubmittedByUserId) {
+          const team1 = [match.team1Player1Id, match.team1Player2Id];
+          if (pending.scoreSubmittedByUserId === actorUserId || !pending.scoreSubmittedByPlayerId || team1.includes(participantIds[0]) === team1.includes(pending.scoreSubmittedByPlayerId)) throw new IdentityConflictError("Only a current claimed opponent can confirm this result.");
+        }
+      }
+    }
+  }
   const outcome = await buildMatchRatingOutcomeInTransaction(tx, {
     match,
     finalTeam1Score,
@@ -1063,6 +1121,21 @@ async function reverseLegacyMatchRatingInTransaction(
   }
 }
 
+export async function assertSelectedProfileLedger(tx: Prisma.TransactionClient, sessionId: string, playerIds: string[], adjustments: Array<{ clubId: string; playerId: string }>) {
+  const seats = await tx.sessionPlayer.findMany({ where: { sessionId, playerId: { in: playerIds } }, select: { playerId: true, profileClubId: true, isGuest: true } });
+  for (const playerId of playerIds) {
+    const seat = seats.find(p => p.playerId === playerId);
+    if (!seat) throw new IdentityConflictError("Session player context is missing; exact rating reversal is blocked.");
+    const rows = adjustments.filter(a => a.playerId === playerId);
+    if (seat.isGuest ? rows.length !== 0 : !seat.profileClubId || rows.length !== 1 || rows[0].clubId !== seat.profileClubId) throw new IdentityConflictError("Selected club rating ledger is missing or inconsistent; exact rating reversal is blocked.");
+  }
+  for (const adjustment of adjustments) {
+    const member = await tx.clubMember.findUnique({ where: { clubId_playerId: { clubId: adjustment.clubId, playerId: adjustment.playerId } }, select: { id: true } });
+    if (!member) throw new IdentityConflictError("The selected club rating is missing; exact reversal is blocked.");
+  }
+  if (adjustments.some(a => !playerIds.includes(a.playerId))) throw new IdentityConflictError("Unexpected selected profile rating ledger; reversal is blocked.");
+}
+
 async function reverseReplayRatingEffectsInTransaction(
   tx: Prisma.TransactionClient,
   {
@@ -1115,6 +1188,9 @@ async function reverseReplayRatingEffectsInTransaction(
     string,
     { clubId: string; playerId: string; delta: number }
   >();
+  for (const match of replayMatches) {
+    if (match.session.ratingPolicyVersion === 2 && !match.session.isTest) await assertSelectedProfileLedger(tx, match.sessionId, getMatchUserIds(match), ledgerRowsByMatchId.get(match.id) ?? []);
+  }
   for (const adjustment of ledgerAdjustments) {
     const key = `${adjustment.clubId}:${adjustment.playerId}`;
     const current = reverseDeltaByClubAndUserId.get(key) ?? {
@@ -1138,7 +1214,7 @@ async function reverseReplayRatingEffectsInTransaction(
   }
 
   for (const match of replayMatches) {
-    if (ledgerRowsByMatchId.has(match.id)) continue;
+    if (ledgerRowsByMatchId.has(match.id) || match.session.ratingPolicyVersion === 2 || match.session.isTest) continue;
     if (clubIds.length > 1) {
       throw new CorrectCompletedMatchScoreError(
         "LEGACY_COLLAB_REPLAY_UNSUPPORTED",
@@ -1209,6 +1285,8 @@ export async function correctCompletedMatchScoreInTransaction(
     matchId,
     finalTeam1Score,
     finalTeam2Score,
+    actorUserId,
+    actorIsGlobalAdmin,
   }: CorrectCompletedMatchScoreArgs
 ) {
   if (!isValidMatchScore(finalTeam1Score, finalTeam2Score)) {
@@ -1218,6 +1296,7 @@ export async function correctCompletedMatchScoreInTransaction(
     );
   }
 
+  if (actorUserId) await tx.$executeRaw`UPDATE "ClubJoinRequest" SET "revision" = "revision" WHERE 0`;
   const targetMatch = await tx.match.findUnique({
     where: { id: matchId },
     include: {
@@ -1228,6 +1307,7 @@ export async function correctCompletedMatchScoreInTransaction(
           status: true,
           type: true,
           balanceMetric: true,
+          ratingPolicyVersion: true,
         },
       },
       team1Player1: { select: { id: true, name: true, elo: true } },
@@ -1242,6 +1322,9 @@ export async function correctCompletedMatchScoreInTransaction(
       "MATCH_NOT_FOUND",
       "Match not found"
     );
+  }
+  if (actorUserId) {
+    await assertSessionMutationActor(tx, { session: { id: targetMatch.sessionId, clubId: targetMatch.session.clubId }, userId: actorUserId, isGlobalAdmin: actorIsGlobalAdmin });
   }
   if (targetMatch.status !== MatchStatus.COMPLETED) {
     throw new CorrectCompletedMatchScoreError(
@@ -1287,6 +1370,7 @@ export async function correctCompletedMatchScoreInTransaction(
           status: true,
           type: true,
           balanceMetric: true,
+          ratingPolicyVersion: true,
         },
       },
       team1Player1: { select: { id: true, name: true, elo: true } },
@@ -1407,8 +1491,9 @@ export async function correctCompletedMatchScore(
 
 export async function undoCompletedMatchResultInTransaction(
   tx: Prisma.TransactionClient,
-  { matchId, undoneAt }: UndoCompletedMatchResultArgs
+  { matchId, undoneAt, actorUserId, actorIsGlobalAdmin }: UndoCompletedMatchResultArgs
 ) {
+  if (actorUserId) await tx.$executeRaw`UPDATE "ClubJoinRequest" SET "revision" = "revision" WHERE 0`;
   const undoneAtDate = undoneAt ?? new Date();
   const match = await tx.match.findUnique({
     where: { id: matchId },
@@ -1420,6 +1505,7 @@ export async function undoCompletedMatchResultInTransaction(
           status: true,
           type: true,
           balanceMetric: true,
+          ratingPolicyVersion: true,
         },
       },
     },
@@ -1429,6 +1515,9 @@ export async function undoCompletedMatchResultInTransaction(
     throw new UndoCompletedMatchError("MATCH_NOT_FOUND", "Match not found");
   }
 
+  if (actorUserId) {
+    await assertSessionMutationActor(tx, { session: { id: match.sessionId, clubId: match.session.clubId }, userId: actorUserId, isGlobalAdmin: actorIsGlobalAdmin });
+  }
   if (match.status !== MatchStatus.COMPLETED) {
     throw new UndoCompletedMatchError(
       "MATCH_NOT_COMPLETED",
@@ -1488,6 +1577,8 @@ export async function undoCompletedMatchResultInTransaction(
   const team1ReverseEloDelta = -(match.team1EloChange ?? 0);
   const team2ReverseEloDelta = -(match.team2EloChange ?? 0);
 
+  if (!match.session.isTest && match.session.ratingPolicyVersion === 2) await assertSelectedProfileLedger(tx, match.sessionId, affectedUserIds, ledgerAdjustments);
+
   if (!match.session.isTest && ledgerAdjustments.length > 0) {
     for (const adjustment of ledgerAdjustments) {
       if (adjustment.delta === 0) continue;
@@ -1502,7 +1593,7 @@ export async function undoCompletedMatchResultInTransaction(
         },
       });
     }
-  } else if (!match.session.isTest) {
+  } else if (!match.session.isTest && match.session.ratingPolicyVersion !== 2) {
     const team1CoreIds = team1Ids.filter(
       (playerId) => isGuestByUserId.get(playerId) !== true
     );

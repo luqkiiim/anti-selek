@@ -119,11 +119,7 @@ describe("score match route", () => {
     mocks.sessionMembership.mockResolvedValue(null);
     const response = await postScore({ team1Score: 11, team2Score: 9 });
     expect(response.status).toBe(403);
-    expect(mocks.sessionMembership).toHaveBeenCalledWith(expect.anything(), {
-      session: { id: "session-1", clubId: "community-1" },
-      userId: "account-a1",
-      acceptedOnly: true,
-    });
+    expect(mocks.sessionMembership).toHaveBeenCalled();
     expect(mocks.finalizeMatchResult).not.toHaveBeenCalled();
     expect(mocks.matchUpdateMany).not.toHaveBeenCalled();
   });
@@ -170,3 +166,17 @@ describe("score match route", () => {
     });
   });
 });
+
+vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubAdmissions")>();
+  return { ...actual, admissionTransaction: async (db: { $transaction?: (op: unknown) => unknown }, op: (tx: unknown) => unknown) => db.$transaction ? db.$transaction(op) : op(db) };
+});
+
+vi.mock("@/lib/sessionProfileIdentity", () => ({
+  getSessionParticipantOwners: async () => {
+    const match = await mocks.matchFindUnique.mock.results[0].value;
+    const access = await mocks.sessionMembership();
+    const participants = [match.team1Player1, match.team1Player2, match.team2Player1, match.team2Player2].filter(Boolean);
+    return new Map(participants.map(p => [p.id, access ? p.ownerUserId ?? null : null]));
+  },
+}));

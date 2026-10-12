@@ -239,8 +239,8 @@ export async function POST(
       );
     }
 
-    const ownPlayers = await prisma.player.findMany({ where: { ownerUserId: viewerId }, select: { id: true } });
-    const ownedPlayerIds = new Set(ownPlayers.map(p => p.id));
+    const ownPlayers = await prisma.clubMember.findMany({ where: { clubId: id, ownerUserId: viewerId, archivedAt: null, retiredByAdmissionEventId: null }, select: { playerId: true } });
+    const ownedPlayerIds = new Set(ownPlayers.map(p => p.playerId));
     const notificationRecipientIds = Array.from(
       new Set(
         (newsItem.featuredPlayers?.length > 0

@@ -51,7 +51,7 @@ export async function GET(
     const unreadCountPromise = prisma.clubNotification.count({
       where: {
         clubId: id,
-        recipientPlayer: { ownerUserId: access.context.viewerId },
+        recipientPlayer: { clubMemberships: { some: { clubId: id, ownerUserId: access.context.viewerId, archivedAt: null, retiredByAdmissionEventId: null } } },
         readAt: null,
       },
     });
@@ -67,7 +67,7 @@ export async function GET(
       prisma.clubNotification.findMany({
         where: {
           clubId: id,
-          recipientPlayer: { ownerUserId: access.context.viewerId },
+          recipientPlayer: { clubMemberships: { some: { clubId: id, ownerUserId: access.context.viewerId, archivedAt: null, retiredByAdmissionEventId: null } } },
         },
         orderBy: { createdAt: "desc" },
         take: getNotificationLimit(request),

@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { clubOwnershipTransaction } from "@/lib/clubPlayerOwnership";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import {
   ADMIN_ONBOARDING_TUTORIAL_KEY,
 } from "@/lib/adminOnboarding";
-import { nonretiredPlayer } from "@/lib/playerIdentity";
 import {
   ClubPlayerStatus,
   MatchStatus,
@@ -364,24 +364,24 @@ async function getUniqueOwnedTutorialPlayerId(
   tx: TutorialTx,
   ownerUserId: string
 ) {
-  const players = await tx.player.findMany({
-    where: { ownerUserId, ...nonretiredPlayer },
-    select: { id: true },
+  const club = await tx.club.findUnique({ where: { tutorialOwnerId: ownerUserId }, select: { id: true, isTutorial: true, createdById: true } });
+  if (!club?.isTutorial || club.createdById !== ownerUserId) throw new Error("Tutorial playground not found");
+  const memberships = await tx.clubMember.findMany({
+    where: { clubId: club.id, ownerUserId, retiredByAdmissionEventId: null },
+    select: { playerId: true },
     take: 2,
   });
-  if (players.length !== 1) {
-    throw new Error(
-      players.length > 1
-        ? "Choose one owned player profile before opening the tutorial playground."
-        : "The tutorial playground requires an owned player profile."
-    );
-  }
-  return players[0].id;
+  if (memberships.length > 1) throw new Error("The tutorial playground has conflicting owner profiles.");
+  if (memberships[0]) return memberships[0].playerId;
+  const account = await tx.user.findUnique({ where: { id: ownerUserId }, select: { name: true, avatarKey: true, gender: true, mixedSideOverride: true, isActive: true } });
+  if (!account?.isActive) throw new Error("An active account is required to open the tutorial playground.");
+  const player = await tx.player.create({ data: { name: account.name, avatarKey: account.avatarKey, gender: account.gender, mixedSideOverride: account.mixedSideOverride } });
+  await tx.clubMember.create({ data: { clubId: club.id, playerId: player.id, ownerUserId, status: ClubPlayerStatus.CORE, elo: 1000 } });
+  return player.id;
 }
 
 async function createTutorialClub(tx: TutorialTx, ownerUserId: string) {
-  const ownerPlayerId = await getUniqueOwnedTutorialPlayerId(tx, ownerUserId);
-  return tx.club.create({
+  const club = await tx.club.create({
     data: {
       name: getTutorialClubName(ownerUserId),
       createdById: ownerUserId,
@@ -394,16 +394,11 @@ async function createTutorialClub(tx: TutorialTx, ownerUserId: string) {
           status: "ACTIVE",
         },
       },
-      members: {
-        create: {
-          playerId: ownerPlayerId,
-          ownerUserId,
-          status: ClubPlayerStatus.CORE,
-        },
-      },
     },
     select: { id: true, isTutorial: true },
   });
+  await getUniqueOwnedTutorialPlayerId(tx, ownerUserId);
+  return club;
 }
 
 async function seedTutorialPlaygroundData(
@@ -412,26 +407,7 @@ async function seedTutorialPlaygroundData(
   ownerUserId: string
 ) {
   const ownerPlayerId = await getUniqueOwnedTutorialPlayerId(tx, ownerUserId);
-  await tx.clubMember.upsert({
-    where: {
-      clubId_playerId: {
-        clubId,
-        playerId: ownerPlayerId,
-      },
-    },
-    update: {
-      ownerUserId,
-      status: ClubPlayerStatus.CORE,
-      elo: 1000,
-    },
-    create: {
-      clubId,
-      playerId: ownerPlayerId,
-      ownerUserId,
-      status: ClubPlayerStatus.CORE,
-      elo: 1000,
-    },
-  });
+  await tx.clubMember.update({ where: { clubId_playerId: { clubId, playerId: ownerPlayerId } }, data: { status: ClubPlayerStatus.CORE, elo: 1000 } });
 
   const fakeUsers = [];
   for (const player of TUTORIAL_FAKE_PLAYERS) {
@@ -518,6 +494,7 @@ async function seedCompletedPracticeSessions(
       data: {
         id: sessionId,
         code: sessionId,
+        ratingPolicyVersion: 2,
         clubId,
         name: practiceSession.name,
         type: SessionType.POINTS,
@@ -542,21 +519,27 @@ async function seedCompletedPracticeSessions(
             reviewedAt: endedAt,
           },
         },
-        players: {
-          create: fakeUsers.map((user) => ({
-            playerId: user.id,
-            isGuest: false,
-            gender: user.gender,
-            partnerPreference: user.partnerPreference,
-            pool: SessionPool.A,
-            sessionPoints: 0,
-            joinedAt: createdAt,
-            availableSince: endedAt,
-            ladderEntryAt: createdAt,
-            lastPlayedAt: endedAt,
-          })),
-        },
+
       },
+    });
+
+    // Resolve club/court children first; V2 inserts validate the exact context.
+    await tx.sessionPlayer.createMany({
+      data: fakeUsers.map(user => ({
+        sessionId,
+        profileClubId: clubId,
+        participantAccountId: null,
+        playerId: user.id,
+        isGuest: false,
+        gender: user.gender,
+        partnerPreference: user.partnerPreference,
+        pool: SessionPool.A,
+        sessionPoints: 0,
+        joinedAt: createdAt,
+        availableSince: endedAt,
+        ladderEntryAt: createdAt,
+        lastPlayedAt: endedAt,
+      })),
     });
 
     for (const [matchIndex, seed] of practiceSession.matches.entries()) {
@@ -676,6 +659,7 @@ async function seedActiveTutorialSession(
     data: {
       id: sessionId,
       code: sessionId,
+      ratingPolicyVersion: 2,
       clubId,
       name: TUTORIAL_PLAYGROUND_SESSION_NAME,
       type: SessionType.POINTS,
@@ -701,20 +685,25 @@ async function seedActiveTutorialSession(
           reviewedAt: now,
         },
       },
-      players: {
-        create: fakeUsers.map((user) => ({
-          playerId: user.id,
-          isGuest: false,
-          gender: user.gender,
-          partnerPreference: user.partnerPreference,
-          pool: SessionPool.A,
-          sessionPoints: 0,
-          joinedAt: now,
-          availableSince: now,
-          ladderEntryAt: now,
-        })),
-      },
+
     },
+  });
+
+  await tx.sessionPlayer.createMany({
+    data: fakeUsers.map(user => ({
+      sessionId,
+      profileClubId: clubId,
+      participantAccountId: null,
+      playerId: user.id,
+      isGuest: false,
+      gender: user.gender,
+      partnerPreference: user.partnerPreference,
+      pool: SessionPool.A,
+      sessionPoints: 0,
+      joinedAt: now,
+      availableSince: now,
+      ladderEntryAt: now,
+    })),
   });
 
   const matchSeeds = [
@@ -754,8 +743,8 @@ async function getSeededFakeUsers(tx: TutorialTx, clubId: string) {
   const members = await tx.clubMember.findMany({
     where: {
       clubId,
+      ownerUserId: null,
       player: {
-        ownerUserId: null,
         name: {
           in: TUTORIAL_FAKE_PLAYERS.map((player) => player.name),
         },
@@ -962,9 +951,7 @@ async function clearTutorialPlaygroundData(
   const fakeMembers = await tx.clubMember.findMany({
     where: {
       clubId,
-      player: {
-        ownerUserId: null,
-      },
+      ownerUserId: null,
     },
     select: { playerId: true },
   });
@@ -980,7 +967,7 @@ async function clearTutorialPlaygroundData(
     await tx.player.deleteMany({
       where: {
         id: { in: fakeUserIds },
-        ownerUserId: null,
+        clubMemberships: { none: { ownerUserId: { not: null } } },
       },
     });
   }
@@ -1017,7 +1004,7 @@ export async function getTutorialPlaygroundSummary(playerId: string) {
 }
 
 export async function ensureTutorialPlayground(playerId: string) {
-  return prisma.$transaction(async (tx) => {
+  return clubOwnershipTransaction(prisma, async (tx) => {
     let playground = await tx.club.findUnique({
       where: { tutorialOwnerId: playerId },
       select: { id: true, isTutorial: true },
@@ -1038,7 +1025,7 @@ export async function ensureTutorialPlayground(playerId: string) {
 }
 
 export async function resetTutorialPlayground(playerId: string) {
-  return prisma.$transaction(async (tx) => {
+  return clubOwnershipTransaction(prisma, async (tx) => {
     let playground = await tx.club.findUnique({
       where: { tutorialOwnerId: playerId },
       select: { id: true, isTutorial: true },
@@ -1058,7 +1045,7 @@ export async function resetTutorialPlayground(playerId: string) {
 }
 
 export async function deleteTutorialPlayground(playerId: string, clubId: string) {
-  return prisma.$transaction(async (tx) => {
+  return clubOwnershipTransaction(prisma, async (tx) => {
     const playground = await tx.club.findUnique({
       where: { id: clubId },
       select: {

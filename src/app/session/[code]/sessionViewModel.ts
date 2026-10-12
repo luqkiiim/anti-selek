@@ -108,7 +108,9 @@ function getAcceptedSessionClubIds(sessionData: SessionData) {
 }
 
 function getPlayerProfileClubId(sessionData: SessionData, player: Player) {
+  if (player.profileClubId) return player.profileClubId;
   if (player.isGuest && (sessionData.status !== "COMPLETED" || sessionData.isTest)) return null;
+  if (sessionData.ratingPolicyVersion === 2 && !player.isGuest) return null;
   const acceptedClubIds = getAcceptedSessionClubIds(sessionData);
 
   if (

@@ -666,6 +666,7 @@ export async function buildMatchmakingState(
   let legacyClubEloByUserId = new Map<string, number>();
 
   if (
+    sessionData.ratingPolicyVersion !== 2 &&
     typeof hostClubId === "string" &&
     sessionClubIds.length === 1 &&
     sessionClubIds[0] === hostClubId
@@ -678,7 +679,7 @@ export async function buildMatchmakingState(
   }
 
   const communityBadgesByUserId =
-    sessionClubIds.length > 0 && !usesLegacySingleClubElo
+    sessionData.ratingPolicyVersion !== 2 && sessionClubIds.length > 0 && !usesLegacySingleClubElo
       ? await getPlayerClubBadges(prisma, sessionClubIds, playerIds)
       : new Map<string, Array<{ id: string; name: string; elo: number }>>();
   const pointDiffByUserId = new Map<string, number>();

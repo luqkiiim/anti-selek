@@ -1,3 +1,4 @@
+import { getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import {
   COMMUNITY_OPERATOR_ROLES,
@@ -214,11 +215,10 @@ export async function isAccountSessionPlayer(
   sessionId: string,
   accountUserId: string
 ) {
-  const participant = await tx.sessionPlayer.findFirst({
-    where: { sessionId, player: { ownerUserId: accountUserId } },
-    select: { id: true },
-  });
-  return !!participant;
+  const session = await tx.session.findUnique({ where: { id: sessionId }, select: { id: true, clubId: true } });
+  if (!session) return false;
+  const owners = await getSessionParticipantOwners(tx, session);
+  return [...owners.values()].filter(owner => owner === accountUserId).length === 1;
 }
 
 export async function getPlayerClubBadges(

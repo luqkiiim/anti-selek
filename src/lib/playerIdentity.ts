@@ -11,48 +11,44 @@ export class IdentityConflictError extends Error {
   readonly statusCode = 409;
 }
 
-/**
- * Automatic claims may add membership to an already-owned Player, but may not
- * give one Account a second nonretired sporting identity across disjoint clubs.
- * Call this inside the admission writer reservation before any ownership read.
- */
-export async function assertNoOtherOwnedPlayer(db: Prisma.TransactionClient, userId: string, playerId: string) {
-  const existing = await db.player.findFirst({
-    where: { ownerUserId: userId, id: { not: playerId }, ...nonretiredPlayer },
-    select: { id: true },
-  });
-  if (existing) throw new IdentityConflictError("This account already owns a different nonretired Player. Ask an administrator to review the identity before claiming another profile.");
+/** Legacy global writers remain callable only to return an explicit denial. */
+export async function assertNoOtherOwnedPlayer(_db: Prisma.TransactionClient, _userId: string, _playerId: string) {
+  throw new IdentityConflictError("Global ownership changes are unavailable. Select a club profile.");
+}
+export async function linkUnownedPlayer(_db: Prisma.TransactionClient, _playerId: string, _userId: string) {
+  throw new IdentityConflictError("Global ownership changes are unavailable. Select a club profile.");
 }
 
-/** Writes only the new ownership column: preserve every legacy value and timestamp. */
-export async function linkUnownedPlayer(db: Prisma.TransactionClient, playerId: string, userId: string) {
-  await assertNoOtherOwnedPlayer(db, userId, playerId);
-  const linked = await db.$executeRaw`UPDATE "User" SET "ownerUserId" = ${userId} WHERE "id" = ${playerId} AND "ownerUserId" IS NULL`;
-  if (linked !== 1) throw new IdentityConflictError("Another account has claimed this Player. Refresh before trying again.");
-}
-
-export async function getOwnedPlayer(db: IdentityDb, { userId, playerId }: { userId: string; playerId: string }) {
-  return db.player.findFirst({ where: { id: playerId, ownerUserId: userId, ...nonretiredPlayer } });
+export async function getOwnedPlayer(db: IdentityDb, { userId, playerId, clubId }: { userId: string; playerId: string; clubId?: string }) {
+  // Callers authorizing a club/session action must supply its exact club. The
+  // broader form is retained for account metadata readers with an exact ID.
+  return db.player.findFirst({ where: { id: playerId, clubMemberships: { some: {
+    ...(clubId ? { clubId } : {}), ownerUserId: userId, retiredByAdmissionEventId: null,
+  } } } });
 }
 
 /** Never select an arbitrary legacy identity when an account has conflicting memberships. */
 export async function getOwnedClubPlayer(db: IdentityDb, { userId, clubId }: { userId: string; clubId: string }) {
   const memberships = await db.clubMember.findMany({
-    where: { clubId, retiredByAdmissionEventId: null, player: { ownerUserId: userId } }, include: { player: true }, take: 2,
+    where: { clubId, retiredByAdmissionEventId: null, ownerUserId: userId }, include: { player: true }, take: 2,
   });
   if (memberships.length > 1) throw new IdentityConflictError("Multiple owned profiles exist in this club. An administrator must review this identity conflict.");
   return memberships[0] ?? null;
 }
 
-export async function resolveOwnedSessionPlayer(db: IdentityDb, { userId, clubIds, playerId }: { userId: string; clubIds: string[]; playerId?: string | null }) {
-  const players = await db.player.findMany({ where: {
-    ownerUserId: userId,
-    AND: [nonretiredPlayer],
-    ...(playerId ? { id: playerId } : {}),
-    ...(clubIds.length ? { clubMemberships: { some: { clubId: { in: clubIds } } } } : {}),
-  }, take: 2 });
-  if (players.length > 1) throw new IdentityConflictError("Choose which owned player profile will participate in this session.");
-  return players[0] ?? null;
+export async function resolveOwnedSessionPlayer(db: IdentityDb, { userId, clubIds, playerId, profileClubId }: { userId: string; clubIds: string[]; playerId?: string | null; profileClubId?: string | null }) {
+  if (!clubIds.length || (profileClubId && !clubIds.includes(profileClubId))) return null;
+  const memberships = await db.clubMember.findMany({ where: {
+    ownerUserId: userId, archivedAt: null, retiredByAdmissionEventId: null,
+    clubId: profileClubId ?? { in: clubIds }, ...(playerId ? { playerId } : {}), player: { isActive: true },
+  }, include: { player: true } });
+  const eligible = [];
+  for (const member of memberships) {
+    const access = await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: member.clubId, userId } }, select: { status: true } });
+    if (access?.status === "ACTIVE") eligible.push(member);
+  }
+  if (eligible.length > 1) throw new IdentityConflictError("Choose the club and player profile for this session.");
+  return eligible[0]?.player ?? null;
 }
 
 export async function getAccountClubContext(db: IdentityDb, { userId, clubId, isGlobalAdmin = false }: { userId: string; clubId: string; isGlobalAdmin?: boolean }) {

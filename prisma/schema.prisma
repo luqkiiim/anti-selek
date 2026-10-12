@@ -14,6 +14,7 @@ model User {
   passwordHash        String
   name                String
   avatarKey           String?
+  mixedSideOverride   String?
   selfNameChangedAt   DateTime?
   selfGenderChangedAt DateTime?
   gender              String    @default("UNSPECIFIED")
@@ -52,6 +53,10 @@ model User {
   ownershipReleasesReceived     PlayerOwnershipRelease[]     @relation("ReleasedOwner")
   ownershipReleasesAuthorized   PlayerOwnershipRelease[]     @relation("ReleaseAuthorizer")
   ownershipReleaseClaims        PlayerOwnershipReleaseClaim[]
+  sessionParticipations         SessionPlayer[]              @relation("SessionParticipantAccount")
+  localOwnershipActions         ClubPlayerOwnershipEvent[]   @relation("LocalOwnershipActor")
+  localOwnershipPrevious        ClubPlayerOwnershipEvent[]   @relation("LocalOwnershipPrevious")
+  localOwnershipNew             ClubPlayerOwnershipEvent[]   @relation("LocalOwnershipNew")
 
   @@map("Account")
 }
@@ -91,6 +96,7 @@ model Player {
   invitations                  PlayerInvitation[]
   sourceInvitations            PlayerInvitation[]           @relation("PlayerInvitationSource")
   ownershipReleases            PlayerOwnershipRelease[]
+  localOwnershipEvents         ClubPlayerOwnershipEvent[]
 
   // Match relations (team memberships)
   matchesAsTeam1Player1 Match[] @relation("Team1Player1")
@@ -131,6 +137,8 @@ model Club {
   notifications                   ClubNotification[]
   playerInvitations               PlayerInvitation[]
   ownershipReleases               PlayerOwnershipRelease[]
+  participantProfiles             SessionPlayer[]
+  localOwnershipEvents            ClubPlayerOwnershipEvent[]
 
   @@index([isTutorial])
   @@map("Community")
@@ -158,6 +166,7 @@ model ClubMember {
   clubId                     String                 @map("communityId")
   playerId                   String                 @map("userId")
   ownerUserId                String?
+  ownershipRevision          Int                    @default(0)
   legacyRole                 String                 @default("MEMBER") @map("role") @ignore
   status                     String                 @default("CORE") // CORE or OCCASIONAL
   preferredPool              String                 @default("B") // A = Competitive, B = Social
@@ -173,6 +182,7 @@ model ClubMember {
   invitations       PlayerInvitation[]
   sourceInvitations PlayerInvitation[]  @relation("PlayerInvitationSourceMember")
   retirementEvent   ClubAdmissionEvent? @relation(fields: [retiredByAdmissionEventId], references: [id], onDelete: Restrict)
+  ownershipEvents   ClubPlayerOwnershipEvent[]
 
   @@unique([clubId, playerId])
   // A migration-owned partial unique index excludes only audited retired rosters.
@@ -192,6 +202,7 @@ model ClubAccess {
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Restrict)
   ownershipReleases PlayerOwnershipRelease[]
+  localOwnershipEvents ClubPlayerOwnershipEvent[]
 
   @@unique([clubId, userId])
   @@index([userId, status])
@@ -211,6 +222,7 @@ model Session {
   balanceMetric              String    @default("SESSION_POINTS")
   pairingMode                String    @default("OPEN")
   status                     String    @default("WAITING") // WAITING, ACTIVE, COMPLETED
+  ratingPolicyVersion        Int       @default(1)
   isTest                     Boolean   @default(false)
   sourceSessionId            String?
   autoQueueEnabled           Boolean   @default(true)
@@ -280,6 +292,8 @@ model SessionPlayer {
   sessionId           String
   playerId            String  @map("userId")
   representingClubId  String?
+  profileClubId       String?
+  participantAccountId String?
   isGuest             Boolean @default(false)
   gender              String  @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
   partnerPreference   String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
@@ -306,8 +320,12 @@ model SessionPlayer {
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   player  Player  @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  profileClub Club? @relation(fields: [profileClubId], references: [id], onDelete: Restrict)
+  participantAccount User? @relation("SessionParticipantAccount", fields: [participantAccountId], references: [id], onDelete: Restrict)
 
   @@unique([sessionId, playerId])
+  @@unique([sessionId, participantAccountId])
+  @@index([profileClubId, playerId])
   @@index([sessionId, representingClubId])
 }
 
@@ -588,6 +606,7 @@ model ClubAdmissionRequest {
   approvedPlayer       Player?              @relation("AdmissionApprovedPlayer", fields: [approvedPlayerId], references: [id], onDelete: Restrict)
   reviewedBy           User?                @relation("AdmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
   events               ClubAdmissionEvent[]
+  localOwnershipEvents ClubPlayerOwnershipEvent[]
   originInvitation     PlayerInvitation?    @relation(fields: [originInvitationId], references: [id], onDelete: Restrict)
 
   @@unique([requesterUserId, idempotencyKey])
@@ -618,6 +637,7 @@ model PlayerInvitation {
   clubId                   String
   playerId                 String
   clubMemberId             String
+  targetOwnershipRevision  Int       @default(0)
   createdByUserId          String
   purpose                  String    @default("CLAIM") // CLAIM, CORRECTION, ACCESS_RESTORE
   targetAccountUserId      String?
@@ -654,6 +674,7 @@ model PlayerInvitation {
   redeemedByUser   User?                          @relation("PlayerInvitationRedeemer", fields: [redeemedByUserId], references: [id], onDelete: Restrict)
   revokedByUser    User?                          @relation("PlayerInvitationRevoker", fields: [revokedByUserId], references: [id], onDelete: Restrict)
   events           PlayerInvitationEvent[]
+  localOwnershipEvent ClubPlayerOwnershipEvent?
   continuations    PlayerInvitationContinuation[]
   recoveryRequests ClubAdmissionRequest[]
   ownershipReleaseClaim PlayerOwnershipReleaseClaim?
@@ -720,4 +741,49 @@ model PlayerInvitationContinuation {
   invitation   PlayerInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
 
   @@index([invitationId, expiresAt])
+}
+
+// An append-only local transition receipt. SQLite validates and applies the
+// exact ownership/access revisions in the same statement as insertion.
+model ClubPlayerOwnershipEvent {
+  id                        String   @id @default(cuid())
+  clubId                    String
+  clubMemberId              String
+  playerId                  String
+  actorUserId               String
+  action                    String // CLAIM, REMOVE, DISCONNECT, LEAVE, ARCHIVE
+  previousOwnerUserId       String?
+  newOwnerUserId            String?
+  previousOwnershipRevision Int
+  newOwnershipRevision      Int
+  accessId                  String?
+  previousAccessRevision    Int?
+  newAccessRevision         Int?
+  previousAccessStatus      String?
+  newAccessStatus           String?
+  previousAccessRole        String?
+  newAccessRole             String?
+  invitationId              String?  @unique
+  admissionRequestId        String?
+  releaseEventId            String?  @unique
+  metadataBeforeJson        String
+  metadataAfterJson         String
+  detailsJson               String   @default("{}")
+  reason                    String
+  createdAt                 DateTime @default(now())
+  club                      Club     @relation(fields: [clubId], references: [id], onDelete: Restrict)
+  member                    ClubMember @relation(fields: [clubMemberId], references: [id], onDelete: Restrict)
+  player                    Player   @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  actor                     User     @relation("LocalOwnershipActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  previousOwner             User?    @relation("LocalOwnershipPrevious", fields: [previousOwnerUserId], references: [id], onDelete: Restrict)
+  newOwner                  User?    @relation("LocalOwnershipNew", fields: [newOwnerUserId], references: [id], onDelete: Restrict)
+  access                    ClubAccess? @relation(fields: [accessId], references: [id], onDelete: Restrict)
+  invitation                PlayerInvitation? @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+  admissionRequest          ClubAdmissionRequest? @relation(fields: [admissionRequestId], references: [id], onDelete: Restrict)
+  releaseEvent              ClubPlayerOwnershipEvent? @relation("LocalReleaseUse", fields: [releaseEventId], references: [id], onDelete: Restrict)
+  usedBy                    ClubPlayerOwnershipEvent? @relation("LocalReleaseUse")
+
+  @@unique([clubMemberId, newOwnershipRevision])
+  @@index([clubId, playerId, createdAt])
+  @@index([previousOwnerUserId, clubId])
 }

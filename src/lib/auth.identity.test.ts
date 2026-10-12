@@ -79,10 +79,14 @@ describe("NextAuth Account and Player identities", () => {
     mocks.clubFindMany.mockResolvedValue([{ id: "club-1", name: "Example Club", isTutorial: false }]);
     mocks.clubMemberFindMany.mockResolvedValue([{
       role: "ADMIN",
+      ownerUserId: null,
+      retiredByAdmissionEventId: null,
       player: { id: playerId, name: "Guest Player", ownerUserId: null, isActive: true },
     }]);
     mocks.clubMemberFindUnique.mockResolvedValue({
       archivedAt: null,
+      ownerUserId: null,
+      retiredByAdmissionEventId: null,
       player: { ownerUserId: null, isActive: true },
     });
   });
@@ -141,13 +145,19 @@ describe("NextAuth Account and Player identities", () => {
       token,
     });
     expect(session.user).toMatchObject({ id: `guest:${playerId}`, userId: null, guestPlayerId: playerId, isQuickAccess: true, isAdmin: false });
-    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { clubId: "club-1", archivedAt: null } }));
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { clubId: "club-1", archivedAt: null, retiredByAdmissionEventId: null, ownerUserId: null } }));
   });
 
-  it("invalidates Quick access after the Player is claimed by an Account", async () => {
+  it("invalidates Quick access after its local profile is claimed by an Account", async () => {
     const user = await authorizeQuickAccess();
-    mocks.clubMemberFindUnique.mockResolvedValue({ archivedAt: null, player: { ownerUserId: account.id, isActive: true } });
+    mocks.clubMemberFindUnique.mockResolvedValue({ archivedAt: null, retiredByAdmissionEventId: null, ownerUserId: account.id, player: { ownerUserId: null, isActive: true } });
     await expect(callbacks().jwt({ token: {}, user })).resolves.toBeNull();
+  });
+
+  it("keeps local Quick access valid when the frozen legacy Player owner belongs elsewhere", async () => {
+    const user = await authorizeQuickAccess();
+    mocks.clubMemberFindUnique.mockResolvedValue({ archivedAt: null, retiredByAdmissionEventId: null, ownerUserId: null, player: { ownerUserId: account.id, isActive: true } });
+    await expect(callbacks().jwt({ token: {}, user })).resolves.toMatchObject({ guestPlayerId: playerId, quickAccessClubId: "club-1" });
   });
 
   it("invalidates Quick access after its roster membership is archived", async () => {

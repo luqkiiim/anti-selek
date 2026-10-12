@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { claimClubPlayer, clubOwnershipTransaction } from "@/lib/clubPlayerOwnership";
 import {
   afterAll,
   beforeAll,
@@ -43,6 +44,7 @@ const tempDatabaseFile = path.resolve(
   `offline-identity-links-${randomUUID()}.db`
 );
 const tempDatabaseUrl = `file:${tempDatabaseFile.replace(/\\/g, "/")}`;
+const baselineDatabaseFile = `${tempDatabaseFile}.baseline`;
 const mutableEnv = process.env as Record<string, string | undefined>;
 const previousEnv = {
   DATABASE_URL: mutableEnv.DATABASE_URL,
@@ -58,15 +60,6 @@ let GET_ROSTER: GetRosterRoute;
 let SCORE_MATCH: ScoreRoute;
 let ROLLBACK_SESSION: RollbackRoute;
 let mockedAuth: MockedFunction<typeof import("@/lib/auth")["auth"]>;
-
-function getPrismaBinary() {
-  return path.join(
-    process.cwd(),
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "prisma.cmd" : "prisma"
-  );
-}
 
 async function removeDatabaseFiles() {
   await Promise.all(
@@ -97,7 +90,7 @@ async function createUser({
   isClaimed?: boolean;
 }) {
   if (isClaimed) await prisma.user.create({ data: { id, name, email: email!, passwordHash: "test-password-hash" } });
-  await prisma.player.create({ data: { id, name, ownerUserId: isClaimed ? id : null, gender: PlayerGender.MALE, partnerPreference: PartnerPreference.OPEN } });
+  await prisma.player.create({ data: { id, name, gender: PlayerGender.MALE, partnerPreference: PartnerPreference.OPEN } });
 }
 
 async function createClub({
@@ -123,6 +116,7 @@ async function createClub({
       playerId: adminId,
     },
   });
+  await clubOwnershipTransaction(prisma, tx => claimClubPlayer(tx, { clubId: id, playerId: adminId, userId: adminId, actorUserId: adminId }));
 }
 
 async function addMember(clubId: string, userId: string, elo = 1000) {
@@ -133,6 +127,11 @@ async function addMember(clubId: string, userId: string, elo = 1000) {
       elo,
     },
   });
+  const account = await prisma.user.findUnique({ where: { id: userId } });
+  if (account) {
+    const club = await prisma.club.findUniqueOrThrow({ where: { id: clubId } });
+    await clubOwnershipTransaction(prisma, tx => claimClubPlayer(tx, { clubId, playerId: userId, userId, actorUserId: club.createdById }));
+  }
 }
 
 async function postLink(body: Record<string, unknown>, clubId: string) {
@@ -239,6 +238,7 @@ beforeAll(async () => {
   await fs.writeFile(tempDatabaseFile, "");
 
   execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "deploy"], { cwd: process.cwd(), env: process.env as NodeJS.ProcessEnv, stdio: "pipe" });
+  await fs.copyFile(tempDatabaseFile, baselineDatabaseFile);
 
   vi.resetModules();
   (globalThis as { prisma?: PrismaInstance }).prisma = undefined;
@@ -258,20 +258,12 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  await prisma.matchEloAdjustment.deleteMany();
-  await prisma.match.deleteMany();
-  await prisma.court.deleteMany();
-  await prisma.sessionPlayer.deleteMany();
-  await prisma.sessionClub.deleteMany();
-  await prisma.session.deleteMany();
-  await prisma.offlineIdentityLinkRequest.deleteMany();
-  await prisma.offlineIdentityMember.deleteMany();
-  await prisma.offlineIdentity.deleteMany();
-  await prisma.clubMember.deleteMany();
-  await prisma.clubAccess.deleteMany();
-  await prisma.club.deleteMany();
-  await prisma.player.deleteMany();
-  await prisma.user.deleteMany();
+  // Each case starts from the full migrated empty baseline. Local roster and
+  // ownership history is immutable; fixture cleanup must not delete it.
+  await prisma.$disconnect();
+  await removeDatabaseFiles();
+  await fs.copyFile(baselineDatabaseFile, tempDatabaseFile);
+  await prisma.$connect();
 });
 
 afterAll(async () => {
@@ -284,9 +276,63 @@ afterAll(async () => {
   mutableEnv.NODE_ENV = previousEnv.NODE_ENV;
 
   await removeDatabaseFiles();
+  await fs.rm(baselineDatabaseFile, { force: true });
 });
 
 describe("offline identity links", () => {
+  it.each([
+    { side: "source", phase: "CREATE" },
+    { side: "target", phase: "CREATE" },
+    { side: "source", phase: "ACCEPT" },
+    { side: "target", phase: "ACCEPT" },
+  ] as const)("rejects $phase when the locally unclaimed $side Player is connected in another club", async ({ side, phase }) => {
+    await createUser({ id: "admin-a", name: "Admin A", email: "offline-a@example.invalid", isClaimed: true });
+    await createUser({ id: "admin-b", name: "Admin B", email: "offline-b@example.invalid", isClaimed: true });
+    await createUser({ id: "admin-c", name: "Admin C", email: "offline-c@example.invalid", isClaimed: true });
+    await createUser({ id: "placeholder-a", name: "Haziq" });
+    await createUser({ id: "placeholder-b", name: "Haziq" });
+    await createClub({ id: "club-a", name: "A", adminId: "admin-a" });
+    await createClub({ id: "club-b", name: "B", adminId: "admin-b" });
+    await createClub({ id: "club-c", name: "C", adminId: "admin-c" });
+    await addMember("club-a", "placeholder-a", 1384);
+    await addMember("club-b", "placeholder-b", 1275);
+    const input = { sourceUserId: "placeholder-a", targetClubId: "club-b", targetUserId: "placeholder-b" };
+    let pendingId: string | undefined;
+    if (phase === "ACCEPT") {
+      mockUser("admin-a");
+      const created = await postLink(input, "club-a");
+      expect(created.status).toBe(201);
+      pendingId = (await created.json()).id;
+    }
+    const playerId = side === "source" ? "placeholder-a" : "placeholder-b";
+    const selectedClubId = side === "source" ? "club-a" : "club-b";
+    await prisma.user.create({ data: { id: "connected-account", name: "Current Account", email: "connected@example.invalid", passwordHash: "fixture" } });
+    await addMember("club-c", playerId, 1420);
+    await clubOwnershipTransaction(prisma, tx => claimClubPlayer(tx, { clubId: "club-c", playerId, userId: "connected-account", actorUserId: "admin-c" }));
+    expect(await prisma.clubMember.findUniqueOrThrow({ where: { clubId_playerId: { clubId: selectedClubId, playerId } } })).toMatchObject({ ownerUserId: null });
+    expect(await prisma.clubMember.findUniqueOrThrow({ where: { clubId_playerId: { clubId: "club-c", playerId } } })).toMatchObject({ ownerUserId: "connected-account" });
+    // Frozen Player provenance is NULL. The safeguard must follow the other
+    // ClubMember's live connection rather than infer global Player ownership.
+    expect(await prisma.player.findUniqueOrThrow({ where: { id: playerId } })).toMatchObject({ ownerUserId: null });
+    const snapshot = () => Promise.all([
+      prisma.player.findMany({ orderBy: { id: "asc" } }),
+      prisma.clubMember.findMany({ orderBy: { id: "asc" } }),
+      prisma.clubAccess.findMany({ orderBy: { id: "asc" } }),
+      prisma.clubPlayerOwnershipEvent.findMany({ orderBy: { id: "asc" } }),
+      prisma.offlineIdentityLinkRequest.findMany({ orderBy: { id: "asc" } }),
+      prisma.offlineIdentity.findMany({ orderBy: { id: "asc" } }),
+      prisma.offlineIdentityMember.findMany({ orderBy: { id: "asc" } }),
+      prisma.matchEloAdjustment.findMany({ orderBy: { id: "asc" } }),
+      prisma.clubRatingAdjustment.findMany({ orderBy: { id: "asc" } }),
+    ]);
+    const before = await snapshot();
+    mockUser(phase === "CREATE" ? "admin-a" : "admin-b");
+    const response = phase === "CREATE" ? await postLink(input, "club-a") : await patchLink(pendingId!, "club-b", OfflineIdentityLinkStatus.ACCEPTED);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("another club") });
+    expect(await snapshot()).toEqual(before);
+  });
+
   it("requires source and target club admin approval", async () => {
     const prefix = `approval-${randomUUID().slice(0, 8)}`;
     const communityAId = `${prefix}-community-a`;
@@ -400,6 +446,7 @@ describe("offline identity links", () => {
         type: SessionType.ELO,
         mode: SessionMode.MEXICANO,
         status: SessionStatus.ACTIVE,
+        ratingPolicyVersion: 1,
         sessionClubs: {
           create: [
             {
@@ -426,6 +473,8 @@ describe("offline identity links", () => {
         players: {
           create: [haziqAId, ...playerIds].map((userId) => ({
             playerId: userId,
+            profileClubId: communityAId,
+            participantAccountId: userId === haziqAId ? null : userId,
             gender: PlayerGender.MALE,
             partnerPreference: PartnerPreference.OPEN,
           })),

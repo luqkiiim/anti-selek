@@ -34,10 +34,14 @@ import { SessionPreferenceEditorPortal } from "@/components/session/SessionPrefe
 import { SessionGuestRenameModal } from "@/components/session/SessionGuestRenameModal";
 import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
+import { SessionJoinProfilePanel } from "@/components/session/SessionJoinProfilePanel";
 import { syncSessionPagerAccessibility } from "@/components/session/sessionPagerAccessibility";
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
-import type { CurrentUser } from "@/components/session/sessionTypes";
+import type {
+  CurrentUser,
+  EligibleSessionProfile,
+} from "@/components/session/sessionTypes";
 import {
   MatchStatus,
   SessionBalanceMetric,
@@ -260,6 +264,20 @@ export default function SessionPage() {
   });
   const isInterclubSession =
     sessionData?.collabFormat === SessionCollabFormat.INTERCLUB;
+  const handleSelfJoined = useCallback(
+    (profile: EligibleSessionProfile) => {
+      patchSessionData((current) => ({
+        ...current,
+        viewerPlayerId: profile.playerId,
+        selectedSelf: {
+          playerId: profile.playerId,
+          profileClubId: profile.profileClubId,
+        },
+      }));
+      scheduleSessionRefresh(0);
+    },
+    [patchSessionData, scheduleSessionRefresh]
+  );
   const interclubClubOptions = useMemo(
     () =>
       (sessionData?.clubs ?? [])
@@ -1413,6 +1431,15 @@ export default function SessionPage() {
             }}
           />
         ) : null}
+
+        <SessionJoinProfilePanel
+          code={code}
+          sessionStatus={sessionData.status}
+          eligibleProfiles={sessionData.eligibleProfiles ?? []}
+          selectedSelf={sessionData.selectedSelf ?? null}
+          isInterclub={isInterclubSession}
+          onJoined={handleSelfJoined}
+        />
 
         <div
           ref={mobilePagerRef}

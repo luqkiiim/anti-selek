@@ -1,5 +1,7 @@
+import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
+import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
@@ -95,6 +97,7 @@ export async function POST(
       session.user.id,
       !!session.user.isAdmin
     );
+    Object.assign(sessionData, { mutationActor: { userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin } });
 
     const body = await parseQueueMatchBody(request);
     const wantsReshuffle = body.reshuffle === true;
@@ -192,6 +195,7 @@ export async function POST(
       queuedMatch: await createQueuedMatchForSession(sessionData),
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof GenerateMatchError) {
       if (error.status === 403) {
         return invalidTargetResponse(request, "api:sessions:code:queue-match");
@@ -239,8 +243,10 @@ export async function DELETE(
       session.user.id,
       !!session.user.isAdmin
     );
+    Object.assign(sessionData, { mutationActor: { userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin } });
 
-    await prisma.$transaction(async (tx) => {
+    await admissionTransaction(prisma, async (tx) => {
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       const queuedMatch = sessionData.queuedMatch;
       await tx.queuedMatch.deleteMany({
         where: { sessionId: sessionData.id },
@@ -261,6 +267,7 @@ export async function DELETE(
 
     return sportingJson({ ok: true, queuedMatch: null });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof GenerateMatchError) {
       if (error.status === 403) {
         return invalidTargetResponse(_request, "api:sessions:code:queue-match");

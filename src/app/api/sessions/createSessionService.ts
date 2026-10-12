@@ -1,3 +1,5 @@
+import { admissionTransaction } from "@/lib/clubAdmissions";
+import { resolveSessionProfilePair, withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
@@ -343,7 +345,16 @@ export async function createSessionForUser({
   }
 
   const sessionId = randomUUID();
-  const newSession = await prisma.$transaction(async (tx) => {
+  const newSession = await admissionTransaction(prisma, async (tx) => {
+    const profileConfigs = [];
+    const accountIds = new Set<string>();
+    for (const config of memberSessionConfigs) {
+      const override = input.playerConfigMap.get(config.playerId);
+      const pair = await resolveSessionProfilePair(tx, { userId: requesterId, clubIds: involvedClubIds, playerId: config.playerId, profileClubId: override?.profileClubId ?? config.representingClubId, isGlobalAdmin: requesterIsAdmin });
+      if (pair.ownerUserId && accountIds.has(pair.ownerUserId)) throw new SessionRouteError("An account can participate only once in this tournament", 409);
+      if (pair.ownerUserId) accountIds.add(pair.ownerUserId);
+      profileConfigs.push({ ...config, profileClubId: pair.profileClubId, participantAccountId: pair.ownerUserId });
+    }
     const createdSession = await tx.session.create({
       data: {
         id: sessionId,
@@ -359,6 +370,7 @@ export async function createSessionForUser({
         pairingMode: input.pairingMode,
         status: SessionStatus.WAITING,
         isTest: input.isTest,
+        ratingPolicyVersion: 2,
         autoQueueEnabled: input.autoQueueEnabled,
         respectPlayerRest: input.respectPlayerRest,
         poolsEnabled: input.poolsEnabled,
@@ -395,11 +407,11 @@ export async function createSessionForUser({
               : []),
           ],
         },
-        players: {
-          create: memberSessionConfigs,
-        },
+
       },
     });
+
+    await tx.sessionPlayer.createMany({ data: profileConfigs.map(config => ({ ...config, sessionId: createdSession.id })) });
 
     if (input.normalizedGuests.length > 0) {
       const createdGuests = await Promise.all(
@@ -484,7 +496,8 @@ export async function createSessionForUser({
   }
 
   const playerIds = newSession.players.map((player) => player.playerId);
-  const players =
+  const legacyPlayers =
+      newSession.ratingPolicyVersion === 2 ? newSession.players :
     input.partnerClubId && newSession.players.length > 0
       ? withPlayerClubBadges(
           newSession.players,
@@ -498,5 +511,6 @@ export async function createSessionForUser({
           )
         : newSession.players;
 
+  const players = await withSessionProfileRatings(prisma, newSession, legacyPlayers);
   return { ...newSession, players };
 }

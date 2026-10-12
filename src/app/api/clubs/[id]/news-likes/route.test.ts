@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   clubMemberFindMany: vi.fn(),
   clubAccessFindUnique: vi.fn(),
   clubFindUnique: vi.fn(),
-  playerFindMany: vi.fn(),
   matchFindMany: vi.fn(),
   transaction: vi.fn(),
   clubNewsLikeUpsert: vi.fn(),
@@ -31,9 +30,6 @@ vi.mock("@/lib/prisma", () => ({
     },
     club: {
       findUnique: mocks.clubFindUnique,
-    },
-    player: {
-      findMany: mocks.playerFindMany,
     },
     match: {
       findMany: mocks.matchFindMany,
@@ -93,6 +89,17 @@ const newsItem = {
   likedByMe: false,
 };
 
+let clubMembers: Array<{
+  id: string;
+  clubId: string;
+  playerId: string;
+  ownerUserId: string | null;
+  archivedAt: Date | null;
+  retiredByAdmissionEventId: string | null;
+  elo: number;
+  player: { id: string; name: string; avatarKey: string | null };
+}>;
+
 function createRequest(body: unknown) {
   return new Request("http://localhost/api/clubs/club-1/news-likes", {
     method: "POST",
@@ -121,20 +128,34 @@ describe("club news likes route", () => {
       isTutorial: false,
       tutorialOwnerId: null,
     });
-    mocks.clubMemberFindMany.mockResolvedValue([
+    clubMembers = [
       {
         id: "membership-featured",
+        clubId: "club-1",
         playerId: "player-featured",
+        ownerUserId: "account-featured",
+        archivedAt: null,
+        retiredByAdmissionEventId: null,
         elo: 1000,
         player: {
           id: "player-featured",
-          ownerUserId: "account-featured",
           name: "Player One",
           avatarKey: null,
         },
       },
-    ]);
-    mocks.playerFindMany.mockResolvedValue([]);
+    ];
+    mocks.clubMemberFindMany.mockImplementation(async ({ where }) => {
+      const memberships = clubMembers.filter(
+        (member) => member.clubId === where.clubId && member.archivedAt === null
+      );
+      return where.ownerUserId === undefined
+        ? memberships
+        : memberships.filter(
+            (member) =>
+              member.ownerUserId === where.ownerUserId &&
+              member.retiredByAdmissionEventId === null
+          );
+    });
     mocks.matchFindMany.mockResolvedValue([]);
     mocks.listSessionsForClub.mockResolvedValue([]);
     mocks.buildClubPulse.mockReturnValue({
@@ -217,10 +238,16 @@ describe("club news likes route", () => {
       likedByMe: true,
       likeCount: 3,
     });
-    expect(mocks.playerFindMany).toHaveBeenCalledWith({
-      where: { ownerUserId: "account-viewer" },
-      select: { id: true },
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith({
+      where: {
+        clubId: "club-1",
+        ownerUserId: "account-viewer",
+        archivedAt: null,
+        retiredByAdmissionEventId: null,
+      },
+      select: { playerId: true },
     });
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledTimes(2);
   });
 
   it("removes an existing like", async () => {
@@ -255,15 +282,8 @@ describe("club news likes route", () => {
     });
   });
 
-  it("does not notify the liker when they are the featured player", async () => {
-    mocks.auth.mockResolvedValueOnce({
-      user: { id: "account-viewer", isAdmin: false },
-    });
-    mocks.clubAccessFindUnique.mockResolvedValueOnce({
-      role: "MEMBER",
-      status: "ACTIVE",
-    });
-    mocks.playerFindMany.mockResolvedValueOnce([{ id: "player-featured" }]);
+  it("does not notify the account that owns the featured profile in this club", async () => {
+    clubMembers[0].ownerUserId = "account-viewer";
     mocks.clubNewsLikeCount.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
 
     const response = await POST(
@@ -276,6 +296,15 @@ describe("club news likes route", () => {
     expect(response.status).toBe(200);
     expect(mocks.clubNewsLikeUpsert).toHaveBeenCalled();
     expect(mocks.clubNotificationUpsert).not.toHaveBeenCalled();
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith({
+      where: {
+        clubId: "club-1",
+        ownerUserId: "account-viewer",
+        archivedAt: null,
+        retiredByAdmissionEventId: null,
+      },
+      select: { playerId: true },
+    });
   });
 
   it("rejects stale or unknown news item ids", async () => {

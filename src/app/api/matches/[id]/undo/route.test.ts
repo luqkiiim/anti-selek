@@ -101,6 +101,7 @@ describe("undo completed match route", () => {
     });
     expect(mocks.undoCompletedMatchResult).toHaveBeenCalledWith({
       matchId: "match-1",
+      actorUserId: "admin-1", actorIsGlobalAdmin: false,
     });
   });
 
