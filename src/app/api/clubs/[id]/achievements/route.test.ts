@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  accountFindUnique: vi.fn(),
   clubFindUnique: vi.fn(),
   clubAccessFindUnique: vi.fn(),
   memberFindMany: vi.fn(),
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mocks.accountFindUnique },
     club: { findUnique: mocks.clubFindUnique },
     clubAccess: { findUnique: mocks.clubAccessFindUnique },
     clubMember: {
@@ -79,6 +81,7 @@ function request(path: string, init?: RequestInit) {
 }
 
 describe("club achievements target reads", () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ user: { id: "account-viewer" } });
@@ -104,6 +107,25 @@ describe("club achievements target reads", () => {
     mocks.savePreferences.mockResolvedValue(true);
   });
 
+  it("reads public pins without marking preferences or freezing legacy eligibility in global mode", async () => {
+    vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", "h.luqman1998@gmail.com");
+    mocks.auth.mockResolvedValue({ user: { id: "account-viewer", canBrowseAllClubs: true } });
+    mocks.accountFindUnique.mockResolvedValue({ email: "h.luqman1998@gmail.com", passwordHash: "hash", isActive: true });
+    mocks.clubAccessFindUnique.mockResolvedValue(null);
+    const response = await GET(request("?view=global&userId=player-target"), { params });
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toHaveProperty("unseen");
+    expect(mocks.getCollection).toHaveBeenCalledWith("club-1", "player-target", { readOnly: true });
+    expect(mocks.savePreferences).not.toHaveBeenCalled();
+  });
+
+  it("denies preference mutations in global mode even for an actual member", async () => {
+    const response = await PATCH(request("?view=global", { method: "PATCH", body: JSON.stringify({ seen: [] }) }), { params });
+    expect(response.status).toBe(403);
+    expect(mocks.savePreferences).not.toHaveBeenCalled();
+    expect(mocks.getCollection).not.toHaveBeenCalled();
+  });
+
   it("returns only earned public pins for another club member", async () => {
     const response = await GET(request("?userId=player-target"), { params });
 
@@ -120,7 +142,7 @@ describe("club achievements target reads", () => {
     expect(mocks.getCollection).toHaveBeenCalledWith("club-1", "player-target");
     expect(mocks.memberFindUnique).toHaveBeenCalledWith({
       where: { clubId_playerId: { clubId: "club-1", playerId: "player-target" } },
-      select: { id: true, retiredByAdmissionEventId: true },
+      select: { id: true, retiredByAdmissionEventId: true, archivedAt: true },
     });
   });
 

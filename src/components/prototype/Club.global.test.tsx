@@ -1,0 +1,16 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import Club from "./Club";
+vi.mock("./Pager", () => ({ Pager: ({ active, children }: { active: string; children: (page: string) => unknown }) => children(active) }));
+vi.mock("./LiveSession", () => ({ default: ({ code, globalClubId }: { code: string; globalClubId?: string }) => <div data-session={code} data-global-club={globalClubId} /> }));
+vi.mock("./Achievements", () => ({ AchievementCabinet: () => null, NextMilestone: () => null }));
+const club = { id: "club", name: "Riverside", avatarUrl: null, membersCount: 1, sessionsCount: 1 };
+let container: HTMLDivElement, root: Root;
+beforeEach(() => { (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement("div"); document.body.append(container); root = createRoot(container); vi.stubGlobal("fetch", vi.fn(async (url) => ({ ok: true, json: async () => String(url).startsWith("/api/clubs/club") ? { club: { ...club, role: "ADMIN", readOnly: String(url).includes("global") }, viewer: { id: "account", name: "Ari", playerId: null, isAdmin: true }, clubMembers: [], claimRequests: [], sessions: [{ id: "s", code: "LIVE1", name: "Live rally", status: "ACTIVE", players: [] }] } : {} }))); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
+function render(globalView: boolean) { return act(async () => root.render(<Club club={club} globalView={globalView} onSwitch={() => {}} onAccountSaved={async () => {}} onClubsChanged={async () => {}} />)); }
+function click(text: string) { const found = Array.from(container.querySelectorAll("button")).find(b => b.textContent === text); if (!found) throw new Error(`Missing ${text}`); return act(async () => found.click()); }
+it("global entry hides own profile and all host controls despite stale administrative flags", async () => { await render(true); expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/clubs/club?view=global"); expect(container.querySelector('[aria-label="Manage club"]')).toBeNull(); expect(container.textContent).not.toContain("Your progress here"); expect(Array.from(container.querySelectorAll("button")).some(b => b.textContent === "Profile")).toBe(false); await click("Sessions"); expect(container.textContent).not.toContain("Continue hosting"); expect(container.textContent).not.toContain("New"); await click("View session"); expect(container.querySelector('[data-global-club="club"][data-session="LIVE1"]')).not.toBeNull(); });
+it("normal owned entry retains management and profile navigation", async () => { await render(false); expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/clubs/club"); expect(container.querySelector('[aria-label="Manage club"]')).not.toBeNull(); expect(container.textContent).toContain("Your progress here"); expect(Array.from(container.querySelectorAll("button")).some(b => b.textContent === "Profile")).toBe(true); expect(container.textContent).toContain("Continue hosting"); await click("Sessions"); expect(container.textContent).toContain("New"); });

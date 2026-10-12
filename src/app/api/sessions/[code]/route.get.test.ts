@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  accountFindUnique: vi.fn(),
   canQuickAccessSessionRead: vi.fn(),
   checkInvalidTargetRateLimit: vi.fn(async () => null),
   sessionFindUnique: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mocks.accountFindUnique },
     session: {
       findUnique: mocks.sessionFindUnique,
       findFirst: mocks.sessionFindFirst,
@@ -94,6 +96,7 @@ vi.mock("@/lib/rateLimit", () => ({
 import { GET } from "./route";
 
 describe("session route GET", () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
@@ -328,6 +331,28 @@ describe("session route GET", () => {
       }
     );
     expect(mocks.checkInvalidTargetRateLimit).toHaveBeenCalledTimes(2);
+  });
+
+  it("global browsing suppresses an actual member's participation, identities and every management control", async () => {
+    vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", "h.luqman1998@gmail.com");
+    mocks.accountFindUnique.mockResolvedValue({ email: "h.luqman1998@gmail.com", isActive: true, passwordHash: "hash" });
+    mocks.auth.mockResolvedValue({ user: { id: "account-u1", canBrowseAllClubs: true, isAdmin: false } });
+    mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
+    mocks.getSessionOperatorMembership.mockResolvedValue({ role: "OWNER" });
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123?view=global&clubId=community-1"), { params: Promise.resolve({ code: "ABC123" }) });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ readOnly: true, viewerClubRole: null, viewerPlayerId: null, selectedSelf: null, eligibleProfiles: [], viewerCanParticipate: false, viewerCanScore: false, viewerCanManage: false, viewerCanUseAdminSessionControls: false, viewerCanDelete: false, viewerCanRollback: false });
+    expect(mocks.getSessionMembership).not.toHaveBeenCalled();
+    expect(mocks.getSessionAdminMembership).not.toHaveBeenCalled();
+    expect(mocks.getSessionOperatorMembership).not.toHaveBeenCalled();
+  });
+
+  it.each(["?view=global", "?view=global&clubId=other", "?view=global&clubId=community-1&clubId=other"])("denies invalid global context even when the user has normal member rights: %s", async query => {
+    vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", "h.luqman1998@gmail.com");
+    mocks.accountFindUnique.mockResolvedValue({ email: "h.luqman1998@gmail.com", isActive: true, passwordHash: "hash" });
+    mocks.auth.mockResolvedValue({ user: { id: "account-u1", canBrowseAllClubs: true, isAdmin: false } });
+    const response = await GET(new Request(`http://localhost/api/sessions/ABC123${query}`), { params: Promise.resolve({ code: "ABC123" }) });
+    expect(response.status).toBe(403);
   });
 
   it("allows quick-access host club spectators without management permissions", async () => {

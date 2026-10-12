@@ -252,4 +252,14 @@ describe("SessionMatchHistory", () => {
     expect(container.textContent).toContain("Score corrected.");
     expect(onMutated).toHaveBeenCalledOnce();
   });
+  it("propagates global context and hides all score mutations", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(historyData({ viewerCanManage: true, canCorrectCompletedScores: true, undoableMatchId: "match-1" })));
+    await act(async () => root.render(<SessionMatchHistory code="ABC123" globalClubId="club with spaces" />));
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/sessions/ABC123/history?view=global&clubId=club%20with%20spaces");
+    expect(container.textContent).not.toContain("Correct score");
+    expect(container.textContent).not.toContain("Undo result");
+    expect(container.textContent).not.toContain("Approve score");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
 });

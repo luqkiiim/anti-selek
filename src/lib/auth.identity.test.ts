@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type TestUser = { id: string; [key: string]: unknown };
 type TestToken = Record<string, unknown> | null;
@@ -73,6 +73,7 @@ async function authorizeQuickAccess() {
 describe("NextAuth Account and Player identities", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", account.email);
     mocks.accountFindUnique.mockImplementation(async ({ where }: { where: { id?: string; email?: string } }) =>
       where.id === account.id || where.email === account.email ? { ...account } : null
     );
@@ -89,6 +90,20 @@ describe("NextAuth Account and Player identities", () => {
       retiredByAdmissionEventId: null,
       player: { ownerUserId: null, isActive: true },
     });
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("refreshes the read-only browsing flag independently of admin permissions", async () => {
+    const user = await authorizeAccount();
+    expect(user).toMatchObject({ canBrowseAllClubs: true, isAdmin: false });
+    const token = await callbacks().jwt({ token: {}, user });
+    expect(token).toMatchObject({ canBrowseAllClubs: true, isAdmin: false });
+    vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", "other@example.invalid");
+    const refreshed = await callbacks().jwt({ token: token! });
+    expect(refreshed).toMatchObject({ canBrowseAllClubs: false, isAdmin: false });
+    const session = await callbacks().session({ session: { user: {}, expires: "2099-01-01" }, token: refreshed });
+    expect(session.user).toMatchObject({ canBrowseAllClubs: false, isAdmin: false });
   });
 
   it("signs in with the Account ID and returns no Player identity as the account ID", async () => {
@@ -137,6 +152,7 @@ describe("NextAuth Account and Player identities", () => {
       quickAccessClubId: "club-1",
       isQuickAccess: true,
       isAdmin: false,
+      canBrowseAllClubs: false,
     });
     const token = await callbacks().jwt({ token: {}, user });
     expect(token).toMatchObject({ id: `guest:${playerId}`, guestPlayerId: playerId, quickAccessClubId: "club-1", isAdmin: false });

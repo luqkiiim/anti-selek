@@ -688,7 +688,11 @@ it.each(["SQLite", "libSQL"] as const)("migration61 preserves genuine terminal r
   const sql = readFileSync(path.resolve("prisma/migrations", localOwnershipMigration, "migration.sql"), "utf8");
   if (engine === "SQLite") { const target=new DatabaseSync(legacyFile); target.exec(sql); target.close(); }
   else { adapterFiles.add(legacyFile); const target=createClient({ url: `file:${legacyFile}` }); await target.executeMultiple(sql); target.close(); }
-  const target=new DatabaseSync(legacyFile); expect(snapshot(target)).toEqual(before); expect(target.prepare("PRAGMA foreign_key_check").all()).toEqual([]); target.close();
+  const target=new DatabaseSync(legacyFile); expect(snapshot(target)).toEqual(before); expect(target.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  // Verify release61 independently, then bring this historical fixture forward
+  // before reading it with the current generated Prisma client.
+  target.exec(readFileSync(path.resolve("prisma/migrations/20261012200000_club_pairing_preferences/migration.sql"), "utf8"));
+  expect(snapshot(target)).toEqual(before); target.close();
   const reader=new PrismaClient({ datasources: { db: { url: `file:${legacyFile}` } } });
   try {
     const invite=await reader.playerInvitation.findUniqueOrThrow({ where: { id: "legacy-invite" } });

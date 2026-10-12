@@ -74,15 +74,19 @@ export default function Club({
   onSwitch,
   onAccountSaved,
   onClubsChanged,
+  globalView = false,
 }: {
-  club: DashboardClub;
+  club: Omit<DashboardClub, "role" | "isPasswordProtected"> & { role?: DashboardClub["role"] | null; isPasswordProtected?: boolean };
+  globalView?: boolean;
   onSwitch: () => void;
   onAccountSaved: () => Promise<unknown>;
   onClubsChanged: () => Promise<unknown>;
 }) {
-  const resource = useResource<Snapshot>("/api/clubs/" + club.id);
+  const resource = useResource<Snapshot>("/api/clubs/" + club.id + (globalView ? "?view=global" : ""));
   const data = resource.data;
-  const viewerPlayerId = data?.viewer.playerId ?? null;
+  const readOnly = globalView || !!data?.club.readOnly;
+  const pages: readonly string[] = readOnly ? mainPages.filter(p => p !== "profile") : mainPages;
+  const viewerPlayerId = readOnly ? null : data?.viewer.playerId ?? null;
   const profile = useResource<Profile>(
     viewerPlayerId
       ? `/api/users/${encodeURIComponent(viewerPlayerId)}/stats?clubId=${encodeURIComponent(club.id)}`
@@ -109,11 +113,11 @@ export default function Club({
     await Promise.all([resource.refresh(), profile.refresh(), achievements.refresh()]);
   }
   const action = useAction(refresh);
-  const canManage =
+  const canManage = !readOnly && (
     data?.club.role === "ADMIN" ||
     data?.club.role === "STAFF" ||
-    data?.viewer.isAdmin;
-  const canAdmin = data?.club.role === "ADMIN" || data?.viewer.isAdmin;
+    data?.viewer.isAdmin);
+  const canAdmin = !readOnly && (data?.club.role === "ADMIN" || data?.viewer.isAdmin);
   const sessions = data?.sessions.filter((s) => !s.isTest) || [];
   const live = sessions.filter((s) => s.status === "ACTIVE");
   const upcoming = sessions.filter((s) => s.status === "WAITING");
@@ -144,7 +148,7 @@ export default function Club({
     setPage(p);
   }
 
-  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); const isSelf=target?.id===viewerPlayerId; return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={isSelf} canInvite={!!canAdmin} onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={isSelf ? renderAchievement() : undefined} milestone={isSelf ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
+  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); const isSelf=target?.id===viewerPlayerId; return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go} readOnly={readOnly}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={isSelf} globalView={readOnly} canInvite={!!canAdmin} onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={isSelf ? renderAchievement() : undefined} milestone={isSelf ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
   function openSession(code: string) {
     setSessionCode(code);
     go("session");
@@ -195,6 +199,7 @@ export default function Club({
   if (page === "session")
     return (
       <><LiveSession
+        globalClubId={readOnly ? club.id : undefined}
         code={sessionCode}
         onBack={() => {
           go("sessions");
@@ -215,6 +220,7 @@ export default function Club({
     return (
       <div className="pc-app">
         <SessionMatchHistory
+          globalClubId={readOnly ? club.id : undefined}
           code={recap.code}
           onBack={() => go("recap")}
           onMutated={refresh}
@@ -235,7 +241,7 @@ export default function Club({
   return (
     <div className="pc-app">
       <header className="pc-header">
-        {mainPages.includes(page as (typeof mainPages)[number]) ? (
+        {pages.includes(page) ? (
           <>
             <button
               className="club-switcher"
@@ -244,7 +250,7 @@ export default function Club({
               }
               onClick={onSwitch}
             >
-              <small>YOUR CLUB</small>
+              <small>{readOnly ? "CLUB" : "YOUR CLUB"}</small>
               <strong>
                 <CaretLeft size={16} aria-hidden="true" />
                 {data?.club.name || club.name}
@@ -276,7 +282,7 @@ export default function Club({
           </>
         )}
       </header>
-      <Pager pages={mainPages.includes(page as (typeof mainPages)[number]) ? mainPages : [page]} active={page} onChange={go}>{page => <>
+      <Pager pages={pages.includes(page) ? pages : [page]} active={page} onChange={go}>{page => <>
           <ErrorText error={resource.error || profile.error || achievements.error || action.error} />
           {!data && <p role="status">Loading club…</p>}
           {data && page === "club" && (
@@ -290,7 +296,7 @@ export default function Club({
                     <h1>
                       {canManage
                         ? "Ready for a rally?"
-                        : `Welcome back, ${data.viewer.name}.`}
+                        : readOnly ? data.club.name : `Welcome back, ${data.viewer.name}.`}
                     </h1>
                   </div>
                   <Image src="/spark.png" alt="Friendly spark" width={92} height={92} />
@@ -338,7 +344,7 @@ export default function Club({
               </div>
               <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
               {data.clubPulse?.monthlyClimbers && <MonthlyClimbers climbers={data.clubPulse.monthlyClimbers} month={data.clubPulse.monthlyClimbersMonth} onOpenProfile={openMember} />}
-              <div className="club-dashboard-progress">
+              {!readOnly && <div className="club-dashboard-progress">
                 <div className="section-heading">
                   <h3>Your progress here</h3>
                   <button className="text-button" onClick={() => go("profile")}>
@@ -346,7 +352,7 @@ export default function Club({
                   </button>
                 </div>
                 {renderStats()}
-              </div>
+              </div>}
               <PartnerChemistry onOpenProfile={openMember} pairs={data.clubPulse?.partnerships ?? []} />
               <TopRivalries onOpenProfile={openMember} rivalries={data.clubPulse?.rivalries ?? []} />
               {data.club.rules && <details className="club-rules"><summary>Club rules</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{data.club.rules}</p></details>}
@@ -468,7 +474,7 @@ export default function Club({
           {data && page === "setup" && canManage && <SessionSetup clubId={club.id} members={data.clubMembers} onCreated={openSession} />}
       </>}</Pager>
       {!["setup", "recap"].includes(page) && (
-        <MainNav active={page} onNavigate={go} />
+        <MainNav active={page} onNavigate={go} readOnly={readOnly} />
       )}
       {memberOverlay}
     </div>

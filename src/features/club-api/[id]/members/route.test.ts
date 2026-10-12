@@ -17,8 +17,12 @@ beforeEach(() => {
 describe("offline roster creation", () => {
   it("creates a Player and ClubMember without an Account or permissions", async () => {
     expect((await create({ name: "Offline Player", gender: "FEMALE", mixedSideOverride: null, needsMoreRest: true })).status).toBe(201);
-    expect(mocks.create).toHaveBeenCalledWith({ data: { name: "Offline Player", gender: "FEMALE", partnerPreference: "FEMALE_FLEX", mixedSideOverride: null } });
-    expect(mocks.membership).toHaveBeenCalledWith({ data: { clubId: "club", playerId: "offline-player", ownerUserId: null, status: "CORE", preferredPool: "B" } });
+    expect(mocks.create).toHaveBeenCalledWith({ data: { name: "Offline Player", gender: "FEMALE" } });
+    expect(mocks.membership).toHaveBeenCalledWith({ data: { clubId: "club", playerId: "offline-player", ownerUserId: null, mixedSideOverride: null, status: "CORE", preferredPool: "B" } });
+  });
+  it("initializes an explicit membership override from requested legacy preferences", async () => {
+    expect((await create({ name: "Offline Player", gender: "FEMALE", partnerPreference: "OPEN" })).status).toBe(201);
+    expect(mocks.membership).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ mixedSideOverride: "UPPER" }) }));
   });
   it.each(["email", "password", "ownerUserId"])("does not infer account ownership from %s", async field => {
     expect((await create({ name: "Offline Player", gender: "MALE", [field]: "unsafe" })).status).toBe(400);

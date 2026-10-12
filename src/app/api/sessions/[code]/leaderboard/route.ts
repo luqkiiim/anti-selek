@@ -1,3 +1,4 @@
+import { isGlobalClubView, canReadSessionGlobally } from "@/lib/globalClubViewer";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -82,7 +83,11 @@ async function getSessionLeaderboard(
     return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
 
-  const membership = await getSessionMembership(prisma, {
+  const globalView = isGlobalClubView(request);
+  const canRead = globalView && await canReadSessionGlobally(request, session, sessionData);
+  if (globalView && !canRead) return sportingJson({ error: "Not authorized" }, { status: 403 });
+
+  const membership = globalView ? null : await getSessionMembership(prisma, {
     session: sessionData,
     userId: session.user.id,
     acceptedOnly: true,
@@ -90,10 +95,10 @@ async function getSessionLeaderboard(
   const clubRole = membership?.role ?? null;
 
   const quickPlayerId = getQuickAccessPlayerId(session);
-  const isSessionPlayer = quickPlayerId
+  const isSessionPlayer = globalView ? false : quickPlayerId
     ? sessionData.players.some((player) => player.playerId === quickPlayerId)
     : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
-  const canView =
+  const canView = canRead ||
     (!isQuickAccessSession(session) && session.user.isAdmin) ||
     !!clubRole ||
     isSessionPlayer;

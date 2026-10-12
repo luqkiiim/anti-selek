@@ -8,6 +8,7 @@ declare module "next-auth" {
       guestPlayerId?: string | null;
       identityVersion?: number;
       isAdmin: boolean;
+      canBrowseAllClubs?: boolean;
       isQuickAccess: boolean;
       quickAccessClubId?: string | null;
       quickAccessCommunityId?: string | null;
@@ -18,6 +19,7 @@ declare module "next-auth" {
     sessionVersion?: number;
     guestPlayerId?: string | null;
     isAdmin: boolean;
+    canBrowseAllClubs?: boolean;
     isQuickAccess?: boolean;
     quickAccessClubId?: string | null;
     quickAccessCommunityId?: string | null;
@@ -31,6 +33,7 @@ declare module "next-auth/jwt" {
     guestPlayerId?: string | null;
     id: string;
     isAdmin: boolean;
+    canBrowseAllClubs?: boolean;
     isQuickAccess: boolean;
     quickAccessClubId?: string | null;
     quickAccessCommunityId?: string | null;

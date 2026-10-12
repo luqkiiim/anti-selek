@@ -1,3 +1,5 @@
+import { canReadClubGlobally } from "@/lib/globalClubViewer";
+import type { Session } from "next-auth";
 import { withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { isClubAdminRole } from "@/lib/clubRoles";
@@ -17,12 +19,16 @@ export async function listSessionsForClub({
   viewerId,
   viewerIsAdmin,
   quickAccessPlayerId,
+  globalViewerSession,
 }: {
   clubId: string;
   viewerId: string;
   viewerIsAdmin: boolean;
   quickAccessPlayerId?: string;
+  globalViewerSession?: Session;
 }) {
+  const canRead = globalViewerSession?.user.id === viewerId && await canReadClubGlobally(globalViewerSession, clubId);
+  if (globalViewerSession && !canRead) throw new SessionRouteError("Not authorized for this club", 403);
   const quick = quickAccessPlayerId !== undefined;
   const guestMembership = quick
     ? await prisma.clubMember.findFirst({
@@ -46,12 +52,12 @@ export async function listSessionsForClub({
     },
   });
 
-  if (quick ? !guestMembership : membership?.status !== "ACTIVE" && !viewerIsAdmin) {
+  if (quick ? !guestMembership : membership?.status !== "ACTIVE" && !viewerIsAdmin && !canRead) {
     throw new SessionRouteError("Not authorized for this club", 403);
   }
 
   const visibleCollabStatuses =
-    !quick && (viewerIsAdmin || isClubAdminRole(membership?.role))
+    !canRead && !quick && (viewerIsAdmin || isClubAdminRole(membership?.role))
       ? [SessionClubStatus.ACCEPTED, SessionClubStatus.PENDING]
       : [SessionClubStatus.ACCEPTED];
   const sessions = await prisma.session.findMany({

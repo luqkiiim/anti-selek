@@ -11,6 +11,8 @@ import {
   SessionType,
 } from "@/types/enums";
 
+const pairingDefaults = vi.hoisted(() => new Map<string, string | null>());
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     clubAccess: {
@@ -60,6 +62,7 @@ function mockClubMemberships(rows: Array<Record<string, unknown>>) {
 describe("createSessionForUser", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    pairingDefaults.clear();
   });
 
   it("requires at least two players in each enabled player group", async () => {
@@ -179,6 +182,19 @@ describe("createSessionForUser", () => {
         }),
       })
     );
+  });
+
+  it.each([false, true])("snapshots membership defaults while preserving explicit session overrides (%s)", async explicit => {
+    const input = parseCreateSessionRequest({ name: "Membership defaults", clubId: "community-1", playerIds: ["player-1", "player-2"], playerConfigs: explicit ? [{ playerId: "player-1", mixedSideOverride: "UPPER" }] : [] });
+    mockRequesterAccess();
+    mockClubMemberships([{ playerId: "player-1" }, { playerId: "player-2" }]);
+    vi.mocked(prisma.player.findMany).mockResolvedValue([{ id: "player-1", name: "One", gender: "FEMALE", mixedSideOverride: "UPPER", partnerPreference: "OPEN" }, { id: "player-2", name: "Two", gender: "FEMALE", mixedSideOverride: null, partnerPreference: "FEMALE_FLEX" }] as never);
+    pairingDefaults.set("player-1", null); pairingDefaults.set("player-2", "UPPER");
+    vi.mocked(prisma.offlineIdentityMember.findMany).mockResolvedValue([] as never);
+    const createMany = vi.fn();
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback({ session: { create: vi.fn().mockResolvedValue({ id: "new-session" }), findUnique: vi.fn().mockResolvedValue({ id: "new-session", clubId: "community-1", players: [], courts: [], sessionClubs: [] }) }, sessionPlayer: { createMany } } as never));
+    await createSessionForUser({ requesterId: "host-account", requesterIsAdmin: false, input });
+    expect(createMany.mock.calls[0][0].data).toMatchObject([{ playerId: "player-1", profileClubId: "community-1", mixedSideOverride: explicit ? "UPPER" : null, partnerPreference: explicit ? "OPEN" : "FEMALE_FLEX" }, { playerId: "player-2", mixedSideOverride: "UPPER", partnerPreference: "OPEN" }]);
   });
 
   it("rejects mixed tournaments when a selected member has no explicit gender", async () => {
@@ -358,6 +374,6 @@ vi.mock("@/lib/clubAdmissions", async (importOriginal) => {
 });
 
 vi.mock("@/lib/sessionProfileIdentity", () => ({
-  resolveSessionProfilePair: async (_db: unknown, args: { playerId: string; profileClubId?: string; clubIds: string[] }) => ({ playerId: args.playerId, profileClubId: args.profileClubId ?? args.clubIds[0], ownerUserId: null }),
+  resolveSessionProfilePair: async (_db: unknown, args: { playerId: string; profileClubId?: string; clubIds: string[] }) => ({ playerId: args.playerId, profileClubId: args.profileClubId ?? args.clubIds[0], ownerUserId: null, mixedSideOverride: pairingDefaults.get(args.playerId) ?? null }),
   withSessionProfileRatings: async (_db: unknown, _session: unknown, players: unknown) => players,
 }));

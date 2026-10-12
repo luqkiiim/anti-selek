@@ -178,8 +178,6 @@ export async function POST(
       where: { id: playerIdToJoin },
       select: {
         gender: true,
-        partnerPreference: true,
-        mixedSideOverride: true,
       },
     });
     if (!userProfile) {
@@ -210,7 +208,7 @@ export async function POST(
           ? overrideMixedSideOverride
           : hasPartnerPreferenceInput || hasOverrideGender
             ? null
-            : userProfile.mixedSideOverride,
+            : chosenPair.mixedSideOverride,
       partnerPreference:
         hasMixedSideOverrideInput
           ? undefined
@@ -218,7 +216,7 @@ export async function POST(
             ? overridePreference
             : hasOverrideGender
               ? undefined
-              : userProfile.partnerPreference,
+              : undefined,
     });
     const joinedAt = new Date();
     const arrivalPriorityAt =
@@ -256,6 +254,9 @@ export async function POST(
       await assertSessionProfileContextsUnambiguous(tx, sessionData);
       const pair = await resolveSessionProfilePair(tx, { userId: session.user.id, clubIds: await getAcceptedSessionClubIds(tx, sessionData), playerId: playerIdToJoin, profileClubId: chosenPair.profileClubId, isGlobalAdmin: !!session.user.isAdmin });
       await assertSessionAccountSeatAvailable(tx, sessionData.id, pair);
+      const freshMixedState = hasMixedSideOverrideInput || hasPartnerPreferenceInput || hasOverrideGender
+        ? resolvedMixedState
+        : resolveMixedSideState({ gender: sessionGender, mixedSideOverride: pair.mixedSideOverride });
       const existingSeat = await tx.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: sessionData.id, playerId: playerIdToJoin } } });
       if (existingSeat) {
         if (existingSeat.profileClubId !== pair.profileClubId) throw new IdentityConflictError("This player already joined with another club profile. Remove the entry before choosing a different profile.");
@@ -272,8 +273,8 @@ export async function POST(
             participantAccountId: pair.ownerUserId,
             representingClubId: normalizedRepresentingClubId,
             gender: sessionGender,
-            partnerPreference: resolvedMixedState.partnerPreference,
-            mixedSideOverride: resolvedMixedState.mixedSideOverride,
+            partnerPreference: freshMixedState.partnerPreference,
+            mixedSideOverride: freshMixedState.mixedSideOverride,
             pool: targetPool,
             sessionPoints: 0,
             matchmakingMatchesCredit,

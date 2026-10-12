@@ -1,3 +1,4 @@
+import { canReadClubGlobally, isGlobalClubView } from "@/lib/globalClubViewer";
 import { ClubAdmissionError } from "@/lib/clubAdmissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
@@ -83,6 +84,8 @@ export async function GET(request: Request) {
         surface: "api",
       }
     );
+    const globalView = isGlobalClubView(request);
+    if (globalView && (!clubId || !(await canReadClubGlobally(session, clubId)))) return sportingJson({ error: "Not authorized" }, { status: 403 });
     if (!clubId) {
       return sportingJson([]);
     }
@@ -93,7 +96,8 @@ export async function GET(request: Request) {
     const sessions = await listSessionsForClub({
       clubId,
       viewerId: session.user.id,
-      viewerIsAdmin: !isQuickAccessSession(session) && !!session.user.isAdmin,
+      viewerIsAdmin: !globalView && !isQuickAccessSession(session) && !!session.user.isAdmin,
+      ...(globalView ? { globalViewerSession: session } : {}),
       ...(isQuickAccessSession(session)
         ? { quickAccessPlayerId: session.user.guestPlayerId ?? "" }
         : {}),

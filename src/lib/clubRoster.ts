@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { deriveClubPairingPreferences } from "./clubPairingPreferences";
 import { serializeAvatarEntity } from "./avatar";
 import { normalizeClubRole } from "./clubRoles";
 
@@ -26,8 +27,7 @@ export async function getClubRoster(db: Database, clubId: string, includeArchive
     email: null,
     avatarUrl: serializeAvatarEntity(member.player).avatarUrl,
     gender: member.player.gender,
-    partnerPreference: member.player.partnerPreference,
-    mixedSideOverride: member.player.mixedSideOverride,
+    ...deriveClubPairingPreferences(member),
     elo: member.elo,
     status: member.status,
     preferredPool: member.preferredPool,

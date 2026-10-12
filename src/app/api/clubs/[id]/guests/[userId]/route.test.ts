@@ -21,7 +21,7 @@ describe("add a guest to the club", () => {
   it("adds only the selected identity, preserving its starting rating and past records", async () => {
     expect((await call()).status).toBe(200);
     expect(mocks.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ playerId: "player-guest", isGuest: true, session: expect.objectContaining({ isTest: false, status: "COMPLETED" }) }), select: { player: { select: { elo: true } } } }));
-    expect(mocks.upsert).toHaveBeenCalledWith({ where: { clubId_playerId: { clubId: "club", playerId: "player-guest" } }, update: {}, create: { clubId: "club", playerId: "player-guest", status: "OCCASIONAL", elo: 1150 }, select: { playerId: true } });
+    expect(mocks.upsert).toHaveBeenCalledWith({ where: { clubId_playerId: { clubId: "club", playerId: "player-guest" } }, update: {}, create: { clubId: "club", playerId: "player-guest", mixedSideOverride: null, status: "OCCASIONAL", elo: 1150 }, select: { playerId: true } });
   });
   it("is safe to repeat without resetting existing membership or rating", async () => {
     await call(); await call();
@@ -40,7 +40,7 @@ describe("add a guest to the club", () => {
         id: "player-guest",
         clubMemberships: { none: { retiredByAdmissionEventId: { not: null } } },
       },
-      select: { id: true },
+      select: { id: true, gender: true, mixedSideOverride: true, partnerPreference: true },
     });
     expect(mocks.findFirst).not.toHaveBeenCalled();
     expect(mocks.upsert).not.toHaveBeenCalled();

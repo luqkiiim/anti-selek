@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { getEligibleSessionProfiles, resolveSessionProfilePair, getSessionParticipantOwners, assertSessionAccountSeatAvailable, withSessionProfileRatings } from "./sessionProfileIdentity";
 
 const members = [
-  { clubId: "a", playerId: "pa", ownerUserId: "account", elo: 1300, preferredPool: "A", club: { name: "A" }, player: { name: "Person" } },
-  { clubId: "b", playerId: "pb", ownerUserId: "account", elo: 800, preferredPool: "B", club: { name: "B" }, player: { name: "Person" } },
+  { clubId: "a", playerId: "pa", ownerUserId: "account", elo: 1300, preferredPool: "A", mixedSideOverride: null, club: { name: "A" }, player: { name: "Person", gender: "FEMALE", mixedSideOverride: null, partnerPreference: "FEMALE_FLEX" } },
+  { clubId: "b", playerId: "pb", ownerUserId: "account", elo: 800, preferredPool: "B", mixedSideOverride: "UPPER", club: { name: "B" }, player: { name: "Person", gender: "FEMALE", mixedSideOverride: null, partnerPreference: "FEMALE_FLEX" } },
 ];
 function db() {
   return {
@@ -19,7 +19,7 @@ describe("local session profile authority", () => {
     const eligible = await getEligibleSessionProfiles(tx as never, { userId: "account", clubIds: ["a", "b"] });
     expect(eligible.map(p => [p.playerId, p.profileClubId])).toEqual([["pa", "a"], ["pb", "b"]]);
     await expect(resolveSessionProfilePair(tx as never, { userId: "account", clubIds: ["a", "b"] })).rejects.toThrow("Choose which club profile");
-    expect(await resolveSessionProfilePair(tx as never, { userId: "account", clubIds: ["a", "b"], playerId: "pb", profileClubId: "b" })).toMatchObject({ playerId: "pb", profileClubId: "b", elo: 800 });
+    expect(await resolveSessionProfilePair(tx as never, { userId: "account", clubIds: ["a", "b"], playerId: "pb", profileClubId: "b" })).toMatchObject({ playerId: "pb", profileClubId: "b", elo: 800, mixedSideOverride: "UPPER" });
   });
   it("revoked access to the selected club removes self and scoring authority even with other active clubs", async () => {
     const tx = db();
@@ -43,6 +43,11 @@ describe("local session profile authority", () => {
     expect(await withSessionProfileRatings(tx as never, { ratingPolicyVersion: 2 }, seats)).toEqual(seats);
     expect(await withSessionProfileRatings(tx as never, { ratingPolicyVersion: 1 }, seats)).toEqual(seats);
     expect(tx.clubMember.findUnique).not.toHaveBeenCalled();
+  });
+  it("serializes existing session pairing snapshots even when shared Player fields have changed", async () => {
+    const tx = db();
+    const seats = [{ playerId: "pb", profileClubId: "b", isGuest: false, gender: "FEMALE", partnerPreference: "FEMALE_FLEX", mixedSideOverride: null, player: { elo: 2000, gender: "MALE", partnerPreference: "OPEN", mixedSideOverride: "LOWER" } }];
+    expect((await withSessionProfileRatings(tx as never, { ratingPolicyVersion: 2 }, seats))[0].player).toMatchObject({ elo: 800, gender: "FEMALE", partnerPreference: "FEMALE_FLEX", mixedSideOverride: null });
   });
   it("cannot borrow legacy global ownership when a shared Player has ambiguous club context", async () => {
     const tx = db();

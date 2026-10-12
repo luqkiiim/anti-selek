@@ -1,5 +1,5 @@
+import { canReadClubGlobally, isGlobalClubView } from "@/lib/globalClubViewer";
 import { sportingJson } from "@/lib/sportingResponse";
-import { NextResponse } from "next/server";
 import { clubGuestWhere } from "@/lib/clubGuest";
 import { guestRatingFromMatches } from "@/lib/guestRating";
 import { auth } from "@/lib/auth";
@@ -69,6 +69,10 @@ async function getUserStatsRoute(
       surface: "api",
     }
   );
+
+  const globalView = isGlobalClubView(request);
+  const canRead = globalView && !!clubId && await canReadClubGlobally(session, clubId);
+  if (globalView && !canRead) return sportingJson({ error: "Not authorized" }, { status: 403 });
 
   const user = await prisma.player.findUnique({
     where: { id },
@@ -148,6 +152,7 @@ async function getUserStatsRoute(
           elo: true,
           status: true,
           retiredByAdmissionEventId: true,
+          archivedAt: true,
           player: {
             select: {
               id: true,
@@ -161,17 +166,18 @@ async function getUserStatsRoute(
     const quickAccessMembership = isQuickAccessSession(session) && session.user.guestPlayerId
       ? await prisma.clubMember.findUnique({ where: { clubId_playerId: { clubId, playerId: session.user.guestPlayerId } }, select: { id: true } })
       : null;
-    if (requesterMembership?.status !== "ACTIVE" && !quickAccessMembership && !session.user.isAdmin) {
+    if (requesterMembership?.status !== "ACTIVE" && !quickAccessMembership && !session.user.isAdmin && !canRead) {
       return invalidTargetResponse(request, "api:users:id:stats");
     }
 
+    if (globalView && (!targetMembership || targetMembership.archivedAt || targetMembership.retiredByAdmissionEventId)) return sportingJson({ error: "Not authorized" }, { status: 403 });
     if (!targetMembership) {
       const guest = await prisma.sessionPlayer.findFirst({ where: clubGuestWhere(clubId, id), select: { id: true } });
       if (!guest) return invalidTargetResponse(request, "api:users:id:stats");
     }
 
     viewerCanManageClub =
-      !isQuickAccessSession(session) &&
+      !globalView && !isQuickAccessSession(session) &&
       ((requesterMembership?.status === "ACTIVE" && (requesterMembership.role === "ADMIN" || requesterMembership.role === "OWNER")) || !!session.user.isAdmin);
     canAddGuestToClub = !targetMembership && !isRetiredPlayer && viewerCanManageClub;
     targetMemberStatus = targetMembership?.status ?? null;

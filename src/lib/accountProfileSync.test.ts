@@ -4,7 +4,7 @@ import { AccountProfileSyncError, syncAccountProfile } from "./accountProfileSyn
 import { PlayerGender, MixedSide } from "@/types/enums";
 const account = { id: "account", name: "Original", gender: "FEMALE", mixedSideOverride: null, avatarKey: "old", isActive: true, selfNameChangedAt: null, selfGenderChangedAt: null };
 function setup() {
-  const db = { user: { findUnique: vi.fn().mockResolvedValue(account), update: vi.fn().mockImplementation(async ({ data }) => ({ ...account, ...data })) }, player: { findMany: vi.fn().mockResolvedValue([{ id: "active", avatarKey: "old", clubMemberships: [{ ownerUserId: "account", retiredByAdmissionEventId: null }] }, { id: "archived", avatarKey: "archive", clubMemberships: [{ ownerUserId: "account", retiredByAdmissionEventId: null }] }]), updateMany: vi.fn().mockResolvedValue({ count: 2 }) } };
+  const db = { clubAccess: { findUnique: vi.fn().mockResolvedValue({ status: "ACTIVE" }) }, clubMember: { findUnique: vi.fn().mockResolvedValue({ id: "member-a", clubId: "club-a", playerId: "active", ownerUserId: "account", archivedAt: null, retiredByAdmissionEventId: null, player: { gender: "FEMALE", isActive: true } }), findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn().mockResolvedValue([]), update: vi.fn() }, user: { findUnique: vi.fn().mockResolvedValue(account), update: vi.fn().mockImplementation(async ({ data }) => ({ ...account, ...data })) }, player: { findMany: vi.fn().mockResolvedValue([{ id: "active", avatarKey: "old", clubMemberships: [{ ownerUserId: "account", retiredByAdmissionEventId: null }] }, { id: "archived", avatarKey: "archive", clubMemberships: [{ ownerUserId: "account", retiredByAdmissionEventId: null }] }]), updateMany: vi.fn().mockResolvedValue({ count: 2 }) } };
   return { db, tx: db as unknown as Prisma.TransactionClient };
 }
 describe("canonical account metadata synchronization", () => {
@@ -24,16 +24,17 @@ describe("canonical account metadata synchronization", () => {
     await syncAccountProfile(tx, { userId: "account", changes: { name: "Original" } });
     expect(db.user.update).not.toHaveBeenCalled();
   });
-  it("normalizes personal Mixed preferences centrally and leaves ratings alone", async () => {
+  it("stores Mixed preferences on the selected membership and leaves identity untouched", async () => {
     const { db, tx } = setup();
-    await syncAccountProfile(tx, { userId: "account", changes: { mixedSideOverride: MixedSide.UPPER } });
-    expect(db.user.update).toHaveBeenCalledWith(expect.objectContaining({ data: { mixedSideOverride: "UPPER" } }));
-    expect(db.player.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { mixedSideOverride: "UPPER", partnerPreference: "OPEN" } }));
+    await syncAccountProfile(tx, { userId: "account", changes: {}, clubPreferences: { clubId: "club-a", playerId: "active", mixedSideOverride: MixedSide.UPPER } });
+    expect(db.user.update).not.toHaveBeenCalled();
+    expect(db.player.updateMany).not.toHaveBeenCalled();
+    expect(db.clubMember.update).toHaveBeenCalledWith({ where: { id: "member-a" }, data: { mixedSideOverride: "UPPER" } });
   });
   it("blocks conflicting retained ownership before any writes", async () => {
     const { db, tx } = setup(); db.player.findMany.mockResolvedValue([{ id: "shared", avatarKey: "old", clubMemberships: [{ ownerUserId: "account", retiredByAdmissionEventId: null }, { ownerUserId: "other", retiredByAdmissionEventId: null }] }]);
-    await expect(syncAccountProfile(tx, { userId: "account", changes: { avatarKey: null } })).rejects.toMatchObject({ statusCode: 409 });
-    expect(db.user.update).not.toHaveBeenCalled(); expect(db.player.updateMany).not.toHaveBeenCalled();
+    await expect(syncAccountProfile(tx, { userId: "account", changes: { avatarKey: null }, clubPreferences: { clubId: "club-a", playerId: "active", mixedSideOverride: MixedSide.UPPER } })).rejects.toMatchObject({ statusCode: 409 });
+    expect(db.user.update).not.toHaveBeenCalled(); expect(db.player.updateMany).not.toHaveBeenCalled(); expect(db.clubMember.update).not.toHaveBeenCalled();
   });
   it("checks photo concurrency before fanout and reports all superseded keys", async () => {
     const { db, tx } = setup();

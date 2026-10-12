@@ -26,8 +26,15 @@ describe("account profile settings", () => {
     expect((await patch({ name: "Updated" })).status).toBe(200);
     expect(mocks.sync).toHaveBeenCalledWith({}, expect.objectContaining({ userId: "account", changes: expect.objectContaining({ name: "Updated" }) }));
   });
-  it.each([{ elo: 900 }, { ownerUserId: "other" }, { email: "bad" }, {}])("rejects unsupported settings %j", async body => {
+  it.each([{ mixedSideOverride: "LOWER" }, { clubPreferences: { clubId: "a", playerId: "shared" } }, { elo: 900 }, { ownerUserId: "other" }, { email: "bad" }, {}])("rejects unsupported settings %j", async body => {
     expect((await patch(body)).status).toBe(400); expect(mocks.sync).not.toHaveBeenCalled();
+  });
+  it("accepts preference-only and combined identity saves with exact club context", async () => {
+    const clubPreferences = { clubId: "a", playerId: "shared", mixedSideOverride: "LOWER" };
+    expect((await patch({ clubPreferences })).status).toBe(200);
+    expect(mocks.sync).toHaveBeenLastCalledWith({}, expect.objectContaining({ userId: "account", clubPreferences, changes: { name: undefined, gender: undefined } }));
+    expect((await patch({ name: "New name", gender: "FEMALE", clubPreferences: { ...clubPreferences, mixedSideOverride: null } })).status).toBe(200);
+    expect(mocks.sync).toHaveBeenLastCalledWith({}, expect.objectContaining({ changes: { name: "New name", gender: "FEMALE" }, clubPreferences: { ...clubPreferences, mixedSideOverride: null } }));
   });
   it("authenticates quick access against the exact local membership", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "guest:shared", guestPlayerId: "shared", isQuickAccess: true, quickAccessClubId: "a" } });

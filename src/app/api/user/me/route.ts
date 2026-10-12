@@ -9,11 +9,12 @@ import { logAuditEvent } from "@/lib/serverAudit";
 import { nonretiredPlayer } from "@/lib/playerIdentity";
 import { admissionTransaction } from "@/lib/clubAdmissions";
 import { AccountProfileSyncError, syncAccountProfile } from "@/lib/accountProfileSync";
+import { deriveClubPairingPreferences } from "@/lib/clubPairingPreferences";
 import { z } from "zod";
 import type { PlayerGender, MixedSide } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
-const accountSelect = { id: true, email: true, name: true, avatarKey: true, gender: true, mixedSideOverride: true, isActive: true, selfNameChangedAt: true, selfGenderChangedAt: true, createdAt: true } as const;
+const accountSelect = { id: true, email: true, name: true, avatarKey: true, gender: true, isActive: true, selfNameChangedAt: true, selfGenderChangedAt: true, createdAt: true } as const;
 function accountPayload<T extends { avatarKey: string | null; selfNameChangedAt: Date | null; selfGenderChangedAt: Date | null }>(user: T, isAdmin: boolean) {
   return { ...serializeAvatarEntity(user), isClaimed: true, isQuickAccess: false, isAdmin, canRenameName: user.selfNameChangedAt === null, canChangeGender: user.selfGenderChangedAt === null };
 }
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
       const { id: playerId, name, avatarKey, gender } = owned[0].player;
       return serializeAvatarEntity({ id: playerId, name, avatarKey, gender, clubMemberships: owned.map(member => ({ clubId: member.clubId, club: member.club })) });
     });
-    const clubProfiles = memberships.map(member => serializeAvatarEntity({ memberId: member.id, clubId: member.clubId, clubName: member.club.name, playerId: member.playerId, name: member.player.name, avatarKey: member.player.avatarKey, status: member.status }));
+    const clubProfiles = memberships.map(member => serializeAvatarEntity({ memberId: member.id, clubId: member.clubId, clubName: member.club.name, playerId: member.playerId, name: member.player.name, avatarKey: member.player.avatarKey, status: member.status, gender: member.player.gender, ...deriveClubPairingPreferences(member) }));
     return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), players, clubProfiles });
   } catch (error) { logError("Load account", error); return safeErrorResponse(); }
 }
@@ -47,12 +48,12 @@ export async function PATCH(request: Request) {
     const limited = await rateLimit(request, "api:user:me:patch", { limit: 15, windowMs: 60000 }); if (limited) return limited;
     const session = await auth(); const userId = getSessionAccountId(session);
     if (!userId) return NextResponse.json({ error: "Sign in with an account to edit account settings" }, { status: 403 });
-    const parsed = z.object({ name: z.string().trim().min(1).max(100).optional(), gender: z.enum(["MALE", "FEMALE"]).optional(), mixedSideOverride: z.enum(["UPPER", "LOWER"]).nullable().optional() }).strict().safeParse(await request.json().catch(() => null));
+    const parsed = z.object({ name: z.string().trim().min(1).max(100).optional(), gender: z.enum(["MALE", "FEMALE"]).optional(), clubPreferences: z.object({ clubId: z.string().min(1), playerId: z.string().min(1), mixedSideOverride: z.enum(["UPPER", "LOWER"]).nullable() }).strict().optional() }).strict().safeParse(await request.json().catch(() => null));
     if (!parsed.success || !Object.keys(parsed.data).length) return NextResponse.json({ error: "Supply valid account settings" }, { status: 400 });
-    const result = await admissionTransaction(prisma, tx => syncAccountProfile(tx, { userId, changes: { ...parsed.data, gender: parsed.data.gender as PlayerGender | undefined, mixedSideOverride: parsed.data.mixedSideOverride as MixedSide | null | undefined } }));
+    const result = await admissionTransaction(prisma, tx => syncAccountProfile(tx, { userId, changes: { name: parsed.data.name, gender: parsed.data.gender as PlayerGender | undefined }, clubPreferences: parsed.data.clubPreferences as { clubId: string; playerId: string; mixedSideOverride: MixedSide | null } | undefined }));
     logAuditEvent({ action: "user.update_account", actor: { userId }, outcome: "success", request, target: { id: userId, type: "account" } });
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: accountSelect });
-    return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), synchronizedPlayerIds: result.playerIds });
+    return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), synchronizedPlayerIds: result.playerIds, ...(result.clubPreferences ? { clubPreferences: result.clubPreferences } : {}) });
   } catch (error) {
     if (error instanceof AccountProfileSyncError) return NextResponse.json({ error: error.message }, { status: error.statusCode });
     logError("Edit account", error); return safeErrorResponse();

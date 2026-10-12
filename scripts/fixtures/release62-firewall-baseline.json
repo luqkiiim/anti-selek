@@ -1,0 +1,594 @@
+[
+  {
+    "name": "Block legacy Preview database access",
+    "action": {
+      "mitigate": {
+        "action": "deny"
+      }
+    },
+    "active": true,
+    "description": "Deny existing Preview hosts that retained production credentials. Newly isolated Preview deployments use development Turso.",
+    "id": "rule_block_legacy_preview_database_access_rnoMzQ",
+    "conditionGroup": [
+      {
+        "conditions": [
+          {
+            "type": "environment",
+            "op": "eq",
+            "value": "preview"
+          },
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-oqo03ebh7-luqkiiims-projects.vercel.app",
+              "anti-selek-dyqrd0jd9-luqkiiims-projects.vercel.app",
+              "anti-selek-28o1i8e7u-luqkiiims-projects.vercel.app",
+              "anti-selek-2t897sail-luqkiiims-projects.vercel.app",
+              "anti-selek-p6id43gq3-luqkiiims-projects.vercel.app",
+              "anti-selek-lizh2godd-luqkiiims-projects.vercel.app",
+              "anti-selek-h99sh831w-luqkiiims-projects.vercel.app",
+              "anti-selek-8bpdpfyda-luqkiiims-projects.vercel.app",
+              "anti-selek-5u8yy100f-luqkiiims-projects.vercel.app",
+              "anti-selek-95ollp8n4-luqkiiims-projects.vercel.app",
+              "anti-selek-4exoyhpib-luqkiiims-projects.vercel.app",
+              "anti-selek-nmg8ves2j-luqkiiims-projects.vercel.app",
+              "anti-selek-979hieslh-luqkiiims-projects.vercel.app",
+              "anti-selek-2l4i9li3p-luqkiiims-projects.vercel.app",
+              "anti-selek-jn9nk34nm-luqkiiims-projects.vercel.app",
+              "anti-selek-mdz3yh34d-luqkiiims-projects.vercel.app",
+              "anti-selek-l5xycu6cp-luqkiiims-projects.vercel.app",
+              "anti-selek-7fl30hq0b-luqkiiims-projects.vercel.app",
+              "anti-selek-e06bcd5cl-luqkiiims-projects.vercel.app",
+              "anti-selek-gtianiow0-luqkiiims-projects.vercel.app",
+              "anti-selek-85c6w0ein-luqkiiims-projects.vercel.app",
+              "anti-selek-8x7ghyllo-luqkiiims-projects.vercel.app",
+              "anti-selek-97yu0wfc0-luqkiiims-projects.vercel.app",
+              "anti-selek-oysfleh74-luqkiiims-projects.vercel.app",
+              "anti-selek-4l258wyjj-luqkiiims-projects.vercel.app",
+              "anti-selek-81m201k2u-luqkiiims-projects.vercel.app",
+              "anti-selek-lbvkxrw4n-luqkiiims-projects.vercel.app",
+              "anti-selek-h7n83e010-luqkiiims-projects.vercel.app",
+              "anti-selek-czhstxwx3-luqkiiims-projects.vercel.app",
+              "anti-selek-ddxiqy9fx-luqkiiims-projects.vercel.app",
+              "anti-selek-k4drqzcec-luqkiiims-projects.vercel.app",
+              "anti-selek-6ixvqfurd-luqkiiims-projects.vercel.app",
+              "anti-selek-crwxgknqc-luqkiiims-projects.vercel.app",
+              "anti-selek-m9mikmob2-luqkiiims-projects.vercel.app",
+              "anti-selek-azpkhdqvf-luqkiiims-projects.vercel.app",
+              "anti-selek-8z6mluug6-luqkiiims-projects.vercel.app",
+              "anti-selek-motlk8zfa-luqkiiims-projects.vercel.app",
+              "anti-selek-p3pep5t33-luqkiiims-projects.vercel.app",
+              "anti-selek-9hg1jnjs6-luqkiiims-projects.vercel.app",
+              "anti-selek-hdagpdnb5-luqkiiims-projects.vercel.app",
+              "anti-selek-8ae3vulxt-luqkiiims-projects.vercel.app",
+              "anti-selek-44bb7a35z-luqkiiims-projects.vercel.app",
+              "anti-selek-gqmo1weqa-luqkiiims-projects.vercel.app",
+              "anti-selek-zwc98mnig-luqkiiims-projects.vercel.app",
+              "anti-selek-pe6evomi9-luqkiiims-projects.vercel.app",
+              "anti-selek-ip43c9uye-luqkiiims-projects.vercel.app",
+              "anti-selek-mb45bkw0w-luqkiiims-projects.vercel.app",
+              "anti-selek-gnctjk0ls-luqkiiims-projects.vercel.app",
+              "anti-selek-fvu8cm2ei-luqkiiims-projects.vercel.app",
+              "anti-selek-d4uh8c6g4-luqkiiims-projects.vercel.app",
+              "anti-selek-137gv45mf-luqkiiims-projects.vercel.app",
+              "anti-selek-fe87fl5s7-luqkiiims-projects.vercel.app",
+              "anti-selek-6grdpok63-luqkiiims-projects.vercel.app",
+              "anti-selek-m6c2vvmco-luqkiiims-projects.vercel.app",
+              "anti-selek-4wt7wl3dy-luqkiiims-projects.vercel.app",
+              "anti-selek-pcuaxmzpq-luqkiiims-projects.vercel.app",
+              "anti-selek-3x2b3b8c3-luqkiiims-projects.vercel.app",
+              "anti-selek-3xpubr265-luqkiiims-projects.vercel.app",
+              "anti-selek-nehste34k-luqkiiims-projects.vercel.app",
+              "anti-selek-ow86ps733-luqkiiims-projects.vercel.app",
+              "anti-selek-4fzcqbtab-luqkiiims-projects.vercel.app",
+              "anti-selek-cfvawpis2-luqkiiims-projects.vercel.app",
+              "anti-selek-1g1p3lfv7-luqkiiims-projects.vercel.app",
+              "anti-selek-94r2bmyla-luqkiiims-projects.vercel.app",
+              "anti-selek-mfewc6tnp-luqkiiims-projects.vercel.app",
+              "anti-selek-gd8zcwetn-luqkiiims-projects.vercel.app",
+              "anti-selek-btobgfhzf-luqkiiims-projects.vercel.app",
+              "anti-selek-en9rc0127-luqkiiims-projects.vercel.app",
+              "anti-selek-fb9genw9x-luqkiiims-projects.vercel.app",
+              "anti-selek-ghanpvan6-luqkiiims-projects.vercel.app",
+              "anti-selek-8u065ewkt-luqkiiims-projects.vercel.app",
+              "anti-selek-8ytbnqjwv-luqkiiims-projects.vercel.app",
+              "anti-selek-kk2jx8gnr-luqkiiims-projects.vercel.app",
+              "anti-selek-i1hzpjp16-luqkiiims-projects.vercel.app",
+              "anti-selek-9t7cx72gb-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      },
+      {
+        "conditions": [
+          {
+            "type": "environment",
+            "op": "eq",
+            "value": "preview"
+          },
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-2nrqkmwxv-luqkiiims-projects.vercel.app",
+              "anti-selek-8of7lodna-luqkiiims-projects.vercel.app",
+              "anti-selek-lpb6ket30-luqkiiims-projects.vercel.app",
+              "anti-selek-5irxsdzy0-luqkiiims-projects.vercel.app",
+              "anti-selek-lqdn9xri2-luqkiiims-projects.vercel.app",
+              "anti-selek-m04sci4lc-luqkiiims-projects.vercel.app",
+              "anti-selek-5h69r52w5-luqkiiims-projects.vercel.app",
+              "anti-selek-949r0vm97-luqkiiims-projects.vercel.app",
+              "anti-selek-7jhvnxx41-luqkiiims-projects.vercel.app",
+              "anti-selek-68gsmkgmv-luqkiiims-projects.vercel.app",
+              "anti-selek-nhxqqnk5p-luqkiiims-projects.vercel.app",
+              "anti-selek-hnfoh1n72-luqkiiims-projects.vercel.app",
+              "anti-selek-gdb9w32fs-luqkiiims-projects.vercel.app",
+              "anti-selek-li5vbo69u-luqkiiims-projects.vercel.app",
+              "anti-selek-dozxy2m35-luqkiiims-projects.vercel.app",
+              "anti-selek-cpbfo80er-luqkiiims-projects.vercel.app",
+              "anti-selek-f0dzgsjuo-luqkiiims-projects.vercel.app",
+              "anti-selek-rbq2iubu4-luqkiiims-projects.vercel.app",
+              "anti-selek-cxuierr20-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-balanced-mixed-rotation-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-balanced-mixed-variety-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-signin-theme-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-absolute-rating-gap-50-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-prototype-first-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-prototype-app-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-play-collective-d27ebf-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-mobile-ux-overhaul-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-owner-page-preview-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-limit-balanced-streaks-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-ipad-iphone-navi-62a3a2-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-interclub-collab-format-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-exclude-guests-f-7a7a96-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-fix-tutorial-pla-d02239-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-avatar-upload-er-fec2b9-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-tutorial-playground-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-node-24-support-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-offline-identity-links-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-player-settings-rename-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-partner-chemistr-e06adf-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-casual-single-co-f5f6a0-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-social-mix-forma-30e344-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-host-setup-cleanup-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      }
+    ],
+    "valid": true,
+    "validationErrors": null
+  },
+  {
+    "name": "Block pre-Phase1 Production deployments",
+    "action": {
+      "mitigate": {
+        "action": "deny"
+      }
+    },
+    "active": true,
+    "description": "Keep all legacy Anti-Selek Production deployment hosts denied against the migrated Account/Player schema. Current Production aliases route to reviewed Phase 1 code.",
+    "id": "rule_block_pre_phase1_production_deployments_aGIB0C",
+    "conditionGroup": [
+      {
+        "conditions": [
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-137gv45mf-luqkiiims-projects.vercel.app",
+              "anti-selek-1g1p3lfv7-luqkiiims-projects.vercel.app",
+              "anti-selek-28o1i8e7u-luqkiiims-projects.vercel.app",
+              "anti-selek-2jpc0yckr-luqkiiims-projects.vercel.app",
+              "anti-selek-2l4i9li3p-luqkiiims-projects.vercel.app",
+              "anti-selek-2nrqkmwxv-luqkiiims-projects.vercel.app",
+              "anti-selek-2t897sail-luqkiiims-projects.vercel.app",
+              "anti-selek-2vcqy8vrg-luqkiiims-projects.vercel.app",
+              "anti-selek-2x6dz1yfx-luqkiiims-projects.vercel.app",
+              "anti-selek-32xqselhv-luqkiiims-projects.vercel.app",
+              "anti-selek-3i4xpydan-luqkiiims-projects.vercel.app",
+              "anti-selek-3x2b3b8c3-luqkiiims-projects.vercel.app",
+              "anti-selek-3xpubr265-luqkiiims-projects.vercel.app",
+              "anti-selek-44bb7a35z-luqkiiims-projects.vercel.app",
+              "anti-selek-479n796co-luqkiiims-projects.vercel.app",
+              "anti-selek-489atfx5p-luqkiiims-projects.vercel.app",
+              "anti-selek-4exoyhpib-luqkiiims-projects.vercel.app",
+              "anti-selek-4fzcqbtab-luqkiiims-projects.vercel.app",
+              "anti-selek-4l258wyjj-luqkiiims-projects.vercel.app",
+              "anti-selek-4sa1d1bw8-luqkiiims-projects.vercel.app",
+              "anti-selek-4wt7wl3dy-luqkiiims-projects.vercel.app",
+              "anti-selek-5h69r52w5-luqkiiims-projects.vercel.app",
+              "anti-selek-5irxsdzy0-luqkiiims-projects.vercel.app",
+              "anti-selek-5u8yy100f-luqkiiims-projects.vercel.app",
+              "anti-selek-68gsmkgmv-luqkiiims-projects.vercel.app",
+              "anti-selek-6grdpok63-luqkiiims-projects.vercel.app",
+              "anti-selek-6ixvqfurd-luqkiiims-projects.vercel.app",
+              "anti-selek-74onzvf1v-luqkiiims-projects.vercel.app",
+              "anti-selek-7fl30hq0b-luqkiiims-projects.vercel.app",
+              "anti-selek-7jhvnxx41-luqkiiims-projects.vercel.app",
+              "anti-selek-7vbfe7dg9-luqkiiims-projects.vercel.app",
+              "anti-selek-7xp0tvije-luqkiiims-projects.vercel.app",
+              "anti-selek-81m201k2u-luqkiiims-projects.vercel.app",
+              "anti-selek-85c6w0ein-luqkiiims-projects.vercel.app",
+              "anti-selek-8ae3vulxt-luqkiiims-projects.vercel.app",
+              "anti-selek-8bpdpfyda-luqkiiims-projects.vercel.app",
+              "anti-selek-8of7lodna-luqkiiims-projects.vercel.app",
+              "anti-selek-8u065ewkt-luqkiiims-projects.vercel.app",
+              "anti-selek-8x7ghyllo-luqkiiims-projects.vercel.app",
+              "anti-selek-8ytbnqjwv-luqkiiims-projects.vercel.app",
+              "anti-selek-8z6mluug6-luqkiiims-projects.vercel.app",
+              "anti-selek-949r0vm97-luqkiiims-projects.vercel.app",
+              "anti-selek-94r2bmyla-luqkiiims-projects.vercel.app",
+              "anti-selek-95hvm3hzl-luqkiiims-projects.vercel.app",
+              "anti-selek-95ollp8n4-luqkiiims-projects.vercel.app",
+              "anti-selek-979hieslh-luqkiiims-projects.vercel.app",
+              "anti-selek-97yu0wfc0-luqkiiims-projects.vercel.app",
+              "anti-selek-9hg1jnjs6-luqkiiims-projects.vercel.app",
+              "anti-selek-9j16jt7ra-luqkiiims-projects.vercel.app",
+              "anti-selek-9t7cx72gb-luqkiiims-projects.vercel.app",
+              "anti-selek-9uhm7ndj8-luqkiiims-projects.vercel.app",
+              "anti-selek-aorfa032e-luqkiiims-projects.vercel.app",
+              "anti-selek-auquyeq4i-luqkiiims-projects.vercel.app",
+              "anti-selek-azpkhdqvf-luqkiiims-projects.vercel.app",
+              "anti-selek-btobgfhzf-luqkiiims-projects.vercel.app",
+              "anti-selek-bx0opyne9-luqkiiims-projects.vercel.app",
+              "anti-selek-cfvawpis2-luqkiiims-projects.vercel.app",
+              "anti-selek-chi0tpyzx-luqkiiims-projects.vercel.app",
+              "anti-selek-cir705hi6-luqkiiims-projects.vercel.app",
+              "anti-selek-cjsruh1u6-luqkiiims-projects.vercel.app",
+              "anti-selek-cm3zfozjg-luqkiiims-projects.vercel.app",
+              "anti-selek-crwxgknqc-luqkiiims-projects.vercel.app",
+              "anti-selek-czhstxwx3-luqkiiims-projects.vercel.app",
+              "anti-selek-d22ife56b-luqkiiims-projects.vercel.app",
+              "anti-selek-d4uh8c6g4-luqkiiims-projects.vercel.app",
+              "anti-selek-d6vob8a0b-luqkiiims-projects.vercel.app",
+              "anti-selek-ddxiqy9fx-luqkiiims-projects.vercel.app",
+              "anti-selek-dhj75xpbx-luqkiiims-projects.vercel.app",
+              "anti-selek-dozxy2m35-luqkiiims-projects.vercel.app",
+              "anti-selek-dyqrd0jd9-luqkiiims-projects.vercel.app",
+              "anti-selek-e06bcd5cl-luqkiiims-projects.vercel.app",
+              "anti-selek-edq7rfix1-luqkiiims-projects.vercel.app",
+              "anti-selek-en9rc0127-luqkiiims-projects.vercel.app",
+              "anti-selek-fb9genw9x-luqkiiims-projects.vercel.app",
+              "anti-selek-fe87fl5s7-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      },
+      {
+        "conditions": [
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-fvu8cm2ei-luqkiiims-projects.vercel.app",
+              "anti-selek-g6k54cmvj-luqkiiims-projects.vercel.app",
+              "anti-selek-g7975otx6-luqkiiims-projects.vercel.app",
+              "anti-selek-gd8zcwetn-luqkiiims-projects.vercel.app",
+              "anti-selek-gdb9w32fs-luqkiiims-projects.vercel.app",
+              "anti-selek-ghanpvan6-luqkiiims-projects.vercel.app",
+              "anti-selek-gi6l3u7v4-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-absolute-rating-gap-50-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-avatar-upload-er-fec2b9-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-balanced-benefic-19511b-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-balanced-mixed-rotation-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-balanced-mixed-variety-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-exclude-guests-f-7a7a96-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-fix-tutorial-pla-d02239-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-host-setup-cleanup-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-interclub-collab-format-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-ipad-iphone-navi-62a3a2-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-limit-balanced-streaks-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-mobile-ux-overhaul-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-node-24-support-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-offline-identity-links-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-owner-page-preview-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-partner-chemistr-e06adf-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-play-collective-d27ebf-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-player-identity-phase1-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-player-settings-rename-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-prototype-app-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-prototype-first-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-signin-theme-luqkiiims-projects.vercel.app",
+              "anti-selek-git-codex-tutorial-playground-luqkiiims-projects.vercel.app",
+              "anti-selek-gnctjk0ls-luqkiiims-projects.vercel.app",
+              "anti-selek-gpdxd7wgr-luqkiiims-projects.vercel.app",
+              "anti-selek-gqmo1weqa-luqkiiims-projects.vercel.app",
+              "anti-selek-gtianiow0-luqkiiims-projects.vercel.app",
+              "anti-selek-h7n83e010-luqkiiims-projects.vercel.app",
+              "anti-selek-h99sh831w-luqkiiims-projects.vercel.app",
+              "anti-selek-hdagpdnb5-luqkiiims-projects.vercel.app",
+              "anti-selek-hnfoh1n72-luqkiiims-projects.vercel.app",
+              "anti-selek-i1hzpjp16-luqkiiims-projects.vercel.app",
+              "anti-selek-i53es4itu-luqkiiims-projects.vercel.app",
+              "anti-selek-il6cs0ov8-luqkiiims-projects.vercel.app",
+              "anti-selek-ip43c9uye-luqkiiims-projects.vercel.app",
+              "anti-selek-j2ya4xdkx-luqkiiims-projects.vercel.app",
+              "anti-selek-jn9nk34nm-luqkiiims-projects.vercel.app",
+              "anti-selek-k4drqzcec-luqkiiims-projects.vercel.app",
+              "anti-selek-kcmynd87b-luqkiiims-projects.vercel.app",
+              "anti-selek-kk2jx8gnr-luqkiiims-projects.vercel.app",
+              "anti-selek-l5xycu6cp-luqkiiims-projects.vercel.app",
+              "anti-selek-l67dfwzz6-luqkiiims-projects.vercel.app",
+              "anti-selek-l6dx998cz-luqkiiims-projects.vercel.app",
+              "anti-selek-l7l6enf6r-luqkiiims-projects.vercel.app",
+              "anti-selek-l84ov4eno-luqkiiims-projects.vercel.app",
+              "anti-selek-layq9sr5j-luqkiiims-projects.vercel.app",
+              "anti-selek-lbvkxrw4n-luqkiiims-projects.vercel.app",
+              "anti-selek-ldkl1uue7-luqkiiims-projects.vercel.app",
+              "anti-selek-li5vbo69u-luqkiiims-projects.vercel.app",
+              "anti-selek-liganerve-luqkiiims-projects.vercel.app",
+              "anti-selek-lizh2godd-luqkiiims-projects.vercel.app",
+              "anti-selek-lpb6ket30-luqkiiims-projects.vercel.app",
+              "anti-selek-lqdn9xri2-luqkiiims-projects.vercel.app",
+              "anti-selek-lzm1bbd52-luqkiiims-projects.vercel.app",
+              "anti-selek-m04sci4lc-luqkiiims-projects.vercel.app",
+              "anti-selek-m402wyfbk-luqkiiims-projects.vercel.app",
+              "anti-selek-m6c2vvmco-luqkiiims-projects.vercel.app",
+              "anti-selek-m9mikmob2-luqkiiims-projects.vercel.app",
+              "anti-selek-mb45bkw0w-luqkiiims-projects.vercel.app",
+              "anti-selek-mdz3yh34d-luqkiiims-projects.vercel.app",
+              "anti-selek-mfewc6tnp-luqkiiims-projects.vercel.app",
+              "anti-selek-motlk8zfa-luqkiiims-projects.vercel.app",
+              "anti-selek-mrt11bl08-luqkiiims-projects.vercel.app",
+              "anti-selek-nehste34k-luqkiiims-projects.vercel.app",
+              "anti-selek-nhxqqnk5p-luqkiiims-projects.vercel.app",
+              "anti-selek-nmg8ves2j-luqkiiims-projects.vercel.app",
+              "anti-selek-o30kt6bn8-luqkiiims-projects.vercel.app",
+              "anti-selek-oqo03ebh7-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      },
+      {
+        "conditions": [
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-otwq41ctb-luqkiiims-projects.vercel.app",
+              "anti-selek-ow86ps733-luqkiiims-projects.vercel.app",
+              "anti-selek-oysfleh74-luqkiiims-projects.vercel.app",
+              "anti-selek-p3pep5t33-luqkiiims-projects.vercel.app",
+              "anti-selek-p6id43gq3-luqkiiims-projects.vercel.app",
+              "anti-selek-pcuaxmzpq-luqkiiims-projects.vercel.app",
+              "anti-selek-pe6evomi9-luqkiiims-projects.vercel.app",
+              "anti-selek-q3pg40qbb-luqkiiims-projects.vercel.app",
+              "anti-selek-qjjd62mh4-luqkiiims-projects.vercel.app",
+              "anti-selek-zp0x1j5qb-luqkiiims-projects.vercel.app",
+              "anti-selek-zwc98mnig-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      }
+    ],
+    "valid": true,
+    "validationErrors": null
+  },
+  {
+    "name": "Block production generations before independent club profiles",
+    "action": {
+      "mitigate": {
+        "action": "deny"
+      }
+    },
+    "active": true,
+    "id": "rule_temporary_ownership_release_maintenance_6EdivN",
+    "conditionGroup": [
+      {
+        "conditions": [
+          {
+            "type": "path",
+            "op": "pre",
+            "value": "/"
+          },
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-137gv45mf-luqkiiims-projects.vercel.app",
+              "anti-selek-1g1p3lfv7-luqkiiims-projects.vercel.app",
+              "anti-selek-1xn9oqqpr-luqkiiims-projects.vercel.app",
+              "anti-selek-28o1i8e7u-luqkiiims-projects.vercel.app",
+              "anti-selek-2jpc0yckr-luqkiiims-projects.vercel.app",
+              "anti-selek-2l4i9li3p-luqkiiims-projects.vercel.app",
+              "anti-selek-2nrqkmwxv-luqkiiims-projects.vercel.app",
+              "anti-selek-2t897sail-luqkiiims-projects.vercel.app",
+              "anti-selek-2vcqy8vrg-luqkiiims-projects.vercel.app",
+              "anti-selek-2x6dz1yfx-luqkiiims-projects.vercel.app",
+              "anti-selek-3i4xpydan-luqkiiims-projects.vercel.app",
+              "anti-selek-3x2b3b8c3-luqkiiims-projects.vercel.app",
+              "anti-selek-3xpubr265-luqkiiims-projects.vercel.app",
+              "anti-selek-44bb7a35z-luqkiiims-projects.vercel.app",
+              "anti-selek-479n796co-luqkiiims-projects.vercel.app",
+              "anti-selek-489atfx5p-luqkiiims-projects.vercel.app",
+              "anti-selek-4exoyhpib-luqkiiims-projects.vercel.app",
+              "anti-selek-4fzcqbtab-luqkiiims-projects.vercel.app",
+              "anti-selek-4l258wyjj-luqkiiims-projects.vercel.app",
+              "anti-selek-4sa1d1bw8-luqkiiims-projects.vercel.app",
+              "anti-selek-4wt7wl3dy-luqkiiims-projects.vercel.app",
+              "anti-selek-5h69r52w5-luqkiiims-projects.vercel.app",
+              "anti-selek-5irxsdzy0-luqkiiims-projects.vercel.app",
+              "anti-selek-5jv4rr5qu-luqkiiims-projects.vercel.app",
+              "anti-selek-5m45fb7q3-luqkiiims-projects.vercel.app",
+              "anti-selek-5u8yy100f-luqkiiims-projects.vercel.app",
+              "anti-selek-68gsmkgmv-luqkiiims-projects.vercel.app",
+              "anti-selek-6grdpok63-luqkiiims-projects.vercel.app",
+              "anti-selek-6ixvqfurd-luqkiiims-projects.vercel.app",
+              "anti-selek-6jvx8o59b-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      },
+      {
+        "conditions": [
+          {
+            "type": "path",
+            "op": "pre",
+            "value": "/"
+          },
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-74onzvf1v-luqkiiims-projects.vercel.app",
+              "anti-selek-7fl30hq0b-luqkiiims-projects.vercel.app",
+              "anti-selek-7jhvnxx41-luqkiiims-projects.vercel.app",
+              "anti-selek-7vbfe7dg9-luqkiiims-projects.vercel.app",
+              "anti-selek-7xp0tvije-luqkiiims-projects.vercel.app",
+              "anti-selek-81m201k2u-luqkiiims-projects.vercel.app",
+              "anti-selek-85c6w0ein-luqkiiims-projects.vercel.app",
+              "anti-selek-8ae3vulxt-luqkiiims-projects.vercel.app",
+              "anti-selek-8bpdpfyda-luqkiiims-projects.vercel.app",
+              "anti-selek-8of7lodna-luqkiiims-projects.vercel.app",
+              "anti-selek-8u065ewkt-luqkiiims-projects.vercel.app",
+              "anti-selek-8x7ghyllo-luqkiiims-projects.vercel.app",
+              "anti-selek-8ytbnqjwv-luqkiiims-projects.vercel.app",
+              "anti-selek-8z6mluug6-luqkiiims-projects.vercel.app",
+              "anti-selek-949r0vm97-luqkiiims-projects.vercel.app",
+              "anti-selek-94r2bmyla-luqkiiims-projects.vercel.app",
+              "anti-selek-95ollp8n4-luqkiiims-projects.vercel.app",
+              "anti-selek-979hieslh-luqkiiims-projects.vercel.app",
+              "anti-selek-97yu0wfc0-luqkiiims-projects.vercel.app",
+              "anti-selek-9hg1jnjs6-luqkiiims-projects.vercel.app",
+              "anti-selek-9j16jt7ra-luqkiiims-projects.vercel.app",
+              "anti-selek-9t7cx72gb-luqkiiims-projects.vercel.app",
+              "anti-selek-9uhm7ndj8-luqkiiims-projects.vercel.app",
+              "anti-selek-auquyeq4i-luqkiiims-projects.vercel.app",
+              "anti-selek-azpkhdqvf-luqkiiims-projects.vercel.app",
+              "anti-selek-beyne8kvo-luqkiiims-projects.vercel.app",
+              "anti-selek-btobgfhzf-luqkiiims-projects.vercel.app",
+              "anti-selek-cfvawpis2-luqkiiims-projects.vercel.app",
+              "anti-selek-cir705hi6-luqkiiims-projects.vercel.app",
+              "anti-selek-cjsruh1u6-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      },
+      {
+        "conditions": [
+          {
+            "type": "path",
+            "op": "pre",
+            "value": "/"
+          },
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-crwxgknqc-luqkiiims-projects.vercel.app",
+              "anti-selek-czhstxwx3-luqkiiims-projects.vercel.app",
+              "anti-selek-d4uh8c6g4-luqkiiims-projects.vercel.app",
+              "anti-selek-d6vob8a0b-luqkiiims-projects.vercel.app",
+              "anti-selek-ddxiqy9fx-luqkiiims-projects.vercel.app",
+              "anti-selek-dozxy2m35-luqkiiims-projects.vercel.app",
+              "anti-selek-dyqrd0jd9-luqkiiims-projects.vercel.app",
+              "anti-selek-e06bcd5cl-luqkiiims-projects.vercel.app",
+              "anti-selek-eke7u5mcr-luqkiiims-projects.vercel.app",
+              "anti-selek-en9rc0127-luqkiiims-projects.vercel.app",
+              "anti-selek-fb9genw9x-luqkiiims-projects.vercel.app",
+              "anti-selek-fe87fl5s7-luqkiiims-projects.vercel.app",
+              "anti-selek-fucfoi36b-luqkiiims-projects.vercel.app",
+              "anti-selek-fvu8cm2ei-luqkiiims-projects.vercel.app",
+              "anti-selek-g6k54cmvj-luqkiiims-projects.vercel.app",
+              "anti-selek-g7975otx6-luqkiiims-projects.vercel.app",
+              "anti-selek-gd8zcwetn-luqkiiims-projects.vercel.app",
+              "anti-selek-gdb9w32fs-luqkiiims-projects.vercel.app",
+              "anti-selek-ghanpvan6-luqkiiims-projects.vercel.app",
+              "anti-selek-gi6l3u7v4-luqkiiims-projects.vercel.app",
+              "anti-selek-gl6szqwph-luqkiiims-projects.vercel.app",
+              "anti-selek-gnctjk0ls-luqkiiims-projects.vercel.app",
+              "anti-selek-gpdxd7wgr-luqkiiims-projects.vercel.app",
+              "anti-selek-gqmo1weqa-luqkiiims-projects.vercel.app",
+              "anti-selek-gtianiow0-luqkiiims-projects.vercel.app",
+              "anti-selek-h7n83e010-luqkiiims-projects.vercel.app",
+              "anti-selek-h99sh831w-luqkiiims-projects.vercel.app",
+              "anti-selek-hdagpdnb5-luqkiiims-projects.vercel.app",
+              "anti-selek-hnfoh1n72-luqkiiims-projects.vercel.app",
+              "anti-selek-i1hzpjp16-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      },
+      {
+        "conditions": [
+          {
+            "type": "path",
+            "op": "pre",
+            "value": "/"
+          },
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-i53es4itu-luqkiiims-projects.vercel.app",
+              "anti-selek-ip43c9uye-luqkiiims-projects.vercel.app",
+              "anti-selek-j2ya4xdkx-luqkiiims-projects.vercel.app",
+              "anti-selek-jn9nk34nm-luqkiiims-projects.vercel.app",
+              "anti-selek-k4drqzcec-luqkiiims-projects.vercel.app",
+              "anti-selek-kcmynd87b-luqkiiims-projects.vercel.app",
+              "anti-selek-kk2jx8gnr-luqkiiims-projects.vercel.app",
+              "anti-selek-l5xycu6cp-luqkiiims-projects.vercel.app",
+              "anti-selek-l67dfwzz6-luqkiiims-projects.vercel.app",
+              "anti-selek-l6dx998cz-luqkiiims-projects.vercel.app",
+              "anti-selek-l84ov4eno-luqkiiims-projects.vercel.app",
+              "anti-selek-layq9sr5j-luqkiiims-projects.vercel.app",
+              "anti-selek-lbvkxrw4n-luqkiiims-projects.vercel.app",
+              "anti-selek-li5vbo69u-luqkiiims-projects.vercel.app",
+              "anti-selek-liganerve-luqkiiims-projects.vercel.app",
+              "anti-selek-lizh2godd-luqkiiims-projects.vercel.app",
+              "anti-selek-lpb6ket30-luqkiiims-projects.vercel.app",
+              "anti-selek-lqdn9xri2-luqkiiims-projects.vercel.app",
+              "anti-selek-lzm1bbd52-luqkiiims-projects.vercel.app",
+              "anti-selek-m04sci4lc-luqkiiims-projects.vercel.app",
+              "anti-selek-m402wyfbk-luqkiiims-projects.vercel.app",
+              "anti-selek-m6c2vvmco-luqkiiims-projects.vercel.app",
+              "anti-selek-m9mikmob2-luqkiiims-projects.vercel.app",
+              "anti-selek-mb45bkw0w-luqkiiims-projects.vercel.app",
+              "anti-selek-mdz3yh34d-luqkiiims-projects.vercel.app",
+              "anti-selek-mfewc6tnp-luqkiiims-projects.vercel.app",
+              "anti-selek-motlk8zfa-luqkiiims-projects.vercel.app",
+              "anti-selek-mrt11bl08-luqkiiims-projects.vercel.app",
+              "anti-selek-nehste34k-luqkiiims-projects.vercel.app",
+              "anti-selek-nhxqqnk5p-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      },
+      {
+        "conditions": [
+          {
+            "type": "path",
+            "op": "pre",
+            "value": "/"
+          },
+          {
+            "type": "host",
+            "op": "inc",
+            "value": [
+              "anti-selek-nmg8ves2j-luqkiiims-projects.vercel.app",
+              "anti-selek-o30kt6bn8-luqkiiims-projects.vercel.app",
+              "anti-selek-og8awouph-luqkiiims-projects.vercel.app",
+              "anti-selek-oqo03ebh7-luqkiiims-projects.vercel.app",
+              "anti-selek-otwq41ctb-luqkiiims-projects.vercel.app",
+              "anti-selek-ow86ps733-luqkiiims-projects.vercel.app",
+              "anti-selek-oysfleh74-luqkiiims-projects.vercel.app",
+              "anti-selek-p3pep5t33-luqkiiims-projects.vercel.app",
+              "anti-selek-p6id43gq3-luqkiiims-projects.vercel.app",
+              "anti-selek-pcuaxmzpq-luqkiiims-projects.vercel.app",
+              "anti-selek-pe6evomi9-luqkiiims-projects.vercel.app",
+              "anti-selek-q3pg40qbb-luqkiiims-projects.vercel.app",
+              "anti-selek-qjjd62mh4-luqkiiims-projects.vercel.app",
+              "anti-selek-zp0x1j5qb-luqkiiims-projects.vercel.app",
+              "anti-selek-zwc98mnig-luqkiiims-projects.vercel.app"
+            ]
+          }
+        ]
+      }
+    ],
+    "valid": true,
+    "validationErrors": null
+  }
+]

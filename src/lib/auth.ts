@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { isGlobalClubViewerEmail } from "@/lib/globalClubViewer";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -186,6 +187,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               email: null,
               name: match.user.name,
               isAdmin: false,
+              canBrowseAllClubs: false,
               isQuickAccess: true,
               quickAccessClubId: match.club.id,
               quickAccessCommunityId: match.club.id,
@@ -334,6 +336,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             email: resolvedEmail,
             name: user.name,
             isAdmin,
+            canBrowseAllClubs: isGlobalClubViewerEmail(resolvedEmail),
           };
         } catch (error) {
           logAuditEvent({
@@ -384,6 +387,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
         if (!guest || guest.archivedAt || guest.retiredByAdmissionEventId || guest.ownerUserId !== null || !guest.player.isActive) return null;
         token.isAdmin = false;
+        token.canBrowseAllClubs = false;
       } else {
         if (typeof token.id !== "string") return null;
         const account = await prisma.user.findUnique({ where: { id: token.id } });
@@ -391,6 +395,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.email = account.email;
         token.name = account.name;
         token.isAdmin = isGlobalAdminEmail(account.email);
+        token.canBrowseAllClubs = isGlobalClubViewerEmail(account.email);
         token.guestPlayerId = null;
         token.quickAccessClubId = null;
         if (trigger === "update" && typeof session?.name === "string") token.name = account.name;
@@ -408,6 +413,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.email =
           typeof token.email === "string" ? token.email : "";
         session.user.isAdmin = !!token.isAdmin;
+        session.user.canBrowseAllClubs = !token.isQuickAccess && !!token.canBrowseAllClubs;
         session.user.isQuickAccess = !!token.isQuickAccess;
         session.user.quickAccessClubId =
           typeof token.quickAccessClubId === "string"

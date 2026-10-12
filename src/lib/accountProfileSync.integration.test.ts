@@ -61,13 +61,52 @@ it("enforces canonical once-only name and gender limits transactionally and pres
   await expect(transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { gender: PlayerGender.MALE } }))).rejects.toMatchObject({ statusCode: 409 });
   expect(await db.user.findUniqueOrThrow({ where: { id: "owner" } })).toEqual(after);
   expect(await history()).toEqual(before);
-  expect(await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } })).toMatchObject({ name: "Renamed", gender: "FEMALE", avatarKey: "legacy-photo", partnerPreference: "FEMALE_FLEX" });
+  expect(await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } })).toMatchObject({ name: "Renamed", gender: "FEMALE", avatarKey: "legacy-photo", partnerPreference: "OPEN" });
 });
-it("normalizes only edited Mixed preferences and checks avatar concurrency before mutation", async () => {
+it("saves a selected club choice with locked identity, clears to default and preserves shared profiles and history", async () => {
+  await db.user.update({ where: { id: "owner" }, data: { selfNameChangedAt: new Date(), selfGenderChangedAt: new Date() } });
+  const account = await db.user.findUniqueOrThrow({ where: { id: "owner" } });
+  const shared = await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } });
   const before = await history();
-  await transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { mixedSideOverride: MixedSide.LOWER } }));
-  expect(await db.user.findUniqueOrThrow({ where: { id: "owner" } })).toMatchObject({ name: "Original", gender: "MALE", avatarKey: "old-avatar", mixedSideOverride: "LOWER", selfNameChangedAt: null, selfGenderChangedAt: null });
-  expect(await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } })).toMatchObject({ name: "Legacy Name", avatarKey: "legacy-photo", mixedSideOverride: "LOWER", partnerPreference: "OPEN" });
-  await expect(transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { avatarKey: null }, expectedAvatarKey: "stale" }))).rejects.toMatchObject({ statusCode: 409 });
+  const result = await transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: {}, clubPreferences: { clubId: "club-b", playerId: "legacy-shared", mixedSideOverride: MixedSide.LOWER } }));
+  expect(result.clubPreferences).toEqual({ clubId: "club-b", playerId: "legacy-shared", mixedSideOverride: "LOWER", partnerPreference: "OPEN" });
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "legacy-b" } })).toMatchObject({ mixedSideOverride: "LOWER" });
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "legacy-a" } })).toMatchObject({ mixedSideOverride: null });
+  expect(await db.user.findUniqueOrThrow({ where: { id: "owner" } })).toEqual(account);
+  expect(await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } })).toEqual(shared);
+  await transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: {}, clubPreferences: { clubId: "club-b", playerId: "legacy-shared", mixedSideOverride: null } }));
   expect(await history()).toEqual(before);
+  await expect(transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { avatarKey: null }, expectedAvatarKey: "stale" }))).rejects.toMatchObject({ statusCode: 409 });
+});
+it("keeps independent preferences across two clubs sharing a Player and normalizes each during identity gender changes", async () => {
+  await db.clubMember.update({ where: { id: "legacy-a" }, data: { mixedSideOverride: "LOWER" } });
+  await db.clubMember.update({ where: { id: "legacy-b" }, data: { mixedSideOverride: null } });
+  await transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { gender: PlayerGender.FEMALE }, clubPreferences: { clubId: "club-b", playerId: "legacy-shared", mixedSideOverride: MixedSide.UPPER } }));
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "legacy-a" } })).toMatchObject({ mixedSideOverride: null });
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "legacy-b" } })).toMatchObject({ mixedSideOverride: "UPPER" });
+  expect(await db.clubMember.findFirstOrThrow({ where: { clubId: "club-c" } })).toMatchObject({ mixedSideOverride: null });
+  expect(await db.user.findUniqueOrThrow({ where: { id: "owner" } })).toMatchObject({ gender: "FEMALE", mixedSideOverride: null });
+  expect(await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } })).toMatchObject({ mixedSideOverride: null, partnerPreference: "OPEN" });
+});
+it.each(["archived", "revoked", "wrong-player"])("rejects stale %s preference context atomically before account writes", async condition => {
+  if (condition === "archived") await transaction(tx => removeClubPlayerOwnership(tx, { clubId: "club-b", playerId: "legacy-shared", actorUserId: "admin" }));
+  if (condition === "revoked") await db.clubAccess.update({ where: { id: "owner-b" }, data: { status: "REVOKED" } });
+  const before = { account: await db.user.findUniqueOrThrow({ where: { id: "owner" } }), player: await db.player.findMany(), history: await history() };
+  await expect(transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { name: "Must not persist" }, clubPreferences: { clubId: "club-b", playerId: condition === "wrong-player" ? "club-c-player" : "legacy-shared", mixedSideOverride: MixedSide.LOWER } }))).rejects.toMatchObject({ statusCode: 403 });
+  expect({ account: await db.user.findUniqueOrThrow({ where: { id: "owner" } }), player: await db.player.findMany(), history: await history() }).toEqual(before);
+});
+it("rejects combined edits after ownership disconnect without consuming the identity allowance", async () => {
+  await transaction(tx => removeClubPlayerOwnership(tx, { clubId: "club-b", playerId: "legacy-shared", actorUserId: "admin" }));
+  await transaction(tx => removeClubPlayerOwnership(tx, { clubId: "club-b", playerId: "legacy-shared", actorUserId: "admin", mode: "DISCONNECT" }));
+  const before = { account: await db.user.findUniqueOrThrow({ where: { id: "owner" } }), player: await db.player.findMany(), history: await history() };
+  await expect(transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { name: "Cannot spread" }, clubPreferences: { clubId: "club-b", playerId: "legacy-shared", mixedSideOverride: MixedSide.LOWER } }))).rejects.toMatchObject({ statusCode: 403 });
+  expect({ account: await db.user.findUniqueOrThrow({ where: { id: "owner" } }), player: await db.player.findMany(), history: await history() }).toEqual(before);
+});
+it("serializes concurrent once-only identity edits and rolls back the losing preference", async () => {
+  const edits = await Promise.allSettled(["First", "Second"].map(name => transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { name }, clubPreferences: { clubId: "club-b", playerId: "legacy-shared", mixedSideOverride: name === "First" ? MixedSide.LOWER : null } }))));
+  expect(edits.filter(result => result.status === "fulfilled")).toHaveLength(1);
+  expect(edits.filter(result => result.status === "rejected")).toHaveLength(1);
+  const account = await db.user.findUniqueOrThrow({ where: { id: "owner" } });
+  expect(account.selfNameChangedAt).toBeInstanceOf(Date);
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "legacy-b" } })).toMatchObject({ mixedSideOverride: account.name === "First" ? "LOWER" : null });
 });

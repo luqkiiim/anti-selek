@@ -158,7 +158,7 @@ export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
       // reread in this approval transaction supplies the new profile's metadata.
       const { name, gender } = accountPlayerDetails(requester);
       const player = await db.player.create({ data: { name, gender } });
-      await db.clubMember.create({ data: { clubId: input.clubId, playerId: player.id } });
+      await db.clubMember.create({ data: { clubId: input.clubId, playerId: player.id, mixedSideOverride: null } });
       await claimClubPlayer(db, { clubId: input.clubId, playerId: player.id, userId: request.requesterUserId, actorUserId: input.reviewerUserId, admissionRequestId: request.id });
       approvedPlayerId = player.id;
       decision = "CREATE_NEW";

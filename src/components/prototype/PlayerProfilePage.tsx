@@ -5,14 +5,13 @@ import type { ClubPageMember } from "@/components/club/clubTypes";
 import type { PlayerProfileSessionSummary, PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
 import type { MemberProfileData, RecordedSessionSummary } from "@/lib/memberProfile";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
-import { api, useAction, useResource } from "./api";
+import { useResource } from "./api";
 import { MemberPins, type PublicAchievementCollection } from "./MemberPins";
 import { ProfileActivityHistory } from "./ProfileActivityHistory";
 import { formatProfileDate as dateLabel } from "./profileDate";
 import { ProfilePeople, ProfileRecords } from "./ProfileHighlights";
 import { ratingJourneyPoints } from "@/lib/ratingJourney";
-import { getMixedSideOverrideOptionForGender, getStoredPartnerPreference, normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
-import { PlayerGender } from "@/types/enums";
+import { normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
 import { AccountSettings } from "./AccountSettings";
 import { MainNav } from "./MainNav";
 import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
@@ -24,14 +23,14 @@ export type MemberProfileResponse = {
 };
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
 
-export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite = false, achievements, milestone, onOpenMember, onAccountSaved }: {
+export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite = false, globalView = false, achievements, milestone, onOpenMember, onAccountSaved }: {
   clubId: string; clubName: string; member: ClubPageMember; isSelf: boolean;
   onAccountSaved?: () => Promise<unknown>;
-  canInvite?: boolean;
+  canInvite?: boolean; globalView?: boolean;
   achievements?: ReactNode; milestone?: ReactNode; onOpenMember: (id: string) => void;
 }) {
-  const resource = useResource<MemberProfileResponse>(`/api/users/${encodeURIComponent(member.id)}/stats?clubId=${encodeURIComponent(clubId)}`);
-  const pins = useResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${encodeURIComponent(clubId)}/achievements?userId=${encodeURIComponent(member.id)}`);
+  const resource = useResource<MemberProfileResponse>(`/api/users/${encodeURIComponent(member.id)}/stats?clubId=${encodeURIComponent(clubId)}${globalView ? "&view=global" : ""}`);
+  const pins = useResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${encodeURIComponent(clubId)}/achievements?userId=${encodeURIComponent(member.id)}${globalView ? "&view=global" : ""}`);
   const data = resource.data?.profile;
   const user = resource.data?.user;
   const [accountOpen, setAccountOpen] = useState(false);
@@ -41,7 +40,6 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite 
     <header className="player-profile-identity">{!isSelf && <span className="eyebrow">{clubName}</span>}{isSelf ? <button className="profile-account-button" aria-label="Account settings" onClick={() => setAccountOpen(true)}><Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /></button> : <Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} />}<h1>{user?.name ?? member.name}</h1>{!isSelf && <span className="player-profile-membership">{member.status === "CORE" ? "Core member" : "Occasional member"}</span>}</header>
       <div className="player-standing profile-overview-stats"><div><span>Club rating</span><strong>{user?.elo ?? member.elo}</strong></div><div><span>Club rank</span><strong>{(member as RankedMember).currentRank ? `#${(member as RankedMember).currentRank}` : "—"}</strong>{member.rankDelta != null && member.rankDelta !== 0 && member.previousRank != null && <small className={member.rankDelta > 0 ? "positive" : "negative"}>{member.rankDelta > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{Math.abs(member.rankDelta)} {Math.abs(member.rankDelta) === 1 ? "place" : "places"}</small>}</div><p className="profile-activity-totals">{data ? new Set(data.matchHistory.map(m => m.sessionId)).size : "\u2014"} sessions {"\u00b7"} {data?.matchHistory.length ?? "\u2014"} matches</p></div>
       {canInvite && !isSelf && <PlayerInvitationPanel key={`invite:${member.id}`} clubId={clubId} playerId={member.id} playerName={member.name} rating={user?.elo ?? member.elo} matchesPlayed={data?.matchHistory.length} connected={member.isClaimed} />}
-      {isSelf && <PlayerPreferences key={`${member.id}:${member.gender}:${member.mixedSideOverride}:${member.partnerPreference}`} member={member} clubId={clubId} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
     {resource.error && <div className="profile-load-error"><ErrorText error={resource.error} /><button className="secondary" onClick={() => void resource.refresh().catch(() => {})}>Try again</button></div>}
     {!data && !resource.error && <div className="profile-loading" role="status">Loading the story so far…</div>}
     {data && <>
@@ -51,43 +49,13 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite 
       {isSelf ? <section className="profile-achievements" aria-label="Achievements"><div className="section-heading"><h2>Achievements</h2></div>{achievements}{milestone}</section> : pins.data ? <MemberPins collection={pins.data} /> : <ErrorText error={pins.error} />}
       <ProfilePeople relationships={data.relationships} isSelf={isSelf} onOpenMember={onOpenMember} />
       <ProfileRecords records={data.records} onOpenSession={setRecap} />
-      <ProfileActivityHistory key={member.id} clubId={clubId} playerId={member.id} history={data.history} onOpen={setRecap} matches={data.matchHistory} onOpenMatch={setMatch} />
+      <ProfileActivityHistory globalView={globalView} key={member.id} clubId={clubId} playerId={member.id} history={data.history} onOpen={setRecap} matches={data.matchHistory} onOpenMatch={setMatch} />
     </>}
     <details className="profile-rating-help"><summary>How ratings work</summary><p>Ratings and ranks belong to this club. Match results change your rating; manual adjustments are marked separately. Achievements are separate from matchmaking ratings.</p></details>
-    {isSelf && <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
+    {isSelf && <AccountSettings clubContext={{ clubId, clubName, playerId: member.id, gender: member.gender, mixedSideOverride: normalizeMixedSideOverrideForGender(member.gender, member.mixedSideOverride, member.partnerPreference) }} open={accountOpen} onClose={() => setAccountOpen(false)} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
     <Sheet open={!!recap} title="Session recap" onClose={() => setRecap(null)}>{recap && <div className="profile-recap"><Avatar name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h3>{user?.name ?? member.name}</h3><h2>{recap.name}</h2><p className="muted">{dateLabel(recap.date)}</p><div className="player-standing"><div><span>Result</span><strong>{recap.wins}W · {recap.losses}L</strong></div><div><span>Rating change</span><strong>{(recap as RecordedSessionSummary).ratingVerified === false ? "—" : signed(recap.ratingChange)}</strong></div></div><div className="profile-joined-list profile-recap-matches">{data?.matchHistory.filter(m => m.sessionId === recap.id).map(m => <button className="profile-history-row" key={m.id} onClick={() => setMatch(m)}><b className={m.result === "WIN" ? "positive" : "negative"}>{m.result === "WIN" ? "W" : "L"}</b><span><strong>{m.score}</strong><small>With {m.partner.name}</small><small>vs {m.opponents.map(p => p.name).join(" & ")}</small></span><CaretRight size={18} /></button>)}</div>{recap.id === data?.records.bestSession?.id && <details className="profile-rating-help"><summary>What makes this the best session?</summary><p>Most wins first, then win rate, point difference, games played, and most recent session to break ties.</p></details>}</div>}</Sheet>
     <Sheet open={!!match} title="Match details" onClose={() => setMatch(null)}>{match && <div className="profile-match"><span className="eyebrow">{match.sessionName}</span><h2>{match.result === "WIN" ? "Win" : "Loss"} · {match.score}</h2><p className="muted">{dateLabel(match.date)}</p><h3>Partners</h3><p>{member.name} & {match.partner.name}</p><h3>Opponents</h3><p>{match.opponents.map(p => p.name).join(" & ")}</p><p>{match.eloChange === null ? "Rating change unavailable" : `${signed(match.eloChange)} rating`}</p></div>}</Sheet>
   </article>;
-}
-
-function PlayerPreferences({ member, clubId, onSaved }: { member: ClubPageMember; clubId: string; onSaved: () => Promise<unknown> }) {
-  const initialSide = normalizeMixedSideOverrideForGender(member.gender, member.mixedSideOverride, member.partnerPreference) ?? "";
-  const [gender, setGender] = useState<PlayerGender>(member.gender);
-  const [playerLevel, setPlayerLevel] = useState<string>(initialSide);
-  const [notice, setNotice] = useState("");
-  const action = useAction();
-  const levelOption = getMixedSideOverrideOptionForGender(gender);
-  const changed = gender !== member.gender || playerLevel !== initialSide;
-  return <section className="player-preferences" aria-labelledby="player-preferences-title">
-    <div className="section-heading"><h2 id="player-preferences-title">Player preferences</h2></div>
-    <p>These settings belong to your Player profile and guide mixed pairing in this club.</p>
-    <label className="field-label">Gender for mixed pairing<select value={gender} onChange={event => { setGender(event.target.value as PlayerGender); setPlayerLevel(""); }} disabled={action.busy}>
-      <option value={PlayerGender.UNSPECIFIED}>Not set</option><option value={PlayerGender.MALE}>Male</option><option value={PlayerGender.FEMALE}>Female</option>
-    </select></label>
-    <label className="field-label">Player level<select value={playerLevel} onChange={event => setPlayerLevel(event.target.value)} disabled={action.busy || !levelOption}>
-      <option value="">Default</option>{levelOption && <option value={levelOption.value}>{levelOption.label}</option>}
-    </select></label>
-    <button type="button" className="secondary full" disabled={action.busy || !changed} onClick={() => void action.run(async () => {
-      await api(`/api/clubs/${encodeURIComponent(clubId)}/members/${encodeURIComponent(member.id)}`, "PATCH", {
-        gender,
-        mixedSideOverride: playerLevel || null,
-        partnerPreference: getStoredPartnerPreference(gender, playerLevel || null),
-      });
-      setNotice("Player preferences updated.");
-      await onSaved();
-    })}>{action.busy ? "Saving…" : "Save Player preferences"}</button>
-    <ErrorText error={action.error} />{notice && <p className="player-preferences-notice" role="status">{notice}</p>}
-  </section>;
 }
 
 export type RankedMember = ClubPageMember & { currentRank?: number | null };
@@ -116,8 +84,8 @@ function RatingJourney({ timeline, onOpenSession }: { timeline: MemberProfileDat
   </section>;
 }
 
-export function MemberProfileOverlay({ member, clubId, clubName, onBack, onNavigate, children }: { member: ClubPageMember; clubId: string; clubName: string; onBack: () => void; onNavigate: (page: string) => void; children: ReactNode }) {
+export function MemberProfileOverlay({ member, clubId, clubName, onBack, onNavigate, children, readOnly = false }: { readOnly?: boolean; member: ClubPageMember; clubId: string; clubName: string; onBack: () => void; onNavigate: (page: string) => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const node=ref.current; const trigger=document.activeElement as HTMLElement | null; node?.showModal(); return () => {node?.close(); trigger?.focus({preventScroll:true});}; }, []);
-  return <dialog ref={ref} className="member-profile-dialog" aria-label={`${member.name} profile in ${clubName}`} onCancel={e => {e.preventDefault();onBack();}} data-club-id={clubId}><div className="pc-app"><header className="pc-header"><button className="icon-button" aria-label="Back to previous page" onClick={onBack}><ArrowLeft size={23} /></button><strong>Player profile</strong><span /></header><div className="pc-scroll" key={member.id}><main className="pc-content">{children}</main></div><MainNav active="" onNavigate={onNavigate} /></div></dialog>;
+  return <dialog ref={ref} className="member-profile-dialog" aria-label={`${member.name} profile in ${clubName}`} onCancel={e => {e.preventDefault();onBack();}} data-club-id={clubId}><div className="pc-app"><header className="pc-header"><button className="icon-button" aria-label="Back to previous page" onClick={onBack}><ArrowLeft size={23} /></button><strong>Player profile</strong><span /></header><div className="pc-scroll" key={member.id}><main className="pc-content">{children}</main></div><MainNav active="" onNavigate={onNavigate} readOnly={readOnly} /></div></dialog>;
 }

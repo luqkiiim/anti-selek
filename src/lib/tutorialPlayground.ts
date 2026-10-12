@@ -1,3 +1,5 @@
+import { deriveClubPairingPreferences } from "@/lib/clubPairingPreferences";
+import { normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
 import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -115,6 +117,7 @@ type TutorialSeedUser = {
   name: string;
   gender: string;
   partnerPreference: string;
+  mixedSideOverride?: string | null;
   elo: number;
 };
 
@@ -373,10 +376,10 @@ async function getUniqueOwnedTutorialPlayerId(
   });
   if (memberships.length > 1) throw new Error("The tutorial playground has conflicting owner profiles.");
   if (memberships[0]) return memberships[0].playerId;
-  const account = await tx.user.findUnique({ where: { id: ownerUserId }, select: { name: true, avatarKey: true, gender: true, mixedSideOverride: true, isActive: true } });
+  const account = await tx.user.findUnique({ where: { id: ownerUserId }, select: { name: true, avatarKey: true, gender: true, isActive: true } });
   if (!account?.isActive) throw new Error("An active account is required to open the tutorial playground.");
-  const player = await tx.player.create({ data: { name: account.name, avatarKey: account.avatarKey, gender: account.gender, mixedSideOverride: account.mixedSideOverride } });
-  await tx.clubMember.create({ data: { clubId: club.id, playerId: player.id, ownerUserId, status: ClubPlayerStatus.CORE, elo: 1000 } });
+  const player = await tx.player.create({ data: { name: account.name, avatarKey: account.avatarKey, gender: account.gender } });
+  await tx.clubMember.create({ data: { clubId: club.id, playerId: player.id, ownerUserId, mixedSideOverride: null, status: ClubPlayerStatus.CORE, elo: 1000 } });
   return player.id;
 }
 
@@ -417,23 +420,22 @@ async function seedTutorialPlaygroundData(
         ownerUserId: null,
         elo: player.elo,
         gender: player.gender,
-        partnerPreference: player.partnerPreference,
       },
       select: {
         id: true,
         name: true,
         gender: true,
-        partnerPreference: true,
         elo: true,
       },
     });
-    fakeUsers.push(user);
+    fakeUsers.push({ ...user, ...deriveClubPairingPreferences({ player: user, mixedSideOverride: normalizeMixedSideOverrideForGender(user.gender as PlayerGender, null, player.partnerPreference) }) });
   }
 
   await tx.clubMember.createMany({
     data: fakeUsers.map((user, index) => ({
       clubId,
       playerId: user.id,
+      mixedSideOverride: user.mixedSideOverride,
 
       status:
         index % 6 === 4
@@ -533,6 +535,7 @@ async function seedCompletedPracticeSessions(
         isGuest: false,
         gender: user.gender,
         partnerPreference: user.partnerPreference,
+        mixedSideOverride: user.mixedSideOverride ?? null,
         pool: SessionPool.A,
         sessionPoints: 0,
         joinedAt: createdAt,
@@ -698,6 +701,7 @@ async function seedActiveTutorialSession(
       isGuest: false,
       gender: user.gender,
       partnerPreference: user.partnerPreference,
+      mixedSideOverride: user.mixedSideOverride ?? null,
       pool: SessionPool.A,
       sessionPoints: 0,
       joinedAt: now,
@@ -762,7 +766,7 @@ async function getSeededFakeUsers(tx: TutorialTx, clubId: string) {
     },
   });
   const memberByName = new Map(
-    members.map((member) => [member.player.name, member.player])
+    members.map((member) => [member.player.name, { ...member.player, ...deriveClubPairingPreferences(member) }])
   );
 
   const fakeUsers: TutorialSeedUser[] = [];
@@ -775,6 +779,7 @@ async function getSeededFakeUsers(tx: TutorialTx, clubId: string) {
       name: user.name,
       gender: user.gender,
       partnerPreference: user.partnerPreference,
+      mixedSideOverride: user.mixedSideOverride,
       elo: player.elo,
     });
   }

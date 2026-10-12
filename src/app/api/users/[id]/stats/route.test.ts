@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  accountFindUnique: vi.fn(),
+  clubFindUnique: vi.fn(),
   sessionPlayerFindFirst: vi.fn(),
   clubMemberFindMany: vi.fn(),
   clubMemberFindUnique: vi.fn(),
@@ -20,6 +22,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mocks.accountFindUnique },
+    club: { findUnique: mocks.clubFindUnique },
     sessionPlayer: { findFirst: mocks.sessionPlayerFindFirst },
     player: { findUnique: mocks.playerFindUnique },
     match: { findMany: mocks.matchFindMany },
@@ -72,6 +76,7 @@ function getStats(playerId = "player-1", query = "") {
 }
 
 describe("user stats route", () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ user: { id: "account-viewer", isAdmin: false } });
@@ -94,6 +99,36 @@ describe("user stats route", () => {
     });
     mocks.buildMemberProfileData.mockReturnValue({ history: [] });
     mocks.buildPlayerProfileDerivedData.mockReturnValue(EMPTY_PROFILE);
+  });
+
+  function enableGlobalViewer() {
+    vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", "h.luqman1998@gmail.com");
+    mocks.auth.mockResolvedValue({ user: { id: "account-viewer", canBrowseAllClubs: true, isAdmin: false } });
+    mocks.accountFindUnique.mockResolvedValue({ email: "h.luqman1998@gmail.com", isActive: true, passwordHash: "hash" });
+    mocks.clubFindUnique.mockResolvedValue({ isTutorial: false });
+    mocks.clubAccessFindUnique.mockResolvedValue(null);
+  }
+
+  it("reads the selected club member history without management privileges", async () => {
+    enableGlobalViewer();
+    mocks.clubMemberFindUnique.mockResolvedValue({ id: "member-1", elo: 1200, archivedAt: null, retiredByAdmissionEventId: null, status: "ACTIVE" });
+    const response = await getStats("player-1", "?clubId=club-1&view=global");
+    expect(response.status).toBe(200);
+    expect((await response.json()).context).toMatchObject({ clubId: "club-1", viewerCanManageClub: false, canAddGuestToClub: false });
+    expect(mocks.matchFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ session: expect.objectContaining({ OR: [{ clubId: "club-1" }, { sessionClubs: { some: { clubId: "club-1", status: "ACCEPTED" } } }] }) }) }));
+  });
+
+  it.each([null, { id: "member-other", archivedAt: new Date() }, { id: "member-retired", retiredByAdmissionEventId: "retired" }])("denies absent, archived and retired targets before accessing history", async member => {
+    enableGlobalViewer();
+    mocks.clubMemberFindUnique.mockResolvedValue(member);
+    expect((await getStats("player-other", "?clubId=club-1&view=global")).status).toBe(403);
+    expect(mocks.matchFindMany).not.toHaveBeenCalled();
+  });
+
+  it("requires a club scope for global member history", async () => {
+    enableGlobalViewer();
+    expect((await getStats("player-1", "?view=global")).status).toBe(403);
+    expect(mocks.matchFindMany).not.toHaveBeenCalled();
   });
 
   it("loads profile data by Player ID and serializes its avatar", async () => {

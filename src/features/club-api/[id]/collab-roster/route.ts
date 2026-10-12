@@ -1,3 +1,4 @@
+import { deriveClubPairingPreferences } from "@/lib/clubPairingPreferences";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
@@ -187,6 +188,7 @@ export async function GET(
           status: string;
           role: string;
           preferredPool: string;
+          mixedSideOverride: string | null;
         }>;
       }
     >();
@@ -212,6 +214,7 @@ export async function GET(
         status: membership.status,
         role: "MEMBER",
         preferredPool: membership.preferredPool,
+        mixedSideOverride: deriveClubPairingPreferences(membership).mixedSideOverride,
       });
       if (membership.club.id === hostClubId) {
         current.user = membership.player;
@@ -242,11 +245,7 @@ export async function GET(
             ].includes(user.gender as PlayerGender)
               ? user.gender
               : PlayerGender.UNSPECIFIED,
-            partnerPreference: user.partnerPreference,
-            mixedSideOverride:
-              typeof user.mixedSideOverride === "string"
-                ? user.mixedSideOverride
-                : null,
+            ...deriveClubPairingPreferences({ player: user, mixedSideOverride: preferred.mixedSideOverride }),
             elo: preferred.elo,
             preferredPool: isValidSessionPool(preferred.preferredPool)
               ? preferred.preferredPool

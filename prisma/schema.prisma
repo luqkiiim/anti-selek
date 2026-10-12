@@ -170,6 +170,7 @@ model ClubMember {
   legacyRole                 String                 @default("MEMBER") @map("role") @ignore
   status                     String                 @default("CORE") // CORE or OCCASIONAL
   preferredPool              String                 @default("B") // A = Competitive, B = Social
+  mixedSideOverride          String?                // Club-specific UPPER/LOWER; null uses gender default
   needsMoreRest              Boolean                @default(false)
   elo                        Int                    @default(1000)
   createdAt                  DateTime               @default(now())

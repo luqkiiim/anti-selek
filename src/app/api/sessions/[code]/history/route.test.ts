@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MatchStatus,
   SessionClubStatus,
@@ -8,6 +8,8 @@ import {
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  accountFindUnique: vi.fn(),
+  clubFindUnique: vi.fn(),
   canQuickAccessClub: vi.fn(),
   canQuickAccessSessionRead: vi.fn(),
   getSessionAdminMembership: vi.fn(),
@@ -28,6 +30,8 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mocks.accountFindUnique },
+    club: { findUnique: mocks.clubFindUnique },
     match: {
       findFirst: mocks.matchFindFirst,
     },
@@ -111,13 +115,29 @@ function createHistorySessionBase() {
   };
 }
 
-function getHistory() {
-  return GET(new Request("http://localhost/api/sessions/ABC123/history"), {
+function getHistory(query = "") {
+  return GET(new Request(`http://localhost/api/sessions/ABC123/history${query}`), {
     params: Promise.resolve({ code: "ABC123" }),
   });
 }
 
 describe("session history route correction availability", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("returns unchanged match history with correction and undo disabled during global browsing", async () => {
+    vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", "h.luqman1998@gmail.com");
+    mocks.auth.mockResolvedValue({ user: { id: "viewer", canBrowseAllClubs: true, isAdmin: false } });
+    mocks.accountFindUnique.mockResolvedValue({ email: "h.luqman1998@gmail.com", passwordHash: "hash", isActive: true });
+    mocks.clubFindUnique.mockResolvedValue({ isTutorial: false });
+    const response = await getHistory("?view=global&clubId=community-1");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ viewerCanManage: false, canCorrectCompletedScores: false, undoableMatchId: null });
+    expect(body.matches).toHaveLength(1);
+    expect(body.matches[0]).toMatchObject({ id: "match-1", team1Score: 21, team2Score: 18 });
+    expect(mocks.getSessionOperatorMembership).not.toHaveBeenCalled();
+    expect(mocks.getSessionAdminMembership).not.toHaveBeenCalled();
+    expect(mocks.matchFindFirst).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.rateLimit.mockResolvedValue(null);

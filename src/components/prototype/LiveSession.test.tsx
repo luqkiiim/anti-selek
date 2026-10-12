@@ -127,7 +127,7 @@ function setup(session: SessionData) {
     error: "",
     refresh: vi.fn(async () => undefined),
   };
-  mocks.useResource.mockImplementation((url: string) => url.endsWith("/leaderboard") ? mocks.standingsResource : mocks.sessionResource);
+  mocks.useResource.mockImplementation((url: string) => url.split("?")[0].endsWith("/leaderboard") ? mocks.standingsResource : mocks.sessionResource);
   mocks.useAction.mockImplementation((refresh: () => Promise<unknown>) => ({
     busy: false,
     error: "",
@@ -969,4 +969,16 @@ describe("LiveSession score and player controls", () => {
     expect(container.textContent).toContain("Club score");
     expect(container.textContent).toContain("Alpha leads");
   });
+  it("propagates global club context to both session reads and hides scoring", async () => {
+    const session = sessionWithCourts([{ id: "court", courtNumber: 1, currentMatch: match("match", 1) }]);
+    setup(session);
+    await act(async () => root.render(<LiveSession globalClubId="club with spaces" code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    expect(mocks.useResource).toHaveBeenCalledWith("/api/sessions/TEST01?view=global&clubId=club%20with%20spaces");
+    expect(mocks.useResource).toHaveBeenCalledWith("/api/sessions/TEST01/leaderboard?view=global&clubId=club%20with%20spaces");
+    expect(container.querySelector('[aria-label="Team 1 score"]')).toBeNull();
+    expect(container.textContent).not.toContain("Save score");
+    expect(container.querySelector('[aria-label="Player actions for Score Player 1A"]')).toBeNull();
+    expect(mocks.api).not.toHaveBeenCalled();
+  });
+
 });

@@ -7,6 +7,8 @@ import { clubGuestWhere } from "@/lib/clubGuest";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
+import { normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
+import type { PlayerGender } from "@/types/enums";
 import { nonretiredPlayer } from "@/lib/playerIdentity";
 
 export async function POST(request: Request, { params }: {
@@ -24,7 +26,7 @@ export async function POST(request: Request, { params }: {
     const membership = await prisma.$transaction(async (tx) => {
       const target = await tx.player.findFirst({
         where: { id: userId, ...nonretiredPlayer },
-        select: { id: true },
+        select: { id: true, gender: true, mixedSideOverride: true, partnerPreference: true },
       });
       if (!target) return null;
       const guest = await tx.sessionPlayer.findFirst({
@@ -36,7 +38,7 @@ export async function POST(request: Request, { params }: {
       return tx.clubMember.upsert({
         where: { clubId_playerId: { clubId, playerId: userId } },
         update: {},
-        create: { clubId, playerId: userId, status: "OCCASIONAL", elo },
+        create: { clubId, playerId: userId, mixedSideOverride: normalizeMixedSideOverrideForGender(target.gender as PlayerGender, target.mixedSideOverride, target.partnerPreference), status: "OCCASIONAL", elo },
         select: { playerId: true },
       });
     });

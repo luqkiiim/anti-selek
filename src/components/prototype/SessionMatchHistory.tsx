@@ -46,6 +46,7 @@ type SessionHistoryResponse = {
 
 export type SessionMatchHistoryProps = {
   /** Session code also works for a completed session recap. */
+  globalClubId?: string;
   code: string;
   onBack?: () => void;
   onMutated?: () => void | Promise<void>;
@@ -87,6 +88,7 @@ export default function SessionMatchHistory({
   code,
   onBack,
   onMutated,
+  globalClubId,
 }: SessionMatchHistoryProps) {
   const requestId = useRef(0);
   const [response, setResponse] = useState<{
@@ -116,7 +118,7 @@ export default function SessionMatchHistory({
 
       try {
         const next = await requestJson<SessionHistoryResponse>(
-          `/api/sessions/${encodeURIComponent(code)}/history`,
+          `/api/sessions/${encodeURIComponent(code)}/history${globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : ""}`,
         );
         if (requestId.current === thisRequest) {
           setResponse({ code, data: next });
@@ -135,7 +137,7 @@ export default function SessionMatchHistory({
         if (requestId.current === thisRequest) setLoading(false);
       }
     },
-    [code],
+    [code, globalClubId],
   );
 
   useEffect(() => {
@@ -337,18 +339,18 @@ export default function SessionMatchHistory({
               const timestamp = matchTime(match);
               const isPending = match.status === "PENDING_APPROVAL";
               const canUndo =
-                data.viewerCanManage === true &&
+                !globalClubId && data.viewerCanManage === true &&
                 data.undoableMatchId === match.id &&
                 match.status === "COMPLETED";
               const canCorrect =
-                data.canCorrectCompletedScores === true &&
+                !globalClubId && data.canCorrectCompletedScores === true &&
                 match.status === "COMPLETED";
               const team1Won = match.winnerTeam === 1;
               const team2Won = match.winnerTeam === 2;
               const hasScore =
                 typeof match.team1Score === "number" &&
                 typeof match.team2Score === "number";
-              const canApprove = data.viewerCanManage === true && isPending && hasScore;
+              const canApprove = !globalClubId && data.viewerCanManage === true && isPending && hasScore;
 
               return (
                 <li className={styles.matchItem} key={match.id}>

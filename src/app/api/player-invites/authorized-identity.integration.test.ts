@@ -169,7 +169,8 @@ it("genuine pre61 completed authorization remains readable after access revocati
   await db.$disconnect();
   const filename = path.join(directory, "historical-receipt.db"); const legacy = new DatabaseSync(filename, { enableDoubleQuotedStringLiterals: true });
   migrateFixture(legacy, "20261011120000_audited_player_ownership_release"); seedHistoricalAccessReceipt(legacy);
-  legacy.exec(readFileSync(path.resolve("prisma/migrations", localOwnershipMigration, "migration.sql"), "utf8")); legacy.close();
+  legacy.exec(readFileSync(path.resolve("prisma/migrations", localOwnershipMigration, "migration.sql"), "utf8"));
+  legacy.exec(readFileSync(path.resolve("prisma/migrations/20261012200000_club_pairing_preferences/migration.sql"), "utf8")); legacy.close();
   db = new PrismaClient({ datasources: { db: { url: `file:${filename.replaceAll("\\", "/")}` } } });
   const invite = await db.playerInvitation.findUniqueOrThrow({ where: { id: "legacy-invite" } });
   const receipt = await invitationExecutionReceipt(db, invite);

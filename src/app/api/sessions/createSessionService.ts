@@ -12,7 +12,6 @@ import {
 } from "@/lib/sessionCollab";
 import { resolveMixedSideState } from "@/lib/mixedSide";
 import {
-  MixedSide,
   PlayerGender,
   SessionCollabFormat,
   SessionMode,
@@ -41,8 +40,6 @@ function buildMemberSessionConfigs({
     id: string;
     name: string;
     gender: string;
-    partnerPreference: string;
-    mixedSideOverride: string | null;
     preferredPool: string;
   }>;
   playerConfigMap: ParsedCreateSessionRequest["playerConfigMap"];
@@ -76,14 +73,8 @@ function buildMemberSessionConfigs({
       mixedSideOverride:
         override?.mixedSideOverride !== undefined
           ? override.mixedSideOverride
-          : override?.gender !== undefined
-            ? null
-            : (selectedUser?.mixedSideOverride as MixedSide | null | undefined),
-      partnerPreference:
-        override?.partnerPreference ??
-        (override?.gender !== undefined
-          ? undefined
-          : selectedUser?.partnerPreference),
+          : null,
+      partnerPreference: override?.partnerPreference,
     });
     const availableRepresentingClubIds = (clubBadgesByUserId.get(playerId) ?? [])
       .map((badge) => badge.id)
@@ -274,8 +265,6 @@ export async function createSessionForUser({
       id: true,
       name: true,
       gender: true,
-      partnerPreference: true,
-      mixedSideOverride: true,
     },
   });
   const selectedUsersWithPools = selectedUsers.map((user) => ({
@@ -353,7 +342,10 @@ export async function createSessionForUser({
       const pair = await resolveSessionProfilePair(tx, { userId: requesterId, clubIds: involvedClubIds, playerId: config.playerId, profileClubId: override?.profileClubId ?? config.representingClubId, isGlobalAdmin: requesterIsAdmin });
       if (pair.ownerUserId && accountIds.has(pair.ownerUserId)) throw new SessionRouteError("An account can participate only once in this tournament", 409);
       if (pair.ownerUserId) accountIds.add(pair.ownerUserId);
-      profileConfigs.push({ ...config, profileClubId: pair.profileClubId, participantAccountId: pair.ownerUserId });
+      const pairing = override?.mixedSideOverride !== undefined || override?.partnerPreference !== undefined || override?.gender !== undefined
+        ? { mixedSideOverride: config.mixedSideOverride, partnerPreference: config.partnerPreference }
+        : resolveMixedSideState({ gender: config.gender, mixedSideOverride: pair.mixedSideOverride });
+      profileConfigs.push({ ...config, ...pairing, profileClubId: pair.profileClubId, participantAccountId: pair.ownerUserId });
     }
     const createdSession = await tx.session.create({
       data: {

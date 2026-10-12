@@ -1,3 +1,4 @@
+import { isGlobalClubView, canReadSessionGlobally } from "@/lib/globalClubViewer";
 import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
 
@@ -245,17 +246,21 @@ async function getSessionHistory(
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
 
-  const membership = await getSessionMembership(prisma, {
+  const globalView = isGlobalClubView(_request);
+  const canRead = globalView && await canReadSessionGlobally(_request, session, sessionData);
+  if (globalView && !canRead) return sportingJson({ error: "Not authorized" }, { status: 403 });
+
+  const membership = globalView ? null : await getSessionMembership(prisma, {
     session: sessionData,
     userId: session.user.id,
     acceptedOnly: true,
   });
-  const operatorMembership = await getSessionOperatorMembership(prisma, {
+  const operatorMembership = globalView ? null : await getSessionOperatorMembership(prisma, {
     session: sessionData,
     userId: session.user.id,
     acceptedOnly: true,
   });
-  const adminMembership = await getSessionAdminMembership(prisma, {
+  const adminMembership = globalView ? null : await getSessionAdminMembership(prisma, {
     session: sessionData,
     userId: session.user.id,
     acceptedOnly: true,
@@ -263,16 +268,16 @@ async function getSessionHistory(
   const clubRole = membership?.role ?? null;
 
   const quickPlayerId = getQuickAccessPlayerId(session);
-  const isSessionPlayer = quickPlayerId
+  const isSessionPlayer = globalView ? false : quickPlayerId
     ? sessionData.players.some((player) => player.playerId === quickPlayerId)
     : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
   const viewerCanManage =
-    !isQuickAccess &&
+    !globalView && !isQuickAccess &&
     (!!session.user.isAdmin || !!operatorMembership);
   const viewerCanCorrectCompletedScores =
-    !isQuickAccess && (!!session.user.isAdmin || !!adminMembership);
-  const canView =
+    !globalView && !isQuickAccess && (!!session.user.isAdmin || !!adminMembership);
+  const canView = canRead ||
     viewerCanManage ||
     !!clubRole ||
     isSessionPlayer;

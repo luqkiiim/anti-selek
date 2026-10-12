@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionClubStatus } from "@/types/enums";
 import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
 
 const mocks = vi.hoisted(() => ({
+  accountFindUnique: vi.fn(),
+  clubFindUnique: vi.fn(),
   clubAccessFindUnique: vi.fn(),
   clubMemberFindFirst: vi.fn(),
   sessionFindMany: vi.fn(),
@@ -10,6 +12,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mocks.accountFindUnique },
+    club: { findUnique: mocks.clubFindUnique },
     clubAccess: {
       findUnique: mocks.clubAccessFindUnique,
     },
@@ -23,10 +27,26 @@ vi.mock("@/lib/prisma", () => ({
 import { listSessionsForClub } from "./listSessionsService";
 
 describe("listSessionsForClub", () => {
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.clubMemberFindFirst.mockResolvedValue(null);
     mocks.sessionFindMany.mockResolvedValue([]);
+  });
+
+  it("allows a separately validated global read without promoting the viewer to admin or exposing pending partners", async () => {
+    vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", "h.luqman1998@gmail.com");
+    mocks.accountFindUnique.mockResolvedValue({ email: "h.luqman1998@gmail.com", passwordHash: "hash", isActive: true });
+    mocks.clubFindUnique.mockResolvedValue({ isTutorial: false });
+    mocks.clubAccessFindUnique.mockResolvedValue(null);
+    await listSessionsForClub({ clubId: "club-1", viewerId: "viewer", viewerIsAdmin: false, globalViewerSession: { user: { id: "viewer", canBrowseAllClubs: true } } as never });
+    expect(mocks.sessionFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: { OR: [{ clubId: "club-1" }, { sessionClubs: { some: { clubId: "club-1", status: { in: [SessionClubStatus.ACCEPTED] } } } }] } }));
+  });
+
+  it("rejects mismatched global session identity rather than falling back to other read permissions", async () => {
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "OWNER", status: "ACTIVE" });
+    await expect(listSessionsForClub({ clubId: "club-1", viewerId: "viewer", viewerIsAdmin: true, globalViewerSession: { user: { id: "different", canBrowseAllClubs: true } } as never })).rejects.toMatchObject({ status: 403 });
+    expect(mocks.sessionFindMany).not.toHaveBeenCalled();
   });
 
   it("allows an active unowned roster Player to read accepted non-test club sessions", async () => {

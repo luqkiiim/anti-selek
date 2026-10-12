@@ -109,7 +109,9 @@ export default function LiveSession({
   onDeleted,
   onOpenMember,
   profileMemberIds,
+  globalClubId,
 }: {
+  globalClubId?: string;
   code: string;
   onBack: () => void;
   onEnded: () => Promise<void>;
@@ -118,7 +120,8 @@ export default function LiveSession({
   profileMemberIds?: readonly string[];
 }) {
   const endpoint = "/api/sessions/" + code;
-  const resource = useResource<SessionData>(endpoint);
+  const readQuery = globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : "";
+  const resource = useResource<SessionData>(endpoint + readQuery);
   const [pauseOverlays, setPauseOverlays] = useState<Record<string, PlayerPauseOverlay>>({});
   const [pauseError, setPauseError] = useState("");
   const [queuedMatchOverlay, setQueuedMatchOverlay] = useState<QueuedMatchOverlay | null>(null);
@@ -137,7 +140,7 @@ export default function LiveSession({
       sessionPoints: number;
       score?: number;
     }[];
-  }>(endpoint + "/leaderboard");
+  }>(endpoint + "/leaderboard" + readQuery);
   const [tab, setTab] = useState("Courts"),
     [sheet, setSheet] = useState(""),
     [confirmingMatchIds, setConfirmingMatchIds] = useState<Set<string>>(() => new Set()),
@@ -209,7 +212,7 @@ export default function LiveSession({
     }, 15000);
     return () => clearInterval(timer);
   }, [refreshSession, refreshStandings, action.busy, savingScoreMatchIds]);
-  const canManage = !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
+  const canManage = !globalClubId && !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
   const ended = s?.status === "COMPLETED";
   const sessionPlayerById = new Map(s?.players.map((player) => [player.userId, player]) ?? []);
   const profileMemberIdSet = new Set(profileMemberIds ?? []);
@@ -534,6 +537,7 @@ export default function LiveSession({
     return (
       <div className="pc-app">
         <SessionMatchHistory
+          globalClubId={globalClubId}
           code={code}
           onBack={() => setShowHistory(false)}
           onMutated={refresh}

@@ -1,3 +1,4 @@
+import { isGlobalClubView, canReadSessionGlobally } from "@/lib/globalClubViewer";
 import { withMatchLocalClaimLabels } from "@/lib/matchApprovalRules";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
@@ -223,8 +224,6 @@ async function getSessionRoute(
               avatarKey: true,
               elo: true,
               gender: true,
-              partnerPreference: true,
-              mixedSideOverride: true,
             },
           },
         },
@@ -270,22 +269,26 @@ async function getSessionRoute(
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
-  const membership = await getSessionMembership(prisma, {
+  const globalView = isGlobalClubView(request);
+  const canRead = globalView && await canReadSessionGlobally(request, session, sessionData);
+  if (globalView && !canRead) return sportingJson({ error: "Not authorized" }, { status: 403 });
+
+  const membership = globalView ? null : await getSessionMembership(prisma, {
     session: sessionData,
     userId: session.user.id,
     acceptedOnly: false,
   });
-  const adminMembership = await getSessionAdminMembership(prisma, {
+  const adminMembership = globalView ? null : await getSessionAdminMembership(prisma, {
     session: sessionData,
     userId: session.user.id,
     acceptedOnly: false,
   });
-  const operatorMembership = await getSessionOperatorMembership(prisma, {
+  const operatorMembership = globalView ? null : await getSessionOperatorMembership(prisma, {
     session: sessionData,
     userId: session.user.id,
     acceptedOnly: true,
   });
-  const hostClubContext = sessionData.clubId
+  const hostClubContext = !globalView && sessionData.clubId
     ? await getAccountClubContext(prisma, {
         userId: session.user.id,
         clubId: sessionData.clubId,
@@ -294,26 +297,26 @@ async function getSessionRoute(
   const clubRole = membership?.role ?? null;
 
   const quickPlayerId = getQuickAccessPlayerId(session);
-  const isSessionPlayer = quickPlayerId
+  const isSessionPlayer = globalView ? false : quickPlayerId
     ? sessionData.players.some((player) => player.playerId === quickPlayerId)
     : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
   const participantOwners = await getSessionParticipantOwners(prisma, sessionData);
-  const viewerOwnedPlayers = isQuickAccess
+  const viewerOwnedPlayers = globalView || isQuickAccess
     ? []
     : sessionData.players.filter((player) => participantOwners.get(player.playerId) === session.user.id);
   const viewerPlayerId = quickPlayerId
     ? sessionData.players.some((player) => player.playerId === quickPlayerId) ? quickPlayerId : null
     : viewerOwnedPlayers.length === 1 ? viewerOwnedPlayers[0].playerId : null;
   const viewerUserId = isQuickAccess ? null : session.user.id;
-  const canView =
+  const canView = canRead ||
     (!isQuickAccess && session.user.isAdmin) || !!clubRole || isSessionPlayer;
   if (!canView) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
   const canRequestRollback =
-    !isQuickAccess &&
+    !globalView && !isQuickAccess &&
     sessionData.status === SessionStatus.COMPLETED &&
     !sessionData.isTest &&
     sessionData.club?.isTutorial !== true &&
@@ -355,7 +358,7 @@ async function getSessionRoute(
           )
         : sessionData.players;
   const players = await withSessionProfileRatings(prisma, sessionData, legacyPlayers);
-  const eligibleProfiles = isQuickAccess ? [] : await getEligibleSessionProfiles(prisma, { userId: session.user.id, clubIds: await getAcceptedSessionClubIds(prisma, sessionData) });
+  const eligibleProfiles = globalView || isQuickAccess ? [] : await getEligibleSessionProfiles(prisma, { userId: session.user.id, clubIds: await getAcceptedSessionClubIds(prisma, sessionData) });
   const selectedSeat = viewerOwnedPlayers.length === 1 ? viewerOwnedPlayers[0] : null;
   const selectedSelf = selectedSeat ? { ...eligibleProfiles.find(p => p.playerId === selectedSeat.playerId && (!selectedSeat.profileClubId || p.profileClubId === selectedSeat.profileClubId)), playerId: selectedSeat.playerId, profileClubId: selectedSeat.profileClubId ?? selectedSeat.representingClubId ?? (eligibleProfiles.length === 1 ? eligibleProfiles[0].profileClubId : null) } : null;
   const serializedPlayers = players.map((player) => ({
@@ -370,9 +373,9 @@ async function getSessionRoute(
       name: player.player.name,
       avatarKey: player.player.avatarKey,
       elo: player.player.elo,
-      gender: player.player.gender,
-      partnerPreference: player.player.partnerPreference,
-      mixedSideOverride: player.player.mixedSideOverride,
+      gender: player.gender,
+      partnerPreference: player.partnerPreference,
+      mixedSideOverride: player.mixedSideOverride,
     }),
   }));
 
@@ -439,6 +442,9 @@ async function getSessionRoute(
     matches: sessionData.matches.map(match => withMatchLocalClaimLabels(match, participantOwners)),
     players: serializedPlayers,
     queuedMatch,
+    readOnly: globalView,
+    viewerCanParticipate: !globalView && !isQuickAccess,
+    viewerCanScore: !globalView && !isQuickAccess,
     viewerClubRole: clubRole,
     viewerUserId,
     viewerPlayerId,
@@ -446,11 +452,11 @@ async function getSessionRoute(
     selectedSelf,
     viewerIsQuickAccess: isQuickAccess,
     viewerCanManage:
-      !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
+      !globalView && !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
     viewerCanUseAdminSessionControls:
-      !isQuickAccess && (session.user.isAdmin || !!adminMembership),
+      !globalView && !isQuickAccess && (session.user.isAdmin || !!adminMembership),
     viewerCanDelete:
-      !isQuickAccess &&
+      !globalView && !isQuickAccess &&
       (sessionData.status !== SessionStatus.COMPLETED || sessionData.isTest) &&
       (session.user.isAdmin || hostClubContext?.canAdmin === true || hostClubContext?.canOperate === true),
     viewerCanRollback,

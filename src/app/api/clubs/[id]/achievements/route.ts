@@ -1,3 +1,4 @@
+import { canReadClubGlobally, isGlobalClubView } from "@/lib/globalClubViewer";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -43,17 +44,22 @@ async function handle(request:Request,context:{params:Promise<{id:string}>},writ
     const hasTargetUserId = searchParams.has("userId");
     const targetUserId = searchParams.get("userId") ?? "";
     if(!canQuickAccessClub(session,clubId))return NextResponse.json({error:"Club unavailable"},{status:404});
+    const globalView = isGlobalClubView(request);
+    if (globalView && write) return NextResponse.json({error:"Global club browsing is read-only"},{status:403});
+    const canRead = globalView && await canReadClubGlobally(session, clubId);
+    if (globalView && !canRead) return NextResponse.json({error:"Not authorized"},{status:403});
     const quick = isQuickAccessSession(session);
-    const identity = quick ? null : await getAccountClubContext(prisma, { clubId, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+    const identity = quick || globalView ? null : await getAccountClubContext(prisma, { clubId, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
     const ownPlayerId = quick ? getQuickAccessPlayerId(session) : identity?.player?.id ?? null;
-    if (!quick && !identity?.canAccess) return NextResponse.json({error:"Club unavailable"},{status:404});
+    if (!canRead && !quick && !identity?.canAccess) return NextResponse.json({error:"Club unavailable"},{status:404});
     const playerId = hasTargetUserId ? targetUserId : ownPlayerId;
     if (!playerId) return NextResponse.json({error:"Connect your Player profile to view your collection"},{status:409});
-    const member = await prisma.clubMember.findUnique({where:{clubId_playerId:{clubId,playerId}},select:{id:true,retiredByAdmissionEventId:true}});
+    const member = await prisma.clubMember.findUnique({where:{clubId_playerId:{clubId,playerId}},select:{id:true,retiredByAdmissionEventId:true,archivedAt:true}});
+    if (globalView && (!member || member.archivedAt || member.retiredByAdmissionEventId)) return NextResponse.json({error:"Not authorized"},{status:403});
     if (!member) return NextResponse.json({error:"Club unavailable"},{status:404});
     if (member.retiredByAdmissionEventId) return NextResponse.json({error:"Club unavailable"},{status:404});
     if (write && playerId !== ownPlayerId) return NextResponse.json({error:"Achievement preferences are self-only"},{status:403});
-    if (playerId !== ownPlayerId) return NextResponse.json(toPublicAchievementCollection(await getClubAchievementCollection(clubId,playerId)));
+    if (playerId !== ownPlayerId) return NextResponse.json(toPublicAchievementCollection(await (globalView ? getClubAchievementCollection(clubId,playerId,{ readOnly: true }) : getClubAchievementCollection(clubId,playerId))));
     if(write) {
       if(isQuickAccessSession(session))return NextResponse.json({error:"Sign in to save your collection"},{status:403});
       const parsed=preferences.safeParse(await request.json().catch(()=>null));

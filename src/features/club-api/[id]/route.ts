@@ -1,3 +1,4 @@
+import { canReadClubGlobally, isGlobalClubView } from "@/lib/globalClubViewer";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
@@ -7,6 +8,7 @@ import { getClubStatUserResolver, getOfflineIdentityInfoByUserId } from "@/lib/o
 import { buildClubLeaderboardRankMovements } from "@/lib/profileClubRank";
 import { prisma } from "@/lib/prisma";
 import { getClubRoster } from "@/lib/clubRoster";
+import { deriveClubPairingPreferences } from "@/lib/clubPairingPreferences";
 import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { listSessionsForClub } from "@/app/api/sessions/listSessionsService";
 import { SessionRouteError } from "@/app/api/sessions/sessionRouteShared";
@@ -24,6 +26,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     const { id } = await params;
+    const globalView = isGlobalClubView(request);
+    if (globalView && !(await canReadClubGlobally(session, id))) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     if (!canQuickAccessClub(session, id)) return invalidTargetResponse(request, "api:communities:id");
     const quick = isQuickAccessSession(session);
     const actorId = session.user.id;
@@ -34,14 +38,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       prisma.clubMember.findFirst({ where: { clubId: id, archivedAt: null, retiredByAdmissionEventId: null, ...(quick ? { playerId: session.user.guestPlayerId ?? "" } : { ownerUserId: actorId }) }, include: { player: true } }),
     ]);
     if (!club || (!quick && !account) || (club.isTutorial && club.tutorialOwnerId !== actorId)) return invalidTargetResponse(request, "api:communities:id");
-    const isOwner = !quick && club.createdById === actorId && access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role);
-    const canAdmin = !quick && (!!session.user.isAdmin || isOwner || (access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role)));
-    if (quick ? !viewerMembership : !canAdmin && access?.status !== "ACTIVE") return invalidTargetResponse(request, "api:communities:id");
+    const isOwner = !globalView && !quick && club.createdById === actorId && access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role);
+    const canAdmin = !globalView && !quick && (!!session.user.isAdmin || isOwner || (access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role)));
+    if (!globalView && (quick ? !viewerMembership : !canAdmin && access?.status !== "ACTIVE")) return invalidTargetResponse(request, "api:communities:id");
     const [roster, storedMatches, sessions, unreadCount] = await Promise.all([
       getClubRoster(prisma, id),
       prisma.match.findMany({ where: { status: "COMPLETED", session: { isTest: false, OR: [{ clubId: id }, { sessionClubs: { some: { clubId: id, status: "ACCEPTED" } } }] } }, include: { team1Player1: true, team1Player2: true, team2Player1: true, team2Player2: true, eloAdjustments: { where: { clubId: id } }, session: true } }),
-      listSessionsForClub({ clubId: id, viewerId: actorId, viewerIsAdmin: canAdmin, ...(quick ? { quickAccessPlayerId: session.user.guestPlayerId ?? "" } : {}) }),
-      quick ? Promise.resolve(0) : prisma.clubNotification.count({ where: { clubId: id, recipientPlayer: { clubMemberships: { some: { clubId: id, ownerUserId: actorId, archivedAt: null, retiredByAdmissionEventId: null } } }, readAt: null } }),
+      listSessionsForClub({ clubId: id, viewerId: actorId, viewerIsAdmin: canAdmin, ...(globalView ? { globalViewerSession: session } : {}), ...(quick ? { quickAccessPlayerId: session.user.guestPlayerId ?? "" } : {}) }),
+      quick || globalView ? Promise.resolve(0) : prisma.clubNotification.count({ where: { clubId: id, recipientPlayer: { clubMemberships: { some: { clubId: id, ownerUserId: actorId, archivedAt: null, retiredByAdmissionEventId: null } } }, readAt: null } }),
     ]);
     const matches = withLegacySportingAliases(storedMatches);
     const resolve = await getClubStatUserResolver(prisma, { clubId: id, memberUserIds: roster.map(p => p.id) });
@@ -61,12 +65,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     let pulse = buildClubPulse({ members, sessions: withLegacySportingAliases(sessions), completedMatches: matches.map(m => ({ ...m, team1User1: serializeAvatarEntity(m.team1Player1), team1User2: serializeAvatarEntity(m.team1Player2), team2User1: serializeAvatarEntity(m.team2Player1), team2User2: serializeAvatarEntity(m.team2Player2) })) });
     const likes = await prisma.clubNewsLike.findMany({ where: { clubId: id, newsItemId: { in: pulse.sessionNews.map(n => n.id) } }, select: { newsItemId: true, userId: true } });
     const likeState = new Map<string, { likeCount: number; likedByMe: boolean }>();
-    for (const like of likes) { const state = likeState.get(like.newsItemId) ?? { likeCount: 0, likedByMe: false }; state.likeCount++; state.likedByMe ||= !quick && like.userId === actorId; likeState.set(like.newsItemId, state); }
+    for (const like of likes) { const state = likeState.get(like.newsItemId) ?? { likeCount: 0, likedByMe: false }; state.likeCount++; state.likedByMe ||= !globalView && !quick && like.userId === actorId; likeState.set(like.newsItemId, state); }
     pulse = applyClubPulseNewsLikes(pulse, likeState);
-    const player = viewerMembership?.player;
-    const clubPayload = withLegacyClubAliases({ id: club.id, name: getTutorialClubDisplayName(club), rules: club.rules, avatarUrl: serializeAvatarEntity(club).avatarUrl, clubId: club.id, clubName: getTutorialClubDisplayName(club), isTutorial: club.isTutorial, tutorialOwnerId: club.tutorialOwnerId, viewerIsOwner: isOwner, role: canAdmin ? "ADMIN" : access?.role ?? "MEMBER", isPasswordProtected: club.isPasswordProtected, membersCount: members.length, sessionsCount: club._count.sessions });
+    const player = globalView ? null : viewerMembership?.player;
+    const viewerPairingPreferences = !globalView && viewerMembership
+      ? deriveClubPairingPreferences(viewerMembership)
+      : { partnerPreference: "OPEN", mixedSideOverride: null };
+    const clubPayload = withLegacyClubAliases({ id: club.id, name: getTutorialClubDisplayName(club), rules: club.rules, avatarUrl: serializeAvatarEntity(club).avatarUrl, clubId: club.id, clubName: getTutorialClubDisplayName(club), isTutorial: club.isTutorial, tutorialOwnerId: club.tutorialOwnerId, viewerIsOwner: isOwner, role: globalView ? null : canAdmin ? "ADMIN" : access?.role ?? "MEMBER", readOnly: globalView, isPasswordProtected: club.isPasswordProtected, membersCount: members.length, sessionsCount: club._count.sessions });
     return NextResponse.json({
-      viewer: { id: actorId, userId: quick ? null : actorId, playerId: player?.id ?? null, name: player?.name ?? account?.name ?? "Guest", email: account?.email ?? null, avatarUrl: serializeAvatarEntity(player ?? account ?? { avatarKey: null }).avatarUrl, isAdmin: !quick && !!session.user.isAdmin, isQuickAccess: quick, elo: viewerMembership?.elo ?? player?.elo ?? 1000, gender: player?.gender ?? "UNSPECIFIED", partnerPreference: player?.partnerPreference ?? "OPEN", mixedSideOverride: player?.mixedSideOverride ?? null },
+      viewer: { id: actorId, userId: quick ? null : actorId, playerId: player?.id ?? null, name: player?.name ?? account?.name ?? "Guest", email: account?.email ?? null, avatarUrl: serializeAvatarEntity(player ?? account ?? { avatarKey: null }).avatarUrl, isAdmin: !globalView && !quick && !!session.user.isAdmin, isQuickAccess: quick, elo: viewerMembership?.elo ?? player?.elo ?? 1000, gender: player?.gender ?? "UNSPECIFIED", ...viewerPairingPreferences },
       club: clubPayload, community: clubPayload, clubMembers: members, communityMembers: members, sessions: withLegacySportingAliases(sessions), clubPulse: pulse, communityPulse: pulse, notifications: { unreadCount }, claimRequests: [],
     });
   } catch (error) {

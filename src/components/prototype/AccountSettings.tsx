@@ -8,7 +8,11 @@ import { createCroppedAvatarFile } from "@/lib/avatarCrop";
 import { uploadAccountAvatar, deleteAccountAvatar } from "@/lib/avatarClient";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
 import { api, useAction, useResource } from "./api";
+import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { MixedSide, PlayerGender } from "@/types/enums";
 import "./account-settings.css";
+
+export type AccountClubContext = { clubId: string; clubName: string; playerId: string; gender: PlayerGender; mixedSideOverride: MixedSide | null };
 
 export type AccountUser = {
   id: string; name: string; email: string | null; gender: string;
@@ -16,18 +20,22 @@ export type AccountUser = {
   isClaimed: boolean; isQuickAccess: boolean;
 };
 
-export function AccountSettings({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => Promise<unknown> }) {
+export function AccountSettings({ open, onClose, onSaved, clubContext }: { open: boolean; onClose: () => void; onSaved: () => Promise<unknown>; clubContext?: AccountClubContext }) {
   const resource = useResource<{ user: AccountUser }>(open ? "/api/user/me" : null);
   return <Sheet open={open} title="Your account" onClose={onClose}>
     <ErrorText error={resource.error} />
-    {resource.data ? <AccountForm key={resource.data.user.id} initial={resource.data.user} onSaved={onSaved} /> : !resource.error && <p role="status">Loading your account…</p>}
+    {resource.data ? <AccountForm key={resource.data.user.id} initial={resource.data.user} onSaved={onSaved} clubContext={clubContext} /> : !resource.error && <p role="status">Loading your account…</p>}
   </Sheet>;
 }
 
-function AccountForm({ initial, onSaved }: { initial: AccountUser; onSaved: () => Promise<unknown> }) {
+function AccountForm({ initial, onSaved, clubContext }: { initial: AccountUser; onSaved: () => Promise<unknown>; clubContext?: AccountClubContext }) {
   const [user, setUser] = useState(initial);
   const [name, setName] = useState(initial.name);
   const [gender, setGender] = useState(initial.gender);
+  const [clubGender, setClubGender] = useState(clubContext?.gender);
+  const [playerLevel, setPlayerLevel] = useState<string>(clubContext?.mixedSideOverride ?? "");
+  const [savedLevel, setSavedLevel] = useState<string>(clubContext?.mixedSideOverride ?? "");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [source, setSource] = useState<{ file: File; url: string } | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -39,6 +47,22 @@ function AccountForm({ initial, onSaved }: { initial: AccountUser; onSaved: () =
   const editable = user.isClaimed && !user.isQuickAccess;
   const nameChanged = user.canRenameName && name.trim() !== user.name;
   const genderChanged = user.canChangeGender && gender !== user.gender;
+  const levelOption = getMixedSideOverrideOptionForGender((genderChanged ? gender : clubGender ?? gender) as PlayerGender);
+  const preferencesChanged = !!clubContext && playerLevel !== savedLevel;
+  async function saveChanges() {
+    setNotice("");
+    await action.run(async () => {
+      const body = { ...(nameChanged ? { name: name.trim() } : {}), ...(genderChanged ? { gender } : {}),
+        ...(clubContext && (preferencesChanged || genderChanged) ? { clubPreferences: { clubId: clubContext.clubId, playerId: clubContext.playerId, mixedSideOverride: playerLevel || null } } : {}) };
+      const result = await api<{ user: AccountUser; clubPreferences?: { mixedSideOverride: MixedSide | null } }>("/api/user/me", "PATCH", body);
+      if (genderChanged) setClubGender(result.user.gender as PlayerGender);
+      if (result.clubPreferences) {
+        const confirmedLevel = result.clubPreferences.mixedSideOverride ?? "";
+        setPlayerLevel(confirmedLevel); setSavedLevel(confirmedLevel);
+      }
+      setUser(result.user); setName(result.user.name); setGender(result.user.gender); setConfirmOpen(false); setNotice("Profile updated."); await refresh(result.user.name);
+    });
+  }
   useEffect(() => () => { if (source) URL.revokeObjectURL(source.url); }, [source]);
   async function refresh(nextName?: string) {
     await update(nextName ? { name: nextName } : undefined);
@@ -69,20 +93,22 @@ function AccountForm({ initial, onSaved }: { initial: AccountUser; onSaved: () =
           {editable && <div><button type="button" className="text-button" onClick={() => fileInput.current?.click()}>{user.avatarUrl ? "Change photo" : "Add photo"}</button>{user.avatarUrl && <button type="button" className="text-button muted" onClick={() => void action.run(async () => { await deleteAccountAvatar(); setUser(u => ({ ...u, avatarUrl: null })); setNotice("Photo removed."); await refresh(); })}>Remove photo</button>}</div>}
           <input ref={fileInput} hidden type="file" accept="image/jpeg,image/png,image/webp" aria-label="Profile photo file" onChange={e => { choosePhoto(e.target.files?.[0]); e.target.value = ""; }} />
         </div>
-        <form onSubmit={e => { e.preventDefault(); setNotice(""); void action.run(async () => {
-          const body = { ...(nameChanged ? { name: name.trim() } : {}), ...(genderChanged ? { gender } : {}) };
-          const result = await api<{ user: AccountUser }>("/api/user/me", "PATCH", body);
-          setUser(result.user); setName(result.user.name); setGender(result.user.gender); setNotice("Profile updated."); await refresh(result.user.name);
-        }); }}>
+        <form onSubmit={e => { e.preventDefault(); if (action.busy) return; action.setError(""); if (nameChanged || genderChanged) setConfirmOpen(true); else void saveChanges(); }}>
           <label className="field-label">Account name<input value={name} onChange={e => setName(e.target.value)} disabled={!user.canRenameName} required /></label>
-          <p className="account-field-note">{user.canRenameName ? "You can change your account name once. It updates your connected club profiles." : editable ? "Account name change already used. Your connected club profiles keep the account name." : "Name editing requires a full account."}</p>
-          <label className="field-label">Account gender<select aria-label="Account gender" value={gender} onChange={e => setGender(e.target.value)} disabled={!user.canChangeGender} required><option value="UNSPECIFIED" disabled>Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>
-          <p className="account-field-note">{user.canChangeGender ? "You can change account gender once. It updates connected club profiles; mixed pairing settings remain club-specific." : editable ? "Account gender change already used. Mixed pairing settings remain club-specific." : "Account gender editing requires a full account."}</p>
-          {(user.canRenameName || user.canChangeGender) && <button type="submit" className="primary full" disabled={action.busy || (!nameChanged && !genderChanged) || !name.trim()}>{action.busy ? "Saving…" : "Save changes"}</button>}
+          <label className="field-label">Account gender<select aria-label="Account gender" value={gender} onChange={e => { setGender(e.target.value); setPlayerLevel(""); }} disabled={!user.canChangeGender} required><option value="UNSPECIFIED" disabled>Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>
+          {clubContext && <label className="field-label">Player level · {clubContext.clubName}<select aria-label="Player level" value={playerLevel} onChange={e => setPlayerLevel(e.target.value)} disabled={!levelOption}><option value="">Default</option>{levelOption && <option value={levelOption.value}>{levelOption.label}</option>}</select></label>}
+          {(user.canRenameName || user.canChangeGender || clubContext) && <button type="submit" className="primary full" disabled={action.busy || (!nameChanged && !genderChanged && !preferencesChanged) || !name.trim()}>{action.busy ? "Saving…" : "Save changes"}</button>}
         </form>
         <button type="button" className="text-button account-signout" onClick={() => void signOut({ callbackUrl: "/signin" })}>Sign out</button>
       </>}
     </fieldset>
-    <ErrorText error={action.error} />{notice && <p className="account-notice" role="status">{notice}</p>}
+    <Sheet open={confirmOpen} title="Confirm account changes" busy={action.busy} onClose={() => setConfirmOpen(false)}>
+      {nameChanged && <p>Account name: <strong>{user.name}</strong> → <strong>{name.trim()}</strong></p>}
+      {genderChanged && <p>Account gender: <strong>{user.gender === "UNSPECIFIED" ? "Not set" : user.gender === "MALE" ? "Male" : "Female"}</strong> → <strong>{gender === "MALE" ? "Male" : "Female"}</strong></p>}
+      <p>{nameChanged && genderChanged ? "You can change your name/gender only once." : nameChanged ? "You can change your name only once." : "You can change your gender only once."}</p>
+      <ErrorText error={action.error} />
+      <div className="account-actions"><button type="button" className="secondary" disabled={action.busy} onClick={() => setConfirmOpen(false)}>Cancel</button><button type="button" className="primary" disabled={action.busy} onClick={() => void saveChanges()}>{action.busy ? "Saving…" : "Confirm changes"}</button></div>
+    </Sheet>
+    <ErrorText error={confirmOpen ? "" : action.error} />{notice && <p className="account-notice" role="status">{notice}</p>}
   </div>;
 }

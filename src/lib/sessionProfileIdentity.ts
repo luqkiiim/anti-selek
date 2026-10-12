@@ -1,4 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { deriveClubPairingPreferences } from "./clubPairingPreferences";
+import type { MixedSide } from "@/types/enums";
 import { admissionTransaction } from "@/lib/clubAdmissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { COMMUNITY_OPERATOR_ROLES } from "@/lib/clubRoles";
@@ -7,12 +9,12 @@ import { getAcceptedSessionClubIds, getSessionAdminMembership, getSessionOperato
 type Db = Prisma.TransactionClient | PrismaClient;
 export interface SessionProfilePair {
   playerId: string; profileClubId: string; clubName: string; playerName: string;
-  ownerUserId: string | null; elo: number; preferredPool: string;
+  ownerUserId: string | null; elo: number; preferredPool: string; mixedSideOverride: MixedSide | null;
 }
 export async function getEligibleSessionProfiles(db: Db, { userId, clubIds }: { userId: string; clubIds: string[] }): Promise<SessionProfilePair[]> {
   const access = await db.clubAccess.findMany({ where: { userId, status: "ACTIVE", ...(clubIds.length ? { clubId: { in: clubIds } } : {}) }, select: { clubId: true } });
-  const rows = await db.clubMember.findMany({ where: { ownerUserId: userId, clubId: { in: access.map(a => a.clubId) }, archivedAt: null, retiredByAdmissionEventId: null, player: { isActive: true } }, include: { player: { select: { name: true } }, club: { select: { name: true } } }, orderBy: [{ clubId: "asc" }, { playerId: "asc" }] });
-  return rows.map(m => ({ playerId: m.playerId, profileClubId: m.clubId, clubName: m.club.name, playerName: m.player.name, ownerUserId: m.ownerUserId, elo: m.elo, preferredPool: m.preferredPool }));
+  const rows = await db.clubMember.findMany({ where: { ownerUserId: userId, clubId: { in: access.map(a => a.clubId) }, archivedAt: null, retiredByAdmissionEventId: null, player: { isActive: true } }, include: { player: { select: { name: true, gender: true } }, club: { select: { name: true } } }, orderBy: [{ clubId: "asc" }, { playerId: "asc" }] });
+  return rows.map(m => ({ playerId: m.playerId, profileClubId: m.clubId, clubName: m.club.name, playerName: m.player.name, ownerUserId: m.ownerUserId, elo: m.elo, preferredPool: m.preferredPool, mixedSideOverride: deriveClubPairingPreferences(m).mixedSideOverride }));
 }
 export async function resolveSessionProfilePair(db: Db, args: { userId: string; clubIds: string[]; playerId?: string | null; profileClubId?: string | null; isGlobalAdmin?: boolean }): Promise<SessionProfilePair> {
   let pairs = await getEligibleSessionProfiles(db, args);
@@ -24,7 +26,7 @@ export async function resolveSessionProfilePair(db: Db, args: { userId: string; 
   // Operators may add only a profile in a club they actually operate.
   const access = args.isGlobalAdmin ? null : await db.clubAccess.findMany({ where: { userId: args.userId, status: "ACTIVE", role: { in: [...COMMUNITY_OPERATOR_ROLES] }, ...(args.clubIds.length ? { clubId: { in: args.clubIds } } : {}) }, select: { clubId: true } });
   const manageable = args.isGlobalAdmin ? (args.clubIds.length ? args.clubIds : null) : (access ?? []).map(a => a.clubId);
-  const members = await db.clubMember.findMany({ where: { playerId: args.playerId, archivedAt: null, retiredByAdmissionEventId: null, player: { isActive: true }, ...(args.profileClubId ? { clubId: args.profileClubId } : manageable ? { clubId: { in: manageable } } : {}) }, include: { player: { select: { name: true } }, club: { select: { name: true } } } });
+  const members = await db.clubMember.findMany({ where: { playerId: args.playerId, archivedAt: null, retiredByAdmissionEventId: null, player: { isActive: true }, ...(args.profileClubId ? { clubId: args.profileClubId } : manageable ? { clubId: { in: manageable } } : {}) }, include: { player: { select: { name: true, gender: true } }, club: { select: { name: true } } } });
   const candidates = members.filter(m => !manageable || manageable.includes(m.clubId));
   if (candidates.length !== 1) throw new IdentityConflictError(candidates.length ? "Choose which club profile will participate in this tournament." : "You need active ownership or staff access to this exact club profile.");
   const m = candidates[0];
@@ -32,7 +34,7 @@ export async function resolveSessionProfilePair(db: Db, args: { userId: string; 
     const grant = await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: m.clubId, userId: m.ownerUserId } }, select: { status: true } });
     if (grant?.status !== "ACTIVE") throw new IdentityConflictError("The selected profile owner needs active access to that club before joining.");
   }
-  return { playerId: m.playerId, profileClubId: m.clubId, clubName: m.club.name, playerName: m.player.name, ownerUserId: m.ownerUserId, elo: m.elo, preferredPool: m.preferredPool };
+  return { playerId: m.playerId, profileClubId: m.clubId, clubName: m.club.name, playerName: m.player.name, ownerUserId: m.ownerUserId, elo: m.elo, preferredPool: m.preferredPool, mixedSideOverride: deriveClubPairingPreferences(m).mixedSideOverride };
 }
 /** Revalidate under the shared writer reservation, including claims since preflight. */
 export async function assertSessionAccountSeatAvailable(db: Db, sessionId: string, pair: { playerId: string; ownerUserId: string | null }, excludePlayerId?: string) {
@@ -68,7 +70,7 @@ export async function getSelectedSessionSelf(db: Db, session: { id: string; club
   const ids = [...owners].filter(([, owner]) => owner === userId).map(([id]) => id);
   return ids.length === 1 ? { playerId: ids[0] } : null;
 }
-export async function withSessionProfileRatings<T extends { playerId: string; profileClubId?: string | null; isGuest?: boolean; player: { elo: number } }>(db: Db, session: { id?: string; clubId?: string | null; ratingPolicyVersion?: number }, players: T[]): Promise<T[]> {
+export async function withSessionProfileRatings<T extends { playerId: string; profileClubId?: string | null; isGuest?: boolean; gender?: string; partnerPreference?: string; mixedSideOverride?: string | null; player: { elo: number } }>(db: Db, session: { id?: string; clubId?: string | null; ratingPolicyVersion?: number }, players: T[]): Promise<T[]> {
   const owners = players.length && session.id ? await getSessionParticipantOwners(db, { id: session.id, clubId: session.clubId }) : null;
   return Promise.all(players.map(async seat => {
     let elo = seat.player.elo;
@@ -78,7 +80,7 @@ export async function withSessionProfileRatings<T extends { playerId: string; pr
       if (!member) throw new IdentityConflictError("The selected club rating is unavailable; no other club rating can be substituted.");
       elo = member.elo;
     }
-    return { ...seat, player: { ...seat.player, elo, ...(owners ? { isClaimed: !!owners.get(seat.playerId), email: null } : {}) } };
+    return { ...seat, player: { ...seat.player, elo, ...(seat.gender !== undefined ? { gender: seat.gender } : {}), ...(seat.partnerPreference !== undefined ? { partnerPreference: seat.partnerPreference } : {}), ...(seat.mixedSideOverride !== undefined ? { mixedSideOverride: seat.mixedSideOverride } : {}), ...(owners ? { isClaimed: !!owners.get(seat.playerId), email: null } : {}) } };
   }));
 }
 

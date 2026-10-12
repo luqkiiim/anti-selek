@@ -4,7 +4,7 @@ const state = vi.hoisted(() => ({
   auth: vi.fn(), reserve: vi.fn(), update: vi.fn(),
   accepted: ["a", "b"],
   session: { id: "s", clubId: "a", code: "ABC", ratingPolicyVersion: 2, status: "WAITING", mode: "MEXICANO", poolsEnabled: false, players: [] as Array<{ playerId: string; pool: string; matchesPlayed: number; matchmakingMatchesCredit: number; isPaused: boolean }> },
-  members: [] as Array<{ clubId: string; playerId: string; ownerUserId: string | null; archivedAt: Date | null; retiredByAdmissionEventId: string | null; preferredPool: string; elo: number; club: { name: string }; player: { name: string; isActive: boolean } }>,
+  members: [] as Array<{ clubId: string; playerId: string; ownerUserId: string | null; archivedAt: Date | null; retiredByAdmissionEventId: string | null; preferredPool: string; elo: number; mixedSideOverride: string | null; club: { name: string }; player: { name: string; isActive: boolean; gender: string } }>,
   accesses: [] as Array<{ clubId: string; userId: string; status: string; role: string }>,
   seats: [] as Array<{ playerId: string; profileClubId: string | null; participantAccountId: string | null; representingClubId: string | null; isGuest: boolean }>,
 }));
@@ -41,7 +41,7 @@ vi.mock("@/lib/prisma", () => {
 import { POST } from "./route";
 function post(body: unknown = {}) { return POST(new Request("http://localhost/api/sessions/ABC/join", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { params: Promise.resolve({ code: "ABC" }) }); }
 function member(playerId: string, clubId: string, ownerUserId: string | null = "actor") {
-  return { playerId, clubId, ownerUserId, archivedAt: null, retiredByAdmissionEventId: null, preferredPool: "B", elo: clubId === "a" ? 1400 : 800, club: { name: clubId }, player: { name: playerId, isActive: true } };
+  return { playerId, clubId, ownerUserId, archivedAt: null, retiredByAdmissionEventId: null, preferredPool: "B", mixedSideOverride: null, elo: clubId === "a" ? 1400 : 800, club: { name: clubId }, player: { name: playerId, isActive: true, gender: "FEMALE" } };
 }
 describe("join exact local club profile", () => {
   beforeEach(() => {
@@ -68,6 +68,19 @@ describe("join exact local club profile", () => {
   it("requires club selection even when one legacy physical Player belongs to both clubs", async () => {
     state.members.push(member("pa", "b")); expect((await post({ playerId: "pa" })).status).toBe(409);
     expect((await post({ playerId: "pa", profileClubId: "b" })).status).toBe(200);
+  });
+  it("uses the selected collaboration membership choice while ignoring stale global Player preferences", async () => {
+    state.members.push({ ...member("pa", "b"), mixedSideOverride: "UPPER" });
+    expect((await post({ playerId: "pa", profileClubId: "a" })).status).toBe(200);
+    expect(state.update.mock.calls[0][0].data.players.create).toMatchObject({ gender: "FEMALE", mixedSideOverride: null, partnerPreference: "FEMALE_FLEX" });
+    state.update.mockClear();
+    expect((await post({ playerId: "pa", profileClubId: "b" })).status).toBe(200);
+    expect(state.update.mock.calls[0][0].data.players.create).toMatchObject({ gender: "FEMALE", mixedSideOverride: "UPPER", partnerPreference: "OPEN" });
+  });
+  it("reads a changed membership preference again after acquiring the writer", async () => {
+    state.reserve.mockImplementation(async () => { state.members[0].mixedSideOverride = "UPPER"; return 0; });
+    expect((await post()).status).toBe(200);
+    expect(state.update.mock.calls[0][0].data.players.create).toMatchObject({ mixedSideOverride: "UPPER", partnerPreference: "OPEN" });
   });
   it("rejects revoked or archived local profiles while another club remains active", async () => {
     state.accesses[0].status = "REVOKED";

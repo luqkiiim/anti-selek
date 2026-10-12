@@ -1,3 +1,4 @@
+import { deriveClubPairingPreferences } from "@/lib/clubPairingPreferences";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
@@ -178,11 +179,7 @@ export async function GET(
           )
             ? membership.player.gender
             : PlayerGender.MALE,
-          partnerPreference: membership.player.partnerPreference,
-          mixedSideOverride:
-            typeof membership.player.mixedSideOverride === "string"
-              ? membership.player.mixedSideOverride
-              : null,
+          ...deriveClubPairingPreferences(membership),
           elo: membership.elo,
           isActive: membership.player.isActive,
           isClaimed: !!membership.ownerUserId,

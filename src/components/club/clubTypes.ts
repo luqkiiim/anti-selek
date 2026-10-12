@@ -31,7 +31,8 @@ export interface ClubPageClub {
   rules?: string;
   id: string;
   name: string;
-  role: "ADMIN" | "STAFF" | "MEMBER";
+  role: "ADMIN" | "STAFF" | "MEMBER" | null;
+  readOnly?: boolean;
   viewerIsOwner?: boolean;
   isPasswordProtected: boolean;
   isTutorial: boolean;

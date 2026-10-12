@@ -18,7 +18,7 @@ export async function captureAchievementEligibility(db: Database, sessionId: str
   await db.session.update({where:{id:sessionId},data:{achievementEligibilityJson:JSON.stringify(snapshot)}});
 }
 
-export async function getClubAchievementCollection(clubId: string,playerId: string): Promise<AchievementCollection> {
+export async function getClubAchievementCollection(clubId: string,playerId: string, options: { readOnly?: boolean } = {}): Promise<AchievementCollection> {
   const members=await prisma.clubMember.findMany({where:{clubId,retiredByAdmissionEventId:null},select:{playerId:true,createdAt:true,achievementPreferencesJson:true}});
   const member=members.find(m=>m.playerId===playerId);
   if(!member) throw new Error("Achievement member unavailable");
@@ -35,7 +35,9 @@ export async function getClubAchievementCollection(clubId: string,playerId: stri
     if(!Array.isArray(snapshot[clubId])) {
       // Legacy sessions have no historical roster snapshot. Freeze known members
       // who had joined by the session date; future joins will not rewrite it.
-      await prisma.$transaction(async tx=>{
+      if (options.readOnly) {
+        snapshot[clubId]=members.filter(m=>m.createdAt.toISOString()<=date).map(m=>m.playerId);
+      } else await prisma.$transaction(async tx=>{
         const fresh=await tx.session.findUniqueOrThrow({where:{id:session.id},select:{achievementEligibilityJson:true}});
         snapshot=parseObject(fresh.achievementEligibilityJson);
         if(!Array.isArray(snapshot[clubId])) {

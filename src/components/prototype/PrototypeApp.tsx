@@ -13,6 +13,7 @@ import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
 import { api, useResource, useAction } from "./api";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 import Club from "./Club";
+import { BrowseClubs, type BrowsableClub } from "./BrowseClubs";
 import { AccountSettings, type AccountUser } from "./AccountSettings";
 import { JoinClubAdmission } from "./JoinClubAdmission";
 import "@fontsource/nunito-sans/400.css";
@@ -39,13 +40,16 @@ function ClubMark({ url, tone }: { url?: string | null; tone: number }) {
 export default function PrototypeApp() {
   const { data: auth, status } = useSession();
   const router = useRouter();
-  const account = useResource<{ user: AccountUser }>(status === "authenticated" ? "/api/user/me" : null);
+  const accountReady = status !== "unauthenticated" && !!auth?.user?.id;
+  const account = useResource<{ user: AccountUser }>(accountReady ? "/api/user/me" : null);
   const clubs = useResource<DashboardClub[]>(
-    status === "authenticated" ? "/api/clubs" : null,
+    accountReady ? "/api/clubs" : null,
   );
   const [selected, setSelected] = useState<string | null>(null),
     [form, setForm] = useState(""),
     [value, setValue] = useState("");
+  const [globalClub, setGlobalClub] = useState<BrowsableClub | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const [joinAccountOpen, setJoinAccountOpen] = useState(false);
   const action = useAction(clubs.refresh);
   useEffect(() => {
@@ -73,12 +77,14 @@ export default function PrototypeApp() {
     });return()=>{cancelled=true};
   }, [clubs.data, userId]);
   function select(id: string) {
+    setGlobalClub(null);
     setSelected(id);
     try {
       localStorage.setItem("pc-club:" + userId, id);
     } catch {}
   }
   function switchClub() {
+    setGlobalClub(null);
     setSelected(null);
     try {
       localStorage.removeItem("pc-club:" + userId);
@@ -87,7 +93,7 @@ export default function PrototypeApp() {
   const club = clubs.data?.find((c) => c.id === selected);
   return (
     <div className="prototype-root">
-      {club ? (
+      {globalClub ? <Club key={`global:${globalClub.id}`} globalView club={globalClub} onSwitch={switchClub} onAccountSaved={account.refresh} onClubsChanged={clubs.refresh} /> : club ? (
         <Club key={club.id} club={club} onSwitch={switchClub} onAccountSaved={account.refresh} onClubsChanged={clubs.refresh} />
       ) : (
         <div className="pc-app">
@@ -146,6 +152,7 @@ export default function PrototypeApp() {
                   <CaretRight size={20} />
                 </button>
               ))}
+              {auth?.user?.canBrowseAllClubs && <button className="secondary" onClick={() => setBrowseOpen(true)}>Browse clubs</button>}
               {status === "authenticated" && account.data && !account.data.user.isQuickAccess && (
                 <div className="chooser-actions">
                   <button
@@ -174,6 +181,7 @@ export default function PrototypeApp() {
           </div>
         </div>
       )}
+      {auth?.user?.canBrowseAllClubs && <BrowseClubs open={browseOpen} onClose={() => setBrowseOpen(false)} onSelect={club => { setGlobalClub(club); setBrowseOpen(false); }} />}
       <AccountSettings open={form === "account" || joinAccountOpen} onClose={() => {
         if (joinAccountOpen) void account.refresh().catch(() => {}).finally(() => setJoinAccountOpen(false));
         else setForm("");

@@ -12,6 +12,7 @@ import { tryRebuildAutomaticQueuedMatchForSessionId } from "@/app/api/sessions/[
 import { rateLimit } from "@/lib/rateLimit";
 import { ClubAdmissionError } from "@/lib/clubAdmissions";
 import { ClubPlayerOwnershipError, clubOwnershipTransaction, removeClubPlayerOwnership } from "@/lib/clubPlayerOwnership";
+import { normalizeClubMembershipPreferencesForGender } from "@/lib/clubPairingPreferences";
 import { AccountProfileSyncError, syncAccountProfile } from "@/lib/accountProfileSync";
 import { logError, safeErrorResponse } from "@/lib/errors";
 
@@ -73,11 +74,17 @@ export async function PATCH(request: Request, { params }: Context) {
         if (["ADMIN", "OWNER"].includes(grant.role) && !currentAccess?.isOwner && !currentAccess?.isGlobalAdmin) throw new ClubAdmissionError("Only the club owner can demote admins.", 403);
         await tx.clubAccess.update({ where: { id: grant.id }, data: { role: body.role } });
       }
+      const pairingChanged = body.partnerPreference !== undefined || body.mixedSideOverride !== undefined;
       if (personalChanged && currentSelf) {
-        await syncAccountProfile(tx, { userId: session.user.id, changes: { ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.gender !== undefined ? { gender: body.gender } : {}), ...(body.partnerPreference !== undefined ? { partnerPreference: body.partnerPreference } : {}), ...(body.mixedSideOverride !== undefined ? { mixedSideOverride: body.mixedSideOverride } : {}) } });
+        const preference = pairingChanged ? resolveMixedSideState({ gender: body.gender ?? current.player.gender, mixedSideOverride: body.mixedSideOverride !== undefined ? body.mixedSideOverride : null, partnerPreference: body.mixedSideOverride !== undefined ? undefined : body.partnerPreference }) : null;
+        await syncAccountProfile(tx, { userId: session.user.id, changes: { ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.gender !== undefined ? { gender: body.gender } : {}) }, ...(preference ? { clubPreferences: { clubId, playerId, mixedSideOverride: preference.mixedSideOverride } } : {}) });
       } else if (personalChanged) {
-        const currentMixed = resolveMixedSideState({ gender: body.gender ?? current.player.gender, partnerPreference: body.partnerPreference ?? (body.mixedSideOverride !== undefined ? undefined : current.player.partnerPreference), mixedSideOverride: body.mixedSideOverride !== undefined ? body.mixedSideOverride : current.player.mixedSideOverride });
-        await tx.player.update({ where: { id: playerId }, data: { ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.gender !== undefined ? { gender: body.gender } : {}), ...(mixedChanged ? currentMixed : {}) } });
+        if (body.name !== undefined || body.gender !== undefined) await tx.player.update({ where: { id: playerId }, data: { ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.gender !== undefined ? { gender: body.gender } : {}) } });
+        if (body.gender !== undefined) await normalizeClubMembershipPreferencesForGender(tx, [playerId], body.gender);
+        if (pairingChanged) {
+          const state = resolveMixedSideState({ gender: body.gender ?? current.player.gender, mixedSideOverride: body.mixedSideOverride !== undefined ? body.mixedSideOverride : null, partnerPreference: body.mixedSideOverride !== undefined ? undefined : body.partnerPreference });
+          await tx.clubMember.update({ where: { id: current.id }, data: { mixedSideOverride: state.mixedSideOverride } });
+        }
       }
       if (typeof body.isActive === "boolean") await tx.player.update({ where: { id: playerId }, data: { isActive: body.isActive } });
       if (body.status !== undefined || body.preferredPool !== undefined) await tx.clubMember.update({ where: { id: member.id }, data: { ...(body.status !== undefined ? { status: body.status } : {}), ...(body.preferredPool !== undefined ? { preferredPool: body.preferredPool } : {}) } });
