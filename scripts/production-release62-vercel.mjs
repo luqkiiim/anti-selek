@@ -174,13 +174,13 @@ try {
   const completed=await inventory(d,{previous:[inv],requireResolved:true,rejectNew:true});
   const hosts=permanentHosts(completed,m,d);demand(JSON.stringify(hosts)===JSON.stringify(e.permanentDenyHosts),'INVENTORY_DENY_HOSTS_CHANGED');
   const permanent={name:oldName,active:true,conditionGroup:permanentDenyConditions(hosts),action:{mitigate:{action:'deny'}}};
-  openingHttp=true;
+  const publicOpenedAt=new Date().toISOString();openingHttp=true;
   run(['firewall','rules','edit',e.maintenanceRule.id,'--json',JSON.stringify(permanent),'--yes','--project',PROJECT]);publish([{action:'rules.update',id:e.maintenanceRule.id,value:permanent}]);
   const after=firewall();baseline(after);demand(after.active.rules.length===3&&sameConditions(canonicalRules(after.active.rules.filter(r=>r.id===e.maintenanceRule.id)),canonicalRules([{id:e.maintenanceRule.id,...permanent}])),'HTTP_THAW_FAILED');
   const finalInventory=await inventory(d,{previous:[completed],requireResolved:true,rejectNew:true});
   let finalToken=tokenFrom(target());const finalDenials=await inventoryDenials(finalInventory,d,finalToken);finalToken=null;
   const finalCompleted=await inventory(d,{previous:[finalInventory],requireResolved:true,rejectNew:true});
-  write('http-open-evidence.json',{...base(after),observedAt:new Date().toISOString(),deploymentId:d.id,commit,host:d.url,inventory:finalCompleted,permanentDenyHosts:hosts,firewallRules:after.active.rules,oldHostDenials:finalDenials});
+  write('http-open-evidence.json',{...base(after),observedAt:new Date().toISOString(),publicOpenedAt,deploymentId:d.id,commit,host:d.url,inventory:finalCompleted,permanentDenyHosts:hosts,firewallRules:after.active.rules,oldHostDenials:finalDenials});
   openingHttp=false;
   console.log(JSON.stringify({stage:'public-http-reopened',oldGenerationsRemainDenied:true}));
  } else if(mode==='public-runtime') {
@@ -190,10 +190,12 @@ try {
   demand(d.id===opened.deploymentId&&d.url===opened.host&&d.meta?.githubCommitSha===commit,'DEPLOYMENT_CHANGED');currentProduction(d);
   const before=firewall();baseline(before);cleanDraft();demand(sameConditions(canonicalRules(before.active.rules),canonicalRules(opened.firewallRules)),'PUBLIC_FIREWALL_CHANGED');
   const scope=publicRuntimeScope({projectId:PROJECT,teamId:TEAM,deploymentId:d.id,host:d.url});
-  const smokeStartedAt=new Date().toISOString();demand(Date.parse(smokeStartedAt)>=Date.parse(opened.observedAt),'PUBLIC_WINDOW_BEFORE_OPEN');
+  const probeStartedAt=new Date().toISOString(),smokeStartedAt=opened.publicOpenedAt;
+  demand(Number.isFinite(Date.parse(smokeStartedAt))&&Date.parse(smokeStartedAt)<=Date.parse(opened.observedAt)
+    &&Date.parse(opened.observedAt)<=Date.parse(probeStartedAt)&&Date.parse(probeStartedAt)-Date.parse(smokeStartedAt)<900000,'PUBLIC_WINDOW_BEFORE_OPEN');
   const smokeResults=await Promise.all(['/','/api/auth/session'].map(path=>probe(ALIASES[0],path,undefined,{correlate:true})));
   demand(smokeResults.every(result=>result.appResponse&&result.status===200&&result.protectionBypassSent===false),'PUBLIC_SMOKE_FAILED');
-  const smoke={deploymentId:d.id,host:d.url,smokeStartedAt,smokeResults};
+  const smoke={deploymentId:d.id,host:d.url,smokeStartedAt,probeStartedAt,smokeResults};
   const runtime=await collectRuntimeEvidence(scope,smoke);validateRuntimeEvidence(runtime,scope,smoke);currentProduction(d);
   const after=firewall();baseline(after);cleanDraft();demand(sameConditions(canonicalRules(after.active.rules),canonicalRules(opened.firewallRules)),'PUBLIC_FIREWALL_CHANGED');
   write('public-runtime-evidence.json',{...base(after),observedAt:new Date().toISOString(),commit,deploymentId:d.id,host:d.url,smoke,runtime});
