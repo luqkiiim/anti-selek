@@ -81,7 +81,7 @@ test("a request stays pending before review and the claimed Player keeps match h
   await joinDialog.getByRole("button", { name: /Claim Candidate/ }).click();
   await expect(joinDialog.getByText(/1\s+match(?:es)?/)).toBeVisible();
   await joinDialog.getByRole("button", { name: "Request to connect this Player" }).click();
-  await expect(joinDialog.getByText("Request sent")).toBeVisible();
+  await expect(joinDialog.getByText("Waiting for admin approval")).toBeVisible();
   await expect(joinDialog.getByText(/An admin will review your request/)).toBeVisible();
 
   const pendingAccount = await page.evaluate(async () => {
@@ -118,7 +118,7 @@ test("a request stays pending before review and the claimed Player keeps match h
   await page.goto(`/?join=${encodeURIComponent(claimClubId)}`);
   const approvedDialog = page.getByRole("dialog", { name: "Join a club" });
   await expect(approvedDialog.getByText("You’re already a member.")).toBeVisible();
-  await approvedDialog.getByRole("button", { name: "Open E2E Claim Club" }).click();
+  await approvedDialog.getByRole("button", { name: "Open club", exact: true }).click();
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   const playerProfile = page.locator(".player-profile");
   await expect(playerProfile.getByRole("heading", { name: "Your latest session" })).toBeVisible();
@@ -180,7 +180,7 @@ test("registration creates only an Account until a new Player request is approve
   await joinDialog.getByRole("button", { name: "I’m new to this club" }).click();
   await joinDialog.getByLabel("Player name").fill(newAdmissionPlayerName);
   await joinDialog.getByRole("button", { name: "Send request" }).click();
-  await expect(joinDialog.getByText("Request sent")).toBeVisible();
+  await expect(joinDialog.getByText("Waiting for admin approval")).toBeVisible();
 
   const pendingAccount = await page.evaluate(async () => {
     const response = await fetch("/api/user/me");
@@ -238,7 +238,7 @@ test("registration creates only an Account until a new Player request is approve
   await page.goto(`/?join=${encodeURIComponent(newAdmissionClubId)}`);
   const approvedDialog = page.getByRole("dialog", { name: "Join a club" });
   await expect(approvedDialog.getByText("You’re already a member.")).toBeVisible();
-  await approvedDialog.getByRole("button", { name: "Open E2E New Admission Club" }).click();
+  await approvedDialog.getByRole("button", { name: "Open club", exact: true }).click();
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   await expect(page.locator(".player-profile")).toContainText(newAdmissionPlayerName);
   await expect(page.getByRole("heading", { name: "Player preferences" })).toBeVisible();

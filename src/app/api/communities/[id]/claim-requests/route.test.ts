@@ -17,7 +17,7 @@ function claim(body: unknown) {
   return POST(
     new Request("http://localhost/api/communities/club/claim-requests", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", Origin: "http://localhost" },
       body: JSON.stringify(body),
     }),
     { params: Promise.resolve({ id: "club" }) },

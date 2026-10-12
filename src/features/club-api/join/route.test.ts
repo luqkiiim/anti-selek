@@ -49,9 +49,10 @@ import { POST } from "./route";
 
 describe("club join API", () => {
   beforeEach(() => {
+    process.env.AUTH_SECRET = "test-entry-secret-for-integration-only";
     vi.clearAllMocks();
     mocks.rateLimit.mockResolvedValue(null);
-    mocks.account.mockResolvedValue({ id: "viewer-1", name: "Account Name", gender: "MALE", isActive: true });
+    mocks.account.mockResolvedValue({ id: "viewer-1", name: "Account Name", gender: "MALE", isActive: true, sessionVersion: 0 });
     mocks.submit.mockResolvedValue({ id: "request-1", status: "PENDING" });
     mocks.auth.mockResolvedValue({
       user: {
@@ -85,7 +86,7 @@ describe("club join API", () => {
     const response = await POST(
       new Request("http://localhost/api/clubs/join", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", Origin: "http://localhost" },
         body: JSON.stringify({ clubName: "Club One" }),
       })
     );
@@ -107,7 +108,7 @@ describe("club join API", () => {
     const response = await POST(
       new Request("http://localhost/api/clubs/join", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", Origin: "http://localhost" },
         body: JSON.stringify({ clubName: "Missing Club" }),
       })
     );
@@ -133,7 +134,7 @@ describe("club join API", () => {
     const response = await POST(
       new Request("http://localhost/api/clubs/join", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", Origin: "http://localhost" },
         body: JSON.stringify({ clubName: "Club One" }),
       })
     );
@@ -159,7 +160,7 @@ describe("club join API", () => {
 
     const invalid = await POST(new Request("http://localhost/api/clubs/join", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", Origin: "http://localhost" },
       body: JSON.stringify({ clubName: "Protected Club", password: "wrong", targetPlayerId: "forged-player" }),
     }));
     expect(invalid.status).toBe(403);
@@ -167,7 +168,7 @@ describe("club join API", () => {
 
     const accepted = await POST(new Request("http://localhost/api/clubs/join", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", Origin: "http://localhost" },
       body: JSON.stringify({ clubName: "Protected Club", password, targetPlayerId: "forged-player", targetUserId: "forged-player" }),
     }));
     expect(accepted.status).toBe(200);

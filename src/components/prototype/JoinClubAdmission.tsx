@@ -7,6 +7,8 @@ import { formatProfileDate } from "./profileDate";
 import type { AdmissionCandidate, AdmissionDiscovery, AdmissionKind, AdmissionRequest, AdmissionRequestSummary } from "./admissionTypes";
 import "./admission.css";
 
+type ClubResult = { id: string; name: string; avatarUrl: string | null; isPasswordProtected: boolean };
+
 type Selection = { id: string; kind: "EXISTING_PLAYER" } | null;
 
 function parseClubId(value: string) {
@@ -35,6 +37,12 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   onOpenClub: (clubId: string) => void;
 }) {
   const [value, setValue] = useState(initialValue);
+  const [clubQuery, setClubQuery] = useState("");
+  const [clubResults, setClubResults] = useState<ClubResult[]>([]);
+  const [clubSearching, setClubSearching] = useState(false);
+  const [clubSearchError, setClubSearchError] = useState("");
+  const [password, setPassword] = useState("");
+  const searchVersion = useRef(0);
   const [discovery, setDiscovery] = useState<AdmissionDiscovery | null>(null);
   const [latestRequest, setLatestRequest] = useState<AdmissionRequestSummary | null>(null);
   const [mode, setMode] = useState<"start" | "existing" | "new">("start");
@@ -42,14 +50,17 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   const [selection, setSelection] = useState<Selection>(null);
   const [playerName, setPlayerName] = useState(accountName);
   const [gender, setGender] = useState(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : "");
+  const [duplicates, setDuplicates] = useState<AdmissionCandidate[]>([]);
+  const [duplicateError, setDuplicateError] = useState("");
+  const [duplicateSearching, setDuplicateSearching] = useState(false);
   const [note, setNote] = useState("");
-  const [clubPassword, setClubPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const requestVersion = useRef(0);
 
-  async function loadClub(clubId: string, search = "", nextMode: "start" | "existing" = "start") {
+  async function loadClub(clubId: string, search = "", nextMode: "start" | "existing" | "new" = "start") {
     const version = ++requestVersion.current;
+    setPassword("");
     setBusy(true);
     setError("");
     if (nextMode === "existing" && discovery) {
@@ -63,7 +74,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       if (requestVersion.current !== version) return;
       setDiscovery(result);
       setLatestRequest(result.requests[0] ?? null);
-      setMode(nextMode);
+      setMode(result.requiresJoinCode ? "start" : nextMode);
       setSelection(null);
       setQuery(search);
       setValue(clubId);
@@ -83,47 +94,90 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialValue]);
 
+  useEffect(() => {
+    const version = ++searchVersion.current;
+    const controller = new AbortController();
+    const q = clubQuery.trim();
+    setClubResults([]);
+    setClubSearchError("");
+    if (!open || discovery || q.length < 2) { setClubSearching(false); return () => controller.abort(); }
+    setClubSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/clubs/search?${new URLSearchParams({ q })}`, { signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data?.error || "Unable to search clubs");
+        if (version === searchVersion.current && !controller.signal.aborted) setClubResults(data.clubs);
+      } catch (reason) {
+        if (version === searchVersion.current && !controller.signal.aborted) setClubSearchError(reason instanceof Error ? reason.message : "Unable to search clubs");
+      } finally {
+        if (version === searchVersion.current && !controller.signal.aborted) setClubSearching(false);
+      }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [clubQuery, open, discovery]);
+
+  useEffect(() => {
+    if (!open) { requestVersion.current += 1; setPassword(""); }
+  }, [open]);
+
+  const duplicateClubId = discovery?.club.id;
+  const duplicateLocked = discovery?.requiresJoinCode || discovery?.identityReviewRequired;
+  useEffect(() => {
+    const controller = new AbortController();
+    setDuplicates([]); setDuplicateError(""); setDuplicateSearching(false);
+    const q = playerName.trim().slice(0, 64);
+    if (!open || mode !== "new" || !duplicateClubId || duplicateLocked || !q) return () => controller.abort();
+    setDuplicateSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/clubs/join-requests?${new URLSearchParams({ clubId: duplicateClubId, q })}`, { signal: controller.signal });
+        const data = await response.json();
+        if (controller.signal.aborted) return;
+        if (!response.ok) throw new ApiError(data?.error || "Unable to check matching profiles", response.status, data?.code);
+        const result = data as AdmissionDiscovery;
+        if (result.requiresJoinCode) {
+          setDiscovery(result); setLatestRequest(result.requests[0] ?? null); setMode("start"); setSelection(null);
+        } else if (result.identityReviewRequired) { setDiscovery(result); setSelection(null); }
+        else setDuplicates(result.players);
+      } catch (reason) {
+        if (!controller.signal.aborted) {
+          if (reason instanceof ApiError && (reason.code === "JOIN_CODE_REQUIRED" || reason.code === "PASSWORD_REQUIRED")) {
+            setDiscovery(current => current ? { ...current, requiresJoinCode: true, players: [] } : current); setMode("start"); setSelection(null); setPassword("");
+          }
+          setDuplicateError(reason instanceof Error ? reason.message : "Unable to check matching profiles");
+        }
+      } finally { if (!controller.signal.aborted) setDuplicateSearching(false); }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [open, mode, duplicateClubId, duplicateLocked, playerName]);
+
+  async function verifyEntry() {
+    if (!discovery) return;
+    const clubId = discovery.club.id;
+    const entered = password;
+    const version = ++requestVersion.current;
+    setPassword("");
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/clubs/join-entry", "POST", { clubId, password: entered });
+      if (requestVersion.current === version) await loadClub(clubId);
+    } catch (reason) {
+      if (requestVersion.current !== version) return;
+      setError(reason instanceof Error ? reason.message : "Unable to verify the club join code");
+    } finally { setBusy(false); }
+  }
+
   const currentPending = latestRequest
     ? latestRequest.status === "PENDING" ? latestRequest : null
     : discovery?.requests.find(request => request.status === "PENDING") ?? null;
   const mostRecentRequest = latestRequest ?? discovery?.requests[0] ?? null;
   const hasActiveAccess = discovery?.access?.status === "ACTIVE";
-  const isMember = hasActiveAccess && !!discovery?.membership;
-  const proofSatisfied = discovery?.passwordProof.status === "NOT_REQUIRED" || discovery?.passwordProof.status === "VERIFIED";
-
-  function relockProtectedDiscovery(clubId: string) {
-    setDiscovery(current => current?.club.id === clubId ? {
-      ...current,
-      passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null },
-      players: [],
-    } : current);
-    setSelection(null);
-    setMode("start");
-  }
-
-  async function verifyPassword() {
-    if (!discovery) return;
-    setBusy(true);
-    setError("");
-    try {
-      await api<{ ok: true; clubId: string; expiresAt: string }>("/api/clubs/join-proof", "POST", { clubId: discovery.club.id, password: clubPassword });
-      setClubPassword("");
-      await loadClub(discovery.club.id, query, mode === "existing" ? "existing" : "start");
-    } catch (reason) {
-      if (reason instanceof ApiError && reason.code === "INVALID_PASSWORD") setError("That password is incorrect. Try again.");
-      else if (reason instanceof ApiError && reason.code === "PASSWORD_REQUIRED") {
-        setClubPassword("");
-        relockProtectedDiscovery(discovery.club.id);
-        await loadClub(discovery.club.id, query, mode === "existing" ? "existing" : "start");
-      } else setError(reason instanceof Error ? reason.message : "Unable to verify the club password.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const isMember = hasActiveAccess && !!discovery?.membership && !discovery?.identityReviewRequired;
 
   async function submit(kind: AdmissionKind, requestedPlayerId?: string) {
-    if (!discovery) return;
-    if (!proofSatisfied) { setError("Enter the club password to continue."); return; }
+    if (!discovery || discovery.requiresJoinCode || discovery.identityReviewRequired) return;
     setBusy(true);
     setError("");
     try {
@@ -142,11 +196,14 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       setLatestRequest(result);
       setMode("start");
     } catch (reason) {
-      if (reason instanceof ApiError && reason.code === "PASSWORD_REQUIRED") {
-        relockProtectedDiscovery(discovery.club.id);
-        await loadClub(discovery.club.id, query, mode === "existing" ? "existing" : "start");
-        setError("The password check expired. Enter the club password to continue.");
-      } else setError(reason instanceof Error ? reason.message : "Unable to send your request");
+      if (reason instanceof ApiError && (reason.code === "JOIN_CODE_REQUIRED")) {
+        setPassword("");
+        setSelection(null);
+        setMode("start");
+        setDiscovery(current => current ? { ...current, requiresJoinCode: true, players: [] } : current);
+        await loadClub(discovery.club.id);
+      }
+      setError(reason instanceof Error ? reason.message : "Unable to send your request");
     } finally {
       setBusy(false);
     }
@@ -171,64 +228,74 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
     setSelection(null);
   }
 
-  return <Sheet open={open} title="Join a club" busy={busy} onClose={onClose}>
+  return <Sheet open={open} title="Join a club" busy={busy} onClose={() => { requestVersion.current += 1; setPassword(""); onClose(); }}>
     <ErrorText error={error} />
     {!discovery ? <>
-      <p className="muted">Enter the club code or paste its invite link.</p>
-      <form className="admission-form" onSubmit={event => { event.preventDefault(); const clubId = parseClubId(value); if (!clubId) { setError("Enter a valid club code or invite link."); return; } void loadClub(clubId); }}>
-        <label className="field-label">Invite link or club code<input value={value} onChange={event => setValue(event.target.value)} placeholder="Paste an invite link" autoComplete="off" /></label>
+      <p className="muted">Find your club by name, then request admin approval to join.</p>
+      <div className="admission-club-search">
+        <label className="field-label">Search clubs by name<input value={clubQuery} maxLength={64} onChange={event => setClubQuery(event.target.value)} placeholder="Enter at least 2 characters" autoComplete="off" /></label>
+        <ErrorText error={clubSearchError} />
+        {clubSearching && <p role="status">Searching clubs…</p>}
+        {!clubSearching && clubQuery.trim().length >= 2 && !clubResults.length && !clubSearchError && <p className="admission-empty">No clubs found. Ask the admin for a club ID or invite link.</p>}
+        {!!clubResults.length && <div className="admission-club-results">{clubResults.map(club => <button type="button" className="admission-club-result" key={club.id} disabled={busy} onClick={() => { setPassword(""); void loadClub(club.id); }}><Avatar name={club.name} url={club.avatarUrl} /><span><strong>{club.name}</strong><small>{club.isPasswordProtected ? "Club join code required" : "Admin approval required"}</small></span></button>)}</div>}
+      </div>
+      <p className="muted">Already have a club ID or invite link?</p>
+      <form className="admission-form" onSubmit={event => { event.preventDefault(); const clubId = parseClubId(value); if (!clubId) { setError("Enter a valid club ID or invite link."); return; } void loadClub(clubId); }}>
+        <label className="field-label">Invite link or club ID<input value={value} onChange={event => setValue(event.target.value)} placeholder="Paste an invite link" autoComplete="off" /></label>
         <button className="primary" disabled={busy || !value.trim()}>{busy ? "Finding club…" : "Find club"}</button>
       </form>
     </> : <>
-      <div className="admission-club-heading"><span className="eyebrow">CLUB</span><h3>{discovery.club.name}</h3></div>
-      {isMember ? <div className="admission-status is-approved" role="status"><strong>You’re already a member.</strong><span>Your Player profile is connected to this club.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id)}>Open {discovery.club.name}</button></div>
-        : currentPending ? <div className="admission-status" role="status"><strong>Request sent</strong><span>An admin will review your request to {discovery.club.name}.</span><small>Sent {formatProfileDate(currentPending.createdAt)}</small><button className="text-button" type="button" onClick={() => void cancel(currentPending)}>Cancel request</button></div>
+      <div className="admission-club-heading"><Avatar name={discovery.club.name} url={discovery.club.avatarUrl} /><span className="eyebrow">CLUB</span><h3>{discovery.club.name}</h3></div>
+      {isMember ? <div className="admission-status is-approved" role="status"><strong>You’re already a member.</strong><span>Your Player profile is connected to this club.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id)}>Open club</button></div>
+        : currentPending ? <div className="admission-status" role="status"><strong>Waiting for admin approval</strong><span>An admin will review your request to {discovery.club.name}.</span><small>Sent {formatProfileDate(currentPending.createdAt)}</small><button className="text-button" type="button" onClick={() => void loadClub(discovery.club.id)}>Refresh status</button><button className="text-button" type="button" onClick={() => void cancel(currentPending)}>Cancel request</button></div>
+        : discovery.identityReviewRequired ? <div className="admission-status" role="status"><strong>Ask an admin to restore your Player profile.</strong><span>Your existing profile needs an admin review before you can join or open this club.</span></div>
         : mostRecentRequest?.status === "REJECTED" ? <div className="admission-status is-rejected" role="status"><strong>Your last request was declined.</strong><span>You can send a new request if your Player details have changed.</span></div>
-        : mostRecentRequest?.status === "APPROVED" ? <div className="admission-status" role="status"><strong>Your request was approved.</strong><span>Club access may have since changed. Ask an admin if you still cannot open the club.</span></div>
+        : mostRecentRequest?.status === "APPROVED" ? <div className="admission-status" role="status"><strong>Your request was approved.</strong><span>Ask an admin if your club access has changed.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id)}>Open club</button></div>
         : null}
 
-      {!isMember && !currentPending && hasActiveAccess && <div className="admission-status is-approved" role="status"><strong>Your account already has club access.</strong><span>Connect a Player profile to appear on the roster and keep the right match history.</span></div>}
+      {!isMember && !currentPending && !discovery.identityReviewRequired && hasActiveAccess && <div className="admission-status is-approved" role="status"><strong>Your account already has club access.</strong><span>Connect a Player profile to appear on the roster and keep the right match history.</span></div>}
 
-      {!isMember && !currentPending && discovery.club.allowJoinRequests && discovery.passwordProof.status === "PASSWORD_REQUIRED" ? <section className="admission-status" aria-label="Club password required">
-        <strong>Verify the club password to browse Player profiles.</strong>
-        <p>Request status and existing access remain available without the password.</p>
-        <form className="admission-form" onSubmit={event => { event.preventDefault(); void verifyPassword(); }}>
-          <label className="field-label">Club password<input type="password" value={clubPassword} onChange={event => setClubPassword(event.target.value)} autoComplete="current-password" /></label>
-          <button className="primary" disabled={busy || !clubPassword}>{busy ? "Checking password…" : "Continue"}</button>
-        </form>
-      </section> : !isMember && !currentPending && <>
+      {!isMember && !currentPending && !discovery.identityReviewRequired && mostRecentRequest?.status !== "APPROVED" && <>
         {!discovery.club.allowJoinRequests ? <div className="admission-status"><strong>Requests are closed.</strong><span>{discovery.club.name} is not accepting new members right now.</span></div>
-          : !proofSatisfied ? null : mode === "start" ? <>
-            <h3 className="admission-question">Choose your profile for this club</h3>
-            <p className="muted">Profiles and match history belong to each club separately.</p>
+          : discovery.requiresJoinCode ? <form className="admission-entry-code admission-form" onSubmit={event => { event.preventDefault(); void verifyEntry(); }}>
+            <h3>Enter the club join code</h3><p className="muted">Ask the club admin for this code. You’ll still need admin approval after entering it.</p>
+            <label className="field-label">Club join code<input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete="off" maxLength={100} /></label>
+            <button className="primary" disabled={busy || !password}>Continue</button>
+          </form>
+          : mode === "start" ? <>
+            <h3 className="admission-question">Have you played with this club before?</h3>
+            <p className="muted">We’ll connect you to the right Player record so your match history stays together.</p>
             <div className="admission-choice-grid">
-              <button type="button" className="admission-choice" onClick={openExisting}><strong>Use an existing club profile</strong><span>Find a local placeholder on this roster</span></button>
-              <button type="button" className="admission-choice" onClick={() => { setMode("new"); setSelection(null); setPlayerName(accountName); setGender(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : ""); }}><strong>I’m new to this club</strong><span>Request a new local profile</span></button>
+              <button type="button" className="admission-choice" onClick={openExisting}><strong>Yes, find my profile</strong><span>Search the club roster</span></button>
+              <button type="button" className="admission-choice" onClick={() => { setMode("new"); setSelection(null); setPlayerName(accountName); setGender(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : ""); }}><strong>I’m new to this club</strong><span>Ask the admin to add a Player</span></button>
             </div>
           </> : mode === "existing" ? <>
-            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to profile choices</button>
+            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
             <h3>Find your Player profile</h3>
-            <p className="muted">Choose an unclaimed profile already on {discovery.club.name}’s roster.</p>
+            <p className="muted">Choose the profile that represents you in {discovery.club.name}.</p>
             <form className="admission-search" onSubmit={event => { event.preventDefault(); void loadClub(discovery.club.id, query, "existing"); }}>
-              <label className="field-label">Search by name<input value={query} maxLength={64} onChange={event => setQuery(event.target.value)} placeholder="Player name" /></label>
+              <label className="field-label">Search by name<input value={query} maxLength={64} onChange={event => { setQuery(event.target.value); setSelection(null); requestVersion.current += 1; setBusy(false); }} placeholder="Player name" /></label>
               <button className="secondary" type="submit" disabled={busy}>{busy ? "Searching…" : "Search"}</button>
             </form>
             {!!discovery.players.length && <div className="admission-player-list" aria-label="Unclaimed Player profiles in this club">{discovery.players.map(player => <PlayerChoice key={player.id} player={player} selected={selection?.id === player.id} detail={playerMeta(player)} onClick={() => setSelection({ id: player.id, kind: "EXISTING_PLAYER" })} />)}</div>}
-            {!discovery.players.length && <p className="admission-empty">No unclaimed Player profiles match this search.</p>}
+            {!discovery.players.length && <p className="admission-empty">No unclaimed Player profiles match this search. If your profile is missing or already claimed, ask the admin to help connect it.</p>}
             <label className="field-label">Note for the admin <textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder="Optional context for your request" /></label>
             <button type="button" className="primary" disabled={!selection || busy} onClick={() => selection && void submit(selection.kind, selection.id)}>Request to connect this Player</button>
           </> : <>
-            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to profile choices</button>
-            <h3>Request a new local profile</h3>
-            <p className="muted">The admin will review your request to create a Player profile for this club.</p>
+            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
+            <h3>Request a new Player profile</h3>
+            <p className="muted">The admin will review your request before a Player profile is created.</p>
             <label className="field-label">Player name<input value={playerName} maxLength={100} onChange={event => setPlayerName(event.target.value)} required /></label>
+            {duplicateSearching && <p role="status">Checking matching profiles…</p>}
+            <ErrorText error={duplicateError} />
+            {!!duplicates.length && <section className="admission-duplicates"><h4>Could one of these profiles be yours?</h4><p className="muted">These unclaimed profiles match the name you entered. Connect yours to keep your match history, or continue with a new profile if none represents you.</p>{duplicates.map(player => <PlayerChoice key={player.id} player={player} selected={selection?.id === player.id} detail={playerMeta(player)} onClick={() => { setDiscovery(current => current ? { ...current, players: duplicates } : current); setMode("existing"); setSelection({ id: player.id, kind: "EXISTING_PLAYER" }); }} />)}</section>}
             <label className="field-label">Gender for mixed pairing<select value={gender} onChange={event => setGender(event.target.value)} required><option value="" disabled>Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>
             <p className="muted">This belongs to your new Player profile and does not change your account gender.</p>
             <label className="field-label">Note for the admin <textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder="Optional context for your request" /></label>
             <button type="button" className="primary" disabled={busy || playerName.trim().length < 1 || !gender} onClick={() => void submit("NEW_PLAYER")}>Send request</button>
           </>}
       </>}
-      <button type="button" className="text-button admission-change-club" onClick={() => { setDiscovery(null); setLatestRequest(null); setMode("start"); setClubPassword(""); setError(""); }}>Use a different club code</button>
+      <button type="button" className="text-button admission-change-club" onClick={() => { requestVersion.current += 1; setPassword(""); setDiscovery(null); setLatestRequest(null); setSelection(null); setMode("start"); setError(""); }}>Find a different club</button>
     </>}
   </Sheet>;
 }
@@ -237,6 +304,6 @@ function PlayerChoice({ player, selected, detail, onClick }: { player: Admission
   return <button type="button" className="admission-player-choice" aria-pressed={selected} onClick={onClick}>
     <Avatar name={player.name} url={player.avatarUrl} />
     <span><strong>{player.name}</strong><small>{detail}{player.lastPlayedAt ? ` · last played ${formatProfileDate(player.lastPlayedAt)}` : ""}</small></span>
-    <b>{selected ? "Selected" : "Choose"}</b>
+    <b>{selected ? "Selected" : "This is me"}</b>
   </button>;
 }
