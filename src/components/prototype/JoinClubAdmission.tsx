@@ -285,15 +285,13 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
           </form>
           : mode === "start" ? <>
             <h3 className="admission-question">Have you played with this club before?</h3>
-            <p className="muted">We’ll connect you to the right Player record so your match history stays together.</p>
             <div className="admission-choice-grid">
-              <button type="button" className="admission-choice" onClick={openExisting}><strong>Yes, find my profile</strong><span>Search the club roster</span></button>
-              <button type="button" className="admission-choice" onClick={() => { setMode("new"); setSelection(null); setError(""); }}><strong>I’m new to this club</strong><span>Ask the admin to add a Player</span></button>
+              <button type="button" className="admission-choice" onClick={openExisting}><strong>Yes, find my profile</strong></button>
+              <button type="button" className="admission-choice" onClick={() => { setMode("new"); setSelection(null); setError(""); }}><strong>I’m new to this club</strong></button>
             </div>
           </> : mode === "existing" ? <>
             <button type="button" className="secondary admission-back" onClick={() => { setMode("start"); setError(""); }}><CaretLeft size={18} aria-hidden="true" />Back</button>
             <h3>Find your Player profile</h3>
-            <p className="muted">Choose the profile that represents you in {discovery.club.name}.</p>
             <form className="admission-search" onSubmit={event => { event.preventDefault(); void loadClub(discovery.club.id, query, "existing"); }}>
               <label className="field-label">Search by name<input value={query} maxLength={64} onChange={event => { setQuery(event.target.value); setSelection(null); requestVersion.current += 1; setBusy(false); }} placeholder="Player name" /></label>
               <button className="secondary" type="submit" disabled={busy}>{busy ? "Searching…" : "Search"}</button>
