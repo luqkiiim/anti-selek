@@ -95,7 +95,9 @@ function SheetDialog({ title, onClose, children, footer, busy = false }: SheetPr
         onDragEnd={(_, info) => { if (info.offset.y > 96 || info.velocity.y > 550) close(); }}>
         <div className="sheet-handle-zone" onPointerDown={e => controls.start(e)}><div className="sheet-handle" /></div>
         <header><h2>{title}</h2><button disabled={busy} className="icon-button" aria-label="Close" onClick={close}><X size={22} /></button></header>
-        <fieldset disabled={busy} className="sheet-content">{children}</fieldset>
+        {footer != null
+          ? <div className="sheet-content sheet-body-scroll"><fieldset disabled={busy} className="sheet-body-fields">{children}</fieldset></div>
+          : <fieldset disabled={busy} className="sheet-content">{children}</fieldset>}
         {footer != null && <fieldset disabled={busy} className="sheet-footer">{footer}</fieldset>}
       </motion.div>
     </dialog>
