@@ -3,7 +3,7 @@ const mocks = vi.hoisted(() => ({ auth: vi.fn(), accountFind: vi.fn(), members: 
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/rateLimit", () => ({ rateLimit: async () => null }));
 vi.mock("@/lib/serverAudit", () => ({ logAuditEvent: vi.fn() }));
-vi.mock("@/lib/clubAdmissions", () => ({ admissionTransaction: async (_db: unknown, fn: (tx: object) => unknown) => fn({}) }));
+vi.mock("@/lib/clubPlayerOwnership", () => ({ clubOwnershipTransaction: async (_db: unknown, fn: (tx: object) => unknown) => fn({}) }));
 vi.mock("@/lib/accountProfileSync", async original => ({ ...await original<typeof import("@/lib/accountProfileSync")>(), syncAccountProfile: mocks.sync }));
 vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: mocks.accountFind, findUniqueOrThrow: mocks.accountFind }, clubMember: { findMany: mocks.members, findUnique: mocks.member } } }));
 import { GET, PATCH } from "./route";

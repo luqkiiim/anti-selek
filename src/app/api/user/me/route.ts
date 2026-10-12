@@ -7,7 +7,7 @@ import { getSessionAccountId, getQuickAccessPlayerId } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { nonretiredPlayer } from "@/lib/playerIdentity";
-import { admissionTransaction } from "@/lib/clubAdmissions";
+import { clubOwnershipTransaction } from "@/lib/clubPlayerOwnership";
 import { AccountProfileSyncError, syncAccountProfile } from "@/lib/accountProfileSync";
 import { deriveClubPairingPreferences } from "@/lib/clubPairingPreferences";
 import { z } from "zod";
@@ -50,7 +50,7 @@ export async function PATCH(request: Request) {
     if (!userId) return NextResponse.json({ error: "Sign in with an account to edit account settings" }, { status: 403 });
     const parsed = z.object({ name: z.string().trim().min(1).max(100).optional(), gender: z.enum(["MALE", "FEMALE"]).optional(), clubPreferences: z.object({ clubId: z.string().min(1), playerId: z.string().min(1), mixedSideOverride: z.enum(["UPPER", "LOWER"]).nullable() }).strict().optional() }).strict().safeParse(await request.json().catch(() => null));
     if (!parsed.success || !Object.keys(parsed.data).length) return NextResponse.json({ error: "Supply valid account settings" }, { status: 400 });
-    const result = await admissionTransaction(prisma, tx => syncAccountProfile(tx, { userId, changes: { name: parsed.data.name, gender: parsed.data.gender as PlayerGender | undefined }, clubPreferences: parsed.data.clubPreferences as { clubId: string; playerId: string; mixedSideOverride: MixedSide | null } | undefined }));
+    const result = await clubOwnershipTransaction(prisma, tx => syncAccountProfile(tx, { userId, changes: { name: parsed.data.name, gender: parsed.data.gender as PlayerGender | undefined }, clubPreferences: parsed.data.clubPreferences as { clubId: string; playerId: string; mixedSideOverride: MixedSide | null } | undefined }));
     logAuditEvent({ action: "user.update_account", actor: { userId }, outcome: "success", request, target: { id: userId, type: "account" } });
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: accountSelect });
     return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), synchronizedPlayerIds: result.playerIds, ...(result.clubPreferences ? { clubPreferences: result.clubPreferences } : {}) });
