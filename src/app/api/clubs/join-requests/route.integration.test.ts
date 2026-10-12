@@ -1,13 +1,17 @@
 import { beforeAll, afterAll, beforeEach, it, expect, vi } from "vitest";
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, copyFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { admissionTransaction, reviewClubAdmission, submitClubAdmission } from "@/lib/clubAdmissions";
 import { getOwnedClubPlayer, resolveOwnedSessionPlayer } from "@/lib/playerIdentity";
-import { CLUB_COMMUNITY_COMPAT_COOKIE_PATH, CLUB_JOIN_COOKIE_PATH, CLUB_JOIN_PROOF_TTL_SECONDS, clubJoinProofCookieName, issueClubJoinProof } from "@/lib/clubJoinProof";
+import { clubJoinProofCookieName, issueClubJoinProof } from "@/lib/clubJoinProof";
+import { clubEntryCookieName, readClubEntryProof, verifyClubEntryPassword, signClubEntryProof } from "@/lib/clubJoinEntry";
+import { POST as verifyEntry } from "../join-entry/route";
+import { GET as searchClubs } from "../search/route";
+import { POST as legacyNameJoin } from "@/features/club-api/join/route";
 import { claimClubPlayer, removeClubPlayerOwnership } from "@/lib/clubPlayerOwnership";
 let db: PrismaClient;
 let actor: { id: string; isAdmin?: boolean; isQuickAccess?: boolean; guestPlayerId?: string } | null;
@@ -18,15 +22,16 @@ import { POST, GET as discovery } from "./route";
 import { GET, PATCH as settings } from "../[id]/join-requests/route";
 import { PATCH as review } from "../[id]/join-requests/[requestId]/route";
 import { POST as issueJoinProof } from "../join-proof/route";
-import { POST as canonicalClaimAlias } from "../[id]/claim-requests/route";
+import { POST as legacyClaim, POST as canonicalClaimAlias } from "../[id]/claim-requests/route";
 import { POST as communityClaimAlias } from "../../communities/[id]/claim-requests/route";
 const dir = mkdtempSync(path.join(tmpdir(), "account-player-admissions-"));
 const baseline = path.join(dir, "baseline.db");
 let count = 0;
 const context = { params: Promise.resolve({ id: "club-a" }) };
-const request = (body: unknown) => new Request("http://localhost/api/clubs/join-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const request = (body: unknown) => new Request("http://localhost/api/clubs/join-requests", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body) });
 const proofRequest = (body: unknown) => new Request("http://localhost/api/clubs/join-proof", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify(body) });
 const newInput = { clubId: "club-a", kind: "NEW_PLAYER" as const, proposedPlayerName: "New Player", proposedGender: "FEMALE" };
+type ClaimRoute = (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response>;
 const submit = (input: Parameters<typeof submitClubAdmission>[1] = { clubId: "club-a", requesterUserId: "account-member", kind: "EXISTING_PLAYER" as const, requestedPlayerId: "historical-player" }) => admissionTransaction(db, tx => submitClubAdmission(tx, input));
 const approve = (requestId: string, overrides: Partial<Parameters<typeof reviewClubAdmission>[1]> = {}) => admissionTransaction(db, tx => reviewClubAdmission(tx, { clubId: "club-a", requestId, reviewerUserId: "account-owner", action: "APPROVE", ...overrides }));
 const claim = (clubId = "club-a", playerId = "historical-player", userId = "account-member") => admissionTransaction(db, tx => claimClubPlayer(tx, { clubId, playerId, userId, actorUserId: "account-owner" }));
@@ -38,6 +43,7 @@ beforeAll(async () => {
   execFileSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "deploy"], { env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" });
 }, 60000);
 beforeEach(async () => {
+  process.env.AUTH_SECRET = "test-entry-secret-for-integration-only";
   await db?.$disconnect();
   const file = path.join(dir, `case-${count++}.db`); copyFileSync(baseline, file);
   db = new PrismaClient({ datasources: { db: { url: "file:" + file.replaceAll("\\", "/") } } });
@@ -301,13 +307,13 @@ it("requires current account-bound password proof for protected candidate discov
     expect(locked).not.toHaveProperty("passwordHash");
 
     const blockedSubmission = await POST(request(newInput));
-    expect(blockedSubmission.status).toBe(428);
-    expect(await blockedSubmission.json()).toMatchObject({ code: "PASSWORD_REQUIRED" });
+    expect(blockedSubmission.status).toBe(403);
+    expect(await blockedSubmission.json()).toMatchObject({ code: "JOIN_CODE_REQUIRED" });
     expect(await db.clubAdmissionRequest.count()).toBe(0);
 
     const wrongPassword = await issueJoinProof(proofRequest({ clubId: "club-a", password: "incorrect" }));
     expect(wrongPassword.status).toBe(403);
-    expect(await wrongPassword.json()).toMatchObject({ code: "INVALID_PASSWORD" });
+    expect(await wrongPassword.json()).toMatchObject({ code: "INVALID_JOIN_CODE" });
     expect(wrongPassword.headers.get("set-cookie")).toBeNull();
 
     const issued = await issueJoinProof(proofRequest({ clubId: "club-a", password }));
@@ -319,8 +325,8 @@ it("requires current account-bound password proof for protected candidate discov
     const setCookie = issued.headers.get("set-cookie");
     expect(setCookie).toMatch(/HttpOnly/i);
     expect(setCookie).toMatch(/SameSite=Lax/i);
-    expect(setCookie).toContain("Path=/api/clubs");
-    expect(setCookie).toContain("Path=/api/communities");
+    expect(setCookie).toContain("Path=/");
+    expect(setCookie).toContain("Max-Age=1800");
     expect(setCookie).not.toContain(password);
     expect(setCookie).not.toContain(passwordHash);
     const cookiePair = setCookie!.split(";", 1)[0];
@@ -333,7 +339,7 @@ it("requires current account-bound password proof for protected candidate discov
 
     const submitted = await POST(new Request("http://localhost/api/clubs/join-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookiePair },
+      headers: { "Content-Type": "application/json", Origin: "http://localhost", Cookie: cookiePair },
       body: JSON.stringify(newInput),
     }));
     const submittedBody = await submitted.json();
@@ -347,10 +353,10 @@ it("requires current account-bound password proof for protected candidate discov
     expect(await otherAccount.json()).toMatchObject({ passwordProof: { status: "PASSWORD_REQUIRED" }, players: [], ownedPlayers: [] });
     const otherSubmission = await POST(new Request("http://localhost/api/clubs/join-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookiePair },
+      headers: { "Content-Type": "application/json", Origin: "http://localhost", Cookie: cookiePair },
       body: JSON.stringify(newInput),
     }));
-    expect(otherSubmission.status).toBe(428);
+    expect(otherSubmission.status).toBe(403);
 
     actor = { id: "account-member" };
     const replacementPasswordHash = await bcrypt.hash("RotatedLocalClubPassword", 4);
@@ -365,10 +371,10 @@ it("requires current account-bound password proof for protected candidate discov
     expect(allStatuses.requests[0]).not.toHaveProperty("requester");
     const staleSubmission = await POST(new Request("http://localhost/api/clubs/join-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookiePair },
+      headers: { "Content-Type": "application/json", Origin: "http://localhost", Cookie: cookiePair },
       body: JSON.stringify({ ...newInput, idempotencyKey: "stale-proof-retry" }),
     }));
-    expect(staleSubmission.status).toBe(428);
+    expect(staleSubmission.status).toBe(200); // Same pending request is a read-only receipt.
     expect(await db.clubAdmissionRequest.count()).toBe(1);
 
     await db.user.update({ where: { id: "account-member" }, data: { isActive: false } });
@@ -381,6 +387,7 @@ it("requires current account-bound password proof for protected candidate discov
     expect(missingSigner.status).toBe(503);
     expect(await missingSigner.json()).toMatchObject({ code: "PASSWORD_PROOF_UNAVAILABLE" });
     expect((await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"))).status).toBe(503);
+    actor = { id: "account-other" };
     expect((await POST(request({ ...newInput, idempotencyKey: "missing-proof-secret" }))).status).toBe(503);
   } finally {
     if (priorSecret === undefined) delete process.env.AUTH_SECRET;
@@ -388,84 +395,24 @@ it("requires current account-bound password proof for protected candidate discov
   }
 });
 
-it("requires the matching scoped proof on canonical and deprecated claim aliases", async () => {
-  const priorSecret = process.env.AUTH_SECRET;
-  process.env.AUTH_SECRET = "local-test-secret-for-club-join-proof-0123456789";
-  try {
-    const passwordHash = await bcrypt.hash("AliasPasswordForLocalTest", 4);
-    await db.club.updateMany({ where: { id: { in: ["club-a", "club-b"] } }, data: { isPasswordProtected: true, passwordHash } });
-    await db.player.create({ data: { id: "alias-player-b", name: "Alias Player B" } });
-    await db.clubMember.create({ data: { id: "alias-membership-b", clubId: "club-b", playerId: "alias-player-b", elo: 1420 } });
-
-    actor = { id: "account-member" };
-    const canonicalContext = { params: Promise.resolve({ id: "club-a" }) };
-    const communityContext = { params: Promise.resolve({ id: "club-b" }) };
-    const canonicalUrl = "http://localhost/api/clubs/club-a/claim-requests";
-    const communityUrl = "http://localhost/api/communities/club-b/claim-requests";
-    type ClaimAliasHandler = (request: Request, context: { params: Promise<{ id: string }> }) => Promise<Response>;
-    const postAlias = (url: string, targetPlayerId: string, handler: ClaimAliasHandler, context: typeof canonicalContext, cookie?: string, targetField: "targetPlayerId" | "targetUserId" = "targetPlayerId") => handler(
-      new Request(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
-        body: JSON.stringify({ [targetField]: targetPlayerId }),
-      }),
-      context,
-    );
-    const cookieFor = (userId: string, clubId: string, path: string, issuedAt = Date.now()) => {
-      const proof = issueClubJoinProof({ userId, clubId, passwordHash }, issuedAt);
-      return `${clubJoinProofCookieName(clubId, path)}=${proof.token}`;
-    };
-    const cookieFromIssuance = (header: string | null, prefix: string) => header
-      ?.split(/,\s*(?=[A-Za-z0-9_]+=)/)
-      .find(value => value.startsWith(prefix))
-      ?.split(";", 1)[0];
-
-    for (const [url, targetPlayerId, handler, context] of [
-      [canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext],
-      [communityUrl, "alias-player-b", communityClaimAlias, communityContext],
-    ] as const) {
-      expect((await postAlias(url, targetPlayerId, handler, context)).status, `missing proof: ${url}`).toBe(428);
-    }
-
-    const canonicalWrongAccount = cookieFor("account-other", "club-a", CLUB_JOIN_COOKIE_PATH);
-    const communityWrongAccount = cookieFor("account-other", "club-b", CLUB_COMMUNITY_COMPAT_COOKIE_PATH);
-    expect((await postAlias(canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext, canonicalWrongAccount)).status).toBe(428);
-    expect((await postAlias(communityUrl, "alias-player-b", communityClaimAlias, communityContext, communityWrongAccount)).status).toBe(428);
-
-    const wrongClubForCanonical = cookieFor("account-member", "club-b", CLUB_JOIN_COOKIE_PATH);
-    const wrongClubForCommunity = cookieFor("account-member", "club-a", CLUB_COMMUNITY_COMPAT_COOKIE_PATH);
-    expect((await postAlias(canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext, wrongClubForCanonical)).status).toBe(428);
-    expect((await postAlias(communityUrl, "alias-player-b", communityClaimAlias, communityContext, wrongClubForCommunity)).status).toBe(428);
-
-    const expiredAt = Date.now() - (CLUB_JOIN_PROOF_TTL_SECONDS + 1) * 1000;
-    const expiredCanonical = cookieFor("account-member", "club-a", CLUB_JOIN_COOKIE_PATH, expiredAt);
-    const expiredCommunity = cookieFor("account-member", "club-b", CLUB_COMMUNITY_COMPAT_COOKIE_PATH, expiredAt);
-    expect((await postAlias(canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext, expiredCanonical)).status).toBe(428);
-    expect((await postAlias(communityUrl, "alias-player-b", communityClaimAlias, communityContext, expiredCommunity)).status).toBe(428);
-
-    const canonicalProofResponse = await issueJoinProof(proofRequest({ clubId: "club-a", password: "AliasPasswordForLocalTest" }));
-    const communityProofResponse = await issueJoinProof(proofRequest({ clubId: "club-b", password: "AliasPasswordForLocalTest" }));
-    expect(canonicalProofResponse.status).toBe(200);
-    expect(communityProofResponse.status).toBe(200);
-    const validCanonical = cookieFromIssuance(canonicalProofResponse.headers.get("set-cookie"), "club_join_proof_");
-    const validCommunity = cookieFromIssuance(communityProofResponse.headers.get("set-cookie"), "community_join_proof_");
-    expect(validCanonical).toContain("=");
-    expect(validCommunity).toContain("=");
-    expect(canonicalProofResponse.headers.get("set-cookie")).toContain(`Path=${CLUB_JOIN_COOKIE_PATH}`);
-    expect(communityProofResponse.headers.get("set-cookie")).toContain(`Path=${CLUB_COMMUNITY_COMPAT_COOKIE_PATH}`);
-    const canonicalAccepted = await postAlias(canonicalUrl, "historical-player", canonicalClaimAlias, canonicalContext, validCanonical);
-    const communityAccepted = await postAlias(communityUrl, "alias-player-b", communityClaimAlias, communityContext, validCommunity, "targetUserId");
-    expect(canonicalAccepted.status).toBe(200);
-    expect(await canonicalAccepted.json()).toMatchObject({ status: "PENDING", clubId: "club-a", kind: "EXISTING_PLAYER" });
-    expect(communityAccepted.status).toBe(200);
-    expect(await communityAccepted.json()).toMatchObject({ status: "PENDING", clubId: "club-b", kind: "EXISTING_PLAYER", requestedPlayerId: "alias-player-b" });
-    expect(await db.clubAdmissionRequest.count({ where: { requesterUserId: "account-member" } })).toBe(2);
-    expect(await db.player.findUnique({ where: { id: "historical-player" }, select: { ownerUserId: true } })).toEqual({ ownerUserId: null });
-    expect(await db.player.findUnique({ where: { id: "alias-player-b" }, select: { ownerUserId: true } })).toEqual({ ownerUserId: null });
-  } finally {
-    if (priorSecret === undefined) delete process.env.AUTH_SECRET;
-    else process.env.AUTH_SECRET = priorSecret;
-  }
+it("adapts the legacy proof endpoint to the new grant and never accepts weaker legacy grants", async () => {
+  await protectClub();
+  const passwordHash = (await db.club.findUniqueOrThrow({ where: { id: "club-a" } })).passwordHash;
+  const old = issueClubJoinProof({ userId: "account-member", clubId: "club-a", passwordHash });
+  const weakCookie = `${clubJoinProofCookieName("club-a")}=${old.token}`;
+  const postAlias = (cookie: string, handler: ClaimRoute = canonicalClaimAlias): Promise<Response> => handler(new Request("http://localhost/api/clubs/club-a/claim-requests", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost", Cookie: cookie }, body: JSON.stringify({ targetUserId: "historical-player" }) }), context);
+  expect((await postAlias(weakCookie)).status).toBe(403);
+  expect((await postAlias(weakCookie, communityClaimAlias)).status).toBe(403);
+  const response = await issueJoinProof(proofRequest({ clubId: "club-a", password: " exact code " }));
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ ok: true, clubId: "club-a", expiresAt: expect.any(String) });
+  const cookie = response.headers.get("set-cookie")!.split(";", 1)[0];
+  expect(cookie).toMatch(/^club-entry-/); expect(response.headers.get("set-cookie")).toContain("Max-Age=1800");
+  expect((await postAlias(cookie)).status).toBe(200);
+  // The alias returns the same existing receipt, without a second allocation.
+  expect((await postAlias(cookie, communityClaimAlias)).status).toBe(200);
+  expect(await db.clubAdmissionRequest.count()).toBe(1);
+  expect(await db.player.count()).toBe(1); expect(await db.clubMember.count()).toBe(1);
 });
 
 it("rejects a missing target on the deprecated community alias without creating an admission", async () => {
@@ -473,7 +420,7 @@ it("rejects a missing target on the deprecated community alias without creating 
   const response = await communityClaimAlias(
     new Request("http://localhost/api/communities/club-a/claim-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Origin: "http://localhost" },
       body: JSON.stringify({ note: "No Player selected" }),
     }),
     { params: Promise.resolve({ id: "club-a" }) },
@@ -502,7 +449,7 @@ it("signals an inactive owned identity without exposing or offering that Player"
 
     const issued = await issueJoinProof(proofRequest({ clubId: "club-a", password }));
     expect(issued.status).toBe(200);
-    const cookie = issued.headers.get("set-cookie")!.split(/,\s*(?=[A-Za-z0-9_]+=)/).find(value => value.startsWith("club_join_proof_"))!.split(";", 1)[0];
+    const cookie = issued.headers.get("set-cookie")!.split(/,\s*(?=[A-Za-z0-9_]+=)/).find(value => value.startsWith("club-entry-"))!.split(";", 1)[0];
     const unlockedResponse = await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a", { headers: { Cookie: cookie } }));
     const unlocked = await unlockedResponse.json();
     expect(unlocked).toMatchObject({ identityReviewRequired: false, passwordProof: { status: "VERIFIED" }, ownedPlayers: [] });
@@ -514,7 +461,7 @@ it("signals an inactive owned identity without exposing or offering that Player"
   }
 });
 
-it("does not let an active club member browse protected candidates without password proof", async () => {
+it("allows an active club member to browse protected candidates without another join code", async () => {
   const priorSecret = process.env.AUTH_SECRET;
   process.env.AUTH_SECRET = "local-test-secret-for-club-join-proof-0123456789";
   try {
@@ -529,9 +476,9 @@ it("does not let an active club member browse protected candidates without passw
     const data = await response.json();
     expect(response.status).toBe(200);
     expect(data).toMatchObject({
-      passwordProof: { status: "PASSWORD_REQUIRED", expiresAt: null },
-      players: [],
-      ownedPlayers: [],
+      requiresJoinCode: false, passwordProof: { status: "VERIFIED", expiresAt: null },
+      players: [expect.objectContaining({ id: "another-unclaimed-player" })],
+      ownedPlayers: [{ id: "historical-player", name: "Member" }],
       membership: { playerId: "historical-player" },
       access: { role: "MEMBER", status: "ACTIVE" },
     });
@@ -539,4 +486,160 @@ it("does not let an active club member browse protected candidates without passw
     if (priorSecret === undefined) delete process.env.AUTH_SECRET;
     else process.env.AUTH_SECRET = priorSecret;
   }
+});
+
+async function protectClub() {
+  await db.club.update({ where: { id: "club-a" }, data: { isPasswordProtected: true, passwordHash: await bcrypt.hash(" exact code ", 4) } });
+  actor = { id: "account-member" };
+}
+async function entryCookie(password = " exact code ") {
+  const response = await verifyEntry(request({ clubId: "club-a", password }));
+  expect(response.status).toBe(200);
+  return response.headers.get("set-cookie")!.split(";")[0];
+}
+function withCookie(body: unknown, cookie: string) {
+  const value = request(body); value.headers.set("cookie", cookie); return value;
+}
+it("searches open clubs case-insensitively and returns only safe capped summaries", async () => {
+  await db.club.createMany({ data: Array.from({ length: 25 }, (_, i) => ({ name: `SEARCH Club ${i}`, createdById: "account-owner", allowJoinRequests: true })) });
+  await db.club.createMany({ data: [{ name: "Search Closed", createdById: "account-owner" }, { name: "Search Tutorial", createdById: "account-owner", isTutorial: true, allowJoinRequests: true }] });
+  const response = await searchClubs(new Request("http://localhost/api/clubs/search?q=search"));
+  const { clubs } = await response.json();
+  expect(clubs).toHaveLength(20);
+  expect(clubs.every((club: Record<string, unknown>) => Object.keys(club).sort().join(",") === "avatarUrl,id,isPasswordProtected,name")).toBe(true);
+  expect(response.headers.get("cache-control")).toBe("no-store, private");
+  expect((await (await searchClubs(new Request("http://localhost/api/clubs/search?q=s"))).json()).clubs).toEqual([]);
+  expect((await searchClubs(new Request(`http://localhost/api/clubs/search?q=${"a".repeat(65)}`))).status).toBe(400);
+});
+it("locks candidate discovery and direct domain submission without a server capability", async () => {
+  await protectClub();
+  const data = await (await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"))).json();
+  expect(data).toMatchObject({ requiresJoinCode: true, players: [], club: { isPasswordProtected: true, avatarUrl: null } });
+  await expect(submit()).rejects.toMatchObject({ statusCode: 403, code: "JOIN_CODE_REQUIRED" });
+  await expect(admissionTransaction(db, tx => submitClubAdmission(tx, { ...newInput, requesterUserId: "account-member" }, {} as never))).rejects.toMatchObject({ statusCode: 403 });
+  expect(await db.clubAdmissionRequest.count()).toBe(0);
+});
+it("verifies exact password bytes into an HttpOnly host-only cookie without allocating identity or access", async () => {
+  await protectClub();
+  expect((await verifyEntry(request({ clubId: "club-a", password: "exact code" }))).status).toBe(403);
+  expect((await verifyEntry(request({ clubId: "club-a", password: "wrong" }))).status).toBe(403);
+  expect((await verifyEntry(request({ clubId: "club-a" }))).status).toBe(400);
+  const response = await verifyEntry(request({ clubId: "club-a", password: " exact code " }));
+  expect(await response.json()).toEqual({ clubId: "club-a", verified: true });
+  const header = response.headers.get("set-cookie")!;
+  expect(header).toContain("HttpOnly"); expect(header).toContain("SameSite=lax"); expect(header).toContain("Max-Age=1800"); expect(header).not.toContain("Domain="); expect(header).not.toContain(" exact code ");
+  expect(await db.player.count()).toBe(1); expect(await db.clubMember.count()).toBe(1); expect(await db.clubAccess.count()).toBe(2); expect(await db.clubAdmissionRequest.count()).toBe(0);
+  const cookie = header.split(";")[0];
+  const read = new Request("http://localhost/api/clubs/join-requests?clubId=club-a", { headers: { cookie } });
+  expect((await (await discovery(read)).json()).requiresJoinCode).toBe(false);
+  expect((await POST(withCookie(newInput, cookie))).status).toBe(200);
+  expect(await db.player.count()).toBe(1);
+});
+it("rejects tampered, wrong account and wrong club grants for new submissions", async () => {
+  await protectClub(); const cookie = await entryCookie();
+  const [name, token] = cookie.split("=");
+  const changed = token.slice(0, -12) + "AAAAAAAAAAAA";
+  expect((await POST(withCookie(newInput, `${name}=${changed}`))).status).toBe(403);
+  actor = { id: "account-other" }; expect((await POST(withCookie(newInput, cookie))).status).toBe(403);
+  actor = { id: "account-member" };
+  await db.club.update({ where: { id: "club-b" }, data: { isPasswordProtected: true, passwordHash: await bcrypt.hash(" exact code ", 4) } });
+  expect((await POST(withCookie({ ...newInput, clubId: "club-b" }, `${clubEntryCookieName("club-b")}=${token}`))).status).toBe(403);
+  expect(await db.clubAdmissionRequest.count()).toBe(0);
+});
+it("rejects expired grants and account session changes", async () => {
+  await protectClub();
+  const club = (await db.club.findUnique({ where: { id: "club-a" } }))!;
+  const account = (await db.user.findUnique({ where: { id: "account-member" } }))!;
+  const oldTime = vi.spyOn(Date, "now").mockReturnValue(Date.now() - 31 * 60 * 1000);
+  const expired = await verifyClubEntryPassword(club, account, " exact code "); oldTime.mockRestore();
+  const token = await signClubEntryProof(expired!);
+  expect((await POST(withCookie(newInput, `${clubEntryCookieName(club.id)}=${token}`))).status).toBe(403);
+  const cookie = await entryCookie();
+  await db.user.update({ where: { id: account.id }, data: { sessionVersion: { increment: 1 } } });
+  expect((await POST(withCookie(newInput, cookie))).status).toBe(403);
+  await db.user.update({ where: { id: account.id }, data: { isActive: false } });
+  expect((await verifyEntry(request({ clubId: club.id, password: " exact code " }))).status).toBe(403);
+});
+it("rechecks the current password inside admission transactions, including rotation between verification and submission", async () => {
+  await protectClub(); const cookie = await entryCookie(); const value = withCookie(newInput, cookie);
+  const proof = await readClubEntryProof(value, "club-a");
+  await db.club.update({ where: { id: "club-a" }, data: { passwordHash: await bcrypt.hash("rotated", 4) } });
+  await expect(admissionTransaction(db, tx => submitClubAdmission(tx, { ...newInput, requesterUserId: "account-member" }, proof))).rejects.toMatchObject({ code: "JOIN_CODE_REQUIRED" });
+  expect((await POST(value)).status).toBe(403);
+  expect((await (await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a", { headers: { cookie } }))).json()).players).toEqual([]);
+  expect(await db.clubAdmissionRequest.count()).toBe(0);
+});
+it("preserves access bypasses while ownership and revoked access remain locked", async () => {
+  await protectClub();
+  await claim();
+  await db.clubAccess.update({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } }, data: { role: "ADMIN", status: "REVOKED" } });
+  const read = new Request("http://localhost/api/clubs/join-requests?clubId=club-a");
+  const locked = await (await discovery(read)).json();
+  expect(locked).toMatchObject({ requiresJoinCode: true, players: [], membership: { playerId: "historical-player" }, access: { status: "REVOKED" } });
+  expect(locked.ownedPlayers).toContainEqual({ id: "historical-player", name: "Member" });
+  await db.clubAccess.update({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } }, data: { status: "ACTIVE", role: "MEMBER" } });
+  expect((await (await discovery(read)).json()).requiresJoinCode).toBe(false);
+  expect((await submit()).status).toBe("MEMBER");
+  actor = { id: "account-owner" }; expect((await (await discovery(read)).json()).requiresJoinCode).toBe(false);
+});
+it("keeps existing request status readable but blocks new admissions once closed", async () => {
+  await protectClub(); const cookie = await entryCookie();
+  expect((await POST(withCookie(newInput, cookie))).status).toBe(200);
+  await db.club.update({ where: { id: "club-a" }, data: { allowJoinRequests: false } });
+  const status = await (await discovery(new Request("http://localhost/api/clubs/join-requests?clubId=club-a"))).json();
+  expect(status.requests).toHaveLength(1); expect(status.players).toEqual([]);
+  expect((await POST(request(newInput))).status).toBe(200); // Existing pending receipt only.
+  actor = { id: "account-other" };
+  expect((await verifyEntry(request({ clubId: "club-a", password: " exact code " }))).status).toBe(403);
+  await expect(submit({ ...newInput, requesterUserId: "account-other" })).rejects.toMatchObject({ statusCode: 403 });
+});
+it("fails closed for missing password hashes and enforces the gate on legacy aliases", async () => {
+  await protectClub();
+  const claim = request({ targetPlayerId: "historical-player" });
+  expect((await legacyClaim(claim, context)).status).toBe(403);
+  expect((await legacyNameJoin(request({ clubName: "Club A", password: "wrong" }))).status).toBe(403);
+  expect((await legacyNameJoin(request({ clubName: "Club A", password: " exact code " }))).status).toBe(200);
+  actor = { id: "account-other" };
+  await db.club.update({ where: { id: "club-a" }, data: { passwordHash: null } });
+  expect((await verifyEntry(request({ clubId: "club-a", password: " exact code " }))).status).toBe(403);
+  expect((await POST(request(newInput))).status).toBe(403);
+});
+it("requires same-origin JSON for verification and every submission alias", async () => {
+  await protectClub();
+  const bad = request({ clubId: "club-a", password: " exact code " }); bad.headers.set("origin", "https://elsewhere.example");
+  expect((await verifyEntry(bad)).status).toBe(403);
+  const submission = request(newInput); submission.headers.delete("origin"); expect((await POST(submission)).status).toBe(403);
+  const claim = request({ targetPlayerId: "historical-player" }); claim.headers.set("content-type", "text/plain"); expect((await legacyClaim(claim, context)).status).toBe(403);
+  const legacy = request({ clubName: "Club A", password: " exact code " }); legacy.headers.delete("origin"); expect((await legacyNameJoin(legacy)).status).toBe(403);
+  expect(await db.clubAdmissionRequest.count()).toBe(0);
+});
+it("revalidates entry on transaction retries after a concurrent password rotation", async () => {
+  await protectClub(); const cookie = await entryCookie();
+  const proof = await readClubEntryProof(withCookie(newInput, cookie), "club-a");
+  let attempts = 0;
+  const retryingDb = {
+    $transaction: async (operation: (tx: Prisma.TransactionClient) => Promise<unknown>) => {
+      attempts++;
+      if (attempts > 1) return db.$transaction(operation);
+      try {
+        await db.$transaction(async tx => {
+          await operation(tx);
+          throw Object.assign(new Error("write conflict"), { code: "P2034" });
+        });
+      } catch (error) {
+        await db.club.update({ where: { id: "club-a" }, data: { passwordHash: await bcrypt.hash("rotated during retry", 4) } });
+        throw error;
+      }
+    },
+  } as unknown as PrismaClient;
+  await expect(admissionTransaction(retryingDb, tx => submitClubAdmission(tx, { ...newInput, requesterUserId: "account-member" }, proof))).rejects.toMatchObject({ code: "JOIN_CODE_REQUIRED" });
+  expect(attempts).toBe(2); expect(await db.clubAdmissionRequest.count()).toBe(0); expect(await db.clubAdmissionEvent.count()).toBe(0);
+});
+it("marks HTTPS verification cookies secure and rejects malformed JSON before writing", async () => {
+  await protectClub();
+  const response = await verifyEntry(new Request("https://clubs.example/api/clubs/join-entry", { method: "POST", headers: { origin: "https://clubs.example", "content-type": "application/json" }, body: JSON.stringify({ clubId: "club-a", password: " exact code " }) }));
+  expect(response.headers.get("set-cookie")).toContain("Secure");
+  const broken = () => new Request("http://localhost/api/clubs/join-entry", { method: "POST", headers: { origin: "http://localhost", "content-type": "application/json" }, body: "{" });
+  expect((await verifyEntry(broken())).status).toBe(400); expect((await POST(broken())).status).toBe(400);
+  expect(await db.clubAdmissionRequest.count()).toBe(0);
 });

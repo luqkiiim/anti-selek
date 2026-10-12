@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
+import { sameOriginJsonGuard, verifyClubEntryPassword } from "@/lib/clubJoinEntry";
 import { admissionTransaction, submitClubAdmission } from "@/lib/clubAdmissions";
 import { admissionError } from "@/lib/clubAdmissionApi";
 import { rateLimit } from "@/lib/rateLimit";
@@ -18,6 +18,7 @@ import {
 
 export async function POST(request: Request) {
   try {
+    const guard = sameOriginJsonGuard(request); if (guard) return guard;
     const rateLimitResponse = await rateLimit(request, "api:communities:join:post", { limit: 15, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
 
@@ -116,20 +117,15 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-      const ok = await bcrypt.compare(password, club.passwordHash || "");
-      if (!ok) {
-        return NextResponse.json(
-          { error: "Invalid password", field: "password" },
-          { status: 403 }
-        );
-      }
     }
     const account = await prisma.user.findUnique({ where: { id: session.user.id } });
     if (!account?.isActive) return NextResponse.json({ error: "An active account is required" }, { status: 403 });
+    const entryProof = club.isPasswordProtected ? await verifyClubEntryPassword(club, account, password) : undefined;
+    if (club.isPasswordProtected && !entryProof) return NextResponse.json({ error: "Invalid password", field: "password", code: "INVALID_JOIN_CODE" }, { status: 403 });
     const result = await admissionTransaction(prisma, tx => submitClubAdmission(tx, {
       clubId: club.id, requesterUserId: account.id,
       kind: "NEW_PLAYER", proposedPlayerName: account.name, proposedGender: account.gender,
-    }));
+    }, entryProof ?? undefined));
     return NextResponse.json(withLegacyClubAliases({ ...result, clubId: club.id, clubName: club.name }));
 
   } catch (error) {

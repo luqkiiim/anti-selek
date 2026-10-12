@@ -26,7 +26,22 @@
   line-height: 1.45;
 }
 .admission-club-heading {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  column-gap: 11px;
+  align-items: center;
   padding: 2px 0 4px;
+}
+.admission-club-heading > .avatar {
+  grid-row: 1 / 3;
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+.admission-club-heading > .eyebrow,
+.admission-club-heading h3 {
+  grid-column: 2;
+  min-width: 0;
 }
 .admission-club-heading h3 {
   margin-top: 4px;
@@ -180,11 +195,159 @@
   display: block;
   margin: 4px auto 0;
 }
+.admission-club-search {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 8px 0 18px;
+}
+.admission-club-search .field-label {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.admission-club-search input,
+.admission-entry-code input {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #e8ddef;
+  border-radius: 12px;
+  background: #fffdfb;
+  padding: 12px;
+  color: #291440;
+  font: inherit;
+  font-size: 16px;
+}
+.admission-club-search > .prototype-error {
+  margin: 0;
+}
+.admission-club-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 2px;
+}
+.admission-club-result {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  min-height: 70px;
+  padding: 10px 12px;
+  border: 1px solid #e9e1e9;
+  border-radius: 15px;
+  background: #fffdfb;
+  color: #291440;
+  text-align: left;
+  touch-action: manipulation;
+}
+.admission-club-result:hover:not(:disabled) {
+  border-color: #cbb6e2;
+  background: #fcf9ff;
+}
+.admission-club-result:active:not(:disabled) {
+  background: #f6f0fc;
+}
+.admission-club-result > span:not(.avatar) {
+  flex: 1;
+  min-width: 0;
+}
+.admission-club-result strong,
+.admission-club-result small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.admission-club-result strong {
+  font-size: 14px;
+  line-height: 1.3;
+}
+.admission-club-result small {
+  margin-top: 3px;
+  color: #80718b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.admission-club-logo,
+.admission-club-result > .avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  overflow: hidden;
+  border: 1px solid #eee5ef;
+  border-radius: 13px;
+  background: #f5eff9;
+  color: #7040cf;
+}
+.admission-club-logo .avatar,
+.admission-club-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.admission-entry-code {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e8ddef;
+  border-radius: 16px;
+  background: #faf7fc;
+}
+.admission-entry-code h3 {
+  font-size: 17px;
+  line-height: 1.25;
+}
+.admission-entry-code .muted {
+  margin: 0;
+}
+.admission-entry-code .field-label {
+  margin: 2px 0 4px;
+}
+.admission-entry-code .primary {
+  min-height: 48px;
+}
+.admission-duplicates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 10px 0 16px;
+  padding: 13px;
+  border: 1px solid #e8ddef;
+  border-radius: 15px;
+  background: #faf7fc;
+}
+.admission-duplicates h4 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.admission-duplicates > .muted {
+  margin: 0;
+  font-size: 12px;
+}
+.admission-duplicates .admission-player-choice {
+  background: #fffdfb;
+}
+.admission-club-result:focus-visible,
+.admission-club-search input:focus-visible,
+.admission-entry-code input:focus-visible {
+  outline: 3px solid #aa83ed;
+  outline-offset: 2px;
+}
 @media (max-width: 360px) {
   .admission-choice-grid {
     grid-template-columns: 1fr;
   }
   .admission-choice {
     min-height: 78px;
+  }
+  .admission-entry-code {
+    padding: 12px;
   }
 }

@@ -2,12 +2,13 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 import { getOwnedClubPlayer, IdentityConflictError } from "@/lib/playerIdentity";
 import { assertLocalClaimAvailable, claimClubPlayer, ClubPlayerOwnershipError, clubOwnershipTransaction } from "@/lib/clubPlayerOwnership";
+import { hasClubEntry, type ClubEntryProof } from "@/lib/clubJoinEntry";
 import { normalizeClaimName } from "@/lib/clubClaimRules";
 
 type Db = Prisma.TransactionClient;
 type AdmissionKind = "EXISTING_PLAYER" | "NEW_PLAYER" | "OWNED_PLAYER";
 export class ClubAdmissionError extends Error {
-  constructor(message: string, readonly statusCode = 400) { super(message); }
+  constructor(message: string, readonly statusCode = 400, readonly code?: string) { super(message); }
 }
 export const admissionInclude = {
   requester: { select: { id: true, name: true, email: true } },
@@ -46,7 +47,7 @@ function sameAdmissionPayload(request: {
     request.note === normalizedOptional(input.note);
 }
 
-export async function submitClubAdmission(db: Db, input: SubmitAdmission) {
+export async function submitClubAdmission(db: Db, input: SubmitAdmission, entryProof?: ClubEntryProof) {
   const club = await db.club.findUnique({ where: { id: input.clubId } });
   if (!club || club.isTutorial) throw new ClubAdmissionError("Club not found", 404);
   const account = await db.user.findUnique({ where: { id: input.requesterUserId } });
@@ -63,6 +64,7 @@ export async function submitClubAdmission(db: Db, input: SubmitAdmission) {
     if (pending.originInvitationId || !sameAdmissionPayload(pending, input)) throw new ClubAdmissionError("Cancel your pending request before changing its details", 409);
     return pending;
   }
+  if (!await hasClubEntry(db, club, account, entryProof)) throw new ClubAdmissionError("Enter the club join code to continue", 403, "JOIN_CODE_REQUIRED");
   if (input.kind === "OWNED_PLAYER") throw new ClubAdmissionError("Choose a profile in this club or create a new local profile. Profiles from another club cannot be reused.", 409);
   if (!["EXISTING_PLAYER", "NEW_PLAYER"].includes(input.kind)) throw new ClubAdmissionError("Choose an existing profile or a new player");
   if (input.kind !== "NEW_PLAYER") {

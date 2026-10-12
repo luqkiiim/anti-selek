@@ -14,6 +14,7 @@ export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggle
 }) {
   const [name, setName] = useState(club.name);
   const [rules, setRules] = useState(club.rules ?? "");
+  const [joinCode, setJoinCode] = useState("");
   const [notice, setNotice] = useState("");
   const [source, setSource] = useState<{ file: File; url: string } | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -48,7 +49,20 @@ export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggle
       <section className="club-settings-section" aria-label="Joining the club"><h3>Joining the club</h3><div className="club-settings-rows">
         <button className="club-setting-row" onClick={onInvite}><LinkSimple size={22} /><span><strong>Invite link</strong><small>Share your club with players</small></span><CaretRight size={18} /></button>
         <button role="switch" aria-label="Allow join requests" aria-checked={allowJoinRequests ?? false} disabled={allowJoinRequests === undefined || busy} className="toggle-row" onClick={onToggleJoins}><span><strong>Allow join requests</strong><small>Players can ask to join</small></span><span className={"switch " + (allowJoinRequests ? "on" : "")} /></button>
-      </div></section>
+      </div>
+        {club.role === "ADMIN" && !club.isTutorial && <form className="club-join-code-form" onSubmit={event => {
+          event.preventDefault();
+          const password = joinCode;
+          setJoinCode(""); setNotice("");
+          void action.run(async () => { await api(endpoint, "PATCH", { password, isPasswordProtected: true }); await refresh(); setNotice("Club join code updated."); });
+        }}>
+          <h4>Club join code</h4>
+          <p className="club-settings-hint">{club.isPasswordProtected ? "A join code is required. The saved code cannot be displayed. Replacing it invalidates previously verified entry." : "Add a code that players enter before requesting to join."} Admin approval is still required.</p>
+          <label className="field-label">{club.isPasswordProtected ? "New club join code" : "Club join code"}<input type="password" value={joinCode} onChange={event => setJoinCode(event.target.value)} minLength={4} maxLength={100} autoComplete="new-password" placeholder="At least 4 characters" /></label>
+          <button className="secondary" type="submit" disabled={joinCode.length < 4 || action.busy}>{club.isPasswordProtected ? "Replace join code" : "Set join code"}</button>
+          {club.isPasswordProtected && <button className="text-button" type="button" onClick={() => { setJoinCode(""); setNotice(""); void action.run(async () => { await api(endpoint, "PATCH", { password: "", isPasswordProtected: false }); await refresh(); setNotice("Club join code removed."); }); }}>Remove join code</button>}
+        </form>}
+      </section>
       {!club.isTutorial && <div className="club-settings-danger"><button className="text-button danger" onClick={() => { action.setError(""); setConfirmation(""); setDeleting(true); }}><Trash size={18} />Delete club</button></div>}
     </fieldset>
     <ErrorText error={action.error} />{notice && <p className="club-settings-notice" role="status">{notice}</p>}

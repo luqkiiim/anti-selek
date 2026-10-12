@@ -5,6 +5,7 @@ import { e2eBaseURL, e2eEnv } from "./e2e/env";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
 export default defineConfig({
+  tsconfig: "./e2e/tsconfig.json",
   testDir: "./e2e",
   fullyParallel: false,
   workers: 1,

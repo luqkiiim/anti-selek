@@ -39,8 +39,10 @@ export type AdmissionRequest = {
 export type AdmissionRequestSummary = Pick<AdmissionRequest, "id" | "clubId" | "kind" | "status" | "revision" | "createdAt"> & Partial<AdmissionRequest>;
 
 export type AdmissionDiscovery = {
-  club: { id: string; name: string; allowJoinRequests: boolean };
-  passwordProof: { status: "NOT_REQUIRED" | "PASSWORD_REQUIRED" | "VERIFIED"; expiresAt: string | null };
+  requiresJoinCode: boolean;
+  identityReviewRequired?: boolean;
+  passwordProof?: { status: "NOT_REQUIRED" | "PASSWORD_REQUIRED" | "VERIFIED"; expiresAt: string | null };
+  club: { id: string; name: string; avatarUrl: string | null; isPasswordProtected: boolean; allowJoinRequests: boolean };
   players: AdmissionCandidate[];
   requests: AdmissionRequestSummary[];
   membership: { playerId: string } | null;

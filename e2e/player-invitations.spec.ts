@@ -57,7 +57,7 @@ async function assertClaim(page: Page, invited: Awaited<ReturnType<typeof fixtur
   await expect(page.getByText(`Preserved History ${invited.clubId.replace("invitation-", "").replace("-club", "")}`, { exact: true }).filter({ visible: true }).first()).toBeVisible();
   const db = new PrismaClient({ datasources: { db: { url: e2eDatabaseUrl } } });
   try {
-    expect((await db.player.findUniqueOrThrow({ where: { id: invited.playerId } })).ownerUserId).not.toBeNull();
+    expect((await db.clubMember.findUniqueOrThrow({ where: { clubId_playerId: { clubId: invited.clubId, playerId: invited.playerId } } })).ownerUserId).not.toBeNull();
     expect(await db.clubMember.findUnique({ where: { clubId_playerId: { clubId: invited.clubId, playerId: invited.playerId } } })).toMatchObject({ id: invited.clubId.replace("-club", "-member"), elo: 1384 });
   } finally { await db.$disconnect(); }
 }
@@ -123,7 +123,7 @@ test("an authenticated account must explicitly confirm; switching accounts retai
   await expect(page.getByRole("button", { name: "Claim my profile" })).toBeVisible();
   await assertClaim(page, invited);
   const ownerDb = new PrismaClient({ datasources: { db: { url: e2eDatabaseUrl } } });
-  try { expect((await ownerDb.player.findUniqueOrThrow({ where: { id: invited.playerId } })).ownerUserId).toBe(switchAccountId); } finally { await ownerDb.$disconnect(); }
+  try { expect((await ownerDb.clubMember.findUniqueOrThrow({ where: { clubId_playerId: { clubId: invited.clubId, playerId: invited.playerId } } })).ownerUserId).toBe(switchAccountId); } finally { await ownerDb.$disconnect(); }
 });
 test("lost continuation fails closed and reopening the original link restores it; expired links fail", async ({ page }) => {
   const invited = await fixture("lost");
@@ -131,7 +131,7 @@ test("lost continuation fails closed and reopening the original link restores it
   await expect(page.getByRole("heading", { name: invited.name })).toBeVisible();
   await page.context().clearCookies();
   await page.reload();
-  const unavailable = page.getByRole("region", { name: "Claim invitation unavailable" });
+  const unavailable = page.getByRole("region", { name: "Invitation unavailable" });
   await expect(unavailable).toContainText(/reopen the original/i);
   await expect(unavailable.getByRole("heading", { name: invited.name })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Claim my profile" })).toHaveCount(0);
@@ -239,7 +239,7 @@ test("normal admission, removal, and admin-approved placeholder recovery preserv
     const join = page.getByRole("dialog", { name: "Join a club" });
     await join.getByRole("button", { name: "I’m new to this club" }).click();
     await join.getByRole("button", { name: "Send request" }).click();
-    await expect(join.getByText("Request sent")).toBeVisible();
+    await expect(join.getByText("Waiting for admin approval")).toBeVisible();
     const pendingAdmission = await db.clubAdmissionRequest.findFirstOrThrow({ where: { clubId: invited.clubId, requesterUserId: accountId, status: "PENDING" } });
     expect(pendingAdmission).toMatchObject({ kind: "NEW_PLAYER", requestedPlayerId: null });
     expect(await db.player.count({ where: { ownerUserId: accountId } })).toBe(0);
@@ -448,7 +448,7 @@ test("normal new-player admission can be corrected to the exact original Player 
     const join = page.getByRole("dialog", { name: "Join a club" });
     await join.getByRole("button", { name: "I’m new to this club" }).click();
     await join.getByRole("button", { name: "Send request" }).click();
-    await expect(join.getByText("Request sent")).toBeVisible();
+    await expect(join.getByText("Waiting for admin approval")).toBeVisible();
     const pendingAdmission = await db.clubAdmissionRequest.findFirstOrThrow({ where: { clubId: invited.clubId, requesterUserId: accountId, status: "PENDING" } });
     expect(pendingAdmission).toMatchObject({ kind: "NEW_PLAYER", requestedPlayerId: null });
     expect(await db.player.count({ where: { ownerUserId: accountId } })).toBe(0);

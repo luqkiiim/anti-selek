@@ -9,29 +9,31 @@ export async function joinRequestAccess(request: Request, clubId?: string) {
     limit: 30,
     windowMs: 60000,
   });
-  if (limited) return { response: limited } as const;
+  if (limited) { limited.headers.set("Cache-Control", "no-store, private"); return { response: limited } as const; }
   const session = await auth();
   if (!session?.user?.id)
     return {
       response: NextResponse.json(
         { error: "Not authenticated" },
-        { status: 401 },
+        { status: 401, headers: { "Cache-Control": "no-store, private" } },
       ),
     } as const;
   if (isQuickAccessSession(session))
     return {
       response: NextResponse.json(
         { error: "Sign in with an account to manage join requests." },
-        { status: 403 },
+        { status: 403, headers: { "Cache-Control": "no-store, private" } },
       ),
     } as const;
+  const account = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, isActive: true } });
+  if (!account?.isActive) return { response: NextResponse.json({ error: "An active account is required" }, { status: 403, headers: { "Cache-Control": "no-store, private" } }) } as const;
   if (clubId) {
     const access = await getClubAdminAccess(prisma, { clubId, userId: session.user.id, isGlobalAdmin: session.user.isAdmin });
     if (!access?.canAdmin)
       return {
         response: NextResponse.json(
           { error: "Club admin access required" },
-          { status: 403 },
+          { status: 403, headers: { "Cache-Control": "no-store, private" } },
         ),
       } as const;
   }

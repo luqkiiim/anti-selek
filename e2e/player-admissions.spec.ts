@@ -79,9 +79,9 @@ test("a request stays pending before review and the claimed Player keeps match h
   await expect(joinDialog.getByText("Your account already has club access.")).toBeVisible();
   await joinDialog.getByRole("button", { name: "Yes, find my profile" }).click();
   await joinDialog.getByRole("button", { name: /Claim Candidate/ }).click();
-  await expect(joinDialog.getByText(/1\s+match(?:es)?/)).toBeVisible();
+  await expect(joinDialog.getByRole("button", { name: /Claim Candidate/ })).toContainText(/1\s+match(?:es)?/);
   await joinDialog.getByRole("button", { name: "Request to connect this Player" }).click();
-  await expect(joinDialog.getByText("Request sent")).toBeVisible();
+  await expect(joinDialog.getByText("Waiting for admin approval")).toBeVisible();
   await expect(joinDialog.getByText(/An admin will review your request/)).toBeVisible();
 
   const pendingAccount = await page.evaluate(async () => {
@@ -118,7 +118,7 @@ test("a request stays pending before review and the claimed Player keeps match h
   await page.goto(`/?join=${encodeURIComponent(claimClubId)}`);
   const approvedDialog = page.getByRole("dialog", { name: "Join a club" });
   await expect(approvedDialog.getByText("You’re already a member.")).toBeVisible();
-  await approvedDialog.getByRole("button", { name: "Open E2E Claim Club" }).click();
+  await approvedDialog.getByRole("button", { name: "Open club", exact: true }).click();
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   const playerProfile = page.locator(".player-profile");
   await expect(playerProfile.getByRole("heading", { name: "Your latest session" })).toBeVisible();
@@ -180,7 +180,7 @@ test("registration creates only an Account until a new Player request is approve
   await joinDialog.getByRole("button", { name: "I’m new to this club" }).click();
   await joinDialog.getByLabel("Player name").fill(newAdmissionPlayerName);
   await joinDialog.getByRole("button", { name: "Send request" }).click();
-  await expect(joinDialog.getByText("Request sent")).toBeVisible();
+  await expect(joinDialog.getByText("Waiting for admin approval")).toBeVisible();
 
   const pendingAccount = await page.evaluate(async () => {
     const response = await fetch("/api/user/me");
@@ -227,9 +227,9 @@ test("registration creates only an Account until a new Player request is approve
     const requestCard = adminPage.locator(".admission-review-card").filter({
       hasText: newAdmissionPlayerName,
     });
-    await expect(requestCard).toContainText("New Player request");
+    await expect(requestCard).toContainText("New local profile request");
     await expect(requestCard).toContainText("no Player profile has been created");
-    await requestCard.getByRole("button", { name: "Approve as new Player" }).click();
+    await requestCard.getByRole("button", { name: "Approve as new local profile" }).click();
     await expect(requestCard).toHaveCount(0);
   } finally {
     await adminContext.close().catch(() => {});
@@ -238,9 +238,9 @@ test("registration creates only an Account until a new Player request is approve
   await page.goto(`/?join=${encodeURIComponent(newAdmissionClubId)}`);
   const approvedDialog = page.getByRole("dialog", { name: "Join a club" });
   await expect(approvedDialog.getByText("You’re already a member.")).toBeVisible();
-  await approvedDialog.getByRole("button", { name: "Open E2E New Admission Club" }).click();
+  await approvedDialog.getByRole("button", { name: "Open club", exact: true }).click();
   await page.getByRole("button", { name: "Profile", exact: true }).click();
-  await expect(page.locator(".player-profile")).toContainText(newAdmissionPlayerName);
+  await expect(page.locator(".player-profile")).toContainText("New Admission Account");
   await expect(page.getByRole("heading", { name: "Player preferences" })).toBeVisible();
 
   const approvedAccount = await page.evaluate(async () => {
@@ -248,17 +248,17 @@ test("registration creates only an Account until a new Player request is approve
     return response.json();
   });
   expect(approvedAccount.players).toHaveLength(1);
-  expect(approvedAccount.players[0].name).toBe(newAdmissionPlayerName);
+  expect(approvedAccount.players[0].name).toBe("New Admission Account");
 
   const approvedPrisma = new PrismaClient({
     datasources: { db: { url: e2eDatabaseUrl } },
   });
   try {
     const players = await approvedPrisma.player.findMany({
-      where: { ownerUserId: accountId },
+      where: { clubMemberships: { some: { clubId: newAdmissionClubId, ownerUserId: accountId, retiredByAdmissionEventId: null } } },
       select: { id: true, name: true },
     });
-    expect(players).toEqual([{ id: approvedAccount.players[0].id, name: newAdmissionPlayerName }]);
+    expect(players).toEqual([{ id: approvedAccount.players[0].id, name: "New Admission Account" }]);
     expect(
       await approvedPrisma.clubMember.findMany({
         where: { clubId: newAdmissionClubId, playerId: players[0].id },
