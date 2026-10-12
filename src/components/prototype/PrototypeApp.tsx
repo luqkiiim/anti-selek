@@ -46,6 +46,7 @@ export default function PrototypeApp() {
   const [selected, setSelected] = useState<string | null>(null),
     [form, setForm] = useState(""),
     [value, setValue] = useState("");
+  const [joinAccountOpen, setJoinAccountOpen] = useState(false);
   const action = useAction(clubs.refresh);
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/signin?callbackUrl="+encodeURIComponent(location.pathname+location.search));
@@ -173,7 +174,10 @@ export default function PrototypeApp() {
           </div>
         </div>
       )}
-      <AccountSettings open={form === "account"} onClose={() => setForm("")} onSaved={account.refresh} />
+      <AccountSettings open={form === "account" || joinAccountOpen} onClose={() => {
+        if (joinAccountOpen) void account.refresh().catch(() => {}).finally(() => setJoinAccountOpen(false));
+        else setForm("");
+      }} onSaved={async () => { await account.refresh(); if (joinAccountOpen) setJoinAccountOpen(false); }} />
       <Sheet open={!!form && form !== "account" && form !== "join"}
           title="Create club"
           busy={action.busy}
@@ -211,7 +215,9 @@ export default function PrototypeApp() {
             </>
         </Sheet>
       {form === "join" && <JoinClubAdmission
-        open
+        open={!joinAccountOpen}
+        accountReady={!!account.data}
+        onCompleteAccountDetails={() => setJoinAccountOpen(true)}
         initialValue={value}
         accountName={account.data?.user.name || auth?.user?.name || ""}
         accountGender={account.data?.user.gender || ""}

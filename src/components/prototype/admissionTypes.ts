@@ -27,6 +27,7 @@ export type AdmissionRequest = {
   requester?: { id: string; name: string; email: string | null };
   requesterName?: string;
   requesterEmail?: string | null;
+  currentAccountProfile?: { name: string; gender: string; isComplete: boolean };
   name?: string;
   targetName?: string | null;
   history?: AdmissionCandidate | null;

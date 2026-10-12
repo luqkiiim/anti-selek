@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CaretLeft } from "@phosphor-icons/react";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
 import { api, ApiError } from "./api";
 import { formatProfileDate } from "./profileDate";
@@ -28,11 +29,13 @@ function playerMeta(player: AdmissionCandidate) {
   return `${player.elo ?? "—"} rating · ${matches} ${matches === 1 ? "match" : "matches"}`;
 }
 
-export function JoinClubAdmission({ open, initialValue, accountName, accountGender, onClose, onOpenClub }: {
+export function JoinClubAdmission({ open, initialValue, accountName, accountGender, accountReady = true, onCompleteAccountDetails, onClose, onOpenClub }: {
   open: boolean;
   initialValue: string;
   accountName: string;
   accountGender: string;
+  accountReady?: boolean;
+  onCompleteAccountDetails?: () => void;
   onClose: () => void;
   onOpenClub: (clubId: string) => void;
 }) {
@@ -48,8 +51,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   const [mode, setMode] = useState<"start" | "existing" | "new">("start");
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<Selection>(null);
-  const [playerName, setPlayerName] = useState(accountName);
-  const [gender, setGender] = useState(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : "");
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
   const [duplicates, setDuplicates] = useState<AdmissionCandidate[]>([]);
   const [duplicateError, setDuplicateError] = useState("");
   const [duplicateSearching, setDuplicateSearching] = useState(false);
@@ -57,6 +59,9 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const requestVersion = useRef(0);
+  const initialClubLoaded = useRef("");
+  const submissionLock = useRef(false);
+  const retry = useRef<{ signature: string; key: string } | null>(null);
 
   async function loadClub(clubId: string, search = "", nextMode: "start" | "existing" | "new" = "start") {
     const version = ++requestVersion.current;
@@ -88,9 +93,12 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   useEffect(() => {
     if (!open) return;
     const clubId = parseClubId(initialValue);
-    if (clubId) void Promise.resolve().then(() => loadClub(clubId));
+    if (clubId && initialClubLoaded.current !== clubId) {
+      initialClubLoaded.current = clubId;
+      void Promise.resolve().then(() => loadClub(clubId));
+    }
     return () => { requestVersion.current += 1; };
-    // This sheet is mounted only while open, so component state starts fresh.
+    // Account completion hides this sheet without discarding its selected club or profile.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialValue]);
 
@@ -126,8 +134,8 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   useEffect(() => {
     const controller = new AbortController();
     setDuplicates([]); setDuplicateError(""); setDuplicateSearching(false);
-    const q = playerName.trim().slice(0, 64);
-    if (!open || mode !== "new" || !duplicateClubId || duplicateLocked || !q) return () => controller.abort();
+    const q = accountName.trim().slice(0, 64);
+    if (!open || mode !== "new" || !duplicateClubId || duplicateLocked || !accountReady || !q) return () => controller.abort();
     setDuplicateSearching(true);
     const timer = setTimeout(async () => {
       try {
@@ -150,7 +158,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       } finally { if (!controller.signal.aborted) setDuplicateSearching(false); }
     }, 300);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [open, mode, duplicateClubId, duplicateLocked, playerName]);
+  }, [open, mode, duplicateClubId, duplicateLocked, accountName, accountReady]);
 
   async function verifyEntry() {
     if (!discovery) return;
@@ -177,18 +185,17 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   const isMember = hasActiveAccess && !!discovery?.membership && !discovery?.identityReviewRequired;
 
   async function submit(kind: AdmissionKind, requestedPlayerId?: string) {
-    if (!discovery || discovery.requiresJoinCode || discovery.identityReviewRequired) return;
+    if (!discovery || discovery.requiresJoinCode || discovery.identityReviewRequired || submissionLock.current) return;
+    if (!accountReady || !accountName.trim() || !["MALE", "FEMALE"].includes(accountGender) || profileIncomplete) return;
+    submissionLock.current = true;
     setBusy(true);
     setError("");
     try {
-      const result = await api<AdmissionRequest | { status: "MEMBER"; clubId: string }>("/api/clubs/join-requests", "POST", {
-        clubId: discovery.club.id,
-        kind,
-        ...(requestedPlayerId ? { requestedPlayerId } : {}),
-        ...(kind === "NEW_PLAYER" ? { proposedPlayerName: playerName.trim(), proposedGender: gender } : {}),
-        note: note.trim() || undefined,
-        idempotencyKey: crypto.randomUUID(),
-      });
+      const body = { clubId: discovery.club.id, kind, ...(requestedPlayerId ? { requestedPlayerId } : {}), note: note.trim() || undefined };
+      const signature = JSON.stringify(body);
+      if (retry.current?.signature !== signature) retry.current = { signature, key: crypto.randomUUID() };
+      const result = await api<AdmissionRequest | { status: "MEMBER"; clubId: string }>("/api/clubs/join-requests", "POST", { ...body, idempotencyKey: retry.current.key });
+      retry.current = null;
       if (result.status === "MEMBER") {
         onOpenClub(result.clubId);
         return;
@@ -196,6 +203,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       setLatestRequest(result);
       setMode("start");
     } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "ACCOUNT_PROFILE_INCOMPLETE") setProfileIncomplete(true);
       if (reason instanceof ApiError && (reason.code === "JOIN_CODE_REQUIRED")) {
         setPassword("");
         setSelection(null);
@@ -205,6 +213,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       }
       setError(reason instanceof Error ? reason.message : "Unable to send your request");
     } finally {
+      submissionLock.current = false;
       setBusy(false);
     }
   }
@@ -228,8 +237,20 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
     setSelection(null);
   }
 
-  return <Sheet open={open} title="Join a club" busy={busy} onClose={() => { requestVersion.current += 1; setPassword(""); onClose(); }}>
+  const accountDetailsComplete = !!accountName.trim() && ["MALE", "FEMALE"].includes(accountGender);
+  useEffect(() => { if (accountReady && accountDetailsComplete) setProfileIncomplete(false); }, [accountReady, accountName, accountGender, accountDetailsComplete]);
+  const selectedPlayer = discovery?.players.find(player => player.id === selection?.id);
+  const showFooter = !!discovery && !isMember && !currentPending && !discovery.identityReviewRequired && mostRecentRequest?.status !== "APPROVED" && discovery.club.allowJoinRequests && !discovery.requiresJoinCode && (mode === "new" || (mode === "existing" && !!selectedPlayer));
+  const footer = showFooter ? <div className="admission-action-footer">
+    <div className="admission-action-summary" title={mode === "existing" ? selectedPlayer?.name : accountName}><strong>{mode === "existing" ? selectedPlayer?.name : accountName || "Your Player profile"}</strong><span>{mode === "existing" ? "Request to connect this Player" : "Request a new Player profile"}</span></div>
     <ErrorText error={error} />
+    {accountReady && (!accountDetailsComplete || profileIncomplete)
+      ? <button type="button" className="primary" disabled={busy} onClick={onCompleteAccountDetails}>Complete account details</button>
+      : <button type="button" className="primary" disabled={busy || !accountReady} onClick={() => mode === "existing" && selection ? void submit("EXISTING_PLAYER", selection.id) : void submit("NEW_PLAYER")}>{busy ? "Sending…" : "Send request"}</button>}
+  </div> : undefined;
+
+  return <Sheet open={open} title="Join a club" busy={busy} footer={footer} onClose={() => { requestVersion.current += 1; setPassword(""); onClose(); }}>
+    {!showFooter && <ErrorText error={error} />}
     {!discovery ? <>
       <p className="muted">Find your club by name, then request admin approval to join.</p>
       <div className="admission-club-search">
@@ -267,10 +288,10 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
             <p className="muted">We’ll connect you to the right Player record so your match history stays together.</p>
             <div className="admission-choice-grid">
               <button type="button" className="admission-choice" onClick={openExisting}><strong>Yes, find my profile</strong><span>Search the club roster</span></button>
-              <button type="button" className="admission-choice" onClick={() => { setMode("new"); setSelection(null); setPlayerName(accountName); setGender(accountGender === "MALE" || accountGender === "FEMALE" ? accountGender : ""); }}><strong>I’m new to this club</strong><span>Ask the admin to add a Player</span></button>
+              <button type="button" className="admission-choice" onClick={() => { setMode("new"); setSelection(null); setError(""); }}><strong>I’m new to this club</strong><span>Ask the admin to add a Player</span></button>
             </div>
           </> : mode === "existing" ? <>
-            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
+            <button type="button" className="secondary admission-back" onClick={() => { setMode("start"); setError(""); }}><CaretLeft size={18} aria-hidden="true" />Back</button>
             <h3>Find your Player profile</h3>
             <p className="muted">Choose the profile that represents you in {discovery.club.name}.</p>
             <form className="admission-search" onSubmit={event => { event.preventDefault(); void loadClub(discovery.club.id, query, "existing"); }}>
@@ -279,20 +300,19 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
             </form>
             {!!discovery.players.length && <div className="admission-player-list" aria-label="Unclaimed Player profiles in this club">{discovery.players.map(player => <PlayerChoice key={player.id} player={player} selected={selection?.id === player.id} detail={playerMeta(player)} onClick={() => setSelection({ id: player.id, kind: "EXISTING_PLAYER" })} />)}</div>}
             {!discovery.players.length && <p className="admission-empty">No unclaimed Player profiles match this search. If your profile is missing or already claimed, ask the admin to help connect it.</p>}
-            <label className="field-label">Note for the admin <textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder="Optional context for your request" /></label>
-            <button type="button" className="primary" disabled={!selection || busy} onClick={() => selection && void submit(selection.kind, selection.id)}>Request to connect this Player</button>
+            {accountReady && (!accountDetailsComplete || profileIncomplete) && <p className="muted">Complete your saved account name and gender before sending this request.</p>}
+            <details className="admission-note"><summary>Add note (optional)</summary><label className="field-label">Note for the admin<textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} /></label></details>
           </> : <>
-            <button type="button" className="text-button admission-back" onClick={() => setMode("start")}>Back to the question</button>
+            <button type="button" className="secondary admission-back" onClick={() => { setMode("start"); setError(""); }}><CaretLeft size={18} aria-hidden="true" />Back</button>
             <h3>Request a new Player profile</h3>
             <p className="muted">The admin will review your request before a Player profile is created.</p>
-            <label className="field-label">Player name<input value={playerName} maxLength={100} onChange={event => setPlayerName(event.target.value)} required /></label>
+            {!accountReady ? <p role="status">Loading your account details…</p> : <div className="admission-account-summary"><strong>{accountName || "Name needed"}</strong><span>{accountGender === "MALE" ? "Male" : accountGender === "FEMALE" ? "Female" : "Gender needed"} · Mixed pairing</span></div>}
+            {accountReady && (!accountDetailsComplete || profileIncomplete) && <div className="admission-status"><strong>Complete your account details</strong><p>Add your name and gender in your account before requesting a new Player profile.</p></div>}
             {duplicateSearching && <p role="status">Checking matching profiles…</p>}
             <ErrorText error={duplicateError} />
-            {!!duplicates.length && <section className="admission-duplicates"><h4>Could one of these profiles be yours?</h4><p className="muted">These unclaimed profiles match the name you entered. Connect yours to keep your match history, or continue with a new profile if none represents you.</p>{duplicates.map(player => <PlayerChoice key={player.id} player={player} selected={selection?.id === player.id} detail={playerMeta(player)} onClick={() => { setDiscovery(current => current ? { ...current, players: duplicates } : current); setMode("existing"); setSelection({ id: player.id, kind: "EXISTING_PLAYER" }); }} />)}</section>}
-            <label className="field-label">Gender for mixed pairing<select value={gender} onChange={event => setGender(event.target.value)} required><option value="" disabled>Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>
-            <p className="muted">This belongs to your new Player profile and does not change your account gender.</p>
-            <label className="field-label">Note for the admin <textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} placeholder="Optional context for your request" /></label>
-            <button type="button" className="primary" disabled={busy || playerName.trim().length < 1 || !gender} onClick={() => void submit("NEW_PLAYER")}>Send request</button>
+            {!!duplicates.length && <section className="admission-duplicates"><h4>Could one of these profiles be yours?</h4><p className="muted">These unclaimed profiles match your account name. Connect yours to keep your match history, or continue with a new profile if none represents you.</p>{duplicates.map(player => <PlayerChoice key={player.id} player={player} selected={selection?.id === player.id} detail={playerMeta(player)} onClick={() => { setDiscovery(current => current ? { ...current, players: duplicates } : current); setMode("existing"); setSelection({ id: player.id, kind: "EXISTING_PLAYER" }); }} />)}</section>}
+            <p className="muted">Your new Player profile uses your account name and gender. Match history stays separate for this club.</p>
+            <details className="admission-note"><summary>Add note (optional)</summary><label className="field-label">Note for the admin<textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} /></label></details>
           </>}
       </>}
       <button type="button" className="text-button admission-change-club" onClick={() => { requestVersion.current += 1; setPassword(""); setDiscovery(null); setLatestRequest(null); setSelection(null); setMode("start"); setError(""); }}>Find a different club</button>

@@ -35,6 +35,12 @@ export interface SubmitAdmission {
   proposedPlayerName?: string | null; proposedGender?: string | null; note?: string | null; idempotencyKey?: string | null;
 }
 function normalizedOptional(value: string | null | undefined) { return value?.trim() || null; }
+function accountPlayerDetails(account: { name: string; gender: string }) {
+  if (!account.name.trim() || !["MALE", "FEMALE"].includes(account.gender)) {
+    throw new ClubAdmissionError("Complete your name and gender in Account Settings before joining a club.", 400, "ACCOUNT_PROFILE_INCOMPLETE");
+  }
+  return { name: account.name, gender: account.gender };
+}
 
 function sameAdmissionPayload(request: {
   clubId: string; kind: string; requestedPlayerId: string | null; proposedPlayerName: string | null;
@@ -42,8 +48,8 @@ function sameAdmissionPayload(request: {
 }, input: SubmitAdmission) {
   return request.clubId === input.clubId && request.kind === input.kind &&
     request.requestedPlayerId === (input.requestedPlayerId ?? null) &&
-    request.proposedPlayerName === normalizedOptional(input.proposedPlayerName) &&
-    request.proposedGender === (input.proposedGender ?? null) &&
+    (input.kind === "NEW_PLAYER" || (request.proposedPlayerName === normalizedOptional(input.proposedPlayerName) &&
+      request.proposedGender === (input.proposedGender ?? null))) &&
     request.note === normalizedOptional(input.note);
 }
 
@@ -67,6 +73,7 @@ export async function submitClubAdmission(db: Db, input: SubmitAdmission, entryP
   if (!await hasClubEntry(db, club, account, entryProof)) throw new ClubAdmissionError("Enter the club join code to continue", 403, "JOIN_CODE_REQUIRED");
   if (input.kind === "OWNED_PLAYER") throw new ClubAdmissionError("Choose a profile in this club or create a new local profile. Profiles from another club cannot be reused.", 409);
   if (!["EXISTING_PLAYER", "NEW_PLAYER"].includes(input.kind)) throw new ClubAdmissionError("Choose an existing profile or a new player");
+  const accountDetails = accountPlayerDetails(account);
   if (input.kind !== "NEW_PLAYER") {
     if (!input.requestedPlayerId) throw new ClubAdmissionError("Select a Player");
     const player = await db.player.findUnique({ where: { id: input.requestedPlayerId }, include: { clubMemberships: { where: { clubId: input.clubId } } } });
@@ -75,9 +82,8 @@ export async function submitClubAdmission(db: Db, input: SubmitAdmission, entryP
     if (!member) throw new ClubAdmissionError("Player not found in this club", 404);
     if (member.ownerUserId && member.ownerUserId !== input.requesterUserId) throw new ClubAdmissionError("This club profile already has an owner", 409);
     await assertLocalClaimAvailable(db, { clubId: input.clubId, playerId: player.id, userId: input.requesterUserId });
-  } else if (!input.proposedPlayerName?.trim() || !["MALE", "FEMALE"].includes(input.proposedGender ?? "")) {
-    throw new ClubAdmissionError("Enter the new Player's name and gender for Mixed pairing");
   }
+  const newPlayerDetails = input.kind === "NEW_PLAYER" ? accountDetails : null;
   const owned = await getOwnedClubPlayer(db, { userId: input.requesterUserId, clubId: input.clubId });
   if (owned?.playerId === input.requestedPlayerId) {
     // Still allow a MEMBER access request when ownership exists but access was revoked.
@@ -87,8 +93,8 @@ export async function submitClubAdmission(db: Db, input: SubmitAdmission, entryP
   if (!club.allowJoinRequests) throw new ClubAdmissionError("This club is not accepting join requests", 403);
   const request = await db.clubAdmissionRequest.create({ data: {
     clubId: input.clubId, requesterUserId: input.requesterUserId, kind: input.kind,
-    requestedPlayerId: input.requestedPlayerId ?? null, proposedPlayerName: normalizedOptional(input.proposedPlayerName),
-    proposedGender: input.proposedGender ?? null, note: normalizedOptional(input.note), idempotencyKey: input.idempotencyKey ?? null,
+    requestedPlayerId: input.requestedPlayerId ?? null, proposedPlayerName: newPlayerDetails?.name ?? normalizedOptional(input.proposedPlayerName),
+    proposedGender: newPlayerDetails?.gender ?? input.proposedGender ?? null, note: normalizedOptional(input.note), idempotencyKey: input.idempotencyKey ?? null,
   }, include: admissionInclude });
   await event(db, request.id, input.requesterUserId, "SUBMIT", 0, { kind: input.kind, requestedPlayerId: input.requestedPlayerId ?? null });
   return request;
@@ -148,10 +154,10 @@ export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
       decision = member.ownerUserId === request.requesterUserId ? "REUSE_LOCAL" : "CONNECT_EXISTING";
     } else {
       if (existingOwned) throw new ClubAdmissionError("This account already owns a Player in this club. Select that profile instead", 409);
-      const name = request.proposedPlayerName?.trim() || request.requester.name;
-      const gender = request.proposedGender ?? requester.gender;
-      if (!name || !["MALE", "FEMALE"].includes(gender ?? "")) throw new ClubAdmissionError("A name and gender are required before approving a new Player");
-      const player = await db.player.create({ data: { name, gender: gender! } });
+      // Submitted/legacy details remain an immutable audit snapshot; the account
+      // reread in this approval transaction supplies the new profile's metadata.
+      const { name, gender } = accountPlayerDetails(requester);
+      const player = await db.player.create({ data: { name, gender } });
       await db.clubMember.create({ data: { clubId: input.clubId, playerId: player.id } });
       await claimClubPlayer(db, { clubId: input.clubId, playerId: player.id, userId: request.requesterUserId, actorUserId: input.reviewerUserId, admissionRequestId: request.id });
       approvedPlayerId = player.id;

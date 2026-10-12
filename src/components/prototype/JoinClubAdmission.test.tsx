@@ -10,8 +10,8 @@ import { JoinClubAdmission } from "./JoinClubAdmission";
 vi.mock("./Primitives", () => ({
   Avatar: ({ name }: { name: string }) => <span className="avatar">{name}</span>,
   ErrorText: ({ error }: { error: string }) => error ? <p role="alert">{error}</p> : null,
-  Sheet: ({ open, title, children, busy }: { open?: boolean; title: string; children: ReactNode; busy?: boolean }) => open
-    ? <div role="dialog" aria-label={title}><fieldset disabled={busy}>{children}</fieldset></div>
+  Sheet: ({ open, title, children, footer, busy }: { open?: boolean; title: string; children: ReactNode; footer?: ReactNode; busy?: boolean }) => open
+    ? <div role="dialog" aria-label={title}><fieldset disabled={busy} className="sheet-content">{children}</fieldset>{footer && <fieldset disabled={busy} className="sheet-footer">{footer}</fieldset>}</div>
     : null,
 }));
 
@@ -95,7 +95,7 @@ describe("JoinClubAdmission", () => {
     expect(container.textContent).toContain("Have you played with this club before?");
     await act(async () => button(container, "Yes, find my profile").click());
     await act(async () => button(container, "Ari Tan").click());
-    await act(async () => button(container, "Request to connect this Player").click());
+    await act(async () => button(container, "Send request").click());
     expect(submitted).toMatchObject({ clubId: "club-1", kind: "EXISTING_PLAYER", requestedPlayerId: "player-1" });
     expect(container.textContent).toContain("Waiting for admin approval");
   });
@@ -104,7 +104,9 @@ describe("JoinClubAdmission", () => {
     await openSheet();
     await act(async () => button(container, "I’m new to this club").click());
     await act(async () => button(container, "Send request").click());
-    expect(submitted).toMatchObject({ kind: "NEW_PLAYER", proposedPlayerName: "Ari", proposedGender: "FEMALE" });
+    expect(submitted).toMatchObject({ kind: "NEW_PLAYER" });
+    expect(submitted).not.toHaveProperty("proposedPlayerName");
+    expect(submitted).not.toHaveProperty("proposedGender");
     expect(submitted).not.toHaveProperty("requestedPlayerId");
     expect(container.textContent).toContain("Waiting for admin approval");
   });
@@ -268,9 +270,9 @@ describe("JoinClubAdmission", () => {
   it("invalidates the selected existing profile as the search query changes", async () => {
     await openSheet(); await act(async () => button(container, "Yes, find my profile").click());
     await act(async () => button(container, "Ari Tan").click());
-    expect(button(container, "Request to connect this Player").disabled).toBe(false);
+    expect(button(container, "Send request").disabled).toBe(false);
     await type("Search by name", "Different");
-    expect(button(container, "Request to connect this Player").disabled).toBe(true);
+    expect(container.querySelector(".sheet-footer")).toBeNull();
   });
 
   it("checks the currently entered name with a safe query limit and preserves the form on advisory failures", async () => {
@@ -278,15 +280,16 @@ describe("JoinClubAdmission", () => {
     try {
       await openSheet(); await act(async () => button(container, "I’m new to this club").click());
       const name = "B".repeat(100);
-      await type("Player name", name);
+      await act(async () => root.render(<JoinClubAdmission open initialValue="club-1" accountName={name} accountGender="FEMALE" onClose={() => {}} onOpenClub={() => {}} />));
       vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ error: "Matching profiles unavailable" }) } as Response);
       await act(async () => vi.advanceTimersByTimeAsync(300));
       expect(fetch).toHaveBeenLastCalledWith(`/api/clubs/join-requests?clubId=club-1&q=${"B".repeat(64)}`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
-      expect(input("Player name").value).toBe(name);
+      expect(container.querySelector(".admission-account-summary")?.textContent).toContain(name);
       expect(container.textContent).toContain("Matching profiles unavailable");
       expect(button(container, "Send request").disabled).toBe(false);
       await act(async () => button(container, "Send request").click());
-      expect(submitted).toMatchObject({ kind: "NEW_PLAYER", proposedPlayerName: name });
+      expect(submitted).toMatchObject({ kind: "NEW_PLAYER" });
+      expect(submitted).not.toHaveProperty("proposedPlayerName");
     } finally { vi.useRealTimers(); }
   });
 
@@ -303,14 +306,105 @@ describe("JoinClubAdmission", () => {
         }
         return { ok: true, json: async () => makeDiscovery({ players: [{ id: "new", name: "New Person" }] }) } as Response;
       });
-      await type("Player name", "Old"); await act(async () => vi.advanceTimersByTimeAsync(300));
-      await type("Player name", "New"); expect(oldSignal?.aborted).toBe(true);
+      await act(async () => root.render(<JoinClubAdmission open initialValue="club-1" accountName="Old" accountGender="FEMALE" onClose={() => {}} onOpenClub={() => {}} />)); await act(async () => vi.advanceTimersByTimeAsync(300));
+      await act(async () => root.render(<JoinClubAdmission open initialValue="club-1" accountName="New" accountGender="FEMALE" onClose={() => {}} onOpenClub={() => {}} />)); expect(oldSignal?.aborted).toBe(true);
       await act(async () => vi.advanceTimersByTimeAsync(300));
       expect(container.textContent).toContain("New Person");
       await act(async () => resolveOld({ ok: true, json: async () => makeDiscovery({ players: [{ id: "old", name: "Old Person" }] }) } as Response));
       expect(container.textContent).not.toContain("Old Person");
-      expect(input("Player name").value).toBe("New");
+      expect(container.querySelector(".admission-account-summary")?.textContent).toContain("New");
     } finally { vi.useRealTimers(); }
+  });
+
+  it("shows the selected profile and Send request in the footer immediately", async () => {
+    await openSheet(); await act(async () => button(container, "Yes, find my profile").click());
+    expect(container.querySelector(".sheet-footer")).toBeNull();
+    await act(async () => button(container, "Ari Tan").click());
+    expect(container.querySelector(".sheet-footer")?.textContent).toContain("Ari Tan");
+    expect(container.querySelector(".sheet-content .primary")).toBeNull();
+    await act(async () => button(container, "Back").click());
+    expect(container.querySelector(".sheet-footer")).toBeNull();
+  });
+
+  it("confirms account details without editable name or gender and keeps notes optional", async () => {
+    await openSheet(); await act(async () => button(container, "I’m new to this club").click());
+    expect(container.querySelector(".admission-account-summary")?.textContent).toContain("AriFemale");
+    expect(container.querySelector("select")).toBeNull();
+    expect(Array.from(container.querySelectorAll("label")).some(label => label.textContent?.startsWith("Player name"))).toBe(false);
+    expect(container.querySelector("details")?.open).toBe(false);
+    expect(container.querySelector("summary")?.textContent).toBe("Add note (optional)");
+  });
+
+  it("distinguishes loading account details from an incomplete legacy profile and preserves the new mode on return", async () => {
+    const complete = vi.fn();
+    const render = (open: boolean, ready: boolean, gender: string) => root.render(<JoinClubAdmission open={open} initialValue="club-1" accountName="Ari" accountGender={gender} accountReady={ready} onCompleteAccountDetails={complete} onClose={() => {}} onOpenClub={() => {}} />);
+    await act(async () => render(true, false, ""));
+    await act(async () => button(container, "I’m new to this club").click());
+    expect(container.textContent).toContain("Loading your account details");
+    expect(container.textContent).not.toContain("Complete your account details");
+    expect(button(container, "Send request").disabled).toBe(true);
+    await act(async () => render(true, true, "UNSPECIFIED"));
+    await act(async () => button(container, "Complete account details").click()); expect(complete).toHaveBeenCalledOnce();
+    const calls = vi.mocked(fetch).mock.calls.length;
+    await act(async () => render(false, true, "UNSPECIFIED"));
+    await act(async () => render(true, true, "FEMALE"));
+    expect(container.textContent).toContain("Request a new Player profile");
+    expect(button(container, "Send request").disabled).toBe(false);
+    expect(vi.mocked(fetch).mock.calls.length).toBe(calls);
+  });
+
+  it("puts submission errors beside the CTA and retries the same logical request with one key", async () => {
+    const uuid = vi.fn().mockReturnValueOnce("first-key").mockReturnValueOnce("second-key"); vi.stubGlobal("crypto", { randomUUID: uuid });
+    await openSheet(); await act(async () => button(container, "Yes, find my profile").click()); await act(async () => button(container, "Ari Tan").click());
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ error: "Please retry" }) } as Response);
+    await act(async () => button(container, "Send request").click());
+    expect(container.querySelector(".sheet-footer [role=alert]")?.textContent).toBe("Please retry");
+    expect(container.querySelector(".sheet-content [role=alert]")).toBeNull();
+    await act(async () => button(container, "Send request").click());
+    expect(submitted?.idempotencyKey).toBe("first-key"); expect(uuid).toHaveBeenCalledOnce();
+    expect(container.querySelector(".sheet-footer")).toBeNull();
+  });
+
+  it("handles the server account-incomplete error through account completion", async () => {
+    await openSheet(); await act(async () => button(container, "I’m new to this club").click());
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: "Complete account details", code: "ACCOUNT_PROFILE_INCOMPLETE" }) } as Response);
+    await act(async () => button(container, "Send request").click());
+    expect(container.textContent).toContain("Complete your account details"); expect(button(container, "Complete account details")).toBeDefined();
+  });
+
+  it("completes legacy account details without losing the selected existing profile", async () => {
+    const complete = vi.fn();
+    const render = (open: boolean, gender: string) => root.render(<JoinClubAdmission open={open} initialValue="club-1" accountName="Ari" accountGender={gender} accountReady onCompleteAccountDetails={complete} onClose={() => {}} onOpenClub={() => {}} />);
+    await act(async () => render(true, "UNSPECIFIED"));
+    await act(async () => button(container, "Yes, find my profile").click()); await act(async () => button(container, "Ari Tan").click());
+    expect(container.querySelector(".sheet-footer")?.textContent).toContain("Ari Tan");
+    expect(Array.from(container.querySelectorAll("button")).some(item => item.textContent === "Send request")).toBe(false);
+    await act(async () => button(container, "Complete account details").click()); expect(complete).toHaveBeenCalledOnce();
+    await act(async () => render(false, "UNSPECIFIED")); await act(async () => render(true, "FEMALE"));
+    expect(container.querySelector(".sheet-footer")?.textContent).toContain("Ari Tan");
+    await act(async () => button(container, "Send request").click());
+    expect(submitted).toMatchObject({ kind: "EXISTING_PLAYER", requestedPlayerId: "player-1" });
+  });
+
+  it("keeps the retry key after saved account details change because the POST body stays the same", async () => {
+    const uuid = vi.fn(() => "stable-key"); vi.stubGlobal("crypto", { randomUUID: uuid });
+    await openSheet(); await act(async () => button(container, "I’m new to this club").click());
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ error: "Retry this request" }) } as Response);
+    await act(async () => button(container, "Send request").click());
+    await act(async () => root.render(<JoinClubAdmission open initialValue="club-1" accountName="Updated Ari" accountGender="MALE" accountReady onClose={() => {}} onOpenClub={() => {}} />));
+    await act(async () => button(container, "Send request").click());
+    expect(submitted?.idempotencyKey).toBe("stable-key"); expect(uuid).toHaveBeenCalledOnce();
+    expect(submitted).not.toHaveProperty("proposedPlayerName"); expect(submitted).not.toHaveProperty("proposedGender");
+  });
+
+  it("starts a new logical retry when the optional note changes", async () => {
+    const uuid = vi.fn().mockReturnValueOnce("first-key").mockReturnValueOnce("edited-key"); vi.stubGlobal("crypto", { randomUUID: uuid });
+    await openSheet(); await act(async () => button(container, "Yes, find my profile").click()); await act(async () => button(container, "Ari Tan").click());
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ error: "Retry this request" }) } as Response);
+    await act(async () => button(container, "Send request").click());
+    await act(async () => { const textarea = container.querySelector("textarea")!; Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, "Updated note"); textarea.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => button(container, "Send request").click());
+    expect(submitted).toMatchObject({ idempotencyKey: "edited-key", note: "Updated note" }); expect(uuid).toHaveBeenCalledTimes(2);
   });
 
 });
