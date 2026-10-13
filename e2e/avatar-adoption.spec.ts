@@ -97,11 +97,15 @@ for (const layout of ["desktop", "mobile"] as const) {
       await assertPersistedAdoption(f);
     });
 
-    test("personal invitation mounts the destination with the adopted photo", async ({ page }, testInfo) => {
+    test("personal invitation opens the modern Profile among multiple clubs with the adopted photo", async ({ page }, testInfo) => {
       const f = await fixture(`invitation-${layout}`);
       const db = new PrismaClient({ datasources: { db: { url: e2eDatabaseUrl } } });
       let invitationUrl: string;
       try {
+        // Redemption must open the invited club rather than the account's existing club.
+        const otherClubId = `${f.clubId}-other`;
+        await db.club.create({ data: { id: otherClubId, name: `Other Avatar Club ${layout}`, createdById: f.ownerId } });
+        await db.clubAccess.create({ data: { clubId: otherClubId, userId: f.accountId, role: "MEMBER" } });
         const issued = await admissionTransaction(db, tx => managePlayerInvitation(tx, { clubId: f.clubId, playerId: f.playerId, userId: f.ownerId, action: "CREATE" }));
         if (!("secret" in issued)) throw new Error("Fixture invitation was not created");
         invitationUrl = `${e2eBaseURL}/player-invites/${issued.invitation!.id}#${issued.secret}`;
@@ -112,8 +116,9 @@ for (const layout of ["desktop", "mobile"] as const) {
       const before = await page.request.get("/api/user/me");
       expect((await before.json()).user.avatarUrl).toBeNull();
       await page.getByRole("button", { name: "Claim my profile", exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`/club/${f.clubId}\\?tab=profile`));
-      await assertImage(page.getByTestId("profile-hero-body").locator("img").first());
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.locator(".prototype-root .player-profile")).toBeVisible();
+      await assertImage(page.getByRole("button", { name: "Account settings", exact: true }).locator("img"));
       await testInfo.attach(`adopted-invitation-${layout}`, { body: await page.screenshot(), contentType: "image/png" });
       await page.goto("/");
       await page.getByRole("button", { name: /Switch club, current/ }).click();

@@ -95,7 +95,7 @@ describe("PlayerInvitationClaim", () => {
     mocks.fetch.mockImplementation((input: string | Request | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/player-invites/invite-1/redeem" && init?.method === "POST") {
-        return Promise.resolve(jsonResponse({ destination: "/club/club-1" }));
+        return Promise.resolve(jsonResponse({ clubId: "club-1", playerId: "local-player", destination: "/club/club-1" }));
       }
       if (url === "/api/player-invites/invite-1") return Promise.resolve(jsonResponse(claimContext));
       throw new Error(`Unexpected request ${url}`);
@@ -113,7 +113,7 @@ describe("PlayerInvitationClaim", () => {
     await act(async () => click("Claim my profile"));
     const redeem = mocks.fetch.mock.calls.find(([input, init]) => String(input) === "/api/player-invites/invite-1/redeem" && (init as RequestInit | undefined)?.method === "POST");
     expect(JSON.parse((redeem?.[1] as RequestInit).body as string)).toEqual({ confirm: true });
-    expect(mocks.router.replace).toHaveBeenCalledWith("/club/club-1");
+    expect(mocks.router.replace).toHaveBeenCalledWith("/?club=club-1&tab=profile");
     expect(mocks.router.refresh).toHaveBeenCalledTimes(1);
     expect(mocks.router.replace.mock.invocationCallOrder[0]).toBeLessThan(mocks.router.refresh.mock.invocationCallOrder[0]);
   });
@@ -131,8 +131,8 @@ describe("PlayerInvitationClaim", () => {
     expect(mocks.fetch.mock.calls.filter(([input]) => String(input).endsWith("/redeem"))).toHaveLength(1);
     expect(mocks.router.replace).not.toHaveBeenCalled();
     expect(mocks.router.refresh).not.toHaveBeenCalled();
-    await act(async () => complete(jsonResponse({ destination: "/club/club-1?tab=profile" })));
-    expect(mocks.router.replace).toHaveBeenCalledWith("/club/club-1?tab=profile");
+    await act(async () => complete(jsonResponse({ clubId: "club-1", playerId: "local-player", destination: "/club/club-1?tab=profile" })));
+    expect(mocks.router.replace).toHaveBeenCalledWith("/?club=club-1&tab=profile");
     expect(mocks.router.refresh).toHaveBeenCalledTimes(1);
     expect(mocks.router.replace.mock.invocationCallOrder[0]).toBeLessThan(mocks.router.refresh.mock.invocationCallOrder[0]);
   });
@@ -144,7 +144,7 @@ describe("PlayerInvitationClaim", () => {
         attempts += 1;
         return Promise.resolve(attempts === 1
           ? jsonResponse({ error: "Temporary claim failure" }, 503)
-          : jsonResponse({ destination: "/club/club-1?tab=profile" }));
+          : jsonResponse({ clubId: "club-1", playerId: "local-player", destination: "/club/club-1?tab=profile" }));
       }
       return Promise.resolve(jsonResponse(claimContext));
     });
@@ -155,7 +155,7 @@ describe("PlayerInvitationClaim", () => {
     expect(mocks.router.refresh).not.toHaveBeenCalled();
     await act(async () => click("Claim my profile"));
     expect(attempts).toBe(2);
-    expect(mocks.router.replace).toHaveBeenCalledWith("/club/club-1?tab=profile");
+    expect(mocks.router.replace).toHaveBeenCalledWith("/?club=club-1&tab=profile");
     expect(mocks.router.refresh).toHaveBeenCalledTimes(1);
   });
 

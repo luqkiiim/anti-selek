@@ -48,6 +48,7 @@ export default function PrototypeApp() {
   const [selected, setSelected] = useState<string | null>(null),
     [form, setForm] = useState(""),
     [value, setValue] = useState("");
+  const [initialProfileClub, setInitialProfileClub] = useState<string | null>(null);
   const [globalClub, setGlobalClub] = useState<BrowsableClub | null>(null);
   const [browseOpen, setBrowseOpen] = useState(false);
   const [joinAccountOpen, setJoinAccountOpen] = useState(false);
@@ -57,7 +58,7 @@ export default function PrototypeApp() {
   }, [status, router]);
   const userId = auth?.user?.id;
   useEffect(() => {
-    if (!clubs.data || !userId) return;
+    if (!clubs.data || !userId || status !== "authenticated") return;
     const availableClubs=clubs.data;
     let cancelled=false;
     void Promise.resolve().then(()=>{if(cancelled)return;
@@ -69,14 +70,31 @@ export default function PrototypeApp() {
       history.replaceState(null, "", "/");
       return;
     }
+    const requestedClub = params.get("club");
+    if (requestedClub !== null) {
+      const openProfile = params.get("tab") === "profile";
+      params.delete("club");
+      params.delete("tab");
+      history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : "") + location.hash);
+      if (availableClubs.some(c => c.id === requestedClub)) {
+        select(requestedClub);
+        setInitialProfileClub(openProfile ? requestedClub : null);
+      } else {
+        switchClub();
+      }
+      return;
+    }
     try {
       const saved = localStorage.getItem("pc-club:" + userId);
       if (availableClubs.some((c) => c.id === saved)) setSelected(saved);
       else if (availableClubs.length === 1) setSelected(availableClubs[0].id);
     } catch {}
     });return()=>{cancelled=true};
-  }, [clubs.data, userId]);
+    // Selection changes only on authoritative club reads or a consumed link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clubs.data, userId, status]);
   function select(id: string) {
+    setInitialProfileClub(null);
     setGlobalClub(null);
     setSelected(id);
     try {
@@ -84,6 +102,7 @@ export default function PrototypeApp() {
     } catch {}
   }
   function switchClub() {
+    setInitialProfileClub(null);
     setGlobalClub(null);
     setSelected(null);
     try {
@@ -94,7 +113,7 @@ export default function PrototypeApp() {
   return (
     <div className="prototype-root">
       {globalClub ? <Club key={`global:${globalClub.id}`} globalView club={globalClub} onSwitch={switchClub} onAccountSaved={account.refresh} onClubsChanged={clubs.refresh} /> : club ? (
-        <Club key={club.id} club={club} onSwitch={switchClub} onAccountSaved={account.refresh} onClubsChanged={clubs.refresh} />
+        <Club key={club.id} club={club} initialPage={initialProfileClub === club.id ? "profile" : "club"} onSwitch={switchClub} onAccountSaved={account.refresh} onClubsChanged={clubs.refresh} />
       ) : (
         <div className="pc-app">
           <header className="pc-header">

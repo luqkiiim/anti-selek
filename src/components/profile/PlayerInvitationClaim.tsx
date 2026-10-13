@@ -173,12 +173,12 @@ export function PlayerInvitationClaim({ invitationId }: { invitationId: string }
     setBusy(true);
     setError("");
     try {
-      const result = await api<{ destination: string }>(
+      const result = await api<{ clubId: string; playerId: string; destination: string }>(
         `${endpoint}/redeem`,
         "POST",
         { confirm: true }
       );
-      router.replace(result.destination);
+      router.replace(`/?club=${encodeURIComponent(result.clubId)}&tab=profile`);
       router.refresh();
     } catch (claimError) {
       setError(

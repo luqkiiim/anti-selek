@@ -9,7 +9,7 @@ import { useResource } from "./api";
 const session = vi.hoisted(() => ({ data: { user: { id: "account-1", name: "Ari", canBrowseAllClubs: false } }, status: "authenticated" }));
 vi.mock("next-auth/react", () => ({ useSession: () => session }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
-vi.mock("./Club", () => ({ default: function MockClub({ club, onSwitch }: { club: { id: string }; onSwitch: () => void }) { const [open, setOpen] = useState(false); const profile = useResource<{ avatarUrl: string | null }>(`/api/clubs/${club.id}`); return <div>Selected club{profile.data?.avatarUrl && <img alt="Selected Player photo" src={profile.data.avatarUrl} />}<button onClick={onSwitch}>Switch club</button><button onClick={() => setOpen(true)}>Open club account</button>{open && <div role="dialog" aria-label="Club account sheet">Saved draft</div>}</div>; } }));
+vi.mock("./Club", () => ({ default: function MockClub({ club, onSwitch, initialPage = "club" }: { club: { id: string }; onSwitch: () => void; initialPage?: "club" | "profile" }) { const [page, setPage] = useState(initialPage); const [open, setOpen] = useState(false); const profile = useResource<{ avatarUrl: string | null }>(`/api/clubs/${club.id}`); return <div data-selected-club={club.id} data-page={page}>Selected club<button onClick={() => setPage("club")}>Club tab</button>{profile.data?.avatarUrl && <img alt="Selected Player photo" src={profile.data.avatarUrl} />}<button onClick={onSwitch}>Switch club</button><button onClick={() => setOpen(true)}>Open club account</button>{open && <div role="dialog" aria-label="Club account sheet">Saved draft</div>}</div>; } }));
 vi.mock("./Primitives", () => ({
   Avatar: ({ name, url }: { name: string; url?: string | null }) => <span>{url ? <img alt={`${name} photo`} src={url} /> : name}</span>,
   ErrorText: ({ error }: { error: string }) => error ? <p role="alert">{error}</p> : null,
@@ -151,4 +151,44 @@ it("does not fabricate club membership when an approved request's refreshed club
   await act(async () => button("Open club").click());
   expect(container.textContent).not.toContain("Selected club");
   expect(container.querySelector('[aria-label="Account"] img')).toBeNull();
+});
+
+
+it("opens the authorized linked club's Profile among multiple clubs and consumes the link only once", async () => {
+  history.replaceState(null, "", "/?club=club-1&tab=profile&keep=yes");
+  localStorage.setItem("pc-club:account-1", "other-club");
+  vi.mocked(fetch).mockImplementation(async url => String(url) === "/api/clubs"
+    ? response([dashboardClub, { ...dashboardClub, id: "other-club" }])
+    : String(url) === "/api/user/me" ? response({ user: { id: "account-1", name: "Ari", gender: "FEMALE" } }) : response({ avatarUrl: adoptedPhoto }));
+  await act(async () => root.render(<PrototypeApp />));
+  expect(container.querySelector('[data-selected-club="club-1"]')?.getAttribute("data-page")).toBe("profile");
+  expect(localStorage.getItem("pc-club:account-1")).toBe("club-1");
+  expect(location.search).toBe("?keep=yes");
+  await act(async () => button("Club tab").click());
+  session.status = "loading";
+  await act(async () => root.render(<PrototypeApp />));
+  session.status = "authenticated";
+  await act(async () => root.render(<PrototypeApp />));
+  expect(container.querySelector('[data-selected-club="club-1"]')?.getAttribute("data-page")).toBe("club");
+});
+
+it("does not read or select an unavailable club from a link, even with a saved authorized club", async () => {
+  history.replaceState(null, "", "/?club=foreign-club&tab=profile");
+  localStorage.setItem("pc-club:account-1", "club-1");
+  vi.mocked(fetch).mockImplementation(async url => String(url) === "/api/clubs" ? response([dashboardClub])
+    : response({ user: { id: "account-1", name: "Ari", gender: "FEMALE" } }));
+  await act(async () => root.render(<PrototypeApp />));
+  expect(container.textContent).not.toContain("Selected club");
+  expect(location.search).toBe("");
+  expect(localStorage.getItem("pc-club:account-1")).toBeNull();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("foreign-club"))).toBe(false);
+});
+
+it("gives a join link priority over a club Profile link", async () => {
+  history.replaceState(null, "", "/?join=club-1&club=club-1&tab=profile");
+  await act(async () => root.render(<PrototypeApp />));
+  expect(container.querySelector('[aria-label="Join a club"]')).not.toBeNull();
+  expect(container.textContent).not.toContain("Selected club");
+  expect(localStorage.getItem("pc-club:account-1")).toBeNull();
+  expect(location.search).toBe("");
 });

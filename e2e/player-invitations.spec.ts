@@ -50,11 +50,20 @@ function captureInvitationAuditApiFailures(page: Page, pathPart: string, include
 }
 async function assertClaim(page: Page, invited: Awaited<ReturnType<typeof fixture>>) {
   await page.getByRole("button", { name: "Claim my profile" }).click();
-  await expect(page).toHaveURL(new RegExp(`/club/${invited.clubId}\\?tab=profile`));
-  await expect(page.getByRole("region", { name: "Player summary" })).toContainText("Matches");
-  await expect(page.getByRole("region", { name: "Player summary" })).toContainText("1");
-  await page.getByRole("tab", { name: "Matches", exact: true }).click();
-  await expect(page.getByText(`Preserved History ${invited.clubId.replace("invitation-", "").replace("-club", "")}`, { exact: true }).filter({ visible: true }).first()).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  const profile = page.locator(".prototype-root .player-profile");
+  await expect(profile).toBeVisible();
+  await expect(profile.getByRole("button", { name: "Account settings", exact: true })).toBeVisible();
+  await expect(profile.locator(".profile-activity-totals")).toHaveText("1 sessions · 1 matches");
+  await expect(profile.locator(".profile-latest")).toContainText(`Preserved History ${invited.clubId.replace("invitation-", "").replace("-club", "")}`);
+  await page.addLocatorHandler(page.getByRole("dialog", { name: "New club achievement" }), async dialog => {
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  });
+  const matches = profile.getByRole("group", { name: "History view" }).getByRole("button", { name: "Matches", exact: true });
+  await matches.click();
+  await expect(matches).toHaveAttribute("aria-pressed", "true");
+  await expect(profile.locator(".profile-match-history .profile-history-row")).toHaveCount(1);
+  await expect(profile.locator(".profile-match-history .profile-history-row")).toContainText(/21.*17/);
   const db = new PrismaClient({ datasources: { db: { url: e2eDatabaseUrl } } });
   try {
     expect((await db.clubMember.findUniqueOrThrow({ where: { clubId_playerId: { clubId: invited.clubId, playerId: invited.playerId } } })).ownerUserId).not.toBeNull();

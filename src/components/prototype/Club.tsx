@@ -75,9 +75,11 @@ export default function Club({
   onAccountSaved,
   onClubsChanged,
   globalView = false,
+  initialPage = "club",
 }: {
   club: Omit<DashboardClub, "role" | "isPasswordProtected"> & { role?: DashboardClub["role"] | null; isPasswordProtected?: boolean };
   globalView?: boolean;
+  initialPage?: "club" | "profile";
   onSwitch: () => void;
   onAccountSaved: () => Promise<unknown>;
   onClubsChanged: () => Promise<unknown>;
@@ -99,7 +101,7 @@ export default function Club({
     await achievements.refresh();
   }
   const [memberStack, setMemberStack] = useState<string[]>([]);
-  const [page, setPage] = useState("club"),
+  const [page, setPage] = useState<string>(globalView ? "club" : initialPage),
     [sessionCode, setSessionCode] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   const [pastSessionPagination, setPastSessionPagination] = useState({
