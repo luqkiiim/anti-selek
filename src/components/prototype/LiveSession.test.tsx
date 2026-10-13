@@ -383,7 +383,7 @@ describe("LiveSession score and player controls", () => {
     const pause = container.querySelector<HTMLButtonElement>('button[aria-label="Pause Score Player 1A"]');
     expect(pause).toBeTruthy();
     await act(async () => pause?.click());
-    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/pause-player", "POST", { userId: active.userId, isPaused: true });
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/pause-player", "POST", { playerId: active.userId, isPaused: true });
 
     active.isPaused = true;
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
@@ -392,7 +392,7 @@ describe("LiveSession score and player controls", () => {
     const resume = container.querySelector<HTMLButtonElement>('button[aria-label="Resume Paused Waiting"]');
     expect(resume).toBeTruthy();
     await act(async () => resume?.click());
-    expect(mocks.api).toHaveBeenLastCalledWith("/api/sessions/TEST01/pause-player", "POST", { userId: pausedWaiting.userId, isPaused: false });
+    expect(mocks.api).toHaveBeenLastCalledWith("/api/sessions/TEST01/pause-player", "POST", { playerId: pausedWaiting.userId, isPaused: false });
     pausedWaiting.isPaused = false;
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
     expect(container.textContent).toContain("Waiting");
@@ -560,7 +560,7 @@ describe("LiveSession score and player controls", () => {
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause player")?.click());
 
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/pause-player", "POST", {
-      userId: "match-1-a",
+      playerId: "match-1-a",
       isPaused: true,
       courtId: "court-1",
       currentMatchId: "match-1",
@@ -585,7 +585,7 @@ describe("LiveSession score and player controls", () => {
 
     expect(mocks.api.mock.calls.slice(-2)).toEqual([
       ["/api/sessions/TEST01/pause-player", "POST", {
-        userId: "match-1-a",
+        playerId: "match-1-a",
         isPaused: true,
         courtId: "court-1",
         currentMatchId: "match-1",

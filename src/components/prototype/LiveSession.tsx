@@ -405,7 +405,7 @@ export default function LiveSession({
     }));
     try {
       const data = await api<PausePlayerResponse>(endpoint + "/pause-player", "POST", {
-        userId,
+        playerId: userId,
         isPaused,
       });
       setPauseOverlays((current) => ({
@@ -811,7 +811,7 @@ export default function LiveSession({
     let noReplacementMessage = "";
     void action.run(async () => {
       await api(endpoint + "/pause-player", "POST", {
-        userId: target.player.id,
+        playerId: target.player.id,
         isPaused: true,
         courtId: target.courtId,
         currentMatchId: target.matchId,

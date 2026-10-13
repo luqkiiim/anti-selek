@@ -427,7 +427,7 @@ export function useSessionPlayerManagement({
       const res = await fetch(`/api/sessions/${code}/pause-player`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, isPaused: !currentPaused }),
+        body: JSON.stringify({ playerId: userId, isPaused: !currentPaused }),
       });
       const data = await safeJson<PausePlayerResponse>(res);
       if (res.ok) {
