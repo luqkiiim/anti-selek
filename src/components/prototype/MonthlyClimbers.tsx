@@ -13,6 +13,7 @@ export function MonthlyClimbers({
   month: string;
   onOpenProfile: (id: string) => void;
 }) {
+  if (!climbers.length) return null;
   return (
     <section className="monthly-climbers-section" aria-label="Monthly climbers">
       <div className="section-heading">

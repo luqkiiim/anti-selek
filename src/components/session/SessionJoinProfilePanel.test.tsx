@@ -72,7 +72,7 @@ describe("SessionJoinProfilePanel", () => {
       "Alex S · South Club",
     ]);
     const joinButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Join tournament"
+      (button) => button.textContent === "Join session"
     ) as HTMLButtonElement;
     expect(joinButton.disabled).toBe(true);
 
@@ -111,7 +111,7 @@ describe("SessionJoinProfilePanel", () => {
       );
     });
     const joinButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Join tournament"
+      (button) => button.textContent === "Join session"
     ) as HTMLButtonElement;
     expect(container.querySelector("select")).toBeNull();
     expect(joinButton.disabled).toBe(false);

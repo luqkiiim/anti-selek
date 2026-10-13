@@ -121,9 +121,7 @@ function SigninForm() {
             <h1 className={styles.title} id="signin-title">
               Welcome back
             </h1>
-            <p className={styles.subtitle}>
-              Sign in to play, follow results, or manage your club.
-            </p>
+
           </header>
 
           <div
@@ -139,7 +137,7 @@ function SigninForm() {
                 accessMode === "account" ? styles.modeButtonSelected : ""
               }`}
             >
-              Log in
+              Account
             </button>
             <button
               type="button"
@@ -227,16 +225,7 @@ function SigninForm() {
             </form>
           ) : (
             <div className={styles.quickAccess}>
-              <p className={styles.quickNote}>
-                View-only access needs no password and is tied to one club
-                profile. You can follow tournaments and standings, but you
-                cannot join clubs, submit scores, or manage a club.
-              </p>
-              <p className={styles.quickInstructions}>
-                Use the club and player names your host registered. Ask your
-                host for the spelling if you are unsure. To submit scores or
-                join another club, create an account.
-              </p>
+              <p className={styles.quickNote}>Follow results only. Use the club and player names your host registered.</p>
               <form
                 onSubmit={handleQuickAccessSubmit}
                 aria-busy={quickLoading || sessionStatus === "loading"}

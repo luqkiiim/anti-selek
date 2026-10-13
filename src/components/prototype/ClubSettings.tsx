@@ -43,12 +43,11 @@ export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggle
       <form onSubmit={e => { e.preventDefault(); setNotice(""); void action.run(async () => { await api(endpoint, "PATCH", { name: name.trim(), rules: rules.trim() }); await refresh(); setNotice("Club details saved."); }); }}>
         <label className="field-label">Club name<input value={name} onChange={e => setName(e.target.value)} minLength={3} required /></label>
         <label className="field-label">Club rules (optional)<textarea aria-label="Club rules" value={rules} onChange={e => setRules(e.target.value)} maxLength={3000} rows={5} placeholder="e.g. Arrive 10 minutes early and let the host know if you can’t make it." /></label>
-        <p className="club-settings-hint">Shown on your club overview.</p>
         <button type="submit" className="primary full" disabled={!changed || name.trim().length < 3 || action.busy}>{action.busy ? "Saving…" : "Save changes"}</button>
       </form>
       <section className="club-settings-section" aria-label="Joining the club"><h3>Joining the club</h3><div className="club-settings-rows">
-        <button className="club-setting-row" onClick={onInvite}><LinkSimple size={22} /><span><strong>Invite link</strong><small>Share your club with players</small></span><CaretRight size={18} /></button>
-        <button role="switch" aria-label="Allow join requests" aria-checked={allowJoinRequests ?? false} disabled={allowJoinRequests === undefined || busy} className="toggle-row" onClick={onToggleJoins}><span><strong>Allow join requests</strong><small>Players can ask to join</small></span><span className={"switch " + (allowJoinRequests ? "on" : "")} /></button>
+        <button className="club-setting-row" onClick={onInvite}><LinkSimple size={22} /><span><strong>Invite link</strong></span><CaretRight size={18} /></button>
+        <button role="switch" aria-label="Allow join requests" aria-checked={allowJoinRequests ?? false} disabled={allowJoinRequests === undefined || busy} className="toggle-row" onClick={onToggleJoins}><span><strong>Allow join requests</strong></span><span className={"switch " + (allowJoinRequests ? "on" : "")} /></button>
       </div>
         {club.role === "ADMIN" && !club.isTutorial && <form className="club-join-code-form" onSubmit={event => {
           event.preventDefault();

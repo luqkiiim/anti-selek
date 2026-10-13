@@ -18,6 +18,7 @@ export function ClubHighlights({ items, onOpen }: {
     players.forEach(player => seen.add(player.id));
     return true;
   }).slice(0, 3);
+  if (!items.length) return null;
   return <section className="club-highlights" aria-label="Club highlights">
     <div className="section-heading"><h3>Club highlights</h3><Sparkle size={21} weight="duotone" aria-hidden="true" /></div>
     {highlights.length ? <>

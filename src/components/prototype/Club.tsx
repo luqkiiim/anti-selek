@@ -326,8 +326,29 @@ export default function Club({
                         : readOnly ? data.club.name : `Welcome back, ${data.viewer.name}.`}
                     </h1>
                   </div>
-                  <Image src="/spark.png" alt="Friendly spark" width={92} height={92} />
+                  <Image src="/spark.png" alt="Friendly spark" width={68} height={68} />
                 </div>
+
+              </div>
+              <div className="club-dashboard-session-cards">
+                {live.length ? (
+                  <div className="session-tile">
+                    <span className="eyebrow">LIVE NOW</span>
+                    <h2>{live[0].name}</h2>
+                    <p>{live[0].players.length} players</p>
+                    <button
+                      className="primary"
+                      onClick={() => openSession(live[0].code)}
+                    >
+                      {canManage ? "Continue hosting" : "View session"}
+                      <CaretRight size={19} />
+                    </button>
+                  </div>
+                ) : null}
+                <UpcomingSessions sessions={upcoming} clubId={club.id} busy={action.busy} onReview={canAdmin ? (code, status) => void action.run(() => api(`/api/sessions/${encodeURIComponent(code)}/collab`, "PATCH", { status })) : undefined} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
+                {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); if (onRoute) onRoute(changeAppQuery(clubHref(club.id, "recap", readOnly), { session: recent.code })); else go("recap"); }} />}
+              </div>
+              {canManage && !live.length && !upcoming.length && <div className="club-start-session"><button className="primary" onClick={() => go("setup")}><Plus size={18} />New session</button></div>}
                 <section className="club-activity-totals" aria-label="Club activity">
                   <button type="button" onClick={() => go("sessions")} aria-label={`${(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()} Sessions, view sessions`}>
                     <CalendarBlank size={19} aria-hidden="true" />
@@ -350,28 +371,11 @@ export default function Club({
                     <span>Last played</span>
                   </div>
                 </section>
-              </div>
-              <div className="club-dashboard-session-cards">
-                {live.length ? (
-                  <div className="session-tile">
-                    <span className="eyebrow">LIVE NOW</span>
-                    <h2>{live[0].name}</h2>
-                    <p>{live[0].players.length} players</p>
-                    <button
-                      className="primary"
-                      onClick={() => openSession(live[0].code)}
-                    >
-                      {canManage ? "Continue hosting" : "View session"}
-                      <CaretRight size={19} />
-                    </button>
-                  </div>
-                ) : null}
-                <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
-                {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); if (onRoute) onRoute(changeAppQuery(clubHref(club.id, "recap", readOnly), { session: recent.code })); else go("recap"); }} />}
-              </div>
+              {!completedSessions.length && <p className="club-initial-empty">Your first completed session will appear here.</p>}
+              {data.club.isTutorial && onRoute && <a className="text-button specialist-tools" href={changeAppQuery(clubHref(club.id), { tools: "practice" })}>Practice sessions</a>}
               <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
               {data.clubPulse?.monthlyClimbers && <MonthlyClimbers climbers={data.clubPulse.monthlyClimbers} month={data.clubPulse.monthlyClimbersMonth} onOpenProfile={openMember} />}
-              {!readOnly && <div className="club-dashboard-progress">
+              {!readOnly && viewerPlayerId && <div className="club-dashboard-progress">
                 <div className="section-heading">
                   <h3>Your progress here</h3>
                   <button className="text-button" onClick={() => go("profile")}>

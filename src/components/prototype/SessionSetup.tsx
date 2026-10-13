@@ -18,8 +18,8 @@ const formats = [
   { id: "LEVEL_MATCH", name: "Level match", description: "Bring players of similar ability together.", icon: ChartBar },
 ] as const;
 
-function Toggle({ title, hint, checked, onChange }: { title: string; hint: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return <label className="setup-toggle"><span><strong>{title}</strong><small>{hint}</small></span><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span className="setup-switch" aria-hidden="true" /></label>;
+function Toggle({ title, hint, checked, onChange }: { title: string; hint?: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return <label className="setup-toggle"><span><strong>{title}</strong>{hint && <small>{hint}</small>}</span><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span className="setup-switch" aria-hidden="true" /></label>;
 }
 
 export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdvanced }: { clubId: string; members: ClubPageMember[]; onCreated: (code: string) => void; onAdvanced?: () => void }) {
@@ -107,13 +107,14 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdva
       onCreated(created.code);
     });
   }
+  const rosterError = /player|guest|gender|group/i.test(action.error) ? action.error : "";
   return <section className="session-setup" aria-label="Session setup">
     <div className="setup-intro"><span className="eyebrow">LET’S PLAY</span><h1>Make it your session.</h1></div>
     <form onSubmit={e => { e.preventDefault(); prepare(); }}>
       <fieldset disabled={action.busy} className="setup-fields">
         <section className="setup-section" aria-label="Session details">
           <label className="field-label setup-name">Session name<input value={name} onChange={e => setName(e.target.value)} required /></label>
-          <div className="setup-courts"><span><strong>Courts</strong><small>Available for this session</small></span><div className="setup-stepper"><button type="button" aria-label="Fewer courts" disabled={courts === 1} onClick={() => setCourts(n => n - 1)}><Minus size={18} /></button><output aria-label="Court count" aria-live="polite">{courts}</output><button type="button" aria-label="More courts" disabled={courts === 10} onClick={() => setCourts(n => n + 1)}><Plus size={18} /></button></div></div>
+          <div className="setup-courts"><span><strong>Courts</strong></span><div className="setup-stepper"><button type="button" aria-label="Fewer courts" disabled={courts === 1} onClick={() => setCourts(n => n - 1)}><Minus size={18} /></button><output aria-label="Court count" aria-live="polite">{courts}</output><button type="button" aria-label="More courts" disabled={courts === 10} onClick={() => setCourts(n => n + 1)}><Plus size={18} /></button></div></div>
         </section>
 
         <section className="setup-section" aria-labelledby="setup-players"><h2 id="setup-players">Who’s playing?</h2>
@@ -121,23 +122,24 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdva
             <span className="setup-roster-faces" aria-hidden="true">{players.slice(0, 3).map(p => <Avatar key={p.id} name={p.name} url={p.avatarUrl} />)}{!players.length && <UsersThree size={28} />}</span>
             <span><strong>{count} {count === 1 ? "player" : "players"}</strong><small>{guests.length ? `${guests.length} ${guests.length === 1 ? "guest" : "guests"} included · Edit list` : "Choose players & add guests"}</small></span><CaretRight size={18} />
           </button>
+          <ErrorText error={rosterError} />
           {count < 4 && <p className="setup-hint">You’ll need four players to start a doubles game.</p>}
         </section>
 
         <section className="setup-section" aria-labelledby="setup-matches"><h2 id="setup-matches">How should we match?</h2>
           <div className="setup-format-list" role="radiogroup" aria-label="Matchmaking style">{formats.map(({ id, name, description, icon: Icon }) => <label key={id} className={`setup-format ${style === id ? "is-selected" : ""}`}><input type="radio" name="matchmaking" value={id} checked={style === id} onChange={() => setStyle(id)} /><Icon size={24} weight="duotone" aria-hidden="true" /><span><strong>{name}</strong><small>{description}</small></span><span className="setup-radio-mark" aria-hidden="true">{style === id && <Check size={13} weight="bold" />}</span></label>)}</div>
-          <Toggle title="Mixed pairs" hint="Build mixed-gender teams." checked={mixed} onChange={setMixed} />
-          {style !== "SOCIAL" && <fieldset className="setup-metric"><legend>Balance teams using</legend><div className="setup-segments">{[{ id: "RATING", name: "Club rating" }, { id: "SESSION_POINTS", name: "Session points" }].map(option => <label key={option.id}><input type="radio" name="balance" value={option.id} checked={metric === option.id} onChange={() => setMetric(option.id)} /><span>{option.name}</span></label>)}</div><p className="setup-hint">{metric === "RATING" ? "Use each player’s current rating." : "Use points earned during this session."}</p></fieldset>}
+          <Toggle title="Mixed pairs" checked={mixed} onChange={setMixed} />
+          {style !== "SOCIAL" && <fieldset className="setup-metric"><legend>Balance teams using</legend><div className="setup-segments">{[{ id: "RATING", name: "Club rating" }, { id: "SESSION_POINTS", name: "Session points" }].map(option => <label key={option.id}><input type="radio" name="balance" value={option.id} checked={metric === option.id} onChange={() => setMetric(option.id)} /><span>{option.name}</span></label>)}</div></fieldset>}
         </section>
 
-        <details className="setup-options"><summary><span><strong>More options</strong><small>Groups & session controls</small></span><CaretRight size={18} /></summary><div className="setup-options-content">
+        <details className="setup-options"><summary><span><strong>More options</strong></span><CaretRight size={18} /></summary><div className="setup-options-content">
           <Toggle title="Player groups" hint="Separate Competitive and Social groups." checked={groups} onChange={setGroups} />
           {groups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setRosterOpen(true)}>{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
           <Toggle title="Prepare the next game" hint="Automatically keep the next match queued." checked={autoQueue} onChange={setAutoQueue} />
           {onAdvanced && <button type="button" className="text-button setup-advanced" onClick={onAdvanced}>Advanced hosting<CaretRight size={16} /></button>}
         </div></details>
       </fieldset>
-      <div className="setup-submit"><ErrorText error={action.error} /><button className="primary full" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : "Prepare session"}<CaretRight size={18} /></button><p>Players won’t start until you’re ready.</p></div>
+      <div className="setup-submit"><ErrorText error={rosterError ? "" : action.error} /><button className="primary full" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : "Prepare session"}<CaretRight size={18} /></button></div>
     </form>
 
     <Sheet open={rosterOpen} title="Who’s playing?" onClose={() => { setRosterOpen(false); setAddingGuest(false); }}>

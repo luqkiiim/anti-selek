@@ -8,7 +8,7 @@ import {
 } from "@/types/enums";
 
 export const AUTO_QUEUE_DESCRIPTION =
-  "Once every court is busy, the app reserves the next four eligible players and moves their match onto the next free court. Use Create Matches to start play.";
+  "Once every court is busy, the app reserves the next four eligible players and moves their match onto the next free court. Use Create matches to start play.";
 export const PLAYER_GROUPS_DESCRIPTION =
   "Let players choose Competitive or Social games. Crossover games put one player from each group on each team. Leave off to use one shared player list.";
 

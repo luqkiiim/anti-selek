@@ -135,7 +135,7 @@ describe("authentication pages", () => {
     );
     await act(async () => quickButton?.click());
 
-    expect(container.textContent).toContain("View-only access needs no password");
+    expect(container.textContent).toContain("Follow results only.");
 
     const inputs = container.querySelectorAll<HTMLInputElement>("form input");
     await act(async () => {

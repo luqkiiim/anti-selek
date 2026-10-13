@@ -23,6 +23,7 @@ function PairRow({ pair, rank, detailed = false, onOpenProfile }: {
 
 export function PartnerChemistry({ pairs, onOpenProfile }: { pairs: ClubPulsePartnership[]; onOpenProfile:(id:string)=>void }) {
   const [open, setOpen] = useState(false);
+  if (!pairs.length) return null;
   return <section className="chemistry-section" aria-label="Partner chemistry">
     <div className="section-heading"><h3>Partner chemistry</h3>
       {pairs.length > 0 && <button className="text-button" onClick={() => setOpen(true)}>View all</button>}

@@ -616,7 +616,7 @@ export function LiveCourtsPanel({
               className="app-button-primary min-h-11 shrink-0 whitespace-nowrap px-4 py-2.5"
               data-tutorial-target="admin-onboarding-score-input"
             >
-              {creatingOpenMatches ? "Creating..." : "Create Matches"}
+              {creatingOpenMatches ? "Creating..." : "Create matches"}
             </button>
           ) : null}
           {showQueueAction ? (
@@ -626,7 +626,7 @@ export function LiveCourtsPanel({
               disabled={creatingQueuedMatch}
               className="app-button-primary shrink-0 whitespace-nowrap px-4 py-2.5"
             >
-              {creatingQueuedMatch ? "Queueing..." : "Queue Next Match"}
+              {creatingQueuedMatch ? "Queueing..." : "Queue next match"}
             </button>
           ) : null}
         </div>

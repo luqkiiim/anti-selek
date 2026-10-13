@@ -149,19 +149,15 @@ function SignupForm() {
 
   return (
     <main className="app-page flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-5xl">
-        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="w-full max-w-md">
+        <div className="grid gap-6">
           <section className="app-panel order-1 px-6 py-8 sm:px-8 lg:order-2">
-            <p className="app-eyebrow">Create account</p>
             <h1 className="mt-3 text-2xl font-semibold text-gray-900">
-              Get full player access
+              Create account
             </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Use the name your club knows so it is easy to connect your
-              account to your results.
-            </p>
 
-            {error ? (
+
+            {error && !error.field ? (
               <div ref={genericErrorRef} tabIndex={-1} className="mt-6 outline-none">
                 <FlashMessage id="signup-error" tone="error">
                   {error.message}
@@ -193,6 +189,7 @@ function SignupForm() {
                   required
                 />
               </label>
+              {error?.field === "name" && <p id="signup-error" role="alert" className="signup-field-error">{error.message}</p>}
 
               <label className="block space-y-2 text-sm font-medium text-gray-900">
                 <span>Email</span>
@@ -212,9 +209,10 @@ function SignupForm() {
                   required
                 />
               </label>
+              {error?.field === "email" && <p id="signup-error" role="alert" className="signup-field-error">{error.message}</p>}
 
               <label className="block space-y-2 text-sm font-medium text-gray-900">
-                <span>Gender for Mixed pairing</span>
+                <span>Gender</span>
                 <select
                   ref={genderRef}
                   value={gender}
@@ -235,9 +233,10 @@ function SignupForm() {
                   <option value={PlayerGender.FEMALE}>Female</option>
                 </select>
                 <span id="signup-gender-help" className="block text-xs text-gray-600">
-                  Used for Mixed team rules and carried into clubs you join.
+                  Used for mixed pairs.
                 </span>
               </label>
+              {error?.field === "gender" && <p id="signup-error" role="alert" className="signup-field-error">{error.message}</p>}
 
               <label className="block space-y-2 text-sm font-medium text-gray-900">
                 <span>Password</span>
@@ -268,6 +267,7 @@ function SignupForm() {
                   Use at least 8 characters.
                 </span>
               </label>
+              {error?.field === "password" && <p id="signup-error" role="alert" className="signup-field-error">{error.message}</p>}
 
               <label className="block space-y-2 text-sm font-medium text-gray-900">
                 <span>Confirm password</span>
@@ -290,6 +290,7 @@ function SignupForm() {
                   required
                 />
               </label>
+              {error?.field === "confirmPassword" && <p id="signup-error" role="alert" className="signup-field-error">{error.message}</p>}
 
               <button
                 type="submit"
@@ -301,6 +302,7 @@ function SignupForm() {
               </button>
             </form>
 
+            <details className="signup-profile-help"><summary>Already in a club?</summary><p>After signing up, join your club and request your existing player profile. Admin approval keeps its ratings and results connected to you.</p></details>
             <p className="mt-6 text-sm text-gray-600">
               Already have an account?{" "}
               <Link
@@ -312,39 +314,7 @@ function SignupForm() {
             </p>
           </section>
 
-          <section className="app-panel order-2 relative overflow-hidden px-6 py-8 sm:px-8 lg:order-1">
-            <div className="relative">
-              <p className="app-eyebrow">Your badminton profile</p>
-              <h2 className="mt-3 app-title text-gray-900">
-                Keep your club activity connected.
-              </h2>
-              <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Your account gives you full access to clubs, tournament actions,
-                ratings, and match history.
-              </p>
 
-              <div className="mt-8 space-y-3">
-                <div className="app-panel-muted p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600">
-                    Already listed in a club?
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    After signing up, join the club and request to connect your
-                    account to the existing player profile on its leaderboard.
-                  </p>
-                </div>
-                <div className="app-panel-muted p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600">
-                    Your history stays together
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Once a club admin approves the connection, its existing
-                    ratings and tournament results remain with you.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
         </div>
       </div>
     </main>

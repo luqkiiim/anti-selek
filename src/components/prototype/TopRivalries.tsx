@@ -20,6 +20,7 @@ function RivalryCard({ rivalry, rank, onOpenProfile }: { rivalry: ClubPulseRival
 
 export function TopRivalries({ rivalries, onOpenProfile }: { rivalries: ClubPulseRivalry[]; onOpenProfile:(id:string)=>void }) {
   const [open, setOpen] = useState(false);
+  if (!rivalries.length) return null;
   return <section className="rivalries-section" aria-label="Top rivalries">
     <div className="section-heading"><h3>Top rivalries</h3>{rivalries.length > 0 && <button className="text-button" onClick={() => setOpen(true)}>View all</button>}</div>
     {rivalries.length ? <ol className="rivalry-list rivalry-list-joined chemistry-card">{rivalries.slice(0, 3).map((rivalry, i) => <RivalryCard key={rivalry.players.map(p => p.id).join(":")} onOpenProfile={onOpenProfile} rivalry={rivalry} rank={i + 1} />)}</ol>
