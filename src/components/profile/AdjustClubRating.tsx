@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { ModalFrame, FlashMessage } from "@/components/ui/chrome";
 type Entry = { id: string; beforeElo: number; afterElo: number; reason: string; actorName: string; createdAt: string };
-export function AdjustClubRating({ clubId, userId, name, onChanged }: { clubId: string; userId: string; name: string; onChanged?: () => void }) {
+export function AdjustClubRating({ clubId, userId, name, onChanged }: { clubId: string; userId: string; name: string; onChanged?: (rating: number) => void }) {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,7 @@ export function AdjustClubRating({ clubId, userId, name, onChanged }: { clubId: 
       const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating: Number(rating), expectedRating: current, reason }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save rating");
-      setOpen(false); setSuccess("Rating updated"); onChanged?.();
+      setOpen(false); setSuccess("Rating updated"); onChanged?.(Number(rating));
     } catch (e) { setError(e instanceof Error ? e.message : "Could not save rating"); }
     finally { setSaving(false); }
   }

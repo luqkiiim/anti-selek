@@ -50,6 +50,7 @@ export function SessionStandbyView({
   const courts = [...session.courts].sort(
     (left, right) => left.courtNumber - right.courtNumber
   );
+  const pendingClub = session.clubs?.find(club => club.status !== "ACCEPTED");
 
   return (
     <div className={styles.container}>
@@ -189,12 +190,13 @@ export function SessionStandbyView({
       </section>
 
       <div className={styles.startArea}>
+        {pendingClub && <p className={styles.waitingMessage} role="status">{pendingClub.status === "REJECTED" ? `${pendingClub.name} declined the invitation` : `Waiting for ${pendingClub.name} to approve`}</p>}
         {canManage ? (
           <button
             type="button"
             className={styles.startButton}
             onClick={onStart}
-            disabled={busy}
+            disabled={busy || !!pendingClub}
           >
             {busy ? "Starting…" : "Start session"}
           </button>

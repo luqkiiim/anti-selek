@@ -13,17 +13,12 @@ import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
 import { api, useResource, useAction } from "./api";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 import Club from "./Club";
+import { AppShell } from "@/components/app/AppShell";
+import { clubHref, getClubTab, navigateApp } from "@/lib/appNavigation";
 import { BrowseClubs, type BrowsableClub } from "./BrowseClubs";
 import { AccountSettings, type AccountUser } from "./AccountSettings";
 import { JoinClubAdmission } from "./JoinClubAdmission";
-import "@fontsource/nunito-sans/400.css";
-import "@fontsource/nunito-sans/600.css";
-import "@fontsource/nunito-sans/700.css";
-import "@fontsource/nunito-sans/800.css";
-import "@fontsource/nunito-sans/900.css";
-import "./prototype.css";
-import "./browser.css";
-import "./tablet.css";
+
 
 function ClubMark({ url, tone }: { url?: string | null; tone: number }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -72,12 +67,18 @@ export default function PrototypeApp() {
     }
     const requestedClub = params.get("club");
     if (requestedClub !== null) {
-      const openProfile = params.get("tab") === "profile";
+      const requestedTab = getClubTab(params.get("tab"));
+      const openProfile = requestedTab === "profile";
       params.delete("club");
       params.delete("tab");
       history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : "") + location.hash);
+      if (params.getAll("view").includes("global")) {
+        if (auth?.user?.canBrowseAllClubs) navigateApp(router, clubHref(requestedClub, requestedTab, true), true);
+        else switchClub();
+        return;
+      }
       if (availableClubs.some(c => c.id === requestedClub)) {
-        select(requestedClub);
+        select(requestedClub, requestedTab, true);
         setInitialProfileClub(openProfile ? requestedClub : null);
       } else {
         switchClub();
@@ -85,18 +86,22 @@ export default function PrototypeApp() {
       return;
     }
     try {
+      if (params.get("chooser") === "1" || history.state?.antiSelekChooser) return;
+      if (sessionStorage.getItem("anti-selek:show-chooser")) { sessionStorage.removeItem("anti-selek:show-chooser"); return; }
       const saved = localStorage.getItem("pc-club:" + userId);
-      if (availableClubs.some((c) => c.id === saved)) setSelected(saved);
-      else if (availableClubs.length === 1) setSelected(availableClubs[0].id);
+      if (availableClubs.some((c) => c.id === saved)) select(saved!, "club", true);
+      else if (availableClubs.length === 1) select(availableClubs[0].id, "club", true);
     } catch {}
     });return()=>{cancelled=true};
     // Selection changes only on authoritative club reads or a consumed link.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clubs.data, userId, status]);
-  function select(id: string) {
+  }, [clubs.data, userId, status, auth?.user?.canBrowseAllClubs]);
+  function select(id: string, tab = "club", replace = false) {
     setInitialProfileClub(null);
     setGlobalClub(null);
     setSelected(id);
+    if (!replace) history.replaceState({ ...history.state, antiSelekChooser: true }, "", location.href);
+    navigateApp(router, clubHref(id, tab), replace);
     try {
       localStorage.setItem("pc-club:" + userId, id);
     } catch {}
@@ -111,7 +116,7 @@ export default function PrototypeApp() {
   }
   const club = clubs.data?.find((c) => c.id === selected);
   return (
-    <div className="prototype-root">
+    <AppShell>
       {globalClub ? <Club key={`global:${globalClub.id}`} globalView club={globalClub} onSwitch={switchClub} onAccountSaved={account.refresh} onClubsChanged={clubs.refresh} /> : club ? (
         <Club key={club.id} club={club} initialPage={initialProfileClub === club.id ? "profile" : "club"} onSwitch={switchClub} onAccountSaved={account.refresh} onClubsChanged={clubs.refresh} />
       ) : (
@@ -137,7 +142,6 @@ export default function PrototypeApp() {
                   <br />
                   playing?
                 </h1>
-                <p>Choose your club to get started.</p>
               </div>
               <ErrorText error={clubs.error} />
               {!clubs.data && !clubs.error && (
@@ -160,7 +164,7 @@ export default function PrototypeApp() {
                           : c.role === "STAFF"
                             ? "Staff"
                             : "Member"}{" "}
-                      · {c.membersCount} players
+                      · {c.membersCount} {c.membersCount === 1 ? "player" : "players"}
                     </small>
                     {c.sessionStatus === "ACTIVE" ? (
                       <span className="club-session-status is-live">Live session</span>
@@ -200,7 +204,7 @@ export default function PrototypeApp() {
           </div>
         </div>
       )}
-      {auth?.user?.canBrowseAllClubs && <BrowseClubs open={browseOpen} onClose={() => setBrowseOpen(false)} onSelect={club => { setGlobalClub(club); setBrowseOpen(false); }} />}
+      {auth?.user?.canBrowseAllClubs && <BrowseClubs open={browseOpen} onClose={() => setBrowseOpen(false)} onSelect={club => { setGlobalClub(club); setBrowseOpen(false); navigateApp(router, clubHref(club.id, "club", true)); }} />}
       <AccountSettings open={form === "account" || joinAccountOpen} onClose={() => {
         if (joinAccountOpen) void account.refresh().catch(() => {}).finally(() => setJoinAccountOpen(false));
         else setForm("");
@@ -255,6 +259,6 @@ export default function PrototypeApp() {
           setForm("");
         }}
       />}
-    </div>
+    </AppShell>
   );
 }

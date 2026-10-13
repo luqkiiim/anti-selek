@@ -5,7 +5,9 @@ import type { ClubPageMember } from "@/components/club/clubTypes";
 import type { PlayerProfileSessionSummary, PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
 import type { MemberProfileData, RecordedSessionSummary } from "@/lib/memberProfile";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
-import { useResource } from "./api";
+import { api, useResource } from "./api";
+import { AchievementCabinet, NextMilestone } from "./Achievements";
+import type { AchievementCollection, AchievementId } from "@/lib/clubAchievements";
 import { MemberPins, type PublicAchievementCollection } from "./MemberPins";
 import { ProfileActivityHistory } from "./ProfileActivityHistory";
 import { formatProfileDate as dateLabel } from "./profileDate";
@@ -16,6 +18,7 @@ import { AccountSettings } from "./AccountSettings";
 import { MainNav } from "./MainNav";
 import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
 import "./player-profile.css";
+import { useScrollRestoration } from "@/components/app/useScrollRestoration";
 
 export type MemberProfileResponse = {
   user: { id: string; name: string; avatarUrl?: string | null; elo: number };
@@ -23,9 +26,10 @@ export type MemberProfileResponse = {
 };
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
 
-export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite = false, globalView = false, achievements, milestone, onOpenMember, onAccountSaved }: {
-  clubId: string; clubName: string; member: ClubPageMember; isSelf: boolean;
+export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite = false, globalView = false, achievements, milestone, onOpenMember, onAccountSaved, onOpenSession }: {
+  clubId: string; clubName: string; member: RankedMember; isSelf: boolean;
   onAccountSaved?: () => Promise<unknown>;
+  onOpenSession?: (code: string) => void;
   canInvite?: boolean; globalView?: boolean;
   achievements?: ReactNode; milestone?: ReactNode; onOpenMember: (id: string) => void;
 }) {
@@ -46,7 +50,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite 
       {data.latestSession ? <section className="profile-latest"><div className="section-heading"><h2>{isSelf ? "Your latest session" : "Latest session"}</h2><span>{dateLabel(data.latestSession.date)}</span></div><button className="profile-latest-card" onClick={() => setRecap(data.latestSession)}><span className="eyebrow">{data.latestSession.name}</span><strong>{data.latestSession.wins === data.latestSession.matches && data.latestSession.matches > 1 ? "A clean sweep." : data.latestSession.ratingVerified !== false && data.latestSession.ratingChange > 0 ? "Moving up." : `${data.latestSession.wins} ${data.latestSession.wins === 1 ? "win" : "wins"} on the board.`}</strong><span className="profile-latest-result"><b>{data.latestSession.wins}W <span>·</span> {data.latestSession.losses}L</b><span className={data.latestSession.ratingChange >= 0 ? "positive" : "negative"}>{data.latestSession.ratingVerified === false ? "Rating unavailable" : `${signed(data.latestSession.ratingChange)} rating`}</span></span><span className="profile-card-link">View session<CaretRight size={17} /></span></button></section> : <div className="profile-empty"><CalendarBlank size={28} weight="duotone" /><h2>The story starts on court.</h2><p>{isSelf ? "Your first completed session will appear here." : "No completed sessions in this club yet."}</p></div>}
       {!!data.recentForm.length && <section className="profile-form"><div className="section-heading"><h2>Recent form</h2><small>Latest first</small></div><div>{data.recentForm.map(m => <button key={m.id} className={m.result === "WIN" ? "win" : "loss"} aria-label={`${m.result === "WIN" ? "Win" : "Loss"}, ${m.score}, ${m.sessionName}`} onClick={() => setMatch(m)}>{m.result === "WIN" ? "W" : "L"}</button>)}</div></section>}
       <RatingJourney timeline={data.timeline} onOpenSession={id => { const session = data.timeline.find(p => p.sessionId === id && p.session)?.session ?? data.history.items.find(s => s.id === id); if (session) setRecap(session); }} />
-      {isSelf ? <section className="profile-achievements" aria-label="Achievements"><div className="section-heading"><h2>Achievements</h2></div>{achievements}{milestone}</section> : pins.data ? <MemberPins collection={pins.data} /> : <ErrorText error={pins.error} />}
+      {isSelf ? <section className="profile-achievements" aria-label="Achievements"><div className="section-heading"><h2>Achievements</h2></div>{achievements ?? <OwnAchievements clubId={clubId} onOpenSession={onOpenSession} />}{milestone}</section> : pins.data ? <MemberPins collection={pins.data} /> : <ErrorText error={pins.error} />}
       <ProfilePeople relationships={data.relationships} isSelf={isSelf} onOpenMember={onOpenMember} />
       <ProfileRecords records={data.records} onOpenSession={setRecap} />
       <ProfileActivityHistory globalView={globalView} key={member.id} clubId={clubId} playerId={member.id} history={data.history} onOpen={setRecap} matches={data.matchHistory} onOpenMatch={setMatch} />
@@ -56,6 +60,13 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canInvite 
     <Sheet open={!!recap} title="Session recap" onClose={() => setRecap(null)}>{recap && <div className="profile-recap"><Avatar name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h3>{user?.name ?? member.name}</h3><h2>{recap.name}</h2><p className="muted">{dateLabel(recap.date)}</p><div className="player-standing"><div><span>Result</span><strong>{recap.wins}W · {recap.losses}L</strong></div><div><span>Rating change</span><strong>{(recap as RecordedSessionSummary).ratingVerified === false ? "—" : signed(recap.ratingChange)}</strong></div></div><div className="profile-joined-list profile-recap-matches">{data?.matchHistory.filter(m => m.sessionId === recap.id).map(m => <button className="profile-history-row" key={m.id} onClick={() => setMatch(m)}><b className={m.result === "WIN" ? "positive" : "negative"}>{m.result === "WIN" ? "W" : "L"}</b><span><strong>{m.score}</strong><small>With {m.partner.name}</small><small>vs {m.opponents.map(p => p.name).join(" & ")}</small></span><CaretRight size={18} /></button>)}</div>{recap.id === data?.records.bestSession?.id && <details className="profile-rating-help"><summary>What makes this the best session?</summary><p>Most wins first, then win rate, point difference, games played, and most recent session to break ties.</p></details>}</div>}</Sheet>
     <Sheet open={!!match} title="Match details" onClose={() => setMatch(null)}>{match && <div className="profile-match"><span className="eyebrow">{match.sessionName}</span><h2>{match.result === "WIN" ? "Win" : "Loss"} · {match.score}</h2><p className="muted">{dateLabel(match.date)}</p><h3>Partners</h3><p>{member.name} & {match.partner.name}</p><h3>Opponents</h3><p>{match.opponents.map(p => p.name).join(" & ")}</p><p>{match.eloChange === null ? "Rating change unavailable" : `${signed(match.eloChange)} rating`}</p></div>}</Sheet>
   </article>;
+}
+
+function OwnAchievements({ clubId, onOpenSession }: { clubId: string; onOpenSession?: (code: string) => void }) {
+  const [openRequest, setOpenRequest] = useState<{ id: AchievementId; nonce: number }>();
+  const resource = useResource<AchievementCollection>(`/api/clubs/${encodeURIComponent(clubId)}/achievements`);
+  async function save(body: unknown) { await api(`/api/clubs/${encodeURIComponent(clubId)}/achievements`, "PATCH", body); await resource.refresh(); }
+  return resource.data ? <><AchievementCabinet embedded openRequest={openRequest} collection={resource.data} onSaveShowcase={showcase => save({ showcase })} onSeen={seen => save({ seen })} onOpenSession={code => { if (onOpenSession) onOpenSession(code); else location.href = `/session/${encodeURIComponent(code)}`; }} /><NextMilestone embedded collection={resource.data} onOpen={id => setOpenRequest({ id, nonce: Date.now() })} /></> : <ErrorText error={resource.error} />;
 }
 
 export type RankedMember = ClubPageMember & { currentRank?: number | null };
@@ -86,6 +97,8 @@ function RatingJourney({ timeline, onOpenSession }: { timeline: MemberProfileDat
 
 export function MemberProfileOverlay({ member, clubId, clubName, onBack, onNavigate, children, readOnly = false }: { readOnly?: boolean; member: ClubPageMember; clubId: string; clubName: string; onBack: () => void; onNavigate: (page: string) => void; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useScrollRestoration(scrollRef, `${clubId}/member/${member.id}`);
   useEffect(() => { const node=ref.current; const trigger=document.activeElement as HTMLElement | null; node?.showModal(); return () => {node?.close(); trigger?.focus({preventScroll:true});}; }, []);
-  return <dialog ref={ref} className="member-profile-dialog" aria-label={`${member.name} profile in ${clubName}`} onCancel={e => {e.preventDefault();onBack();}} data-club-id={clubId}><div className="pc-app"><header className="pc-header"><button className="icon-button" aria-label="Back to previous page" onClick={onBack}><ArrowLeft size={23} /></button><strong>Player profile</strong><span /></header><div className="pc-scroll" key={member.id}><main className="pc-content">{children}</main></div><MainNav active="" onNavigate={onNavigate} readOnly={readOnly} /></div></dialog>;
+  return <dialog ref={ref} className="member-profile-dialog" aria-label={`${member.name} profile in ${clubName}`} onCancel={e => {e.preventDefault();onBack();}} data-club-id={clubId}><div className="pc-app"><header className="pc-header"><button className="icon-button" aria-label="Back to previous page" onClick={onBack}><ArrowLeft size={23} /></button><strong>Player profile</strong><span /></header><div ref={scrollRef} className="pc-scroll" key={member.id}><main className="pc-content">{children}</main></div><MainNav active="" onNavigate={onNavigate} readOnly={readOnly} /></div></dialog>;
 }

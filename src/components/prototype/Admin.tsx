@@ -1,5 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useAppLocation } from "@/components/app/AppShell";
+import { useScrollRestoration } from "@/components/app/useScrollRestoration";
+import { changeAppQuery } from "@/lib/appNavigation";
 import { MainNav } from "./MainNav";
 import {
   ArrowLeft,
@@ -15,6 +18,7 @@ import { getMixedSideOverrideOptionForGender, getStoredPartnerPreference, normal
 import type { Snapshot } from "./Club";
 import { api, useAction, useResource } from "./api";
 import type { AdminAdmissionList, AdmissionCandidate, AdmissionRequest } from "./admissionTypes";
+import { AdjustClubRating } from "@/components/profile/AdjustClubRating";
 import { MemberPhotoEditor } from "./MemberPhotoEditor";
 import { ClubSettings } from "./ClubSettings";
 import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationPanel";
@@ -28,6 +32,7 @@ export default function Admin({
   onNavigate,
   onDeleted,
   onOpenProfile,
+  onRoute,
 }: {
   snapshot: Snapshot;
   refresh: () => Promise<unknown>;
@@ -35,11 +40,18 @@ export default function Admin({
   onNavigate: (p: string) => void;
   onDeleted: () => Promise<void>;
   onOpenProfile: (id: string) => void;
+  onRoute?: (href: string, replace?: boolean) => void;
 }) {
   const { club, clubMembers: players, viewer } = snapshot;
-  const [tab, setTab] = useState("Players"),
+  const href = useAppLocation();
+  const requestedTab = new URL(href, "https://anti-selek.local").searchParams.get("tab");
+  const [localTab, setLocalTab] = useState("Players"),
     [query, setQuery] = useState(""),
     [sheet, setSheet] = useState("");
+  const tab = onRoute ? requestedTab === "settings" ? "Settings" : requestedTab === "requests" || requestedTab === "claims" ? "Requests" : "Players" : localTab;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useScrollRestoration(scrollRef, `${club.id}/admin#${tab}`);
+  function setTab(next: string) { if (onRoute) onRoute(changeAppQuery(href, { tab: next.toLowerCase() })); else setLocalTab(next); }
   const [alternatePicker, setAlternatePicker] = useState<Record<string, boolean>>({});
   const [selectedCandidate, setSelectedCandidate] = useState<Record<string, string>>({});
   const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
@@ -179,9 +191,10 @@ export default function Admin({
           </button>
         ))}
       </div>
-      <div className="pc-scroll with-tabs">
+      <div ref={scrollRef} className="pc-scroll with-tabs">
         <main className="pc-content">
           <ErrorText error={action.error || roleAction.error || joins.error} />
+          {onRoute && <a className="text-button specialist-tools" href={changeAppQuery(href, { tools: "advanced" })}>More club tools</a>}
           {tab === "Players" ? (
             <>
               <button className="manage-club-identity" onClick={() => setTab("Settings")} aria-label="Edit club details"><Avatar large name={club.name} url={club.avatarUrl} /><span><strong>{club.name}</strong><small>{players.length} players</small></span><PencilSimple size={19} /></button>
@@ -277,6 +290,7 @@ export default function Admin({
             <>
               {edit && <MemberPhotoEditor key={edit.id} member={edit} clubId={club.id} onSaved={async avatarUrl => { setEdit(current => current?.id === edit.id ? { ...current, avatarUrl } : current); await refresh(); }} />}
               {edit && <PlayerInvitationPanel key={`invite:${edit.id}`} clubId={club.id} playerId={edit.id} playerName={edit.name} rating={edit.elo} matchesPlayed={edit.matchesPlayed} connected={edit.isClaimed} />}
+              {edit && <details className="manage-rating-history"><summary>Rating history</summary><AdjustClubRating clubId={club.id} userId={edit.id} name={edit.name} onChanged={updated => { setRating(String(updated)); setEdit(current => current ? { ...current, elo: updated } : null); void refresh(); }} /></details>}
               {currentPlayer && <section className="manage-player-role" aria-label="Club role">
                 <h3>Club role · {currentPlayer.isOwner ? "Owner" : getClubRoleLabel(currentPlayer.role)}</h3>
                 <p className="muted">Staff can host and run sessions. Admins can also manage club settings, players, and requests.</p>

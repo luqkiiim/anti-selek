@@ -1,1 +1,1 @@
-export { default } from "@/features/club-page/ClubPage";
+export { default } from "@/components/app/ClubRoute";

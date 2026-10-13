@@ -42,7 +42,13 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-import SessionHistoryPage from "./page";
+vi.mock("@/components/prototype/Primitives", () => ({
+  ErrorText: ({ error }: { error: string }) => error ? <p role="alert">{error}</p> : null,
+  Sheet: ({ open = true, title, children, onClose }: { open?: boolean; title: string; children: React.ReactNode; onClose: () => void }) => open ? <div role="dialog" aria-label={title}><h2>{title}</h2>{children}<button onClick={onClose}>Keep Result</button></div> : null,
+}));
+
+import SessionMatchHistory from "@/components/prototype/SessionMatchHistory";
+function SessionHistoryPage() { return <SessionMatchHistory code="ABC123" />; }
 
 function createJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -107,7 +113,7 @@ function createHistoryData(overrides: Record<string, unknown> = {}) {
 }
 
 function getButtons(container: HTMLElement) {
-  return Array.from(container.querySelectorAll("button"));
+  return Array.from(container.querySelectorAll("button, summary"));
 }
 
 function getButtonByLabel(container: HTMLElement, label: string) {
@@ -120,7 +126,7 @@ function getButtonByLabel(container: HTMLElement, label: string) {
 }
 
 function hasExactButtonText(container: HTMLElement, text: string) {
-  return getButtons(container).some((button) => button.textContent?.trim() === text);
+  return getButtons(container).some((button) => !button.closest("details:not([open])") && button.textContent?.trim() === text);
 }
 
 describe("SessionHistoryPage match admin actions", () => {
@@ -275,7 +281,7 @@ describe("SessionHistoryPage match admin actions", () => {
       correctAction.click();
     });
 
-    expect(document.body.textContent).toContain("Correct score?");
+    expect(document.body.textContent).toContain("Correct match score");
 
     const cancelButton = getButtons(document.body).find(
       (button) => button.textContent?.trim() === "Keep Result"
@@ -295,6 +301,6 @@ describe("SessionHistoryPage match admin actions", () => {
       undoAction.click();
     });
 
-    expect(document.body.textContent).toContain("Undo result?");
+    expect(document.body.textContent).toContain("Undo match result");
   });
 });

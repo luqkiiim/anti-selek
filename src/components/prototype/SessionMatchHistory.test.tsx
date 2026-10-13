@@ -91,6 +91,7 @@ describe("SessionMatchHistory", () => {
     await act(async () => root.unmount());
     container.remove();
     document.body.innerHTML = "";
+    vi.useRealTimers();
   });
 
   async function render(data = historyData(), props: { onMutated?: () => void } = {}) {
@@ -260,6 +261,32 @@ describe("SessionMatchHistory", () => {
     expect(container.textContent).not.toContain("Undo result");
     expect(container.textContent).not.toContain("Approve score");
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("honors Retry-After before a user retries a rate-limited history request", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: "Please wait before retrying." }), { status: 429, headers: { "Retry-After": "20" } }));
+    await act(async () => root.render(<SessionMatchHistory code="ABC123" />));
+    const retry = () => Array.from(container.querySelectorAll("button")).find(button => button.textContent?.trim() === "Try again")?.click();
+    await act(async () => { retry(); await vi.advanceTimersByTimeAsync(19_000); retry(); });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    fetchMock.mockResolvedValueOnce(jsonResponse(historyData()));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); retry(); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Saturday finals");
+  });
+
+  it("cancels the previous request when the session changes and rejects stale data", async () => {
+    let resolvePrevious: (response: Response) => void = () => {};
+    fetchMock.mockImplementationOnce(() => new Promise<Response>(resolve => { resolvePrevious = resolve; }));
+    await act(async () => root.render(<SessionMatchHistory code="OLD" />));
+    const previousSignal = fetchMock.mock.calls[0][1].signal as AbortSignal;
+    fetchMock.mockResolvedValueOnce(jsonResponse(historyData()));
+    await act(async () => root.render(<SessionMatchHistory code="ABC123" />));
+    expect(previousSignal.aborted).toBe(true);
+    await act(async () => resolvePrevious(jsonResponse(historyData({ session: { name: "Stale session" } }))));
+    expect(container.textContent).toContain("Saturday finals");
+    expect(container.textContent).not.toContain("Stale session");
   });
 
 });

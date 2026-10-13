@@ -8,7 +8,7 @@ import { useResource } from "./api";
 
 const session = vi.hoisted(() => ({ data: { user: { id: "account-1", name: "Ari", canBrowseAllClubs: false } }, status: "authenticated" }));
 vi.mock("next-auth/react", () => ({ useSession: () => session }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }) }));
 vi.mock("./Club", () => ({ default: function MockClub({ club, onSwitch, initialPage = "club" }: { club: { id: string }; onSwitch: () => void; initialPage?: "club" | "profile" }) { const [page, setPage] = useState(initialPage); const [open, setOpen] = useState(false); const profile = useResource<{ avatarUrl: string | null }>(`/api/clubs/${club.id}`); return <div data-selected-club={club.id} data-page={page}>Selected club<button onClick={() => setPage("club")}>Club tab</button>{profile.data?.avatarUrl && <img alt="Selected Player photo" src={profile.data.avatarUrl} />}<button onClick={onSwitch}>Switch club</button><button onClick={() => setOpen(true)}>Open club account</button>{open && <div role="dialog" aria-label="Club account sheet">Saved draft</div>}</div>; } }));
 vi.mock("./Primitives", () => ({
   Avatar: ({ name, url }: { name: string; url?: string | null }) => <span>{url ? <img alt={`${name} photo`} src={url} /> : name}</span>,

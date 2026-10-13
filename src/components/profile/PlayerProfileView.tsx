@@ -7,6 +7,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  createContext,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -46,6 +48,22 @@ import type {
 import { deletePlayerAvatar, uploadPlayerAvatar } from "@/lib/avatarClient";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { EmptyState, FlashMessage } from "@/components/ui/chrome";
+import { navigateApp } from "@/lib/appNavigation";
+
+const ProfileNavigationContext = createContext<{ clubId: string; readOnly: boolean } | null>(null);
+function ProfileDestinationLink({ href, children, className }: { href: string; children: ReactNode; className?: string }) {
+  const context = useContext(ProfileNavigationContext);
+  const router = useRouter();
+  const url = new URL(href, "https://anti-selek.local");
+  if (context?.readOnly) {
+    url.searchParams.set("view", "global");
+    if (!url.searchParams.has("clubId") && context.clubId) url.searchParams.set("clubId", context.clubId);
+  }
+  const destination = url.pathname + (url.searchParams.size ? `?${url.searchParams}` : "");
+  return <Link href={destination} className={className} onClick={event => {
+    if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigateApp(router, destination); }
+  }}>{children}</Link>;
+}
 
 interface UserProfileResponse {
   user: {
@@ -140,6 +158,7 @@ export interface PlayerProfileViewProps {
   playerId: string;
   clubId?: string;
   mode?: "standalone" | "embedded";
+  readOnly?: boolean;
   onBack?: () => void;
 }
 
@@ -363,12 +382,12 @@ function ProfileLink({
   children: ReactNode;
 }) {
   return (
-    <Link
+    <ProfileDestinationLink
       href={href}
       className="font-semibold text-gray-950 underline-offset-2 hover:text-[var(--accent-strong)] hover:underline"
     >
       {children}
-    </Link>
+    </ProfileDestinationLink>
   );
 }
 
@@ -1448,12 +1467,12 @@ function MatchCard({
           >
             {formatMatchScore(match.score)}
           </strong>
-          <Link
+          <ProfileDestinationLink
             href={getSessionHistoryHref(match.sessionCode)}
             className="mt-0.5 block text-xs font-semibold leading-tight text-gray-600 hover:text-[var(--accent-strong)] hover:underline"
           >
             {match.sessionName}
-          </Link>
+          </ProfileDestinationLink>
         </div>
         <span
           className={cx(
@@ -1733,6 +1752,7 @@ export function PlayerProfileView({
   playerId,
   clubId = "",
   mode = "standalone",
+  readOnly = false,
   onBack,
 }: PlayerProfileViewProps) {
   const { data: session, status } = useSession();
@@ -1763,7 +1783,7 @@ export function PlayerProfileView({
         setLoading(true);
         setError("");
         const query = clubId
-          ? `?clubId=${encodeURIComponent(clubId)}`
+          ? `?clubId=${encodeURIComponent(clubId)}${readOnly ? "&view=global" : ""}`
           : "";
         const [res, meRes] = await Promise.all([
           fetch(`/api/users/${encodeURIComponent(playerId)}/stats${query}`),
@@ -1800,7 +1820,7 @@ export function PlayerProfileView({
     if (session?.user) {
       void fetchData();
     }
-  }, [playerId, session, clubId, ratingRevision]);
+  }, [playerId, session, clubId, readOnly, ratingRevision]);
 
   const handleUploadAvatar = async (file: File) => {
     const response = await uploadPlayerAvatar(
@@ -1929,7 +1949,7 @@ export function PlayerProfileView({
       ? "No streak"
       : `${data.recentForm.currentStreak.result === "WIN" ? "W" : "L"}${data.recentForm.currentStreak.count}`;
   const canManageAvatar =
-    data.user.isRetired !== true &&
+    !readOnly && data.user.isRetired !== true &&
     clubId.length > 0 &&
     !!currentUser &&
     (currentUser.isAdmin === true ||
@@ -1959,13 +1979,13 @@ export function PlayerProfileView({
         onBack={isEmbedded ? undefined : handleBack}
       />
 
-      {data.user.isRetired !== true && data.context?.viewerCanManageClub && !data.context.canAddGuestToClub ? (
+      {!readOnly && data.user.isRetired !== true && data.context?.viewerCanManageClub && !data.context.canAddGuestToClub ? (
         <div className="px-4 sm:px-0"><AdjustClubRating key={`${clubId}:${playerId}`} clubId={clubId} userId={playerId} name={data.user.name} onChanged={() => setRatingRevision(value => value + 1)} /></div>
       ) : null}
-      {data.user.isRetired !== true && data.context?.canAddGuestToClub ? (
+      {!readOnly && data.user.isRetired !== true && data.context?.canAddGuestToClub ? (
         <AddGuestToClub key={`${clubId}:${playerId}`} clubId={clubId} userId={playerId} name={data.user.name} />
       ) : null}
-      {data.user.isRetired !== true && clubId && data.context?.viewerCanManageClub ? (
+      {!readOnly && data.user.isRetired !== true && clubId && data.context?.viewerCanManageClub ? (
         <div className="px-4 sm:px-0">
           <p className="text-sm text-gray-600">To connect a different profile, remove this player from the club, then invite the correct profile.</p>
         </div>
@@ -2016,7 +2036,7 @@ export function PlayerProfileView({
     </div>
   );
 
-  return isEmbedded ? content : <main className="app-page px-0">{content}</main>;
+  return <ProfileNavigationContext.Provider value={{ clubId, readOnly }}>{isEmbedded ? content : <main className="app-page px-0">{content}</main>}</ProfileNavigationContext.Provider>;
 }
 
 export default PlayerProfileView;

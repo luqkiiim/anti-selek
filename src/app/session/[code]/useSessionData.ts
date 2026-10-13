@@ -7,6 +7,7 @@ import type { SessionData } from "@/components/session/sessionTypes";
 interface UseSessionDataArgs {
   code: string;
   enabled: boolean;
+  readQuery?: string;
   safeJson: SafeJson;
   setError: (message: string) => void;
 }
@@ -34,6 +35,7 @@ function getRetryAfterDelay(value: string | null) {
 export function useSessionData({
   code,
   enabled,
+  readQuery = "",
   safeJson,
   setError,
 }: UseSessionDataArgs) {
@@ -72,7 +74,7 @@ export function useSessionData({
       inFlightRef.current = { controller, id: requestId, code, timeoutId };
 
       try {
-        const res = await fetch(`/api/sessions/${code}`, {
+        const res = await fetch(`/api/sessions/${encodeURIComponent(code)}${readQuery}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -155,7 +157,7 @@ export function useSessionData({
         }
       }
     },
-    [code, safeJson, setError]
+    [code, readQuery, safeJson, setError]
   );
 
   const patchSessionData = useCallback(

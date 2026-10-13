@@ -17,17 +17,10 @@ const pageMocks = vi.hoisted(() => ({
   clubPage: vi.fn(),
 }));
 
-vi.mock("@/features/club-page/ClubPage", () => ({
-  default: pageMocks.clubPage,
-}));
-
-vi.mock("@/features/club-admin-page/ClubAdminPage", () => ({
-  default: pageMocks.adminPage,
-}));
+vi.mock("@/components/app/ClubRoute", () => ({ default: pageMocks.clubPage, ClubAdminRoute: pageMocks.adminPage }));
 
 const mutableEnv = process.env as Record<string, string | undefined>;
-const previousSunsetDate =
-  mutableEnv[LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV];
+const previousSunsetDate = mutableEnv[LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV];
 
 describe("club page route wrappers", () => {
   beforeEach(() => {

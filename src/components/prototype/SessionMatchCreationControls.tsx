@@ -47,7 +47,7 @@ export function SessionMatchCreationToolbar({
           onClick={onQueueNextMatch}
         >
           <Clock3 aria-hidden="true" size={18} />
-          {creatingQueuedMatch ? "Queueing..." : "Queue Next Match"}
+          {creatingQueuedMatch ? "Queueing..." : "Queue next match"}
         </button>
       </div>
     );
@@ -66,7 +66,7 @@ export function SessionMatchCreationToolbar({
         }}
       >
         <Plus aria-hidden="true" size={19} />
-        {creatingMatches ? "Creating..." : "Create Matches"}
+        {creatingMatches ? "Creating..." : "Create matches"}
         {creatableOpenCourtIds.length > 1 ? (
           <span className={styles.count}>{creatableOpenCourtIds.length}</span>
         ) : null}

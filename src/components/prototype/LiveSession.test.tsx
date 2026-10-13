@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/image", () => ({ default: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} /> }));
+vi.mock("./useSessionController", () => ({ useSessionController: (code: string, globalClubId?: string) => mocks.useResource(`/api/sessions/${code}${globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : ""}`) }));
 vi.mock("./api", () => ({
   api: mocks.api,
   useResource: mocks.useResource,
@@ -928,7 +929,7 @@ describe("LiveSession score and player controls", () => {
     setup(session);
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
 
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("Create Matches"))?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("Create matches"))?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", { courtIds: ["court-1", "court-2"] });
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Create on Court 1")?.click());
     expect(container.textContent).toContain("Men's Court");
@@ -948,7 +949,7 @@ describe("LiveSession score and player controls", () => {
     );
     setup(session);
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("Queue Next Match"))?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("Queue next match"))?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/queue-match", "POST");
   });
 
@@ -979,6 +980,35 @@ describe("LiveSession score and player controls", () => {
     expect(container.textContent).not.toContain("Save score");
     expect(container.querySelector('[aria-label="Player actions for Score Player 1A"]')).toBeNull();
     expect(mocks.api).not.toHaveBeenCalled();
+  });
+
+  it("allows a participating account to submit its own match without host controls", async () => {
+    const currentMatch = match("participant-match", 1);
+    const session = sessionWithCourts([{ id: "court", courtNumber: 1, currentMatch }]);
+    session.viewerCanManage = false;
+    session.viewerUserId = "account-a";
+    session.viewerPlayerId = currentMatch.team1User1.id;
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn()} />));
+    expect(container.querySelector('[aria-label="Team 1 score"]')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll("button")).some(b => b.textContent === "Save score")).toBe(true);
+    expect(container.querySelector('[aria-label="Player actions for Score Player 1A"]')).toBeNull();
+  });
+
+  it("offers approval only to the opposing participating account", async () => {
+    const currentMatch = { ...match("pending-match", 1, 21, 18), status: "PENDING_APPROVAL", scoreSubmittedByUserId: "account-a", scoreSubmittedByPlayerId: "pending-match-a" };
+    const session = sessionWithCourts([{ id: "court", courtNumber: 1, currentMatch }]);
+    session.viewerCanManage = false;
+    session.viewerUserId = "account-b";
+    session.viewerPlayerId = currentMatch.team2User1.id;
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn()} />));
+    expect(Array.from(container.querySelectorAll("button")).some(b => b.textContent === "Approve score")).toBe(true);
+    session.viewerUserId = "account-a";
+    session.viewerPlayerId = currentMatch.team1User1.id;
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn()} />));
+    expect(Array.from(container.querySelectorAll("button")).some(b => b.textContent === "Approve score")).toBe(false);
+    expect(container.querySelector('[aria-label="Team 1 score"]')).toBeNull();
   });
 
 });

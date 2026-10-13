@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   ArrowCounterClockwise,
   ArrowLeft,
@@ -11,6 +12,7 @@ import {
 } from "@phosphor-icons/react";
 import { ErrorText, Sheet } from "./Primitives";
 import styles from "./SessionMatchHistory.module.css";
+import { useScrollRestoration } from "@/components/app/useScrollRestoration";
 
 type HistoryPlayer = { id: string; name: string };
 
@@ -22,6 +24,8 @@ type HistoryMatch = {
   winnerTeam?: number | null;
   team1Score?: number | null;
   team2Score?: number | null;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
   court: { courtNumber: number; label?: string | null };
   team1User1: HistoryPlayer;
   team1User2: HistoryPlayer;
@@ -32,6 +36,8 @@ type HistoryMatch = {
 type SessionHistoryResponse = {
   session: {
     code: string;
+    clubId?: string | null;
+    ratingPolicyVersion?: number;
     name: string;
     status: string;
     createdAt: string;
@@ -41,6 +47,7 @@ type SessionHistoryResponse = {
   canCorrectCompletedScores?: boolean;
   correctionBlockedReason?: string | null;
   undoableMatchId?: string | null;
+  playerProfiles?: Array<{ playerId: string; profileClubId: string | null; isGuest: boolean }>;
   matches: HistoryMatch[];
 };
 
@@ -50,6 +57,7 @@ export type SessionMatchHistoryProps = {
   code: string;
   onBack?: () => void;
   onMutated?: () => void | Promise<void>;
+  onNavigate?: (href: string) => void;
 };
 
 type MatchAction = { kind: "approve" | "correct" | "undo"; match: HistoryMatch };
@@ -71,14 +79,20 @@ function formatMatchTime(timestamp: string) {
   }).format(date);
 }
 
+class HistoryRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly retryAfterMs: number) { super(message); }
+}
 async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(
+    const retryAfter = response.headers?.get("Retry-After");
+    const seconds = retryAfter ? Number(retryAfter) : NaN;
+    const retryAfterMs = Number.isFinite(seconds) ? Math.max(0, seconds * 1000) : retryAfter ? Math.max(0, Date.parse(retryAfter) - Date.now()) : 15_000;
+    throw new HistoryRequestError(
       typeof payload?.error === "string"
         ? payload.error
-        : `Request failed (${response.status})`,
+        : `Request failed (${response.status})`, response.status, Number.isFinite(retryAfterMs) ? retryAfterMs : 15_000,
     );
   }
   return payload as T;
@@ -89,8 +103,13 @@ export default function SessionMatchHistory({
   onBack,
   onMutated,
   globalClubId,
+  onNavigate,
 }: SessionMatchHistoryProps) {
   const requestId = useRef(0);
+  const request = useRef<AbortController | null>(null);
+  const nextRequestAt = useRef(0);
+  const scrollRef = useRef<HTMLElement>(null);
+  useScrollRestoration(scrollRef, `/session/${code}/history`);
   const [response, setResponse] = useState<{
     code: string;
     data: SessionHistoryResponse;
@@ -112,28 +131,39 @@ export default function SessionMatchHistory({
         return false;
       }
 
+      if (Date.now() < nextRequestAt.current || (!showLoading && request.current)) return false;
+      request.current?.abort();
+      const controller = new AbortController();
+      request.current = controller;
       const thisRequest = ++requestId.current;
+      let timedOut = false;
+      const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 10_000);
       if (showLoading) setLoading(true);
       setLoadError("");
 
       try {
         const next = await requestJson<SessionHistoryResponse>(
           `/api/sessions/${encodeURIComponent(code)}/history${globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : ""}`,
+          { signal: controller.signal },
         );
         if (requestId.current === thisRequest) {
           setResponse({ code, data: next });
         }
         return requestId.current === thisRequest;
       } catch (error) {
+        if (controller.signal.aborted && !timedOut) return false;
+        if (error instanceof HistoryRequestError && error.status === 429) nextRequestAt.current = Date.now() + error.retryAfterMs;
         if (requestId.current === thisRequest) {
           setLoadError(
-            error instanceof Error
+            timedOut ? "Match history took too long to load. Try again." : error instanceof Error
               ? error.message
               : "Unable to load match history. Try again.",
           );
         }
         return false;
       } finally {
+        clearTimeout(timeout);
+        if (request.current === controller) request.current = null;
         if (requestId.current === thisRequest) setLoading(false);
       }
     },
@@ -141,12 +171,14 @@ export default function SessionMatchHistory({
   );
 
   useEffect(() => {
+    nextRequestAt.current = 0;
     setNotice("");
     setDraft(null);
     setLoadError("");
     setResponse((current) => (current?.code === code ? current : null));
     void loadHistory(true);
     return () => {
+      request.current?.abort();
       requestId.current += 1;
     };
   }, [code, loadHistory]);
@@ -236,6 +268,21 @@ export default function SessionMatchHistory({
     }
   };
 
+  useEffect(() => {
+    if (data?.session.status !== "ACTIVE" || saving) return;
+    const timer = setInterval(() => { if (!document.hidden) void loadHistory(false); }, 2_000);
+    return () => clearInterval(timer);
+  }, [data?.session.status, saving, loadHistory]);
+  function playerLink(player: HistoryPlayer, teamClubId?: string | null) {
+    const stored = data?.playerProfiles?.find(p => p.playerId === player.id);
+    const profileClubId = data?.session.ratingPolicyVersion === 2 && !stored?.isGuest
+      ? stored?.profileClubId : teamClubId ?? data?.session.clubId;
+    const params = new URLSearchParams();
+    if (profileClubId) params.set("clubId", profileClubId);
+    if (globalClubId && profileClubId) params.set("view", "global");
+    const href = `/profile/${encodeURIComponent(player.id)}${params.size ? `?${params}` : ""}`;
+    return <Link href={href} onClick={event => { if (onNavigate && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onNavigate(href); } }}>{player.name}</Link>;
+  }
   const session = data?.session;
   const matches = data?.matches ?? [];
   const completedCount = matches.filter(
@@ -246,7 +293,7 @@ export default function SessionMatchHistory({
   ).length;
 
   return (
-    <section className={styles.history} aria-label="Session match history">
+    <section ref={scrollRef} className={styles.history} aria-label="Session match history">
       <header className={styles.header}>
         <div className={styles.headingLine}>
           {onBack ? (
@@ -368,7 +415,7 @@ export default function SessionMatchHistory({
                         ) : null}
                         {canApprove || canCorrect || canUndo ? (
                           <details className={styles.matchOptions}>
-                            <summary aria-label="Match options">
+                            <summary aria-label={`Open actions for ${courtLabel(match.court)}`}>
                               <DotsThreeVertical aria-hidden="true" size={20} weight="bold" />
                             </summary>
                             <div className={styles.matchOptionsMenu} aria-label="Host match actions">
@@ -396,9 +443,9 @@ export default function SessionMatchHistory({
                     <div className={styles.scoreboard}>
                       <div className={`${styles.team} ${team1Won ? styles.winner : ""}`}>
                         <span className={styles.playerNames}>
-                          {match.team1User1.name}
+                          {playerLink(match.team1User1, match.team1ClubId)}
                           <span aria-hidden="true"> &amp; </span>
-                          {match.team1User2.name}
+                          {playerLink(match.team1User2, match.team1ClubId)}
                         </span>
                         {team1Won ? (
                           <span className={styles.winnerLabel}>
@@ -419,9 +466,9 @@ export default function SessionMatchHistory({
                       </div>
                       <div className={`${styles.team} ${styles.teamRight} ${team2Won ? styles.winner : ""}`}>
                         <span className={styles.playerNames}>
-                          {match.team2User1.name}
+                          {playerLink(match.team2User1, match.team2ClubId)}
                           <span aria-hidden="true"> &amp; </span>
-                          {match.team2User2.name}
+                          {playerLink(match.team2User2, match.team2ClubId)}
                         </span>
                         {team2Won ? (
                           <span className={styles.winnerLabel}>

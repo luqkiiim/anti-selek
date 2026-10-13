@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   DotsThree,
-  House,
+  SquaresFour,
   UsersThree,
   ChartBar,
   Plus,
@@ -31,6 +31,9 @@ import {
   PlayerGender,
 } from "@/types/enums";
 import { api, useResource, useAction } from "./api";
+import { useSessionController } from "./useSessionController";
+import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
+import { SessionJoinProfilePanel } from "@/components/session/SessionJoinProfilePanel";
 import {
   Avatar,
   Sheet,
@@ -56,6 +59,7 @@ import {
   applyQueuedMatch,
   applyScoreApproval,
   applyScoreSubmission,
+  applyScoreReopen,
   type MatchPayload,
 } from "@/app/session/[code]/sessionDataMutations";
 import { MatchStatus } from "@/types/enums";
@@ -71,6 +75,18 @@ type LiveSettingsDraft = {
   crossoverFrequency: SessionCrossoverFrequency;
   courtCount: number;
 };
+function settingsDraft(session: SessionData): LiveSettingsDraft {
+  return {
+    autoQueueEnabled: session.autoQueueEnabled,
+    courtLabels: Object.fromEntries(session.courts.map(court => [court.courtNumber, court.label ?? ""])),
+    matchmakingStyle: session.matchmakingStyle ?? SessionMatchmakingStyle.BALANCED,
+    balanceMetric: session.balanceMetric ?? SessionBalanceMetric.RATING,
+    pairingMode: session.pairingMode ?? SessionPairingMode.OPEN,
+    poolsEnabled: session.poolsEnabled,
+    crossoverFrequency: session.crossoverFrequency,
+    courtCount: session.courts.length,
+  };
+}
 type ManualTarget =
   | { kind: "court"; courtId: string }
   | { kind: "queue"; replaceQueuedMatch: boolean };
@@ -110,7 +126,14 @@ export default function LiveSession({
   onOpenMember,
   profileMemberIds,
   globalClubId,
+  activeTab, onTabChange, onSessionData, onHistory, onPracticeTools, onOpenProfile,
 }: {
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
+  onSessionData?: (session: SessionData) => void;
+  onHistory?: () => void;
+  onPracticeTools?: () => void;
+  onOpenProfile?: (id: string, clubId: string | null) => void;
   globalClubId?: string;
   code: string;
   onBack: () => void;
@@ -121,7 +144,7 @@ export default function LiveSession({
 }) {
   const endpoint = "/api/sessions/" + code;
   const readQuery = globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : "";
-  const resource = useResource<SessionData>(endpoint + readQuery);
+  const resource = useSessionController(code, globalClubId);
   const [pauseOverlays, setPauseOverlays] = useState<Record<string, PlayerPauseOverlay>>({});
   const [pauseError, setPauseError] = useState("");
   const [queuedMatchOverlay, setQueuedMatchOverlay] = useState<QueuedMatchOverlay | null>(null);
@@ -141,7 +164,7 @@ export default function LiveSession({
       score?: number;
     }[];
   }>(endpoint + "/leaderboard" + readQuery);
-  const [tab, setTab] = useState("Courts"),
+  const [localTab, setLocalTab] = useState("Courts"),
     [sheet, setSheet] = useState(""),
     [confirmingMatchIds, setConfirmingMatchIds] = useState<Set<string>>(() => new Set()),
     [savingScoreMatchIds, setSavingScoreMatchIds] = useState<Set<string>>(() => new Set()),
@@ -162,6 +185,7 @@ export default function LiveSession({
   const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
+  const [restPlayerId, setRestPlayerId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -171,7 +195,19 @@ export default function LiveSession({
   const [confirmAutoQueueOff, setConfirmAutoQueueOff] = useState(false);
   const [confirmedQueueId, setConfirmedQueueId] = useState<string | null>(null);
   const sessionTabs = ["Players", "Courts", "Standings"] as const;
+  const tab = activeTab ?? localTab;
+  function setTab(next: string) { if (onTabChange) onTabChange(next); else setLocalTab(next); }
   function navigateTab(nextTab: string) { setTab(nextTab); }
+  function openHistory() { if (onHistory) onHistory(); else setShowHistory(true); }
+  useEffect(() => { if (s) onSessionData?.(s); }, [s, onSessionData]);
+  const initialSettingsOpened = useRef(false);
+  useEffect(() => {
+    if (!initialSettingsOpened.current && s?.viewerCanManage && !s.viewerIsQuickAccess && !globalClubId && location.hash === "#settings") {
+      initialSettingsOpened.current = true;
+      setLiveSettingsDraft(settingsDraft(s));
+      setSheet("settings");
+    }
+  }, [s, globalClubId]);
   async function refresh() {
     await Promise.all([resource.refresh(), standings.refresh()]);
   }
@@ -213,9 +249,38 @@ export default function LiveSession({
     return () => clearInterval(timer);
   }, [refreshSession, refreshStandings, action.busy, savingScoreMatchIds]);
   const canManage = !globalClubId && !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
+  const canJoin = !!s && !globalClubId && !s.viewerIsQuickAccess && !s.selectedSelf && !!s.eligibleProfiles?.length && s.status !== "COMPLETED";
   const ended = s?.status === "COMPLETED";
   const sessionPlayerById = new Map(s?.players.map((player) => [player.userId, player]) ?? []);
-  const profileMemberIdSet = new Set(profileMemberIds ?? []);
+  const profileMemberIdSet = new Set(profileMemberIds ?? s?.players.filter(p => !p.isGuest).map(p => p.userId) ?? []);
+  const openMember = onOpenProfile ? (id: string) => {
+    const player = s?.players.find(p => p.userId === id);
+    onOpenProfile(id, player?.profileClubId ?? (s?.ratingPolicyVersion === 2 ? null : s?.clubId ?? null));
+  } : onOpenMember;
+  const viewerPlayerId = s?.viewerPlayerId ?? s?.selectedSelf?.playerId ?? "";
+  function maySubmitScore(match: Match) {
+    return !globalClubId && !s?.viewerIsQuickAccess && match.status === MatchStatus.IN_PROGRESS &&
+      (canManage || playersInMatch(match).some(p => p.id === viewerPlayerId));
+  }
+  function mayApproveScore(match: Match) {
+    return !globalClubId && !s?.viewerIsQuickAccess && match.status === MatchStatus.PENDING_APPROVAL && canApprovePendingSubmission({
+      match: { team1User1Id: match.team1User1.id, team1User2Id: match.team1User2.id, team2User1Id: match.team2User1.id, team2User2Id: match.team2User2.id },
+      approverUserId: s?.viewerUserId ?? "", approverPlayerId: viewerPlayerId, approverIsAdmin: canManage,
+      approverIsClaimed: true, scoreSubmittedByUserId: match.scoreSubmittedByUserId, scoreSubmittedByPlayerId: match.scoreSubmittedByPlayerId,
+    });
+  }
+  async function pendingScoreAction(match: Match, operation: "approve" | "reopen") {
+    if (savingScoreMatchIdsRef.current.has(match.id)) return;
+    setMatchSaving(match.id, true);
+    try {
+      const response = await api<ScoreSaveResponse>(`/api/matches/${encodeURIComponent(match.id)}/${operation}`, "POST");
+      if (operation === "approve") setQueuedMatchOverlay(null);
+      resource.update(current => operation === "reopen" ? applyScoreReopen(current, response) : applyQueuedMatch(
+        response.autoAssignedMatch ? applyGeneratedMatches(applyScoreApproval(current, response), [response.autoAssignedMatch]) : applyScoreApproval(current, response), response.queuedMatch ?? null));
+      void refresh().catch(() => {});
+    } catch (error) { setScoreErrors(previous => ({ ...previous, [match.id]: error instanceof Error ? error.message : "Unable to update score." })); }
+    finally { setMatchSaving(match.id, false); }
+  }
   const sessionStats = deriveLiveSessionPlayerStats(
     s?.players.map((player) => player.userId) ?? [],
     s?.matches ?? [],
@@ -393,6 +458,12 @@ export default function LiveSession({
   const pausedPlayers = s?.players.filter((player) =>
     isRosterPlayerPaused(player) && !playingCourtFor(player.userId),
   ) ?? [];
+  function ownsSessionSeat(player: SessionData["players"][number]) {
+    if (!s || globalClubId || s.viewerIsQuickAccess) return false;
+    if (s.ratingPolicyVersion === 2) return s.eligibleProfiles?.some(profile => profile.playerId === player.userId && profile.profileClubId === player.profileClubId) ?? false;
+    return player.userId === viewerPlayerId;
+  }
+  const restPlayer = s?.players.find(player => player.userId === restPlayerId);
   async function toggleRosterPlayerPause(userId: string, currentPaused: boolean) {
     if (pauseRequestsRef.current.has(userId)) return;
     pauseRequestsRef.current.add(userId);
@@ -584,18 +655,7 @@ export default function LiveSession({
   }
   function openLiveSettings() {
     if (!s) return;
-    setLiveSettingsDraft({
-      autoQueueEnabled: s.autoQueueEnabled,
-      courtLabels: Object.fromEntries(
-        s.courts.map((court) => [court.courtNumber, court.label ?? ""]),
-      ),
-      matchmakingStyle: s.matchmakingStyle ?? SessionMatchmakingStyle.BALANCED,
-      balanceMetric: s.balanceMetric ?? SessionBalanceMetric.RATING,
-      pairingMode: s.pairingMode ?? SessionPairingMode.OPEN,
-      poolsEnabled: s.poolsEnabled,
-      crossoverFrequency: s.crossoverFrequency,
-      courtCount: s.courts.length,
-    });
+    setLiveSettingsDraft(settingsDraft(s));
     setConfirmAutoQueueOff(false);
     setConfirmedQueueId(null);
     action.setError("");
@@ -872,7 +932,13 @@ export default function LiveSession({
           <ErrorText
             error={pauseError || resource.error || standings.error || (!sheet ? action.error : "")}
           />
-          {!s && <p role="status">Loading session…</p>}
+          {!s && !resource.error && <p role="status">Loading session…</p>}
+          {resource.error && !s && <button className="secondary" onClick={resource.retry}>Try again</button>}
+          {canJoin && s && (tab === "Players" || s.status === "WAITING") && <SessionJoinProfilePanel code={code} sessionStatus={s.status} eligibleProfiles={s.eligibleProfiles ?? []} selectedSelf={s.selectedSelf ?? null} isInterclub={s.collabFormat === "INTERCLUB"} onJoined={profile => {
+            resource.update(current => ({ ...current, viewerPlayerId: profile.playerId, selectedSelf: { playerId: profile.playerId, profileClubId: profile.profileClubId } }));
+            void resource.refresh().catch(() => {});
+          }} />}
+          {canJoin && s?.status === "ACTIVE" && tab === "Courts" && <button className="secondary full" onClick={() => setTab("Players")}>Join session</button>}
           {s && ended ? (
             <>
               {standings.data ? (
@@ -888,7 +954,7 @@ export default function LiveSession({
                   sharePreparationFailed={!!shareImage.error}
                   celebrate={celebrateFinish}
                   highlights={sessionFinishHighlights(finalPlayers, sessionStats)}
-                  onOpenMember={onOpenMember}
+                  onOpenMember={openMember}
                   profileMemberIds={profileMemberIds}
                 >
                   {getInterclubScore(s) ? <InterclubScoreboard session={s} /> : null}
@@ -898,7 +964,7 @@ export default function LiveSession({
               <button className="primary" onClick={onBack}>
                 Back to club
               </button>
-              <button className="text-button full" onClick={() => { setCelebrateFinish(false); setShowHistory(true); }}>
+              <button className="text-button full" onClick={() => { setCelebrateFinish(false); openHistory(); }}>
                 Match history
               </button>
             </>
@@ -913,7 +979,7 @@ export default function LiveSession({
                 () => api(endpoint + "/start", "POST"),
                 () => setTab("Courts"),
               )}
-              onOpenMember={onOpenMember}
+              onOpenMember={openMember}
               profileMemberIds={profileMemberIds}
             />
           ) : s && tab === "Courts" ? (
@@ -924,7 +990,7 @@ export default function LiveSession({
                   Live session
                 </span>
                 <small>
-                  {s.players.length} players · {s.courts.length} courts
+                  {s.players.length} {s.players.length === 1 ? "player" : "players"} · {s.courts.length} {s.courts.length === 1 ? "court" : "courts"}
                 </small>
               </div>
               <InterclubScoreboard session={s} />
@@ -986,7 +1052,7 @@ export default function LiveSession({
                                 </span>
                               ))}
                             </div>
-                            {canManage ? (
+                            {maySubmitScore(match) ? (
                               <>
                                 <input
                                   ref={(node) => {
@@ -1012,7 +1078,7 @@ export default function LiveSession({
                           </div>
                         ))}
                         <ErrorText error={scoreErrors[match.id] ?? ""} />
-                        {canManage && (
+                        {maySubmitScore(match) && (
                           <button
                             className="primary"
                             disabled={action.busy || savingScoreMatchIds.has(match.id)}
@@ -1022,6 +1088,11 @@ export default function LiveSession({
                             {confirmingMatchIds.has(match.id) ? "Confirm" : "Save score"}
                           </button>
                         )}
+                        {match.status === MatchStatus.PENDING_APPROVAL && <div className="pending-score-actions">
+                          <p role="status">Waiting for score approval</p>
+                          {mayApproveScore(match) && <button className="primary" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(match, "approve")}>Approve score</button>}
+                          {canManage && <button className="secondary full" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(match, "reopen")}>Edit score</button>}
+                        </div>}
                       </>
                     ) : (
                       <>
@@ -1117,7 +1188,8 @@ export default function LiveSession({
                         <strong>{p.user.name}</strong>
                         <small>{playerStatus(p)} · {p.user.elo}</small>
                       </span>
-                      {canManage && (
+                      {ownsSessionSeat(p) && <button className="icon-button" aria-label={`Rest options for ${p.user.name}`} onClick={() => { setRestPlayerId(p.userId); setSheet("self-rest"); }}><DotsThree size={20} /></button>}
+                      {(canManage || ownsSessionSeat(p)) && (
                         <button
                           className="icon-button"
                           aria-label={
@@ -1147,7 +1219,7 @@ export default function LiveSession({
                           <strong>{p.user.name}</strong>
                           <small>{playerStatus(p)}</small>
                         </span>
-                        {canManage && (
+                        {(canManage || ownsSessionSeat(p)) && (
                           <button
                             className="icon-button"
                             aria-label={`Resume ${p.user.name}`}
@@ -1172,10 +1244,10 @@ export default function LiveSession({
                   groupAName={s.poolAName ?? "Competitive"}
                   groupBName={s.poolBName ?? "Social"}
                   scoreLabel={s.type === SessionType.LADDER ? "net wins" : "points"}
-                  onOpenMember={onOpenMember}
+                  onOpenMember={openMember}
                 />
                 <details>
-                  <summary>How rankings work</summary>
+                  <summary>How standings work</summary>
                   <p>
                     Standings use this session&apos;s scoring rules. Results update
                     after scores are saved.
@@ -1188,7 +1260,7 @@ export default function LiveSession({
       {s?.status === "ACTIVE" && (
         <nav className="bottom-nav" aria-label="Session navigation">
           {sessionTabs.map((t, i) => {
-            const Icon = [UsersThree, House, ChartBar][i];
+            const Icon = [UsersThree, SquaresFour, ChartBar][i];
             return (
               <button
                 key={t}
@@ -1205,7 +1277,7 @@ export default function LiveSession({
       )}
       <Sheet open={!!sheet}
           title={
-            sheet === "menu"
+            sheet === "self-rest" ? "Rest options" : sheet === "menu"
                 ? "Options"
                 : sheet === "end"
                   ? "End this session?"
@@ -1315,9 +1387,17 @@ export default function LiveSession({
                 Add player
               </button>
             </>
+          ) : sheet === "self-rest" && restPlayer && ownsSessionSeat(restPlayer) ? (
+            <>
+              <p>{restPlayer.user.name}</p>
+              <button className="primary full" disabled={action.busy || (!restPlayer.skipNextMatchAt && isRosterPlayerPaused(restPlayer))} onClick={() => void action.run(() => api(`${endpoint}/players/${encodeURIComponent(restPlayer.userId)}/skip-next`, "PATCH", { skipNextMatch: !restPlayer.skipNextMatchAt }), () => setSheet(""))}>{restPlayer.skipNextMatchAt ? "Cancel skip" : "Skip next match"}</button>
+              <button className="secondary full" disabled={pauseOverlays[restPlayer.userId]?.pending} onClick={() => { void toggleRosterPlayerPause(restPlayer.userId, isRosterPlayerPaused(restPlayer)); setSheet(""); }}>{isRosterPlayerPaused(restPlayer) ? "Resume playing" : playingCourtFor(restPlayer.userId) ? "Pause after this game" : "Pause playing"}</button>
+            </>
           ) : sheet === "menu" ? (
             <>
-              <Row title="Match history" icon={ClockCounterClockwise} onClick={() => { setSheet(""); setShowHistory(true); }} />
+              {canJoin && <Row title="Join session" icon={UsersThree} onClick={() => { setSheet(""); setTab("Players"); }} />}
+              {canManage && (s?.isTest || s?.isTutorialClub) && onPracticeTools && <Row title="Practice tools" icon={GearSix} onClick={onPracticeTools} />}
+              <Row title="Match history" icon={ClockCounterClockwise} onClick={() => { setSheet(""); openHistory(); }} />
               {canManage && !ended && <>
                 <Row title="Session settings" icon={GearSix} onClick={openLiveSettings} />
                 <Row title="End session" icon={SignOut} onClick={() => setSheet("end")} />
