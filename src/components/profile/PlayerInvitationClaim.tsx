@@ -269,7 +269,7 @@ export function PlayerInvitationClaim({ invitationId }: { invitationId: string }
             <section className="app-panel-muted space-y-3 p-4">
               <p>You&apos;re claiming as <strong>{session?.user?.name}</strong>.</p>
               <p className="text-sm text-gray-600">
-                Claiming copies your account name and photo to this club profile, including clearing its photo if your account has none. Its match history and rating stay with the profile.
+                Your account photo takes priority; if you have none, this profile&apos;s photo is used. Match history and rating stay with this profile.
               </p>
               {quickAccess ? (
                 <p>Quick access cannot claim a profile. Sign in with a full account.</p>

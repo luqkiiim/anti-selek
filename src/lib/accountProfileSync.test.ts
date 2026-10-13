@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Prisma } from "@prisma/client";
 import { AccountProfileSyncError, syncAccountProfile } from "./accountProfileSync";
 import { PlayerGender, MixedSide } from "@/types/enums";
@@ -43,5 +43,22 @@ describe("canonical account metadata synchronization", () => {
     const result = await syncAccountProfile(tx, { userId: "account", changes: { avatarKey: null }, expectedAvatarKey: "old" });
     expect(result.previousAvatarKeys).toEqual(["old", "archive"]);
     expect(db.player.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { avatarKey: null } }));
+  });
+  it("skips identical avatar-only player writes without excluding their ownership from the result", async () => {
+    const { db, tx } = setup();
+    const result = await syncAccountProfile(tx, { userId: "account", changes: { avatarKey: "old" } });
+    expect(db.player.updateMany).toHaveBeenCalledWith({ where: { id: { in: ["archived"] } }, data: { avatarKey: "old" } });
+    expect(result.playerIds).toEqual(["active", "archived"]);
+    db.player.updateMany.mockClear();
+    db.player.findMany.mockResolvedValue([{ id: "active", avatarKey: "old", clubMemberships: [{ ownerUserId: "account", retiredByAdmissionEventId: null }] }]);
+    await syncAccountProfile(tx, { userId: "account", changes: { avatarKey: "old" } });
+    expect(db.player.updateMany).not.toHaveBeenCalled();
+  });
+  it("retains the shared-ownership guard even when every player avatar already matches", async () => {
+    const { db, tx } = setup();
+    db.player.findMany.mockResolvedValue([{ id: "shared", avatarKey: "old", clubMemberships: [{ ownerUserId: "account", retiredByAdmissionEventId: null }, { ownerUserId: "other", retiredByAdmissionEventId: null }] }]);
+    await expect(syncAccountProfile(tx, { userId: "account", changes: { avatarKey: "old" } })).rejects.toMatchObject({ statusCode: 409 });
+    expect(db.user.update).not.toHaveBeenCalled();
+    expect(db.player.updateMany).not.toHaveBeenCalled();
   });
 });

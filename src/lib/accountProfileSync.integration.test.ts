@@ -52,6 +52,19 @@ it("synchronizes edited canonical metadata to distinct owned profiles including 
   expect(await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } })).toMatchObject({ elo: 1432, ownerUserId: "owner" });
   expect(await db.player.findUniqueOrThrow({ where: { id: "club-c-player" } })).toMatchObject({ elo: 1179, ownerUserId: null });
 });
+it("preserves unchanged player timestamps during avatar-only sync, including an entirely identical fanout", async () => {
+  const unchanged = await db.player.findUniqueOrThrow({ where: { id: "club-c-player" } });
+  const shared = await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } });
+  const before = await history();
+  await transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { avatarKey: "old-avatar" } }));
+  expect(await db.player.findUniqueOrThrow({ where: { id: unchanged.id } })).toEqual(unchanged);
+  const updated = await db.player.findUniqueOrThrow({ where: { id: shared.id } });
+  expect(updated).toEqual({ ...shared, avatarKey: "old-avatar", updatedAt: updated.updatedAt });
+  const players = await db.player.findMany({ orderBy: { id: "asc" } });
+  await transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { avatarKey: "old-avatar" } }));
+  expect(await db.player.findMany({ orderBy: { id: "asc" } })).toEqual(players);
+  expect(await history()).toEqual(before);
+});
 it("enforces canonical once-only name and gender limits transactionally and preserves sporting history", async () => {
   const before = await history();
   await transaction(tx => syncAccountProfile(tx, { userId: "owner", changes: { name: "Renamed", gender: PlayerGender.FEMALE } }));

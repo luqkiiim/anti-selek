@@ -60,7 +60,11 @@ export async function syncAccountProfile(tx: Prisma.TransactionClient, input: {
   if (changes.avatarKey !== undefined) { playerData.avatarKey = changes.avatarKey; accountData.avatarKey = changes.avatarKey; }
   if (changes.gender !== undefined) { playerData.gender = changes.gender; if (genderChanged) { accountData.gender = changes.gender; accountData.selfGenderChangedAt = new Date(); } }
   const account = Object.keys(accountData).length ? await tx.user.update({ where: { id: userId }, data: accountData }) : current;
-  if (players.length && Object.keys(playerData).length) await tx.player.updateMany({ where: { id: { in: players.map(player => player.id) } }, data: playerData });
+  // An avatar-only fanout must not rewrite an identical Player. Besides avoiding
+  // needless timestamps, a legacy shared claim relies on its exact before snapshot.
+  const avatarOnly = Object.keys(playerData).length === 1 && changes.avatarKey !== undefined;
+  const changedPlayers = avatarOnly ? players.filter(player => player.avatarKey !== changes.avatarKey) : players;
+  if (changedPlayers.length && Object.keys(playerData).length) await tx.player.updateMany({ where: { id: { in: changedPlayers.map(player => player.id) } }, data: playerData });
   if (changes.gender !== undefined) await normalizeClubMembershipPreferencesForGender(tx, players.map(player => player.id), changes.gender);
   let clubPreferences;
   if (input.clubPreferences && preferenceMember) {

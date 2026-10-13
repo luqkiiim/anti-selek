@@ -230,7 +230,11 @@ export default function PrototypeApp() {
         accountName={account.data?.user.name || auth?.user?.name || ""}
         accountGender={account.data?.user.gender || ""}
         onClose={() => setForm("")}
-        onOpenClub={id => { select(id); setForm(""); void clubs.refresh().catch(() => {}); }}
+        onOpenClub={id => {
+          void Promise.allSettled([account.refresh(), clubs.refresh()]);
+          select(id);
+          setForm("");
+        }}
       />}
     </div>
   );

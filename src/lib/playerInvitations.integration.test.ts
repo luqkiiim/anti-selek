@@ -17,6 +17,8 @@ import { confirmAuthorizedInvitation, createAuthorizedInvitation, identityOption
 
 import { claimClubPlayer, removeClubPlayerOwnership } from "./clubPlayerOwnership";
 import { migrateFixture, seedHistoricalAccessReceipt, localOwnershipMigration } from "./clubOwnership.integration.fixture";
+import * as accountProfileSync from "./accountProfileSync";
+import { reviewAdmissionApi } from "./clubAdmissionApi";
 let db: PrismaClient;
 let actor: { id: string; isQuickAccess?: boolean; guestPlayerId?: string; isAdmin?: boolean } | null;
 vi.mock("@/lib/prisma", () => ({ get prisma() { return db; } }));
@@ -113,6 +115,37 @@ it("claims the same sporting identity and preserves every original sporting fiel
   expect(await db.playerInvitationEvent.findMany({ where: { invitationId: invitation.id }, orderBy: { createdAt: "asc" } })).toHaveLength(2);
   await expectTerminalCleanup(invitation.id, "REDEEMED");
   expect(await db.playerInvitationEvent.findUnique({ where: { id: creationEvent.id } })).toEqual(creationEvent);
+});
+it.each(["invitation", "admission"])("returns a photo sync conflict as HTTP 409 and rolls back the %s operation", async flow => {
+  await db.player.update({ where: { id: "historical-player" }, data: { avatarKey: "placeholder-photo" } });
+  await db.user.update({ where: { id: "account-a" }, data: { gender: "MALE" } });
+  const invitation = flow === "invitation" ? await ready() : null;
+  const admission = flow === "admission" ? await transaction(tx => submitClubAdmission(tx, { clubId: "club-a", requesterUserId: "account-a", kind: "EXISTING_PLAYER", requestedPlayerId: "historical-player" })) : null;
+  const before = { account: await db.user.findUniqueOrThrow({ where: { id: "account-a" } }), sporting: sportingSnapshot(), invitations: await db.playerInvitation.findMany(), continuations: await db.playerInvitationContinuation.findMany(), invitationEvents: await db.playerInvitationEvent.findMany(), requests: await db.clubAdmissionRequest.findMany(), admissionEvents: await db.clubAdmissionEvent.findMany(), access: await db.clubAccess.findMany() };
+  const sync = vi.spyOn(accountProfileSync, "syncAccountProfile").mockRejectedValueOnce(new accountProfileSync.AccountProfileSyncError("A shared profile belongs to another account. An administrator must review it before editing", 409));
+  try {
+    actor = { id: flow === "invitation" ? "account-a" : "admin" };
+    const response = flow === "invitation"
+      ? await invitationRedeemPost(request(`/api/player-invites/${invitation!.id}/redeem`, { confirm: true }, invitation!), inviteContext(invitation!.id))
+      : await reviewAdmissionApi(request(`/api/clubs/club-a/join-requests/${admission!.id}`, { action: "APPROVE" }), { params: Promise.resolve({ id: "club-a", requestId: admission!.id! }) });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining("shared profile") });
+    expect(sync).toHaveBeenCalledWith(expect.anything(), { userId: "account-a", changes: { avatarKey: "placeholder-photo" }, expectedAvatarKey: null });
+    expect({ account: await db.user.findUniqueOrThrow({ where: { id: "account-a" } }), sporting: sportingSnapshot(), invitations: await db.playerInvitation.findMany(), continuations: await db.playerInvitationContinuation.findMany(), invitationEvents: await db.playerInvitationEvent.findMany(), requests: await db.clubAdmissionRequest.findMany(), admissionEvents: await db.clubAdmissionEvent.findMany(), access: await db.clubAccess.findMany() }).toEqual(before);
+    expect(await db.clubPlayerOwnershipEvent.count()).toBe(0);
+  } finally { sync.mockRestore(); }
+});
+it("adopts a personal invitation photo while preserving every original sporting field and timestamp", async () => {
+  await db.player.update({ where: { id: "historical-player" }, data: { avatarKey: "placeholder-photo" } });
+  const before = sportingSnapshot();
+  const playerBefore = await db.player.findUniqueOrThrow({ where: { id: "historical-player" } });
+  const invitation = await ready();
+  await redeem(invitation.id, invitation.handle);
+  expect(sportingSnapshot()).toEqual(before);
+  expect(await db.player.findUniqueOrThrow({ where: { id: "historical-player" } })).toEqual({ ...playerBefore, name: "account-a" });
+  expect(await db.user.findUniqueOrThrow({ where: { id: "account-a" } })).toMatchObject({ avatarKey: "placeholder-photo", selfNameChangedAt: null, selfGenderChangedAt: null });
+  const event = await db.clubPlayerOwnershipEvent.findFirstOrThrow({ where: { invitationId: invitation.id } });
+  expect(JSON.parse(event.detailsJson)).toMatchObject({ photoSource: "PLACEHOLDER", accountAvatarBefore: null, accountAvatarAfter: "placeholder-photo" });
 });
 it.each(["MEMBER", "ADMIN", "OWNER", "STAFF"])("preserves existing active %s access exactly", async role => {
   const grant = await db.clubAccess.create({ data: { clubId: "club-a", userId: "account-a", role } });

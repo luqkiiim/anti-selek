@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { AccountProfileSyncError, syncAccountProfile } from "./accountProfileSync";
 
 type Db = Prisma.TransactionClient;
 export class ClubPlayerOwnershipError extends Error {
@@ -121,13 +122,27 @@ export async function claimClubPlayer(db: Db, input: {
     throw new ClubPlayerOwnershipError("Your club access was revoked. Ask an admin for a fresh invitation after a local disconnect.", 409, "ACCESS_REVIEW_REQUIRED");
   if (access?.status === "ACTIVE" && input.releaseEventId) throw new ClubPlayerOwnershipError("This release receipt is no longer current.");
   const snapshot = await rawSnapshot(db, member.id);
+  // Resolve from fresh transaction reads only when this claim will complete.
+  // Preserve the raw nonblank reference; trimming is solely a missing-photo test.
+  const photoSource = account.avatarKey?.trim() ? "ACCOUNT" : member.player.avatarKey?.trim() ? "PLACEHOLDER" : "NONE";
+  const avatarKey = photoSource === "PLACEHOLDER" ? member.player.avatarKey : account.avatarKey;
+  if (photoSource === "PLACEHOLDER") {
+    try {
+      // The exact metadata snapshot above must precede fanout, which can include
+      // this physical Player when another local club already belongs to the account.
+      await syncAccountProfile(db, { userId: input.userId, changes: { avatarKey }, expectedAvatarKey: account.avatarKey });
+    } catch (error) {
+      if (error instanceof AccountProfileSyncError) throw new ClubPlayerOwnershipError(error.message, error.statusCode);
+      throw error;
+    }
+  }
   const eventId = await insertEvent(db, {
     clubId: member.clubId, memberId: member.id, playerId: member.playerId, actorUserId: input.actorUserId, action: "CLAIM",
     previousOwner: null, newOwner: input.userId, ownershipRevision: member.ownershipRevision,
     access: accessTransition(access, input.userId, "ACTIVE", access?.status === "REVOKED"),
     invitationId: input.invitationId, admissionRequestId: input.admissionRequestId, releaseEventId: input.releaseEventId,
-    metadataBefore: snapshot.metadata, metadataAfter: JSON.stringify({ name: account.name, avatarKey: account.avatarKey }),
-    details: { previousArchivedAt: snapshot.archivedAt, newArchivedAt: null },
+    metadataBefore: snapshot.metadata, metadataAfter: JSON.stringify({ name: account.name, avatarKey }),
+    details: { previousArchivedAt: snapshot.archivedAt, newArchivedAt: null, photoSource, accountAvatarBefore: account.avatarKey, accountAvatarAfter: photoSource === "PLACEHOLDER" ? avatarKey : account.avatarKey },
     reason: input.reason ?? "Account claimed this club profile; sporting history retained.", now: input.now,
   });
   return { playerId: member.playerId, clubId: member.clubId, eventId, alreadyOwned: false };

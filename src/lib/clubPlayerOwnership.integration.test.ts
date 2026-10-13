@@ -11,6 +11,7 @@ import { assertLocalClaimAvailable, claimClubPlayer, clubOwnershipTransaction, r
 import { exchangeInvitationSecret, managePlayerInvitation, redeemPlayerInvitation } from "./playerInvitations";
 import { disconnectRemovedPlayer } from "./playerOwnershipRelease";
 import { assertSessionAccountSeatAvailable } from "./sessionProfileIdentity";
+import { syncAccountProfile } from "./accountProfileSync";
 
 const dir = mkdtempSync(path.join(tmpdir(), "club-local-ownership-"));
 const baseline = path.join(dir, "baseline.db");
@@ -43,6 +44,24 @@ beforeAll(() => {
   const sqlite = new DatabaseSync(baseline, { enableDoubleQuotedStringLiterals: true });
   for (const migration of readdirSync("prisma/migrations").sort()) {
     const source = path.join("prisma/migrations", migration, "migration.sql");
+    // A legal historical retirement predates the closed recovery writers. Keep
+    // all migration guards enabled so fanout tests see a real immutable record.
+    if (migration === "20261008140000_authorized_identity_transitions") sqlite.exec(`
+      INSERT INTO Account(id,name,email,passwordHash,avatarKey,createdAt,updatedAt) VALUES ('retired-admin','Retired Admin','retired-admin@test.invalid','hash',NULL,1700000000000,1700000000000),('retired-owner','Retired Owner','retired-owner@test.invalid','hash',NULL,1700000000000,1700000000000);
+      INSERT INTO Community(id,name,createdById,createdAt,updatedAt) VALUES ('retired-club','Retired Club','retired-admin',1700000000000,1700000000000);
+      INSERT INTO User(id,ownerUserId,name,avatarKey,isActive,createdAt,updatedAt) VALUES ('retired-source','retired-owner','Old duplicate','retired-photo',0,1600000000000,1700000000000),('retained-target',NULL,'Retained target',NULL,1,1600000000000,1700000000000);
+      INSERT INTO CommunityMember(id,communityId,userId,ownerUserId,createdAt,archivedAt) VALUES ('retired-source-member','retired-club','retired-source','retired-owner',1700000000001,1700000100001),('retained-target-member','retired-club','retained-target',NULL,1600000000000,NULL);
+      INSERT INTO ClubAccess(id,clubId,userId,role,status,createdAt,updatedAt) VALUES ('retired-admin-access','retired-club','retired-admin','OWNER','ACTIVE',1700000000000,1700000000000),('retired-owner-access','retired-club','retired-owner','MEMBER','ACTIVE',1700000000000,1700000000000);
+      INSERT INTO PlayerInvitation(id,clubId,playerId,clubMemberId,createdByUserId,tokenHash,status,expiresAt,createdAt,updatedAt) VALUES ('retirement-invite','retired-club','retained-target','retained-target-member','retired-admin','retirement-hash','ACTIVE','2035-01-01T00:00:00.000Z',1700000400000,1700000400000);
+      INSERT INTO ClubJoinRequest(id,clubId,userId,kind,status,requestedPlayerId,revision,originInvitationId,createdAt,updatedAt) VALUES ('retirement-request','retired-club','retired-owner','EXISTING_PLAYER','PENDING','retained-target',0,'retirement-invite',1700000500000,1700000500000);
+      INSERT INTO ClubAdmissionEvent(id,admissionRequestId,actorUserId,action,revision,detailsJson,createdAt) VALUES ('retirement-submit','retirement-request','retired-owner','SUBMIT',0,'{"kind":"EXISTING_PLAYER","requestedPlayerId":"retained-target"}',1700000500000);
+      UPDATE ClubJoinRequest SET revision=1 WHERE id='retirement-request';
+      INSERT INTO ClubAdmissionEvent(id,admissionRequestId,actorUserId,action,revision,detailsJson,createdAt) VALUES ('retirement-approval','retirement-request','retired-admin','APPROVE_RECOVERY',1,'{"originInvitationId":"retirement-invite","targetPlayerId":"retained-target","sourcePlayerId":"retired-source","sourceMemberId":"retired-source-member","confirmRestoreAccess":false,"restoredAccess":false,"reason":"Verified empty duplicate"}',1700000600000);
+      UPDATE CommunityMember SET retiredByAdmissionEventId='retirement-approval' WHERE id='retired-source-member';
+      UPDATE PlayerInvitation SET status='REDEEMED',redeemedByUserId='retired-owner',redeemedAt=1700000600001 WHERE id='retirement-invite';
+      UPDATE User SET ownerUserId='retired-owner' WHERE id='retained-target';
+      UPDATE ClubJoinRequest SET status='APPROVED',approvedPlayerId='retained-target',decision='RECOVER_INVITED_PLAYER',reviewedById='retired-admin',reviewedAt=1700000600002 WHERE id='retirement-request';
+    `);
     if (migration === localMigration) sqlite.exec(`
       INSERT INTO Account(id,name,email,passwordHash,createdAt,updatedAt) VALUES ('legacy-admin','Legacy admin','legacy-admin@test.invalid','legacy-admin-hash',10,11),('legacy-owner','Legacy Owner','legacy-owner@test.invalid','legacy-owner-hash',12,13);
       INSERT INTO Community(id,name,createdById,createdAt,updatedAt) VALUES ('legacy-a','Legacy A','legacy-admin',14,15),('legacy-b','Legacy B','legacy-admin',16,17);
@@ -72,17 +91,202 @@ afterAll(async () => {
   } else rmSync(dir, { recursive: true, force: true });
 });
 
-it("claims distinct A/B local profiles, audits current name and null avatar, and freezes global provenance", async () => {
+it("claims distinct A/B local profiles, audits current name and adopted avatar, and freezes global provenance", async () => {
   const before = await db.player.findUniqueOrThrow({ where: { id: "p-a" } });
   await claim(); await claim("club-b", "p-b");
   expect(await db.clubMember.findMany({ where: { ownerUserId: "account-a" }, orderBy: { clubId: "asc" } })).toMatchObject([{ clubId: "club-a", playerId: "p-a", ownershipRevision: 1, elo: 1411 }, { clubId: "club-b", playerId: "p-b", ownershipRevision: 1, elo: 999 }]);
   const player = await db.player.findUniqueOrThrow({ where: { id: "p-a" } });
-  expect(player).toEqual({ ...before, name: "Current account-a", avatarKey: null });
+  expect(player).toEqual({ ...before, name: "Current account-a", avatarKey: "old-avatar" });
   const receipt = await db.clubPlayerOwnershipEvent.findFirstOrThrow({ where: { clubMemberId: "m-a" } });
   expect(JSON.parse(receipt.metadataBeforeJson)).toEqual({ name: before.name, avatarKey: "old-avatar" });
-  expect(JSON.parse(receipt.metadataAfterJson)).toEqual({ name: "Current account-a", avatarKey: null });
+  expect(JSON.parse(receipt.metadataAfterJson)).toEqual({ name: "Current account-a", avatarKey: "old-avatar" });
+  expect(JSON.parse(receipt.detailsJson)).toMatchObject({ photoSource: "PLACEHOLDER", accountAvatarBefore: null, accountAvatarAfter: "old-avatar" });
   await expect(db.$executeRaw`UPDATE "User" SET "ownerUserId"='account-a' WHERE "id"='p-c'`).rejects.toThrow(/PROVENANCE/);
   await expect(claim("club-a", "p-extra")).rejects.toMatchObject({ code: "IDENTITY_CONFLICT" });
+});
+
+const missingAvatars = [null, "", " \t\n"];
+it.each([
+  ...["account-photo", "  account-photo  "].flatMap(accountAvatar => [...missingAvatars, "placeholder-photo"].map(placeholderAvatar => ({ accountAvatar, placeholderAvatar, source: "ACCOUNT", finalAvatar: accountAvatar }))),
+  ...missingAvatars.flatMap(accountAvatar => ["placeholder-photo", "  placeholder-photo  "].map(placeholderAvatar => ({ accountAvatar, placeholderAvatar, source: "PLACEHOLDER", finalAvatar: placeholderAvatar }))),
+  ...missingAvatars.flatMap(accountAvatar => missingAvatars.map(placeholderAvatar => ({ accountAvatar, placeholderAvatar, source: "NONE", finalAvatar: accountAvatar }))),
+])("resolves $source from fresh account '$accountAvatar' and placeholder '$placeholderAvatar'", async ({ accountAvatar, placeholderAvatar, source, finalAvatar }) => {
+  await db.user.update({ where: { id: "account-a" }, data: { avatarKey: accountAvatar, selfNameChangedAt: new Date(100), selfGenderChangedAt: new Date(200), mixedSideOverride: "LOWER" } });
+  await db.player.update({ where: { id: "p-a" }, data: { avatarKey: placeholderAvatar } });
+  const accountBefore = await db.user.findUniqueOrThrow({ where: { id: "account-a" } });
+  const playerBefore = await db.player.findUniqueOrThrow({ where: { id: "p-a" } });
+  await claim();
+  const accountAfter = await db.user.findUniqueOrThrow({ where: { id: "account-a" } });
+  expect(accountAfter).toEqual(source === "PLACEHOLDER" ? { ...accountBefore, avatarKey: finalAvatar, updatedAt: accountAfter.updatedAt } : accountBefore);
+  expect(await db.player.findUniqueOrThrow({ where: { id: "p-a" } })).toEqual({ ...playerBefore, name: accountBefore.name, avatarKey: finalAvatar });
+  const event = await db.clubPlayerOwnershipEvent.findFirstOrThrow({ where: { clubMemberId: "m-a" } });
+  expect(JSON.parse(event.metadataBeforeJson)).toEqual({ name: playerBefore.name, avatarKey: placeholderAvatar });
+  expect(JSON.parse(event.metadataAfterJson)).toEqual({ name: accountBefore.name, avatarKey: finalAvatar });
+  expect(JSON.parse(event.detailsJson)).toMatchObject({ photoSource: source, accountAvatarBefore: accountAvatar, accountAvatarAfter: finalAvatar });
+});
+
+it.each(["account-upload", "placeholder-update", "account-removal"])("uses completion-time photos after delayed approval: %s", async change => {
+  if (change === "account-removal") await db.user.update({ where: { id: "account-a" }, data: { avatarKey: "submitted-photo" } });
+  const request = await admissionTransaction(db, t => submitClubAdmission(t, { clubId: "club-a", requesterUserId: "account-a", kind: "EXISTING_PLAYER", requestedPlayerId: "p-a" }));
+  expect(await db.user.findUniqueOrThrow({ where: { id: "account-a" } })).toMatchObject({ avatarKey: change === "account-removal" ? "submitted-photo" : null });
+  if (change === "account-upload") await tx(t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: "fresh-account-photo" }, expectedAvatarKey: null }));
+  if (change === "account-removal") await tx(t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: null }, expectedAvatarKey: "submitted-photo" }));
+  await db.player.update({ where: { id: "p-a" }, data: { avatarKey: "fresh-placeholder-photo" } });
+  await admissionTransaction(db, t => reviewClubAdmission(t, { clubId: "club-a", requestId: request.id!, reviewerUserId: "admin", action: "APPROVE" }));
+  const finalAvatar = change === "account-upload" ? "fresh-account-photo" : "fresh-placeholder-photo";
+  expect(await db.user.findUniqueOrThrow({ where: { id: "account-a" } })).toMatchObject({ avatarKey: finalAvatar });
+  expect(await db.player.findUniqueOrThrow({ where: { id: "p-a" } })).toMatchObject({ avatarKey: finalAvatar });
+  const event = await db.clubPlayerOwnershipEvent.findFirstOrThrow({ where: { admissionRequestId: request.id } });
+  expect(JSON.parse(event.metadataBeforeJson).avatarKey).toBe("fresh-placeholder-photo");
+});
+
+it("personal invitation adoption reads the latest placeholder and redeemed retries preserve replacement and removal", async () => {
+  const invitation = await invite();
+  await db.player.update({ where: { id: "p-a" }, data: { avatarKey: "latest-invited-photo" } });
+  await tx(t => redeemPlayerInvitation(t, invitation.id, invitation.handle, "account-a"));
+  expect(await db.user.findUniqueOrThrow({ where: { id: "account-a" } })).toMatchObject({ avatarKey: "latest-invited-photo" });
+  for (const avatarKey of ["replacement-photo", null]) {
+    await tx(t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey } }));
+    const before = { account: await db.user.findUniqueOrThrow({ where: { id: "account-a" } }), player: await db.player.findUniqueOrThrow({ where: { id: "p-a" } }), events: await db.clubPlayerOwnershipEvent.findMany() };
+    await tx(t => redeemPlayerInvitation(t, invitation.id, undefined, "account-a"));
+    await claim();
+    expect({ account: await db.user.findUniqueOrThrow({ where: { id: "account-a" } }), player: await db.player.findUniqueOrThrow({ where: { id: "p-a" } }), events: await db.clubPlayerOwnershipEvent.findMany() }).toEqual(before);
+  }
+});
+
+it("approved admission retries preserve later photo replacement and removal", async () => {
+  const request = await admissionTransaction(db, t => submitClubAdmission(t, { clubId: "club-a", requesterUserId: "account-a", kind: "EXISTING_PLAYER", requestedPlayerId: "p-a" }));
+  const approve = () => admissionTransaction(db, t => reviewClubAdmission(t, { clubId: "club-a", requestId: request.id!, reviewerUserId: "admin", action: "APPROVE" }));
+  await approve();
+  for (const avatarKey of ["replacement-photo", null]) {
+    await tx(t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey } }));
+    const before = { account: await db.user.findUniqueOrThrow({ where: { id: "account-a" } }), players: await db.player.findMany(), events: await db.clubPlayerOwnershipEvent.findMany() };
+    await approve();
+    expect({ account: await db.user.findUniqueOrThrow({ where: { id: "account-a" } }), players: await db.player.findMany(), events: await db.clubPlayerOwnershipEvent.findMany() }).toEqual(before);
+  }
+});
+
+it("the first successful claim in two clubs supplies the one canonical photo", async () => {
+  await db.player.update({ where: { id: "p-b" }, data: { avatarKey: "second-placeholder-photo" } });
+  const second = new PrismaClient({ datasources: { db: { url: `file:${file}` } } });
+  try {
+    const results = await Promise.all([
+      clubOwnershipTransaction(db, t => claimClubPlayer(t, { clubId: "club-a", playerId: "p-a", userId: "account-a", actorUserId: "admin" })),
+      clubOwnershipTransaction(second, t => claimClubPlayer(t, { clubId: "club-b", playerId: "p-b", userId: "account-a", actorUserId: "admin" })),
+    ]);
+    expect(results).toHaveLength(2);
+    const events = await db.clubPlayerOwnershipEvent.findMany({ where: { newOwnerUserId: "account-a" } });
+    const adopted = events.find(event => JSON.parse(event.detailsJson).photoSource === "PLACEHOLDER")!;
+    const retained = events.find(event => JSON.parse(event.detailsJson).photoSource === "ACCOUNT")!;
+    const avatarKey = JSON.parse(adopted.metadataAfterJson).avatarKey;
+    expect(JSON.parse(retained.metadataAfterJson).avatarKey).toBe(avatarKey);
+    expect(await db.user.findUniqueOrThrow({ where: { id: "account-a" } })).toMatchObject({ avatarKey });
+    for (const id of ["p-a", "p-b"]) expect(await db.player.findUniqueOrThrow({ where: { id } })).toMatchObject({ avatarKey });
+  } finally { await second.$disconnect(); }
+});
+
+it("serializes adoption with an upload and rejects a stale avatar guard", async () => {
+  const second = new PrismaClient({ datasources: { db: { url: `file:${file}` } } });
+  try {
+    const [claimResult, uploadResult] = await Promise.allSettled([
+      claim(),
+      clubOwnershipTransaction(second, t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: "uploaded-photo" }, expectedAvatarKey: null })),
+    ]);
+    expect(claimResult.status).toBe("fulfilled");
+    const avatarKey = uploadResult.status === "fulfilled" ? "uploaded-photo" : "old-avatar";
+    if (uploadResult.status === "rejected") expect(uploadResult.reason).toMatchObject({ statusCode: 409 });
+    expect(await db.user.findUniqueOrThrow({ where: { id: "account-a" } })).toMatchObject({ avatarKey });
+    expect(await db.player.findUniqueOrThrow({ where: { id: "p-a" } })).toMatchObject({ avatarKey });
+    const before = { account: await db.user.findUniqueOrThrow({ where: { id: "account-a" } }), players: await db.player.findMany() };
+    await expect(tx(t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: "stale-upload" }, expectedAvatarKey: null }))).rejects.toMatchObject({ statusCode: 409 });
+    expect({ account: await db.user.findUniqueOrThrow({ where: { id: "account-a" } }), players: await db.player.findMany() }).toEqual(before);
+  } finally { await second.$disconnect(); }
+});
+
+async function photoClaimSnapshot() {
+  return { accounts: await db.user.findMany({ orderBy: { id: "asc" } }), players: await db.player.findMany({ orderBy: { id: "asc" } }), members: await db.clubMember.findMany({ orderBy: { id: "asc" } }), access: await db.clubAccess.findMany({ orderBy: { id: "asc" } }), events: await db.clubPlayerOwnershipEvent.findMany(), admissions: await db.clubAdmissionRequest.findMany(), admissionEvents: await db.clubAdmissionEvent.findMany(), invitations: await db.playerInvitation.findMany(), invitationEvents: await db.playerInvitationEvent.findMany(), continuations: await db.playerInvitationContinuation.findMany() };
+}
+
+it("rolls back adoption and owned-profile fanout when claim authorization fails", async () => {
+  await claim("club-b", "p-b");
+  await tx(t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: null } }));
+  const before = await photoClaimSnapshot();
+  // This active actor lacks local admin authority; the database guard rejects
+  // after the adoption sync, proving both canonical and fanout writes roll back.
+  await expect(tx(t => claimClubPlayer(t, { clubId: "club-a", playerId: "p-a", userId: "account-a", actorUserId: "account-b" }))).rejects.toMatchObject({ statusCode: 409 });
+  expect(await photoClaimSnapshot()).toEqual(before);
+});
+
+it("rolls back canonical account adoption when an owned-player photo fanout fails", async () => {
+  await claim("club-b", "p-b");
+  await tx(t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: null } }));
+  await db.$executeRawUnsafe(`CREATE TRIGGER fixture_reject_photo_fanout BEFORE UPDATE OF "avatarKey" ON "User" WHEN NEW."id"='p-b' BEGIN SELECT RAISE(ABORT,'fixture photo fanout failure'); END`);
+  const before = await photoClaimSnapshot();
+  await expect(claim()).rejects.toThrow();
+  expect(await photoClaimSnapshot()).toEqual(before);
+});
+
+it.each(["invitation", "admission"])("rolls back %s receipts, account adoption and fanout when the ownership event fails", async flow => {
+  await claim("club-b", "p-b");
+  await tx(t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: null } }));
+  const invitation = flow === "invitation" ? await invite() : null;
+  const request = flow === "admission" ? await admissionTransaction(db, t => submitClubAdmission(t, { clubId: "club-a", requesterUserId: "account-a", kind: "EXISTING_PLAYER", requestedPlayerId: "p-a" })) : null;
+  await db.$executeRawUnsafe(`CREATE TRIGGER fixture_reject_adoption_event BEFORE INSERT ON "ClubPlayerOwnershipEvent" WHEN NEW."playerId"='p-a' BEGIN SELECT RAISE(ABORT,'LOCAL_CLAIM_INVALID'); END`);
+  const before = await photoClaimSnapshot();
+  await expect(flow === "invitation" ? tx(t => redeemPlayerInvitation(t, invitation!.id, invitation!.handle, "account-a")) : admissionTransaction(db, t => reviewClubAdmission(t, { clubId: "club-a", requestId: request!.id!, reviewerUserId: "admin", action: "APPROVE" }))).rejects.toMatchObject({ statusCode: 409 });
+  expect(await photoClaimSnapshot()).toEqual(before);
+});
+
+it("rolls back a completed claim and adoption when the later admission audit fails", async () => {
+  const request = await admissionTransaction(db, t => submitClubAdmission(t, { clubId: "club-a", requesterUserId: "account-a", kind: "EXISTING_PLAYER", requestedPlayerId: "p-a" }));
+  await db.$executeRawUnsafe(`CREATE TRIGGER fixture_reject_approval_event BEFORE INSERT ON "ClubAdmissionEvent" WHEN NEW."action"='APPROVE' BEGIN SELECT RAISE(ABORT,'fixture audit failure'); END`);
+  const before = await photoClaimSnapshot();
+  await expect(admissionTransaction(db, t => reviewClubAdmission(t, { clubId: "club-a", requestId: request.id!, reviewerUserId: "admin", action: "APPROVE" }))).rejects.toThrow();
+  expect(await photoClaimSnapshot()).toEqual(before);
+});
+
+it("fans adopted photos out to separate and legacy shared owned profiles, retaining archived links and excluding disconnected ones", async () => {
+  await claim("club-b", "p-b", "legacy-owner");
+  await claim("club-c", "p-c", "legacy-owner");
+  await remove("club-c", "p-c");
+  await tx(t => syncAccountProfile(t, { userId: "legacy-owner", changes: { avatarKey: null } }));
+  await db.player.update({ where: { id: "p-a" }, data: { avatarKey: "adopted-new-photo" } });
+  const accountBefore = await db.user.findUniqueOrThrow({ where: { id: "legacy-owner" } });
+  const sharedBefore = await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } });
+  const separateBefore = await db.player.findUniqueOrThrow({ where: { id: "p-b" } });
+  const detachedBefore = await db.player.findUniqueOrThrow({ where: { id: "p-c" } });
+  const membersBefore = await db.clubMember.findMany({ where: { id: { in: ["legacy-member-a", "legacy-member-b", "m-b", "m-c"] } }, orderBy: { id: "asc" } });
+  await claim("club-a", "p-a", "legacy-owner");
+  const accountAfter = await db.user.findUniqueOrThrow({ where: { id: "legacy-owner" } });
+  expect(accountAfter).toEqual({ ...accountBefore, avatarKey: "adopted-new-photo", updatedAt: accountAfter.updatedAt });
+  for (const before of [sharedBefore, separateBefore]) {
+    const after = await db.player.findUniqueOrThrow({ where: { id: before.id } });
+    expect(after).toEqual({ ...before, avatarKey: "adopted-new-photo", updatedAt: after.updatedAt });
+  }
+  expect(await db.player.findUniqueOrThrow({ where: { id: "p-c" } })).toEqual(detachedBefore);
+  expect(await db.clubMember.findMany({ where: { id: { in: membersBefore.map(member => member.id) } }, orderBy: { id: "asc" } })).toEqual(membersBefore);
+});
+
+it("adopts from a legacy shared target already owned in another club without changing its timestamp or before snapshot", async () => {
+  await db.clubMember.create({ data: { id: "legacy-new-local", clubId: "club-a", playerId: "legacy-shared", elo: 1201 } });
+  const playerBefore = await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } });
+  const legacyMembersBefore = await db.clubMember.findMany({ where: { id: { in: ["legacy-member-a", "legacy-member-b"] } }, orderBy: { id: "asc" } });
+  await claim("club-a", "legacy-shared", "legacy-owner");
+  expect(await db.player.findUniqueOrThrow({ where: { id: "legacy-shared" } })).toEqual({ ...playerBefore, name: "Legacy Owner" });
+  expect(await db.clubMember.findMany({ where: { id: { in: legacyMembersBefore.map(member => member.id) } }, orderBy: { id: "asc" } })).toEqual(legacyMembersBefore);
+  const event = await db.clubPlayerOwnershipEvent.findFirstOrThrow({ where: { clubMemberId: "legacy-new-local" } });
+  expect(event.metadataBeforeJson).toBe(JSON.stringify({ name: playerBefore.name, avatarKey: playerBefore.avatarKey }));
+  expect(JSON.parse(event.detailsJson)).toMatchObject({ photoSource: "PLACEHOLDER", accountAvatarBefore: null, accountAvatarAfter: "legacy-avatar" });
+});
+
+it("adoption excludes permanently retired profiles while synchronizing the retained nonretired identity", async () => {
+  const retiredBefore = await db.player.findUniqueOrThrow({ where: { id: "retired-source" } });
+  const retiredMemberBefore = await db.clubMember.findUniqueOrThrow({ where: { id: "retired-source-member" } });
+  await claim("club-a", "p-a", "retired-owner");
+  expect(await db.player.findUniqueOrThrow({ where: { id: "retired-source" } })).toEqual(retiredBefore);
+  expect(await db.clubMember.findUniqueOrThrow({ where: { id: "retired-source-member" } })).toEqual(retiredMemberBefore);
+  expect(await db.player.findUniqueOrThrow({ where: { id: "retained-target" } })).toMatchObject({ avatarKey: "old-avatar", name: "Retained target" });
+  expect(await db.user.findUniqueOrThrow({ where: { id: "retired-owner" } })).toMatchObject({ avatarKey: "old-avatar" });
 });
 
 it("automatically removes only A, preserves B and every sport field, and retries cannot revoke restored access", async () => {
@@ -166,7 +370,7 @@ it("creates NEW_PLAYER locally even with owned profiles elsewhere and rejects cr
   const approved = await admissionTransaction(db, t => reviewClubAdmission(t, { clubId: "club-b", requestId: request.id!, reviewerUserId: "admin", action: "APPROVE" }));
   expect(approved.approvedPlayerId).not.toBe("p-a");
   expect(await db.clubMember.findUnique({ where: { clubId_playerId: { clubId: "club-b", playerId: approved.approvedPlayerId! } } })).toMatchObject({ ownerUserId: "account-a" });
-  expect(await db.player.findUnique({ where: { id: approved.approvedPlayerId! } })).toMatchObject({ name: "Current account-a", ownerUserId: null });
+  expect(await db.player.findUnique({ where: { id: approved.approvedPlayerId! } })).toMatchObject({ name: "Current account-a", avatarKey: "old-avatar", ownerUserId: null });
 });
 
 it("binds an unambiguous unfinished seat, preserves completed snapshots, and rejects duplicate participation", async () => {
@@ -428,7 +632,7 @@ it("enforces affected pending-work closure on direct ownership receipts before c
   await claim();
   const pending = await db.claimRequest.create({ data: { clubId: "club-a", requesterUserId: "account-b", targetPlayerId: "p-a" } });
   const access = await db.clubAccess.findUniqueOrThrow({ where: { clubId_userId: { clubId: "club-a", userId: "account-a" } } });
-  const metadata = JSON.stringify({ name: "Current account-a", avatarKey: null });
+  const metadata = JSON.stringify({ name: "Current account-a", avatarKey: "old-avatar" });
   const details = JSON.stringify({ previousArchivedAt: null, newArchivedAt: Date.now(), cancelled: {} });
   await expect(db.$executeRaw`INSERT INTO "ClubPlayerOwnershipEvent"("id","clubId","clubMemberId","playerId","actorUserId","action","previousOwnerUserId","newOwnerUserId","previousOwnershipRevision","newOwnershipRevision","accessId","previousAccessRevision","newAccessRevision","previousAccessStatus","newAccessStatus","previousAccessRole","newAccessRole","metadataBeforeJson","metadataAfterJson","detailsJson","reason","createdAt")
    VALUES ('raw-release','club-a','m-a','p-a','admin','REMOVE','account-a',NULL,1,2,${access.id},0,1,'ACTIVE','REVOKED','MEMBER','MEMBER',${metadata},${metadata},${details},'Direct removal',${Date.now()})`).rejects.toThrow(/PENDING_WORK_OPEN/);
@@ -460,6 +664,41 @@ it("uses independent libSQL writer reservations for a concurrent claim/join race
     expect(outcomes.filter(r => r.status === "rejected")).toHaveLength(1);
     expect((outcomes.find(r => r.status === "rejected") as PromiseRejectedResult).reason).toMatchObject({ statusCode: 409 });
     expect(await writers[0].sessionPlayer.count({ where: { sessionId: "adapter-joint", participantAccountId: "account-a" } })).toBe(1);
+  } finally { for (const writer of writers) await writer.$disconnect(); for (const client of clients) client.close(); }
+}, 30000);
+
+it.each(["two-claims", "upload"])("serializes photo adoption across independent file-libSQL writers: %s", async race => {
+  await db.player.update({ where: { id: "p-b" }, data: { avatarKey: "second-placeholder-photo" } });
+  await db.$disconnect(); adapterFiles.add(file);
+  const clients = [createClient({ url: `file:${file}` }), createClient({ url: `file:${file}` })];
+  const writers = clients.map(client => new PrismaClient({ adapter: new PrismaLibSQL(client as unknown as ConstructorParameters<typeof PrismaLibSQL>[0]) } as unknown as ConstructorParameters<typeof PrismaClient>[0]));
+  try {
+    for (const client of clients) await client.execute("PRAGMA foreign_keys=ON");
+    const [first, second] = await Promise.allSettled([
+      clubOwnershipTransaction(writers[0], t => claimClubPlayer(t, { clubId: "club-a", playerId: "p-a", userId: "account-a", actorUserId: "admin" })),
+      race === "two-claims"
+        ? clubOwnershipTransaction(writers[1], t => claimClubPlayer(t, { clubId: "club-b", playerId: "p-b", userId: "account-a", actorUserId: "admin" }))
+        : clubOwnershipTransaction(writers[1], t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: "uploaded-photo" }, expectedAvatarKey: null })),
+    ]);
+    expect(first.status).toBe("fulfilled");
+    const account = await writers[0].user.findUniqueOrThrow({ where: { id: "account-a" } });
+    const events = await writers[0].clubPlayerOwnershipEvent.findMany({ where: { newOwnerUserId: "account-a" } });
+    if (race === "two-claims") {
+      expect(second.status).toBe("fulfilled");
+      expect(events).toHaveLength(2);
+      expect(events.map(event => JSON.parse(event.detailsJson).photoSource).sort()).toEqual(["ACCOUNT", "PLACEHOLDER"]);
+      for (const event of events) expect(JSON.parse(event.metadataAfterJson).avatarKey).toBe(account.avatarKey);
+      expect(await writers[0].player.findUniqueOrThrow({ where: { id: "p-b" } })).toMatchObject({ avatarKey: account.avatarKey });
+    } else {
+      expect(events).toHaveLength(1);
+      if (second.status === "rejected") expect(second.reason).toMatchObject({ statusCode: 409 });
+      expect(account.avatarKey).toBe(second.status === "fulfilled" ? "uploaded-photo" : "old-avatar");
+      expect(JSON.parse(events[0].detailsJson).photoSource).toBe(second.status === "fulfilled" ? "ACCOUNT" : "PLACEHOLDER");
+      const before = { account, player: await writers[0].player.findUniqueOrThrow({ where: { id: "p-a" } }) };
+      await expect(clubOwnershipTransaction(writers[1], t => syncAccountProfile(t, { userId: "account-a", changes: { avatarKey: "stale-upload" }, expectedAvatarKey: null }))).rejects.toMatchObject({ statusCode: 409 });
+      expect({ account: await writers[0].user.findUniqueOrThrow({ where: { id: "account-a" } }), player: await writers[0].player.findUniqueOrThrow({ where: { id: "p-a" } }) }).toEqual(before);
+    }
+    expect(await writers[0].player.findUniqueOrThrow({ where: { id: "p-a" } })).toMatchObject({ avatarKey: account.avatarKey });
   } finally { for (const writer of writers) await writer.$disconnect(); for (const client of clients) client.close(); }
 }, 30000);
 

@@ -103,9 +103,9 @@ describe("PlayerInvitationClaim", () => {
     await render();
 
     expect(container.textContent).toContain("Alex's club profile");
-    expect(container.textContent).toContain("copies your account name and photo");
-    expect(container.textContent).toContain("including clearing its photo if your account has none");
-    expect(container.textContent).toContain("history and rating stay with the profile");
+    expect(container.textContent).toContain("Your account photo takes priority");
+    expect(container.textContent).toContain("if you have none, this profile's photo is used");
+    expect(container.textContent).toContain("Match history and rating stay with this profile");
     expect(container.textContent).not.toContain("profile-in-another-club");
     expect(container.textContent).not.toContain("Request admin review");
     expect(mocks.fetch.mock.calls.some(([input]) => String(input).includes("recovery-request"))).toBe(false);
@@ -114,6 +114,49 @@ describe("PlayerInvitationClaim", () => {
     const redeem = mocks.fetch.mock.calls.find(([input, init]) => String(input) === "/api/player-invites/invite-1/redeem" && (init as RequestInit | undefined)?.method === "POST");
     expect(JSON.parse((redeem?.[1] as RequestInit).body as string)).toEqual({ confirm: true });
     expect(mocks.router.replace).toHaveBeenCalledWith("/club/club-1");
+    expect(mocks.router.refresh).toHaveBeenCalledTimes(1);
+    expect(mocks.router.replace.mock.invocationCallOrder[0]).toBeLessThan(mocks.router.refresh.mock.invocationCallOrder[0]);
+  });
+
+  it("waits for authoritative redemption before navigating and refreshing the destination", async () => {
+    let complete!: (value: Response) => void;
+    const redemption = new Promise<Response>(resolve => { complete = resolve; });
+    mocks.fetch.mockImplementation((input: string | Request | URL) => String(input).endsWith("/redeem")
+      ? redemption : Promise.resolve(jsonResponse({ ...claimContext, player: { ...claimContext.player, avatarUrl: "/avatars/placeholder.png" } })));
+    await render();
+    expect(mocks.router.replace).not.toHaveBeenCalled();
+    expect(mocks.router.refresh).not.toHaveBeenCalled();
+    await act(async () => { click("Claim my profile"); click("Claim my profile"); });
+    expect(container.textContent).toContain("Working…");
+    expect(mocks.fetch.mock.calls.filter(([input]) => String(input).endsWith("/redeem"))).toHaveLength(1);
+    expect(mocks.router.replace).not.toHaveBeenCalled();
+    expect(mocks.router.refresh).not.toHaveBeenCalled();
+    await act(async () => complete(jsonResponse({ destination: "/club/club-1?tab=profile" })));
+    expect(mocks.router.replace).toHaveBeenCalledWith("/club/club-1?tab=profile");
+    expect(mocks.router.refresh).toHaveBeenCalledTimes(1);
+    expect(mocks.router.replace.mock.invocationCallOrder[0]).toBeLessThan(mocks.router.refresh.mock.invocationCallOrder[0]);
+  });
+
+  it("keeps failed redemption on the invitation and permits a retry without refreshing the destination", async () => {
+    let attempts = 0;
+    mocks.fetch.mockImplementation((input: string | Request | URL) => {
+      if (String(input).endsWith("/redeem")) {
+        attempts += 1;
+        return Promise.resolve(attempts === 1
+          ? jsonResponse({ error: "Temporary claim failure" }, 503)
+          : jsonResponse({ destination: "/club/club-1?tab=profile" }));
+      }
+      return Promise.resolve(jsonResponse(claimContext));
+    });
+    await render();
+    await act(async () => click("Claim my profile"));
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Temporary claim failure");
+    expect(mocks.router.replace).not.toHaveBeenCalled();
+    expect(mocks.router.refresh).not.toHaveBeenCalled();
+    await act(async () => click("Claim my profile"));
+    expect(attempts).toBe(2);
+    expect(mocks.router.replace).toHaveBeenCalledWith("/club/club-1?tab=profile");
+    expect(mocks.router.refresh).toHaveBeenCalledTimes(1);
   });
 
   it.each(["CORRECTION", "ACCESS_RESTORE"] as const)(

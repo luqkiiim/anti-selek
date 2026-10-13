@@ -141,8 +141,12 @@ it("links a historical player without changing any match, session or rating hist
   expect(await db.sessionPlayer.findUnique({ where: { id: participation.id } })).toEqual(participation);
   expect(await db.session.findUnique({ where: { id: session.id } })).toEqual(session);
   expect(await db.clubMember.findUnique({ where: { id: "historic-membership" } })).toMatchObject({ playerId: "historical-player", ownerUserId: "account-member", elo: 1455, achievementPreferencesJson: '{"showcase":["win"]}' });
-  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null, name: "Member", avatarKey: null, updatedAt: originalPlayerUpdatedAt });
-  expect(await db.user.findUnique({ where: { id: "account-member" } })).toMatchObject({ name: "Member", avatarKey: null });
+  expect(await db.player.findUnique({ where: { id: "historical-player" } })).toMatchObject({ ownerUserId: null, name: "Member", avatarKey: "historic-avatar", updatedAt: originalPlayerUpdatedAt });
+  expect(await db.user.findUnique({ where: { id: "account-member" } })).toMatchObject({ name: "Member", avatarKey: "historic-avatar" });
+  const ownership = await db.clubPlayerOwnershipEvent.findFirstOrThrow({ where: { admissionRequestId: entry.id } });
+  expect(JSON.parse(ownership.metadataBeforeJson)).toEqual({ name: "Known Name", avatarKey: "historic-avatar" });
+  expect(JSON.parse(ownership.metadataAfterJson)).toEqual({ name: "Member", avatarKey: "historic-avatar" });
+  expect(JSON.parse(ownership.detailsJson)).toMatchObject({ photoSource: "PLACEHOLDER", accountAvatarBefore: null, accountAvatarAfter: "historic-avatar" });
   expect(await db.clubAccess.findUnique({ where: { clubId_userId: { clubId: "club-a", userId: "account-member" } } })).toMatchObject({ role: "MEMBER" });
   expect(await db.clubAdmissionEvent.count({ where: { admissionRequestId: entry.id } })).toBe(2);
 });
