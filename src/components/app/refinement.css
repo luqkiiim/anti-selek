@@ -1,1 +1,55 @@
-/* Shared screen styling is refined in the visual delivery stage. */
+.prototype-root .pc-app h1 { font-weight: 800; }
+.prototype-root .pc-app h2, .prototype-root .pc-app h3 { font-weight: 700; }
+.prototype-root .pc-app .person-info strong, .prototype-root .pc-app .match-player strong,
+.prototype-root .pc-app .rankings-name strong, .prototype-root .pc-app .chemistry-names strong,
+.prototype-root .pc-app .profile-person-row strong, .prototype-root .pc-app .profile-history-row strong { font-weight: 600; }
+.prototype-root .club-welcome { min-height: 84px; margin-bottom: 10px; }
+.prototype-root .club-welcome img { width: 68px; height: 68px; }
+.prototype-root .club-dashboard-intro { display: block; }
+.prototype-root .club-dashboard-session-cards { margin-bottom: 16px; }
+.prototype-root .club-start-session { margin-bottom: 14px; }
+.prototype-root .pc-app .club-activity-totals {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0; margin: 0 0 24px; padding: 12px 4px;
+  border: 1px solid #eee5ef; border-radius: 16px; background: #fffdfb;
+}
+.prototype-root .pc-app .club-activity-totals > * {
+  min-height: 64px; padding: 6px 3px; border: 0; border-radius: 0;
+  background: transparent; box-shadow: none; text-align: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+}
+.prototype-root .pc-app .club-activity-totals > * + * { border-left: 1px solid #eee5ef; }
+.prototype-root .pc-app .club-activity-totals svg { display: none; }
+.prototype-root .pc-app .club-activity-totals strong { font-size: 22px; font-weight: 800; }
+.prototype-root .pc-app .club-activity-totals .club-activity-date { font-size: 13px; font-weight: 600; }
+.prototype-root .pc-app .club-activity-totals span { font-size: 11px; font-weight: 600; }
+.prototype-root details > summary, .signup-profile-help > summary { min-height: 44px; align-content: center; cursor: pointer; }
+.prototype-root .pc-content--setup { max-width: 620px; }
+.prototype-root .player-profile { width: 100%; max-width: 640px; margin-inline: auto; }
+.prototype-root .profile-record-grid { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); }
+.profile-connection-status { display: block; margin: 0 0 18px; text-align: center; color: #80718b; font-size: 12px; }
+.pending-score-actions { display: grid; gap: 8px; }
+.pending-score-actions > p { color: #79501e; font-size: 13px; margin: 8px 0; }
+.specialist-tools { display: inline-flex; align-items: center; font-size: 12px; text-decoration: none; }
+.specialist-app { color: #291440; font-family: "Nunito Sans", sans-serif; --font-heading: "Nunito Sans", sans-serif; }
+.specialist-back { display: inline-flex; min-height: 44px; align-items: center; padding: 12px 20px; color: #7040cf; }
+.route-loading { padding: 28px 20px; color: #80718b; }
+.profile-specialist { font-family: "Nunito Sans", sans-serif; }
+@media (min-width: 768px) {
+  .prototype-root .pc-app .club-activity-totals, .prototype-root .club-start-session { grid-column: 1 / -1; }
+  .prototype-root .club-dashboard-intro { grid-column: 1 / -1; }
+  .prototype-root .pc-app .club-activity-totals { margin-bottom: 0; }
+  .prototype-root .pc-content--profile { max-width: 704px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .prototype-root *, .prototype-sheet * { scroll-behavior: auto; }
+}
+
+.prototype-root .pc-header > div { min-width: 0; }
+.prototype-root .pc-header > div > strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; }
+
+
+.prototype-root .club-initial-empty { color: #80718b; font-size: 13px; margin: -8px 0 22px; grid-column: 1 / -1; }
+
+.upcoming-collab-status { font-size: 13px; color: #80718b; }
+.upcoming-collab-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }

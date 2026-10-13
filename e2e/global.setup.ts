@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { claimClubPlayer, clubOwnershipTransaction } from "../src/lib/clubPlayerOwnership";
 
 import { e2eDatabaseFile, e2eEnv } from "./env";
 
@@ -226,6 +227,31 @@ async function seedDatabase() {
     await prisma.clubMember.createMany({ data: memberships.filter(m => m.userId !== claimRequesterId).map(({ userId, role: _role, ...row }) => ({ ...row, playerId: userId })) });
     await prisma.clubAccess.createMany({ data: memberships.filter(m => legacyPlayers.find(p => p.id === m.userId)?.isClaimed).map(m => ({ clubId: m.clubId, userId: accountId(m.userId), role: m.role })) });
 
+    await prisma.player.create({ data: { id: "player-view-only-e2e", name: "Score Viewer", gender: "MALE" } });
+    await prisma.clubMember.create({ data: { clubId: scoreClubId, playerId: "player-view-only-e2e", status: "OCCASIONAL" } });
+    await prisma.user.create({ data: { id: "account-global-viewer-e2e", email: "global-viewer-e2e@example.com", name: "Global viewer", gender: "FEMALE", passwordHash } });
+    const fixtureOperatorId = "account-fixture-operator";
+    await prisma.user.create({ data: { id: fixtureOperatorId, email: "fixture-operator@example.invalid", name: "Fixture operator", gender: "MALE", passwordHash } });
+    await prisma.clubAccess.createMany({ data: [...new Set(memberships.map(m => m.clubId))].map(clubId => ({ clubId, userId: fixtureOperatorId, role: "ADMIN" })) });
+    // Seed exact club-local ownership through the current writer service, before
+    // active sessions exist. Player.ownerUserId is provenance, not authority.
+    for (const membership of memberships) {
+      if (membership.userId === claimRequesterId || !legacyPlayers.find(p => p.id === membership.userId)?.isClaimed) continue;
+      const request = await prisma.clubAdmissionRequest.create({ data: {
+        clubId: membership.clubId, requesterUserId: accountId(membership.userId),
+        kind: "EXISTING_PLAYER", requestedPlayerId: membership.userId,
+      } });
+      await clubOwnershipTransaction(prisma, async tx => {
+        await claimClubPlayer(tx, { clubId: membership.clubId, playerId: membership.userId,
+          userId: accountId(membership.userId), actorUserId: fixtureOperatorId,
+          admissionRequestId: request.id, reason: "Connect isolated browser test fixture." });
+        await tx.clubAdmissionRequest.update({ where: { id: request.id }, data: {
+          status: "APPROVED", approvedPlayerId: membership.userId,
+          reviewedByUserId: fixtureOperatorId, reviewedAt: new Date(),
+        } });
+      });
+    }
+
     await prisma.session.create({
       data: {
         id: scoreSessionId,
@@ -273,6 +299,8 @@ async function seedDatabase() {
         },
       },
     });
+
+    await prisma.sessionPlayer.create({ data: { sessionId: scoreSessionId, playerId: "player-view-only-e2e", isGuest: false, isPaused: true, gender: "MALE" } });
 
     const seededMatch = await prisma.match.create({
       data: {

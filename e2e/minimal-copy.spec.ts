@@ -28,20 +28,9 @@ for (const { name, viewport } of portraitViewports) {
       await signInAsAdmin(page);
       await page.goto(`/club/${hostClubId}`);
 
-      await expect(
-        page.getByRole("heading", { name: "E2E Host Club" })
-      ).toBeVisible();
-      await expect(
-        page.getByRole("region", { name: "Overview" })
-      ).toBeVisible();
-      await expect(
-        page
-          .getByRole("heading", {
-            name: "In form",
-            exact: true,
-          })
-          .filter({ visible: true })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Ready for a rally?" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Club activity" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Club highlights", exact: true })).toHaveCount(0);
 
       await expect(
         page.getByText("The competitive snapshot right now")
@@ -50,34 +39,17 @@ for (const { name, viewport } of portraitViewports) {
       await expect(page.getByText("Top of the club table")).toHaveCount(0);
     });
 
-    test("profile overview keeps achievement badges compact", async ({ page }) => {
+    test("unplayed profile keeps one empty state", async ({ page }) => {
       await signInAsAdmin(page);
       await page.goto(profileHref);
 
       await expect(
         page.getByRole("heading", { name: "Host Player 1" })
       ).toBeVisible();
-      const achievementPreview = page
-        .locator("section")
-        .filter({
-          has: page.getByRole("heading", {
-            name: "Achievements",
-            exact: true,
-          }),
-        })
-        .first();
-
-      await expect(achievementPreview).toBeVisible();
-      await expect(
-        achievementPreview.getByText("Strong Start", { exact: true })
-      ).toHaveCount(1);
-
-      await expect(
-        achievementPreview.getByText("Win your first 2 matches.")
-      ).toHaveCount(0);
-      await expect(
-        achievementPreview.getByText("Locked", { exact: true })
-      ).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "No completed sessions yet.", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Achievements", exact: true })).toHaveCount(0);
+      await expect(page.getByText("Win your first 2 matches.")).toHaveCount(0);
+      await expect(page.getByText("Locked", { exact: true })).toHaveCount(0);
     });
   });
 }

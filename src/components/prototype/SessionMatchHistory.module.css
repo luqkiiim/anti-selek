@@ -408,7 +408,7 @@
 .score {
   display: flex;
   min-width: 65px;
-  min-height: 43px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 4px;

@@ -14,7 +14,7 @@ function signinUrl(callbackUrl: string) {
 async function signInWithQuickAccess(page: Page, callbackUrl: string) {
   await page.context().clearCookies();
   await page.goto(signinUrl(callbackUrl));
-  await page.getByRole("button", { name: "Quick access" }).click();
+  await page.getByRole("button", { name: "View-only access" }).click();
   await page
     .getByLabel("Club name", { exact: true })
     .fill(quickAccessProfile.clubName);
@@ -31,7 +31,7 @@ test("Quick access honors its own club profile callback", async ({ page }) => {
     new RegExp(`/club/${claimClubId}\\?tab=profile$`)
   );
   await expect(
-    page.getByRole("heading", { name: "E2E Claim Club" })
+    page.getByText("E2E Claim Club", { exact: true }).first()
   ).toBeVisible();
 });
 
@@ -53,7 +53,7 @@ for (const { label, callbackUrl } of [
 
     await expect(page).toHaveURL(new RegExp(`/club/${claimClubId}$`));
     await expect(
-      page.getByRole("heading", { name: "E2E Claim Club" })
+      page.getByText("E2E Claim Club", { exact: true }).first()
     ).toBeVisible();
   });
 }

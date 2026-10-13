@@ -6,7 +6,7 @@
   display: contents;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 768px) {
   .prototype-root .pc-app {
     max-width: 1200px;
   }

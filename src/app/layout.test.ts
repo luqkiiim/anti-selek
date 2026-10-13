@@ -17,7 +17,7 @@ describe("root layout viewport", () => {
     const { viewport } = await import("./layout");
 
     expect(viewport).toMatchObject({
-      themeColor: "#102236",
+      themeColor: "#fffaf3",
       viewportFit: "cover",
     });
   });

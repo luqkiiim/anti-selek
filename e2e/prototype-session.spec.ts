@@ -3,6 +3,7 @@ import { signInAsAdmin } from "./helpers";
 
 test("prototype host can reach court controls, player management, and match history", async ({ page }) => {
   test.setTimeout(150_000);
+  page.setDefaultTimeout(15_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsAdmin(page);
 
@@ -34,7 +35,7 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("button", { name: "Resume Score Player 1", exact: true }).click();
   await expect(page.getByRole("button", { name: "Pause Score Player 1", exact: true })).toBeVisible();
   await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Courts" }).click();
-  await page.getByRole("button", { name: "Create Matches", exact: true }).click();
+  await page.getByRole("button", { name: "Create matches", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Team 1 score" })).toBeVisible();
 
   await page.getByRole("button", { name: "More options" }).click();
@@ -45,13 +46,11 @@ test("prototype host can reach court controls, player management, and match hist
   await page.screenshot({ path: "test-results/prototype-settings-320.png" });
   await page.getByRole("textbox", { name: "Court 1 label" }).fill("North Court");
   await page.getByRole("switch", { name: "Prepare the next game" }).click();
-  await page.getByRole("switch", { name: "Respect extra rest" }).click();
   await page.getByRole("button", { name: "Save settings" }).click();
   await expect(page.getByRole("heading", { name: "North Court" })).toBeVisible();
   await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("button", { name: "Session settings" }).click();
   await expect(page.getByRole("switch", { name: "Prepare the next game" })).toHaveAttribute("aria-checked", "false");
-  await expect(page.getByRole("switch", { name: "Respect extra rest" })).toHaveAttribute("aria-checked", "false");
   await expect(page.getByRole("textbox", { name: "Court 1 label" })).toHaveValue("North Court");
   await page.getByRole("button", { name: "Close" }).click();
 
@@ -152,7 +151,7 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("button", { name: "Start session" }).click();
   await expect(page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Courts" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "South Court" })).toBeVisible();
-  await page.getByRole("button", { name: "Create Matches", exact: true }).click();
+  await page.getByRole("button", { name: "Create matches", exact: true }).click();
   await page.getByRole("textbox", { name: "Team 1 score" }).fill("21");
   await page.getByRole("textbox", { name: "Team 2 score" }).fill("19");
   await page.getByRole("button", { name: "Save score" }).click();
@@ -175,9 +174,6 @@ test("prototype host can reach court controls, player management, and match hist
   await expect(page.locator('[data-celebrating="true"]')).toBeVisible();
   await expect(page.locator('[data-celebrating="false"]')).toBeVisible();
   await expect(page.getByRole("table", { name: "Player standings" })).toBeVisible();
-  await page.getByText("Full standings", { exact: true }).click();
-  await expect(page.getByRole("table", { name: "Player standings" })).toBeHidden();
-  await page.getByText("Full standings", { exact: true }).click();
   await expect(page.getByRole("table", { name: "Player standings" })).toBeVisible();
   await page.getByRole("button", { name: "Match history", exact: true }).click();
   await page.getByRole("button", { name: "Back to session" }).click();
