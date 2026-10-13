@@ -8,6 +8,11 @@
 - After an explicitly approved production migration and matching deployment, verify Vercel runtime logs for fresh 500s or missing-table errors. State clearly when the migration/deployment/cutover remains held.
 - Do not print secrets from `.env`, `.env.local`, or the private rehearsal credential file while checking configuration.
 
+## UI/UX Direction
+
+- Aim for an aesthetic, intuitive, and minimalist feeling throughout the app.
+- Keep interface copy concise. Do not add explanatory subtext unless it is necessary to understand an action, make a decision, or avoid an error. Prefer clear labels and intuitive controls over extra explanation.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
