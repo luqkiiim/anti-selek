@@ -32,6 +32,7 @@ interface SessionRosterMember {
   avatarUrl?: string | null;
   preferredPool: SessionPool;
   gender: PlayerGender;
+  profileClubId?: string | null;
   representingClubId?: string | null;
   representingClubName?: string | null;
   elo: number;
@@ -246,15 +247,22 @@ export function LivePlayerManagement({
 
   function addMember(member: SessionRosterMember) {
     const pool = poolByRosterEntry[rosterEntryKey(member)] ?? member.preferredPool;
+    const profileClubId = member.profileClubId ?? member.representingClubId ?? session.clubId;
     return runAction(
-      () => api(`/api/sessions/${code}/join`, "POST", {
-        userId: member.id,
-        pool: session.poolsEnabled ? pool : SessionPool.A,
-        ...(isInterclub && member.representingClubId
-          ? { representingClubId: member.representingClubId }
-          : {}),
-      }),
-      () => setListScreen("players"),
+      async () => {
+        if (!profileClubId) throw new Error("Choose a club profile for this player.");
+        const result = await api<{ players?: Array<{ playerId?: string; userId?: string; profileClubId?: string | null }> }>(`/api/sessions/${code}/join`, "POST", {
+          playerId: member.id,
+          profileClubId,
+          pool: session.poolsEnabled ? pool : SessionPool.A,
+          ...(isInterclub ? { representingClubId: profileClubId } : {}),
+        });
+        const added = Array.isArray(result?.players) && result.players.some(player =>
+          (player.playerId ?? player.userId) === member.id && player.profileClubId === profileClubId,
+        );
+        if (!added) throw new Error(`${member.name} wasn’t added. Try again.`);
+      },
+      () => { setSearch(""); setListScreen("players"); },
     );
   }
 

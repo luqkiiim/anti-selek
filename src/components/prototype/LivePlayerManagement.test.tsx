@@ -269,7 +269,7 @@ describe("LivePlayerManagement", () => {
   });
 
   it("loads club members and adds one with their selected session pool", async () => {
-    mocks.api.mockImplementation(async (url: string, method?: string) => {
+    mocks.api.mockImplementation(async (url: string) => {
       if (url.endsWith("/members")) {
         return [{
           id: "member-2",
@@ -281,7 +281,7 @@ describe("LivePlayerManagement", () => {
           elo: 1100,
         }];
       }
-      return { url, method };
+      return { players: [{ playerId: "member-2", profileClubId: "club-1" }] };
     });
     const session = sessionFixture();
     session.poolsEnabled = false;
@@ -310,7 +310,7 @@ describe("LivePlayerManagement", () => {
     expect(mocks.api).toHaveBeenLastCalledWith(
       "/api/sessions/LIVE01/join",
       "POST",
-      { userId: "member-2", pool: SessionPool.A },
+      { playerId: "member-2", profileClubId: "club-1", pool: SessionPool.A },
     );
     expect(changed).toHaveBeenCalledOnce();
   });
@@ -373,7 +373,7 @@ describe("LivePlayerManagement", () => {
           elo: 1100,
         }];
       }
-      return {};
+      return { players: [{ playerId: "member-2", profileClubId: "club-2" }] };
     });
     const session = sessionFixture();
     session.collabFormat = SessionCollabFormat.INTERCLUB;
@@ -395,7 +395,79 @@ describe("LivePlayerManagement", () => {
     expect(mocks.api).toHaveBeenLastCalledWith(
       "/api/sessions/LIVE01/join",
       "POST",
-      { userId: "member-2", pool: SessionPool.B, representingClubId: "club-2" },
+      { playerId: "member-2", profileClubId: "club-2", pool: SessionPool.B, representingClubId: "club-2" },
     );
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  const memberToAdd = { id: "member-2", name: "Bea Member", preferredPool: SessionPool.B, gender: PlayerGender.FEMALE, elo: 1100 };
+  async function click(label: string) {
+    const button = [...container.querySelectorAll("button")].find(button => button.textContent?.trim() === label);
+    if (!button) throw new Error(`Missing ${label}`);
+    await act(async () => button.click());
+  }
+
+  it.each([
+    { label: "host's existing seat", result: { players: [{ userId: "player-1", profileClubId: "club-1" }] } },
+    { label: "another club profile", result: { players: [{ playerId: "member-2", profileClubId: "club-2" }] } },
+    { label: "missing roster", result: {} },
+  ])("keeps the picker open when a success response contains $label, and allows retry", async ({ result }) => {
+    mocks.api.mockResolvedValueOnce([memberToAdd]).mockResolvedValueOnce(result);
+    await render();
+    await click("Add club members");
+    await click("Add to session");
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Bea Member wasn’t added. Try again.");
+    expect(container.querySelector('[aria-label="Add club members"]')).not.toBeNull();
+    expect(changed).not.toHaveBeenCalled();
+
+    mocks.api.mockResolvedValueOnce({ players: [{ playerId: "member-2", profileClubId: "club-1" }] });
+    await click("Add to session");
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Players"]')).not.toBeNull();
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the chosen group and clears the roster search after confirmed addition", async () => {
+    mocks.api.mockResolvedValueOnce([memberToAdd]).mockResolvedValueOnce({ players: [{ playerId: "member-2", profileClubId: "club-1" }] });
+    await render();
+    await click("Add club members");
+    const search = container.querySelector<HTMLInputElement>('[aria-label="Search club members"]')!;
+    const group = container.querySelector<HTMLSelectElement>(".pm-pool-choice select")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, "Bea");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      group.value = SessionPool.A;
+      group.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click("Add to session");
+    expect(mocks.api).toHaveBeenLastCalledWith("/api/sessions/LIVE01/join", "POST", { playerId: "member-2", profileClubId: "club-1", pool: SessionPool.A });
+    // The prior roster search must not hide players on the refreshed list.
+    expect(container.textContent).toContain("Ari Player");
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it("uses the selected partner profile in ordinary collaboration without interclub representation", async () => {
+    mocks.api.mockResolvedValueOnce([{ ...memberToAdd, profileClubId: "club-2" }]).mockResolvedValueOnce({ players: [{ playerId: "member-2", profileClubId: "club-2" }] });
+    const session = sessionFixture();
+    session.collabFormat = SessionCollabFormat.FREE_PLAY;
+    session.clubs = [
+      { id: "club-1", name: "Club One", role: "HOST", status: "ACCEPTED" },
+      { id: "club-2", name: "Club Two", role: "PARTNER", status: "ACCEPTED" },
+    ];
+    await render(session);
+    await click("Add club members");
+    await click("Add to session");
+    expect(mocks.api).toHaveBeenLastCalledWith("/api/sessions/LIVE01/join", "POST", { playerId: "member-2", profileClubId: "club-2", pool: SessionPool.B });
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it("shows an authorization failure without implying that the member was added", async () => {
+    mocks.api.mockResolvedValueOnce([memberToAdd]).mockRejectedValueOnce(new Error("Your club access changed."));
+    await render();
+    await click("Add club members");
+    await click("Add to session");
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Your club access changed.");
+    expect(container.querySelector('[aria-label="Add club members"]')).not.toBeNull();
+    expect(changed).not.toHaveBeenCalled();
   });
 });
