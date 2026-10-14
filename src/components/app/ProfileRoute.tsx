@@ -6,7 +6,7 @@ import { ArrowLeft } from "@phosphor-icons/react";
 import { PlayerProfilePage, MemberProfileOverlay } from "@/components/prototype/PlayerProfilePage";
 import { PlayerProfileView } from "@/components/profile/PlayerProfileView";
 import { ErrorText } from "@/components/prototype/Primitives";
-import { useResource } from "@/components/prototype/api";
+import { useClubResource } from "./ClubDataProvider";
 import type { Snapshot } from "@/components/prototype/Club";
 import { AppShell, useAppLocation } from "./AppShell";
 import { backInApp, clubHref, navigateApp, sessionHref } from "@/lib/appNavigation";
@@ -20,21 +20,21 @@ function ScopedProfile({ playerId, clubId, globalView = false, onBack, onOpenMem
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   useScrollRestoration(scrollRef, `${clubId}/profile/${playerId}`);
-  const snapshot = useResource<Snapshot>(clubId ? `/api/clubs/${encodeURIComponent(clubId)}${globalView ? "?view=global" : ""}` : null);
+  const snapshot = useClubResource<Snapshot>(clubId ? `/api/clubs/${encodeURIComponent(clubId)}${globalView ? "?view=global" : ""}` : null);
   const data = snapshot.data;
   const member = data?.clubMembers.find(p => p.id === playerId);
   const ranked = data?.clubMembers.filter(p => p.status === "CORE" && (p.matchesPlayed ?? 0) > 0).sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) ?? [];
   const rank = ranked.findIndex(p => p.id === playerId);
   const rankedMember = member ? { ...member, currentRank: rank < 0 ? null : rank + 1 } : null;
   const navigate = (tab: string) => navigateApp(router, clubHref(clubId, tab, globalView));
-  const content = member && data ? <PlayerProfilePage
+  const content = member && data ? <><ErrorText error={snapshot.error} />{snapshot.error && <button className="secondary" disabled={snapshot.loading || snapshot.retryAt > 0} onClick={() => void snapshot.refresh().catch(() => {})}>Try again</button>}<PlayerProfilePage
     clubId={clubId} clubName={data.club.name} member={rankedMember!}
     isSelf={!globalView && !data.viewer.isQuickAccess && data.viewer.playerId === playerId} globalView={globalView}
-    canInvite={!globalView && (data.club.role === "ADMIN" || !!data.viewer.isAdmin)}
+    canEdit={snapshot.validated} canInvite={snapshot.validated && !globalView && (data.club.role === "ADMIN" || !!data.viewer.isAdmin)}
     onOpenSession={code => navigateApp(router, sessionHref(code, globalView ? clubId : undefined))}
     onOpenMember={id => onOpenMember(id, clubId)} onAccountSaved={snapshot.refresh}
-  /> : !clubId || data ? <div className="profile-specialist"><PlayerProfileView playerId={playerId} clubId={clubId} mode="embedded" readOnly={globalView} onBack={onBack} /></div>
-    : <><ErrorText error={snapshot.error} />{!snapshot.error && <p role="status">Loading profile…</p>}</>;
+  /></> : !clubId || data ? <div className="profile-specialist"><PlayerProfileView playerId={playerId} clubId={clubId} mode="embedded" readOnly={globalView} onBack={onBack} /></div>
+    : <><ErrorText error={snapshot.error} />{snapshot.error ? <button className="secondary" disabled={snapshot.loading || snapshot.retryAt > 0} onClick={() => void snapshot.refresh().catch(() => {})}>Try again</button> : <p role="status">Loading profile…</p>}</>;
   if (overlay && member && data) return <MemberProfileOverlay member={member} clubId={clubId} clubName={data.club.name} onBack={onBack} onNavigate={navigate} readOnly={globalView}>{content}</MemberProfileOverlay>;
   return <div className="pc-app"><header className="pc-header"><button className="icon-button" aria-label="Back" onClick={onBack}><ArrowLeft size={23} /></button><strong>Player profile</strong><span /></header><div ref={scrollRef} className="pc-scroll"><main className="pc-content">{content}</main></div></div>;
 }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AccountSettings, type AccountUser } from "./AccountSettings";
 import { MixedSide, PlayerGender } from "@/types/enums";
 vi.mock("next-auth/react", () => ({ useSession: () => ({ update: vi.fn() }), signOut: vi.fn() }));
-vi.mock("./Primitives", () => ({ Avatar: () => <span />, ErrorText: ({ error }: { error: string }) => error ? <p role="alert">{error}</p> : null, Sheet: ({ open, title, children }: { open: boolean; title: string; children: ReactNode }) => open ? <div role="dialog" aria-label={title}>{children}</div> : null }));
+vi.mock("./Primitives", () => ({ Avatar: () => <span />, ErrorText: ({ error }: { error: string }) => error ? <p role="alert">{error}</p> : null, Sheet: ({ open, title, children, busy }: { open: boolean; title: string; children: ReactNode; busy?: boolean }) => open ? <div role="dialog" aria-label={title}><fieldset disabled={busy}>{children}</fieldset></div> : null }));
 const initial: AccountUser = { id: "account", name: "Ari", gender: "MALE", email: "a@example.com", avatarUrl: null, canRenameName: true, canChangeGender: true, isClaimed: true, isQuickAccess: false };
 let user: AccountUser, container: HTMLDivElement, root: Root;
 const saved = vi.fn(async () => {});
@@ -41,4 +41,21 @@ it("uses the server-normalized side for confirmed UI state", async () => {
   expect((container.querySelector('[aria-label="Player level"]') as HTMLSelectElement).value).toBe("");
   expect(button("Save changes").disabled).toBe(true);
   expect(saved).toHaveBeenCalledOnce();
+});
+
+
+it("retains drafts and confirmations while current club permissions are checked", async () => {
+  const view = (disabled: boolean) => <AccountSettings open disabled={disabled} onClose={() => {}} onSaved={saved} />;
+  await act(async () => root.render(view(false)));
+  await change("name", "Unsaved Ari");
+  await act(async () => button("Save changes").click());
+  await act(async () => root.render(view(true)));
+  expect(container.querySelector<HTMLInputElement>('input:not([type=file])')?.value).toBe("Unsaved Ari");
+  expect(container.querySelector('[aria-label="Confirm account changes"]')).not.toBeNull();
+  expect(button("Confirm changes").matches(":disabled")).toBe(true);
+  await act(async () => button("Confirm changes").click());
+  expect(patches()).toHaveLength(0);
+  await act(async () => root.render(view(false)));
+  await act(async () => button("Confirm changes").click());
+  expect(patches()).toHaveLength(1);
 });

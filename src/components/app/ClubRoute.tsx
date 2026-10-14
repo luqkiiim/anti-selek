@@ -7,6 +7,7 @@ import Club from "@/components/prototype/Club";
 import { AppShell, useAppLocation } from "./AppShell";
 import { backInApp, clubHref, navigateApp } from "@/lib/appNavigation";
 import { withCallbackUrl } from "@/lib/authCallback";
+import { useClubIdentity } from "./ClubDataProvider";
 const LegacyClubPage = dynamic(() => import("@/features/club-page/ClubPage"));
 const LegacyClubAdminPage = dynamic(() => import("@/features/club-admin-page/ClubAdminPage"));
 
@@ -14,6 +15,7 @@ export default function ClubRoute({ admin = false }: { admin?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { status } = useSession();
+  const identity = useClubIdentity(id);
   const href = useAppLocation();
   const params = new URL(href, "https://anti-selek.local").searchParams;
   useEffect(() => {
@@ -24,7 +26,8 @@ export default function ClubRoute({ admin = false }: { admin?: boolean }) {
     return <AppShell specialist><a className="specialist-back" href={clubHref(id)}>Back to club</a>{admin ? <LegacyClubAdminPage /> : <LegacyClubPage />}</AppShell>;
   }
   return <AppShell><Club
-    club={{ id, name: "Club", membersCount: 0, sessionsCount: 0, isPasswordProtected: false }}
+    key={`${id}:${params.getAll("view").includes("global")}`}
+    club={{ id, name: identity?.name ?? "", avatarUrl: identity?.avatarUrl, membersCount: 0, sessionsCount: 0, isPasswordProtected: false }}
     globalView={params.getAll("view").includes("global")}
     initialPage={admin ? "admin" : "club"}
     onRoute={(target, replace) => navigateApp(router, target, replace)}

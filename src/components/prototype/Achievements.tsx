@@ -306,6 +306,7 @@ export function NextMilestone({ collection, onOpen, embedded = false }: {
 }
 
 export type AchievementCabinetProps = {
+  disabled?: boolean;
   embedded?: boolean;
   collection: AchievementCollection;
   onSaveShowcase: (ids: AchievementId[]) => Promise<void> | void;
@@ -320,7 +321,7 @@ function fillShowcase(collection: Pick<AchievementCollection, "showcase" | "achi
   return selected.slice(0, 3);
 }
 
-export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, onSeen, openRequest, embedded = false }: AchievementCabinetProps) {
+export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, onSeen, openRequest, embedded = false, disabled = false }: AchievementCabinetProps) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"browse" | "edit">("browse");
   const [detail, setDetail] = useState<ClubAchievement | null>(null);
@@ -379,6 +380,7 @@ export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, 
     setDraft((current) => current.includes(id) ? current.filter((selected) => selected !== id) : current.length < 3 ? [...current, id] : current);
   };
   const save = async () => {
+    if (disabled) return;
     setSaving(true);
     setSaveError("");
     try {
@@ -393,7 +395,7 @@ export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, 
     }
   };
   const acknowledgeUnseen = async () => {
-    if (!unseen.length || celebrationBusy) return;
+    if (!unseen.length || celebrationBusy || disabled) return;
     setCelebrationBusy(true);
     setCelebrationError("");
     try {
@@ -411,7 +413,7 @@ export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, 
       <section className="achievement-cabinet" aria-label="Achievement cabinet">
           <div className="section-heading">
             <div>{!embedded && <h3>Achievement cabinet</h3>}<small>{collection.achievements.filter((achievement) => earnedTier(achievement) > 0).length} badges unlocked</small></div>
-          <button className="text-button achievement-edit-button" onClick={openEdit}><PencilSimple size={16} aria-hidden="true" /> Edit</button>
+          <button className="text-button achievement-edit-button" disabled={disabled} onClick={openEdit}><PencilSimple size={16} aria-hidden="true" /> Edit</button>
         </div>
         {selectedAchievements.length ? (
           <div className="achievement-showcase" aria-label="Showcase badges">
@@ -422,18 +424,18 @@ export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, 
             </button>)}
             {Array.from({ length: Math.max(0, 3 - selectedAchievements.length) }, (_, index) => <span className="achievement-showcase-slot" key={`empty-${index}`} aria-label="Empty showcase slot"><Medal size={28} weight="duotone" aria-hidden="true" /><small>Open slot</small></span>)}
           </div>
-        ) : <div className="achievement-showcase-empty"><Medal size={29} weight="duotone" aria-hidden="true" /><p>Choose up to three earned badges to show on your club profile.</p><button className="secondary" onClick={openEdit}>Choose badges</button></div>}
+        ) : <div className="achievement-showcase-empty"><Medal size={29} weight="duotone" aria-hidden="true" /><p>Choose up to three earned badges to show on your club profile.</p><button className="secondary" disabled={disabled} onClick={openEdit}>Choose badges</button></div>}
         <button className="achievement-view-all" onClick={openBrowse}>View full collection <CaretRight size={17} aria-hidden="true" /></button>
       </section>
 
       {typeof document !== "undefined" && createPortal(<>
-      <Sheet open={open} title={detail ? detail.name : mode === "edit" ? "Edit showcase" : "Achievement collection"} onClose={() => { setOpen(false); setDetail(null); }} busy={saving}>
+      <Sheet open={open} title={detail ? detail.name : mode === "edit" ? "Edit showcase" : "Achievement collection"} onClose={() => { setOpen(false); setDetail(null); }} busy={saving || (disabled && mode === "edit")}>
         {detail ? <AchievementDetails achievement={detail} onBack={() => setDetail(null)} onOpenSession={onOpenSession} /> : <>
           {mode === "edit" ? <>
             <div className="achievement-sheet-intro"><p>Pick three earned badges for your club profile.</p><span>{draft.length} / 3 selected</span></div>
             <CollectionList achievements={collection.achievements} selected={draft} onSelect={selectAchievement} onOpen={setDetail} />
             {saveError && <p className="achievement-error" role="alert">{saveError}</p>}
-            <button className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save showcase"}</button>
+            <button className="primary" disabled={saving || disabled} onClick={() => void save()}>{saving ? "Saving…" : "Save showcase"}</button>
           </> : <>
             <div className="achievement-sheet-intro"><p>Explore every club badge and its exact tier rules.</p><span>{selectedAchievements.length} showcased</span></div>
             <CollectionList achievements={collection.achievements} onOpen={setDetail} />
@@ -441,7 +443,7 @@ export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, 
         </>}
       </Sheet>
 
-      <Sheet open={celebrationOpen && unseen.length > 0} title="New club achievement" onClose={() => void acknowledgeUnseen()} busy={celebrationBusy}>
+      <Sheet open={celebrationOpen && unseen.length > 0} title="New club achievement" onClose={() => void acknowledgeUnseen()} busy={celebrationBusy || disabled}>
         <div className="achievement-celebration">
           <Sparkle size={30} weight="duotone" aria-hidden="true" />
           <h3>{reveals.length === 1 ? "A new badge is yours" : `${reveals.length} new badges are yours`}</h3>

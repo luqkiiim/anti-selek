@@ -1,0 +1,17 @@
+{
+  "build": "production",
+  "apiDelayMs": 600,
+  "routeDelayMs": 150,
+  "requestCount": 1,
+  "requests": [
+    {
+      "path": "/api/clubs/diagnostic-club",
+      "afterClickMs": 27
+    }
+  ],
+  "headerSequence": [
+    "Diagnostic club"
+  ],
+  "contentReadyAfterClickMs": 648,
+  "pageErrors": []
+}

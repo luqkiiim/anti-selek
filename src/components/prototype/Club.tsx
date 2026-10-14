@@ -1,17 +1,18 @@
 "use client";
 import Image from "next/image";
 import { useState } from "react";
+import { useClubResource, useClubDataStore } from "@/components/app/ClubDataProvider";
+import { clubSnapshotUrl } from "@/components/app/clubReadStore";
+import { ClubHeader } from "@/components/app/ClubHeader";
 import { useAppLocation } from "@/components/app/AppShell";
 import { changeAppQuery, clubHref, getClubTab, sessionHref } from "@/lib/appNavigation";
 import {
   CalendarBlank,
   CaretRight,
-  CaretLeft,
   ArrowLeft,
   ArrowUp,
   ArrowDown,
   ClockCounterClockwise,
-  GearSix,
   Plus,
   Table,
   UsersThree,
@@ -30,7 +31,6 @@ import type {
 } from "@/lib/profileStats";
 import { api, useResource, useAction } from "./api";
 import {
-  Avatar,
   ErrorText,
 } from "./Primitives";
 import { Pager } from "./Pager";
@@ -90,12 +90,13 @@ export default function Club({
   onAccountSaved: () => Promise<unknown>;
   onClubsChanged: () => Promise<unknown>;
 }) {
-  const resource = useResource<Snapshot>("/api/clubs/" + club.id + (globalView ? "?view=global" : ""));
+  const store = useClubDataStore();
+  const resource = useClubResource<Snapshot>(clubSnapshotUrl(club.id, globalView));
   const data = resource.data;
   const readOnly = globalView || !!data?.club.readOnly;
   const pages: readonly string[] = readOnly ? mainPages.filter(p => p !== "profile") : mainPages;
   const viewerPlayerId = readOnly ? null : data?.viewer.playerId ?? null;
-  const profile = useResource<Profile>(
+  const profile = useClubResource<Profile>(
     viewerPlayerId
       ? `/api/users/${encodeURIComponent(viewerPlayerId)}/stats?clubId=${encodeURIComponent(club.id)}`
       : null,
@@ -103,6 +104,7 @@ export default function Club({
   const achievements = useResource<AchievementCollection>(viewerPlayerId ? `/api/clubs/${club.id}/achievements` : null);
   const [achievementRequest, setAchievementRequest] = useState<{id:AchievementId;nonce:number}>();
   async function saveAchievementPreferences(body: unknown) {
+    if (!resource.validated) return;
     await api(`/api/clubs/${club.id}/achievements`, "PATCH", body);
     await achievements.refresh();
   }
@@ -123,14 +125,17 @@ export default function Club({
     setPastSessionPagination({ clubId: club.id, visibleCount: 5 });
   }
   async function refresh() {
-    await Promise.all([resource.refresh(), profile.refresh(), achievements.refresh()]);
+    await Promise.all(store
+      ? [store.refreshClub(club.id), achievements.refresh()]
+      : [resource.refresh(), profile.refresh(), achievements.refresh()]);
   }
   const action = useAction(refresh);
-  const canManage = !readOnly && (
+  const canManage = resource.validated && !readOnly && (
     data?.club.role === "ADMIN" ||
     data?.club.role === "STAFF" ||
     data?.viewer.isAdmin);
-  const canAdmin = !readOnly && (data?.club.role === "ADMIN" || data?.viewer.isAdmin);
+  const hasAdminRole = !readOnly && (data?.club.role === "ADMIN" || data?.viewer.isAdmin);
+  const canAdmin = resource.validated && hasAdminRole;
   const sessions = data?.sessions.filter((s) => !s.isTest) || [];
   const live = sessions.filter((s) => s.status === "ACTIVE");
   const upcoming = sessions.filter((s) => s.status === "WAITING");
@@ -172,7 +177,7 @@ export default function Club({
     else setPage(p);
   }
 
-  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); const isSelf=target?.id===viewerPlayerId&&!data.viewer.isQuickAccess; return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => closeMember(index)} onNavigate={go} readOnly={readOnly}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={isSelf} globalView={readOnly} canInvite={!!canAdmin} onOpenMember={openMember} onOpenSession={openSession} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={isSelf ? renderAchievement() : undefined} milestone={isSelf ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
+  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); const isSelf=target?.id===viewerPlayerId&&!data.viewer.isQuickAccess; return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => closeMember(index)} onNavigate={go} readOnly={readOnly}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={isSelf} canEdit={resource.validated} globalView={readOnly} canInvite={!!canAdmin} onOpenMember={openMember} onOpenSession={openSession} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={isSelf ? renderAchievement() : undefined} milestone={isSelf ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
   function openSession(code: string) {
     if (onRoute) onRoute(sessionHref(code, readOnly ? club.id : undefined));
     else { setSessionCode(code); go("session"); }
@@ -215,7 +220,7 @@ export default function Club({
     return achievements.data ? <NextMilestone embedded collection={achievements.data} onOpen={id => setAchievementRequest({id,nonce:Date.now()})} /> : null;
   }
   function renderAchievement() {
-    return achievements.data ? <AchievementCabinet embedded collection={achievements.data} openRequest={achievementRequest}
+    return achievements.data ? <AchievementCabinet disabled={!resource.validated} embedded collection={achievements.data} openRequest={achievementRequest}
       onSaveShowcase={showcase => saveAchievementPreferences({showcase})}
       onSeen={seen => saveAchievementPreferences({seen})}
       onOpenSession={openSession} /> : <ErrorText error={achievements.error} />;
@@ -251,14 +256,18 @@ export default function Club({
         />
       </div>
     );
-  if (page === "admin" && data && !canAdmin) return <div className="pc-app"><main className="pc-content"><ErrorText error="You do not have access to manage this club." /><button className="secondary" onClick={() => go("club")}>Back to club</button></main></div>;
-  if (page === "setup" && data && !canManage) return <div className="pc-app"><main className="pc-content"><ErrorText error="You do not have access to host a session." /><button className="secondary" onClick={() => go("club")}>Back to club</button></main></div>;
-  if (page === "admin" && data && canAdmin)
+  if (page === "admin" && data && resource.validated && !canAdmin) return <div className="pc-app"><main className="pc-content"><ErrorText error="You do not have access to manage this club." /><button className="secondary" onClick={() => go("club")}>Back to club</button></main></div>;
+  if (page === "setup" && data && resource.validated && !canManage) return <div className="pc-app"><main className="pc-content"><ErrorText error="You do not have access to host a session." /><button className="secondary" onClick={() => go("club")}>Back to club</button></main></div>;
+  if (page === "admin" && data && hasAdminRole)
     return (
       <><Admin
         snapshot={data}
+        disabled={!resource.validated}
+        loadError={resource.error}
+        retryDisabled={resource.loading || resource.retryAt > 0}
+        onRetry={() => void resource.refresh().catch(() => {})}
         refresh={async () => { await Promise.all([refresh(), onClubsChanged()]); }}
-        onDeleted={async () => { await onClubsChanged(); onSwitch(); }}
+        onDeleted={async () => { store?.deleteClub(club.id); await onClubsChanged(); onSwitch(); }}
         onBack={() => go("club")}
         onNavigate={go}
         onOpenProfile={openMember}
@@ -267,50 +276,11 @@ export default function Club({
     );
   return (
     <div className="pc-app">
-      <header className="pc-header">
-        {pages.includes(page) ? (
-          <>
-            <button
-              className="club-switcher"
-              aria-label={
-                "Switch club, current " + (data?.club.name || club.name)
-              }
-              onClick={onSwitch}
-            >
-              <small>{readOnly ? "CLUB" : "YOUR CLUB"}</small>
-              <strong>
-                <CaretLeft size={16} aria-hidden="true" />
-                {data?.club.name || club.name}
-              </strong>
-            </button>
-            <div className="club-header-actions">
-            {canAdmin && <button
-              className="icon-button"
-              aria-label="Manage club"
-              title="Manage club"
-              onClick={() => go("admin")}
-            >
-              <GearSix size={25} />
-            </button>}
-            <span aria-label={`${data?.club.name || club.name} club photo`}><Avatar name={data?.club.name || club.name} url={data ? data.club.avatarUrl : club.avatarUrl} /></span>
-            </div>
-          </>
-        ) : (
-          <>
-            <button
-              className="icon-button"
-              aria-label="Back"
-              onClick={() => go("club")}
-            >
-              <ArrowLeft size={23} />
-            </button>
-            <strong>{page === "setup" ? "New session" : recap?.name}</strong>
-            <span />
-          </>
-        )}
-      </header>
+      {pages.includes(page) ? <ClubHeader identity={data?.club ?? club} globalView={readOnly} onSwitch={onSwitch} onManage={canAdmin ? () => go("admin") : undefined} /> : <header className="pc-header"><button className="icon-button" aria-label="Back" onClick={() => go("club")}><ArrowLeft size={23} /></button><strong>{page === "setup" ? "New session" : recap?.name}</strong><span /></header>}
       <Pager pages={pages.includes(page) ? pages : [page]} active={page} onChange={go}>{page => <>
           <ErrorText error={resource.error || profile.error || achievements.error || action.error} />
+          {resource.error && <button className="secondary" disabled={resource.loading || resource.retryAt > 0} onClick={() => void resource.refresh().catch(() => {})}>Try again</button>}
+          {data && !resource.validated && (page === "admin" || page === "setup") && !resource.error && <p role="status">Loading club…</p>}
           {!data && <p role="status">Loading club…</p>}
           {data && page === "club" && (
             <div className="club-dashboard-grid">
@@ -461,7 +431,7 @@ export default function Club({
             </>
           )}
           {data && page === "rankings" && <Rankings onOpenProfile={openMember} members={data.clubMembers} viewerId={viewerPlayerId ?? ""} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
-          {data && page === "profile" && member && viewerPlayerId && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(viewerPlayerId)!} isSelf={!data.viewer.isQuickAccess} onOpenMember={openMember} onOpenSession={openSession} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={renderAchievement()} milestone={renderMilestone()} />}
+          {data && page === "profile" && member && viewerPlayerId && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(viewerPlayerId)!} isSelf={!data.viewer.isQuickAccess} canEdit={resource.validated} onOpenMember={openMember} onOpenSession={openSession} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={renderAchievement()} milestone={renderMilestone()} />}
           {data && page === "profile" && !viewerPlayerId && <div className="profile-empty"><h2>Your Player profile will appear here.</h2><p>Join this club with a Player profile to see your sporting history and preferences.</p></div>}
           {page === "recap" && displayedRecap && (
             <>

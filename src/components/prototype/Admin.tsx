@@ -33,6 +33,10 @@ export default function Admin({
   onDeleted,
   onOpenProfile,
   onRoute,
+  disabled = false,
+  loadError,
+  onRetry,
+  retryDisabled,
 }: {
   snapshot: Snapshot;
   refresh: () => Promise<unknown>;
@@ -41,6 +45,7 @@ export default function Admin({
   onDeleted: () => Promise<void>;
   onOpenProfile: (id: string) => void;
   onRoute?: (href: string, replace?: boolean) => void;
+  disabled?: boolean; loadError?: string; onRetry?: () => void; retryDisabled?: boolean;
 }) {
   const { club, clubMembers: players, viewer } = snapshot;
   const href = useAppLocation();
@@ -73,7 +78,7 @@ export default function Admin({
   const action = useAction(async () => {
     await Promise.all([refresh(), joins.refresh()]);
   });
-  const busy = action.busy || roleAction.busy;
+  const busy = disabled || action.busy || roleAction.busy;
   const levelOption = edit ? getMixedSideOverrideOptionForGender(edit.gender) : null;
   const endpoint = "/api/clubs/" + club.id;
   const requests = joins.data?.requests ?? [];
@@ -193,7 +198,10 @@ export default function Admin({
       </div>
       <div ref={scrollRef} className="pc-scroll with-tabs">
         <main className="pc-content">
+          <ErrorText error={loadError ?? ""} />
+          {loadError && <button className="secondary" disabled={retryDisabled} onClick={onRetry}>Try again</button>}
           <ErrorText error={action.error || roleAction.error || joins.error} />
+          <fieldset disabled={disabled} className="club-permission-fields">
           {onRoute && <a className="text-button specialist-tools" href={changeAppQuery(href, { tools: "advanced" })}>More club tools</a>}
           {tab === "Players" ? (
             <>
@@ -264,6 +272,7 @@ export default function Admin({
           ) : (
             <ClubSettings club={club} allowJoinRequests={joins.data?.allowJoinRequests} busy={action.busy} onInvite={() => setSheet("invite")} onToggleJoins={() => void action.run(() => api(endpoint + "/join-requests", "PATCH", { allowJoinRequests: !joins.data?.allowJoinRequests }))} refresh={refresh} onDeleted={onDeleted} />
           )}
+          </fieldset>
         </main>
       </div>
       <MainNav active="club" onNavigate={onNavigate} />

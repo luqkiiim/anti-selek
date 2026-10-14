@@ -37,7 +37,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
   accountReady?: boolean;
   onCompleteAccountDetails?: () => void;
   onClose: () => void;
-  onOpenClub: (clubId: string) => void;
+  onOpenClub: (clubId: string, identity?: { id: string; name: string; avatarUrl?: string | null }) => void;
 }) {
   const [value, setValue] = useState(initialValue);
   const [clubQuery, setClubQuery] = useState("");
@@ -197,7 +197,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       const result = await api<AdmissionRequest | { status: "MEMBER"; clubId: string }>("/api/clubs/join-requests", "POST", { ...body, idempotencyKey: retry.current.key });
       retry.current = null;
       if (result.status === "MEMBER") {
-        onOpenClub(result.clubId);
+        onOpenClub(result.clubId, discovery.club);
         return;
       }
       setLatestRequest(result);
@@ -267,11 +267,11 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       </form>
     </> : <>
       <div className="admission-club-heading"><Avatar name={discovery.club.name} url={discovery.club.avatarUrl} /><span className="eyebrow">CLUB</span><h3>{discovery.club.name}</h3></div>
-      {isMember ? <div className="admission-status is-approved" role="status"><strong>You’re already a member.</strong><span>Your Player profile is connected to this club.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id)}>Open club</button></div>
+      {isMember ? <div className="admission-status is-approved" role="status"><strong>You’re already a member.</strong><span>Your Player profile is connected to this club.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id, discovery.club)}>Open club</button></div>
         : currentPending ? <div className="admission-status" role="status"><strong>Waiting for admin approval</strong><span>An admin will review your request to {discovery.club.name}.</span><small>Sent {formatProfileDate(currentPending.createdAt)}</small><button className="text-button" type="button" onClick={() => void loadClub(discovery.club.id)}>Refresh status</button><button className="text-button" type="button" onClick={() => void cancel(currentPending)}>Cancel request</button></div>
         : discovery.identityReviewRequired ? <div className="admission-status" role="status"><strong>Ask an admin to restore your Player profile.</strong><span>Your existing profile needs an admin review before you can join or open this club.</span></div>
         : mostRecentRequest?.status === "REJECTED" ? <div className="admission-status is-rejected" role="status"><strong>Your last request was declined.</strong><span>You can send a new request if your Player details have changed.</span></div>
-        : mostRecentRequest?.status === "APPROVED" ? <div className="admission-status" role="status"><strong>Your request was approved.</strong><span>Ask an admin if your club access has changed.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id)}>Open club</button></div>
+        : mostRecentRequest?.status === "APPROVED" ? <div className="admission-status" role="status"><strong>Your request was approved.</strong><span>Ask an admin if your club access has changed.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id, discovery.club)}>Open club</button></div>
         : null}
 
       {!isMember && !currentPending && !discovery.identityReviewRequired && hasActiveAccess && <div className="admission-status is-approved" role="status"><strong>Your account already has club access.</strong><span>Connect a Player profile to appear on the roster and keep the right match history.</span></div>}

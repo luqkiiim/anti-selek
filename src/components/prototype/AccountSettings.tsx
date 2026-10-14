@@ -20,15 +20,15 @@ export type AccountUser = {
   isClaimed: boolean; isQuickAccess: boolean;
 };
 
-export function AccountSettings({ open, onClose, onSaved, clubContext }: { open: boolean; onClose: () => void; onSaved: () => Promise<unknown>; clubContext?: AccountClubContext }) {
+export function AccountSettings({ open, onClose, onSaved, clubContext, disabled = false }: { open: boolean; onClose: () => void; onSaved: () => Promise<unknown>; clubContext?: AccountClubContext; disabled?: boolean }) {
   const resource = useResource<{ user: AccountUser }>(open ? "/api/user/me" : null);
-  return <Sheet open={open} title="Your account" onClose={onClose}>
+  return <Sheet open={open} title="Your account" busy={disabled} onClose={onClose}>
     <ErrorText error={resource.error} />
-    {resource.data ? <AccountForm key={resource.data.user.id} initial={resource.data.user} onSaved={onSaved} clubContext={clubContext} /> : !resource.error && <p role="status">Loading your account…</p>}
+    {resource.data ? <AccountForm key={resource.data.user.id} initial={resource.data.user} onSaved={onSaved} clubContext={clubContext} disabled={disabled} /> : !resource.error && <p role="status">Loading your account…</p>}
   </Sheet>;
 }
 
-function AccountForm({ initial, onSaved, clubContext }: { initial: AccountUser; onSaved: () => Promise<unknown>; clubContext?: AccountClubContext }) {
+function AccountForm({ initial, onSaved, clubContext, disabled }: { initial: AccountUser; onSaved: () => Promise<unknown>; clubContext?: AccountClubContext; disabled: boolean }) {
   const [user, setUser] = useState(initial);
   const [name, setName] = useState(initial.name);
   const [gender, setGender] = useState(initial.gender);
@@ -50,6 +50,7 @@ function AccountForm({ initial, onSaved, clubContext }: { initial: AccountUser; 
   const levelOption = getMixedSideOverrideOptionForGender((genderChanged ? gender : clubGender ?? gender) as PlayerGender);
   const preferencesChanged = !!clubContext && playerLevel !== savedLevel;
   async function saveChanges() {
+    if (disabled) return;
     setNotice("");
     await action.run(async () => {
       const body = { ...(nameChanged ? { name: name.trim() } : {}), ...(genderChanged ? { gender } : {}),
@@ -77,7 +78,7 @@ function AccountForm({ initial, onSaved, clubContext }: { initial: AccountUser; 
     setSource({ file, url: URL.createObjectURL(file) });
   }
   return <div className="account-settings">
-    <fieldset disabled={action.busy}>
+    <fieldset disabled={action.busy || disabled}>
       {source ? <div className="account-crop">
         <div className="account-crop-area"><Cropper image={source.url} crop={crop} zoom={zoom} aspect={1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, pixels) => setArea(pixels)} /></div>
         <label className="field-label">Zoom<input type="range" min={1} max={3} step={0.01} value={zoom} onChange={e => setZoom(Number(e.target.value))} /></label>
@@ -102,7 +103,7 @@ function AccountForm({ initial, onSaved, clubContext }: { initial: AccountUser; 
         <button type="button" className="text-button account-signout" onClick={() => void signOut({ callbackUrl: "/signin" })}>Sign out</button>
       </>}
     </fieldset>
-    <Sheet open={confirmOpen} title="Confirm account changes" busy={action.busy} onClose={() => setConfirmOpen(false)}>
+    <Sheet open={confirmOpen} title="Confirm account changes" busy={action.busy || disabled} onClose={() => setConfirmOpen(false)}>
       {nameChanged && <p>Account name: <strong>{user.name}</strong> → <strong>{name.trim()}</strong></p>}
       {genderChanged && <p>Account gender: <strong>{user.gender === "UNSPECIFIED" ? "Not set" : user.gender === "MALE" ? "Male" : "Female"}</strong> → <strong>{gender === "MALE" ? "Male" : "Female"}</strong></p>}
       <p>{nameChanged && genderChanged ? "You can change your name/gender only once." : nameChanged ? "You can change your name only once." : "You can change your gender only once."}</p>

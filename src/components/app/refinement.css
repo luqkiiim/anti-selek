@@ -53,3 +53,7 @@
 
 .upcoming-collab-status { font-size: 13px; color: #80718b; }
 .upcoming-collab-actions { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+
+.club-name-skeleton { display: inline-block; width: 8rem; height: 1.15em; border-radius: 6px; background: #e4dbea; }
+.club-avatar-skeleton { width: 38px; height: 38px; border-radius: 50%; background: #e4dbea; }
+.club-permission-fields { display: contents; border: 0; padding: 0; margin: 0; min-width: 0; }
