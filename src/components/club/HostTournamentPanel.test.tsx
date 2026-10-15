@@ -39,8 +39,6 @@ function createPanel({
       onBalanceMetricChange={vi.fn()}
       pairingMode={SessionPairingMode.OPEN}
       onPairingModeChange={vi.fn()}
-      isTestSession={false}
-      onIsTestSessionChange={vi.fn()}
       autoQueueEnabled={true}
       onAutoQueueEnabledChange={vi.fn()}
       collabFormat={SessionCollabFormat.FREE_PLAY}

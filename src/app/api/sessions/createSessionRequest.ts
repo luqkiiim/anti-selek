@@ -275,6 +275,10 @@ export function parseCreateSessionRequest(
     poolsEnabled = false,
     crossoverFrequency = DEFAULT_SESSION_CROSSOVER_FREQUENCY,
   } = bodyRecord;
+  if (isTest !== false) {
+    throw new SessionRouteError("Test sessions are no longer available. Create a regular session instead.", 400);
+  }
+
   let clubId: unknown;
   let partnerClubId: unknown;
   try {
@@ -430,7 +434,7 @@ export function parseCreateSessionRequest(
     clubId,
     partnerClubId:
       typeof partnerClubId === "string" ? partnerClubId : null,
-    isTest: isTest === true,
+    isTest: false,
     courtCount: courtCount as number,
     requestedPlayerIds,
     playerConfigMap: normalizePlayerConfigMap(playerConfigs),

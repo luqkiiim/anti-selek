@@ -136,7 +136,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdva
           <Toggle title="Player groups" hint="Separate Competitive and Social groups." checked={groups} onChange={setGroups} />
           {groups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setRosterOpen(true)}>{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
           <Toggle title="Prepare the next game" hint="Automatically keep the next match queued." checked={autoQueue} onChange={setAutoQueue} />
-          {onAdvanced && <button type="button" className="text-button setup-advanced" onClick={onAdvanced}>Advanced hosting<CaretRight size={16} /></button>}
+          {onAdvanced && <button type="button" className="text-button setup-advanced" onClick={onAdvanced}>Club collaboration<CaretRight size={16} /></button>}
         </div></details>
       </fieldset>
       <div className="setup-submit"><ErrorText error={rosterError ? "" : action.error} /><button className="primary full" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : "Prepare session"}<CaretRight size={18} /></button></div>

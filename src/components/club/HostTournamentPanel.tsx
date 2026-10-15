@@ -32,8 +32,6 @@ interface HostTournamentPanelProps {
   onBalanceMetricChange: (metric: SessionBalanceMetric) => void;
   pairingMode: SessionPairingMode;
   onPairingModeChange: (mode: SessionPairingMode) => void;
-  isTestSession: boolean;
-  onIsTestSessionChange: (value: boolean) => void;
   autoQueueEnabled: boolean;
   onAutoQueueEnabledChange: (value: boolean) => void;
   collabFormat: SessionCollabFormat;
@@ -173,8 +171,6 @@ export function HostTournamentPanel({
   onBalanceMetricChange,
   pairingMode,
   onPairingModeChange,
-  isTestSession,
-  onIsTestSessionChange,
   autoQueueEnabled,
   onAutoQueueEnabledChange,
   collabFormat,
@@ -309,12 +305,6 @@ export function HostTournamentPanel({
               </div>
 
               <div className="min-w-0 space-y-2">
-                <SwitchRow
-                  label="Test tournament"
-                  description="Resettable rehearsal."
-                  checked={isTestSession}
-                  onChange={onIsTestSessionChange}
-                />
                 <SwitchRow
                   label="Auto queue"
                   description={AUTO_QUEUE_DESCRIPTION}
@@ -507,11 +497,7 @@ export function HostTournamentPanel({
           className="app-button-primary flex-1 px-4 py-2.5"
           data-tutorial-target="admin-onboarding-create-session"
         >
-          {creatingSession
-            ? "Creating..."
-            : isTestSession
-              ? "Create Test Tournament"
-              : "Create Tournament"}
+          {creatingSession ? "Creating..." : "Create Tournament"}
         </button>
         {creationIssues.length > 0 ? (
           <div

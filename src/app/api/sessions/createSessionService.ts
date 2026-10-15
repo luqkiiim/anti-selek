@@ -361,7 +361,8 @@ export async function createSessionForUser({
         balanceMetric: input.balanceMetric,
         pairingMode: input.pairingMode,
         status: SessionStatus.WAITING,
-        isTest: input.isTest,
+        // Guided practice stays isolated; ordinary clubs cannot create legacy test sessions.
+        isTest: Boolean(hostClub?.isTutorial),
         ratingPolicyVersion: 2,
         autoQueueEnabled: input.autoQueueEnabled,
         respectPlayerRest: input.respectPlayerRest,

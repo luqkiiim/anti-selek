@@ -111,7 +111,7 @@ describe("createSessionForUser", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("uses explicit group overrides before saved club preferences", async () => {
+  it.each([false, true])("uses explicit group overrides and isolates only tutorial sessions (tutorial: %s)", async (isTutorial) => {
     const playerIds = ["player-1", "player-2", "player-3", "player-4"];
     const input = parseCreateSessionRequest({
       name: "Grouped Friday",
@@ -126,6 +126,13 @@ describe("createSessionForUser", () => {
       ],
     });
     mockRequesterAccess();
+    if (isTutorial) {
+      vi.mocked(prisma.clubAccess.findUnique).mockResolvedValue({
+        role: "ADMIN",
+        status: "ACTIVE",
+        club: { isTutorial: true, tutorialOwnerId: "host-account" },
+      } as never);
+    }
     mockClubMemberships([
       { playerId: "player-1", preferredPool: SessionPool.A },
       { playerId: "player-2", preferredPool: SessionPool.A },
@@ -179,6 +186,7 @@ describe("createSessionForUser", () => {
         data: expect.objectContaining({
           poolAName: "Competitive",
           poolBName: "Social",
+          isTest: isTutorial,
         }),
       })
     );

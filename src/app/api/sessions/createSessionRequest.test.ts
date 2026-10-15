@@ -309,14 +309,12 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
   });
 
-  it("carries the test-session flag", () => {
-    const parsed = parseCreateSessionRequest({
+  it("rejects retired test-session creation instead of silently creating a rated session", () => {
+    expect(() => parseCreateSessionRequest({
       name: "Dry Run",
       clubId: "community-1",
       isTest: true,
-    });
-
-    expect(parsed.isTest).toBe(true);
+    })).toThrow("Test sessions are no longer available. Create a regular session instead.");
   });
 
   it("allows auto queue to be disabled explicitly", () => {

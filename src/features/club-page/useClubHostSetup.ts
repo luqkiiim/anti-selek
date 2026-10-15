@@ -77,7 +77,6 @@ export function useClubHostSetup({
     pairingMode === SessionPairingMode.MIXED
       ? SessionMode.MIXICANO
       : SessionMode.MEXICANO;
-  const [isTestSession, setIsTestSession] = useState(false);
   const [autoQueueEnabled, setAutoQueueEnabled] = useState(false);
   const [courtCount, setCourtCount] = useState(DEFAULT_COURT_COUNT);
   const [poolsEnabled, setPoolsEnabled] = useState(false);
@@ -135,7 +134,6 @@ export function useClubHostSetup({
     setMatchmakingStyle(SessionMatchmakingStyle.BALANCED);
     setBalanceMetric(SessionBalanceMetric.SESSION_POINTS);
     setPairingMode(SessionPairingMode.OPEN);
-    setIsTestSession(false);
     setAutoQueueEnabled(false);
     setCourtCount(DEFAULT_COURT_COUNT);
     setPoolsEnabled(false);
@@ -488,7 +486,6 @@ export function useClubHostSetup({
           matchmakingStyle,
           balanceMetric,
           pairingMode,
-          isTest: isTestSession,
           autoQueueEnabled,
           respectPlayerRest: true,
           courtCount,
@@ -833,8 +830,6 @@ export function useClubHostSetup({
     pairingMode,
     setPairingMode,
     sessionMode,
-    isTestSession,
-    setIsTestSession,
     autoQueueEnabled,
     setAutoQueueEnabled,
     courtCount,

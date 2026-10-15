@@ -83,8 +83,6 @@ export default function ClubPage() {
     pairingMode,
     setPairingMode,
     sessionMode,
-    isTestSession,
-    setIsTestSession,
     autoQueueEnabled,
     setAutoQueueEnabled,
     collabFormat,
@@ -744,8 +742,6 @@ export default function ClubPage() {
       onBalanceMetricChange={setBalanceMetric}
       pairingMode={pairingMode}
       onPairingModeChange={setPairingMode}
-      isTestSession={isTestSession}
-      onIsTestSessionChange={setIsTestSession}
       autoQueueEnabled={autoQueueEnabled}
       onAutoQueueEnabledChange={setAutoQueueEnabled}
       collabFormat={collabFormat}
@@ -823,6 +819,7 @@ export default function ClubPage() {
       />
       <TestSessionsPanel
         sessions={testSessions}
+        isTutorial={isTutorialPlayground}
         currentUserId={user?.playerId}
         currentClubId={clubId}
         canReviewCollabs={canAdminClub}
