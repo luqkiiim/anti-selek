@@ -1,5 +1,7 @@
 "use client";
 
+import { adminApi } from "@/lib/adminClient";
+
 import type {
   ClubAdminClaimRequest,
   ClubAdminClub,
@@ -15,8 +17,8 @@ export async function safeJson(res: Response) {
   }
 }
 
-export async function fetchClubAdminSnapshot(clubId: string) {
-  const clubRes = await fetch(`/api/clubs/${clubId}`);
+export async function fetchClubAdminSnapshot(clubId: string, signal?: AbortSignal) {
+  const clubRes = await adminFetch(`/api/clubs/${clubId}`, { signal });
   const clubData = await safeJson(clubRes);
   if (!clubRes.ok) {
     throw new Error(clubData.error || "Failed to load club");
@@ -37,10 +39,10 @@ export async function fetchClubAdminSnapshot(clubId: string) {
   }
 
   const [playersRes, claimRequestsRes] = await Promise.all([
-    fetch(`/api/clubs/${clubId}/members`),
+    adminFetch(`/api/clubs/${clubId}/members`, { signal }),
     currentClub.isTutorial
       ? Promise.resolve(null)
-      : fetch(`/api/clubs/${clubId}/claim-requests`),
+      : adminFetch(`/api/clubs/${clubId}/claim-requests`, { signal }),
   ]);
   const [playersData, claimRequestsData] = await Promise.all([
     safeJson(playersRes),
@@ -70,4 +72,12 @@ export async function fetchClubAdminSnapshot(clubId: string) {
           note: entry.note, createdAt: entry.createdAt, revision: entry.revision,
         })),
   };
+}
+
+// Compatibility response for legacy handlers; the shared client bounds the full body read.
+export async function adminFetch(url: string, init?: RequestInit): Promise<Response> {
+  const data = await adminApi<unknown>(url, init?.method ?? "GET",
+    typeof init?.body === "string" ? JSON.parse(init.body) : init?.body,
+    { signal: init?.signal ?? undefined });
+  return new Response(JSON.stringify(data ?? {}), { status: 200 });
 }

@@ -2,6 +2,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { useClubResource, useClubDataStore } from "@/components/app/ClubDataProvider";
+import { adminApi } from "@/lib/adminClient";
 import { clubSnapshotUrl } from "@/components/app/clubReadStore";
 import { ClubHeader } from "@/components/app/ClubHeader";
 import { useAppLocation } from "@/components/app/AppShell";
@@ -96,18 +97,6 @@ export default function Club({
   const readOnly = globalView || !!data?.club.readOnly;
   const pages: readonly string[] = readOnly ? mainPages.filter(p => p !== "profile") : mainPages;
   const viewerPlayerId = readOnly ? null : data?.viewer.playerId ?? null;
-  const profile = useClubResource<Profile>(
-    viewerPlayerId
-      ? `/api/users/${encodeURIComponent(viewerPlayerId)}/stats?clubId=${encodeURIComponent(club.id)}`
-      : null,
-  );
-  const achievements = useResource<AchievementCollection>(viewerPlayerId ? `/api/clubs/${club.id}/achievements` : null);
-  const [achievementRequest, setAchievementRequest] = useState<{id:AchievementId;nonce:number}>();
-  async function saveAchievementPreferences(body: unknown) {
-    if (!resource.validated) return;
-    await api(`/api/clubs/${club.id}/achievements`, "PATCH", body);
-    await achievements.refresh();
-  }
   const href = useAppLocation();
   const route = new URL(href, "https://anti-selek.local");
   const [localMemberStack, setMemberStack] = useState<string[]>([]);
@@ -116,6 +105,18 @@ export default function Club({
     [sessionCode, setSessionCode] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   const page = onRoute ? (route.pathname.endsWith("/admin") ? "admin" : route.searchParams.get("tab") === "recap" ? "recap" : getClubTab(route.searchParams.get("tab"))) : localPage;
+  const profile = useClubResource<Profile>(
+    viewerPlayerId && page !== "admin"
+      ? `/api/users/${encodeURIComponent(viewerPlayerId)}/stats?clubId=${encodeURIComponent(club.id)}`
+      : null,
+  );
+  const achievements = useResource<AchievementCollection>(viewerPlayerId && page !== "admin" ? `/api/clubs/${club.id}/achievements` : null);
+  const [achievementRequest, setAchievementRequest] = useState<{id:AchievementId;nonce:number}>();
+  async function saveAchievementPreferences(body: unknown) {
+    if (!resource.validated) return;
+    await api(`/api/clubs/${club.id}/achievements`, "PATCH", body);
+    await achievements.refresh();
+  }
   const [pastSessionPagination, setPastSessionPagination] = useState(() => {
     let visibleCount = 5;
     try { const saved = Number(sessionStorage.getItem(`anti-selek:past-sessions:${club.id}`)); if (Number.isSafeInteger(saved) && saved >= 5) visibleCount = saved; } catch {}
@@ -266,8 +267,18 @@ export default function Club({
         loadError={resource.error}
         retryDisabled={resource.loading || resource.retryAt > 0}
         onRetry={() => void resource.refresh().catch(() => {})}
-        refresh={async () => { await Promise.all([refresh(), onClubsChanged()]); }}
-        onDeleted={async () => { store?.deleteClub(club.id); await onClubsChanged(); onSwitch(); }}
+        refresh={async () => {
+          const url = clubSnapshotUrl(club.id, globalView);
+          if (store) await store.refreshConfirmed(url);
+          else {
+            const snapshot = await adminApi<Snapshot>(url);
+            resource.update(() => snapshot);
+          }
+        }}
+        onMemberSaved={member => resource.update(current => ({ ...current, clubMembers: current.clubMembers.some(player => player.id === member.id) ? current.clubMembers.map(player => player.id === member.id ? { ...player, ...member, wins: player.wins, losses: player.losses, matchesPlayed: player.matchesPlayed } : player) : [...current.clubMembers, member] }))}
+        onMemberRemoved={id => resource.update(current => ({ ...current, clubMembers: current.clubMembers.filter(player => player.id !== id) }))}
+        onClubSaved={updated => resource.update(current => ({ ...current, club: { ...current.club, ...updated } }))}
+        onDeleted={async () => { store?.deleteClub(club.id); onSwitch(); await onClubsChanged(); }}
         onBack={() => go("club")}
         onNavigate={go}
         onOpenProfile={openMember}

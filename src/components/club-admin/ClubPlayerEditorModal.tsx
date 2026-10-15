@@ -37,8 +37,8 @@ interface ClubPlayerEditorModalProps {
   onClose: () => void;
   onRemovePlayer: (player: ClubAdminPlayer) => void;
   onSavePlayerName: (player: ClubAdminPlayer) => Promise<void>;
-  onSavePlayerRating: (player: ClubAdminPlayer) => Promise<void>;
-  onRatingChanged?: () => void;
+  onSavePlayerRating?: (player: ClubAdminPlayer) => Promise<void>;
+  onRatingChanged?: (rating: number) => void;
   onUpdatePreferences: (
     player: ClubAdminPlayer,
     updates: {
@@ -93,6 +93,7 @@ export function ClubPlayerEditorModal({
   const playerLevelOptionLabel =
     player.gender === PlayerGender.FEMALE ? "High level" : "Low level";
   const canEditName = !player.isClaimed;
+  const canEditPairing = !player.isClaimed || player.id === currentPlayerId;
   const isCurrentPlayer = player.id === currentPlayerId;
   const canRemovePlayer =
     !player.isOwner && (player.role !== "ADMIN" || isCurrentPlayer);
@@ -228,7 +229,7 @@ export function ClubPlayerEditorModal({
                     mixedSideOverride: null,
                   });
                 }}
-                disabled={savingPreferences}
+                disabled={savingPreferences || !canEditPairing}
                 className="field"
               >
                 <option value={PlayerGender.MALE}>Male</option>
@@ -248,7 +249,7 @@ export function ClubPlayerEditorModal({
                         : null,
                     });
                   }}
-                  disabled={savingPreferences}
+                  disabled={savingPreferences || !canEditPairing}
                   className="field"
                 >
                   <option value="">Default</option>

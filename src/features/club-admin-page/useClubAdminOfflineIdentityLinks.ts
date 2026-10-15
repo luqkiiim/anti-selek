@@ -9,12 +9,13 @@ import type {
   ClubCollabCandidate,
   ClubPageMember,
 } from "@/components/club/clubTypes";
+import { useAdminRefresh } from "./useAdminRefresh";
 import { safeJson } from "./clubAdminApi";
 
 export function useClubAdminOfflineIdentityLinks({
   clubId,
   players,
-  refreshClubData,
+  refreshClubData: refresh,
   setError,
   setSuccess,
 }: {
@@ -24,6 +25,7 @@ export function useClubAdminOfflineIdentityLinks({
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
 }) {
+  const { refreshClubData, refreshWarning, refreshing, retryRefresh, uncertain, request } = useAdminRefresh(refresh);
   const [linkSourceUserId, setLinkSourceUserId] = useState("");
   const [targetClubSearch, setTargetClubSearch] = useState("");
   const [selectedTargetClub, setSelectedTargetClub] =
@@ -60,7 +62,7 @@ export function useClubAdminOfflineIdentityLinks({
       void (async () => {
         setLoadingTargetClubs(true);
         try {
-          const res = await fetch(
+          const res = await request(
             `/api/clubs/${clubId}/collab-candidates?search=${encodeURIComponent(search)}`
           );
           const data = await safeJson(res);
@@ -89,7 +91,7 @@ export function useClubAdminOfflineIdentityLinks({
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [clubId, selectedTargetClub, setError, targetClubSearch]);
+  }, [clubId, selectedTargetClub, setError, targetClubSearch, request]);
 
   useEffect(() => {
     if (!clubId || !selectedTargetClub) {
@@ -103,7 +105,7 @@ export function useClubAdminOfflineIdentityLinks({
     void (async () => {
       setLoadingTargetRoster(true);
       try {
-        const res = await fetch(
+        const res = await request(
           `/api/clubs/${clubId}/collab-roster?partnerClubId=${encodeURIComponent(selectedTargetClub.id)}`
         );
         const data = await safeJson(res);
@@ -128,7 +130,7 @@ export function useClubAdminOfflineIdentityLinks({
     return () => {
       cancelled = true;
     };
-  }, [clubId, selectedTargetClub, setError]);
+  }, [clubId, selectedTargetClub, setError, request]);
 
   const sourcePlaceholderOptions = useMemo(
     () =>
@@ -197,7 +199,7 @@ export function useClubAdminOfflineIdentityLinks({
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`/api/clubs/${clubId}/offline-identity-links`, {
+      const res = await request(`/api/clubs/${clubId}/offline-identity-links`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -218,7 +220,7 @@ export function useClubAdminOfflineIdentityLinks({
       );
       setLinkSourceUserId("");
       clearTargetClub();
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to request identity link");
     } finally {
@@ -234,7 +236,7 @@ export function useClubAdminOfflineIdentityLinks({
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(
+      const res = await request(
         `/api/clubs/${clubId}/offline-identity-links/${link.id}`,
         {
           method: "PATCH",
@@ -252,7 +254,7 @@ export function useClubAdminOfflineIdentityLinks({
           ? "Offline identity link approved."
           : "Offline identity link rejected."
       );
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to review identity link");
     } finally {
@@ -265,7 +267,7 @@ export function useClubAdminOfflineIdentityLinks({
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(
+      const res = await request(
         `/api/clubs/${clubId}/offline-identity-links/${link.id}`,
         { method: "DELETE" }
       );
@@ -275,7 +277,7 @@ export function useClubAdminOfflineIdentityLinks({
       }
 
       setSuccess("Offline identity link removed.");
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to unlink identity");
     } finally {
@@ -284,6 +286,7 @@ export function useClubAdminOfflineIdentityLinks({
   };
 
   return {
+    refreshWarning, refreshing, retryRefresh, uncertain,
     linkSourceUserId,
     setLinkSourceUserId,
     targetClubSearch,

@@ -197,10 +197,12 @@ export default function ClubAdminPage() {
     clubId,
     club,
     players,
+    setPlayers,
     claimRequests,
     loading,
     error,
     success,
+    refreshWarning, refreshing, uncertain, retryRefresh, creatingPlayer, playerSaveWarning,
     clubNameInput,
     setClubNameInput,
     clubPasswordInput,
@@ -262,8 +264,6 @@ export default function ClubAdminPage() {
     closePasswordResetModal,
     handleAddPlayer,
     handleSavePlayerName,
-    handleSavePlayerRating,
-    fetchClubAndPlayers,
     handleRemovePlayer,
     handleUploadPlayerAvatar,
     handleRemovePlayerAvatar,
@@ -445,6 +445,16 @@ export default function ClubAdminPage() {
           </FlashMessage>
         ) : null}
 
+        {playerSaveWarning ? <p role="status" className={styles.flashMessage}>{playerSaveWarning}</p> : null}
+        {refreshWarning || uncertain ? (
+          <div role="status" className={styles.flashMessage}>
+            <p>{refreshWarning || "Couldn’t confirm the save. Refresh to check."}</p>
+            <button type="button" className="app-button-secondary px-3 py-2" disabled={refreshing} onClick={() => void retryRefresh()}>
+              {refreshing ? "Refreshing…" : "Refresh details"}
+            </button>
+          </div>
+        ) : null}
+
         {isTutorialPlayground ? (
           <div className={styles.tutorialChecklist}>
             <AdminOnboardingChecklist
@@ -560,6 +570,7 @@ export default function ClubAdminPage() {
 
       <CreateClubPlayerModal
         open={isCreatePlayerOpen}
+        saving={creatingPlayer || uncertain}
         name={name}
         newPlayerGender={newPlayerGender}
         newPlayerMixedSideOverride={newPlayerMixedSideOverride}
@@ -593,8 +604,11 @@ export default function ClubAdminPage() {
         onClose={closePlayerEditor}
         onRemovePlayer={(player) => void handleRemovePlayer(player)}
         onSavePlayerName={handleSavePlayerName}
-        onSavePlayerRating={handleSavePlayerRating}
-        onRatingChanged={() => { closePlayerEditor(); void fetchClubAndPlayers(); }}
+        onRatingChanged={rating => {
+          setPlayers(current => current.map(player => player.id === editingPlayer?.id ? { ...player, elo: rating } : player));
+          closePlayerEditor();
+          void retryRefresh();
+        }}
         onUpdatePreferences={handleUpdatePreferences}
         onPromotePlayer={handlePromotePlayer}
         onDemoteAdmin={handleDemoteAdmin}

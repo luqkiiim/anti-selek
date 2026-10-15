@@ -153,6 +153,32 @@ describe("shared club reads", () => {
     expect(vi.mocked(fetch).mock.calls[0][1]?.signal?.aborted).toBe(true);
     expect(store.get(url)).toMatchObject({ loading: false, validated: false });
   });
+  it("does not confirm recovery while Retry-After suppresses reads", async () => {
+    vi.mocked(fetch).mockResolvedValue(response({ error: "Too many requests" }, 429, { "Retry-After": "5" }));
+    await expect(store.read(url)).rejects.toThrow();
+    await expect(store.refreshConfirmed(url)).rejects.toThrow("Please wait");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5001);
+    vi.mocked(fetch).mockResolvedValue(response(snapshot));
+    await store.refreshConfirmed(url);
+    expect(store.get(url).validated).toBe(true);
+  });
+  it("rejects recovery when a newer local update supersedes its read", async () => {
+    await store.read(url);
+    const pending = deferred(); vi.mocked(fetch).mockReturnValueOnce(pending.promise);
+    const recovery = expect(store.refreshConfirmed(url)).rejects.toThrow("Refresh again");
+    store.update<typeof snapshot>(url, current => ({ ...current, club: { ...current.club, name: "Saved" } }));
+    pending.resolve(response(snapshot)); await recovery;
+    expect(store.get<typeof snapshot>(url).data?.club.name).toBe("Saved");
+  });
+  it("confirms with a fresh read instead of an outstanding pre-save request", async () => {
+    const pending = deferred(); vi.mocked(fetch).mockReturnValueOnce(pending.promise);
+    const old = store.read(url);
+    await store.refreshConfirmed(url);
+    pending.resolve(response({ ...snapshot, club: { ...identity, name: "Stale" } })); await old;
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(store.get<typeof snapshot>(url).data?.club.name).toBe("Riverside");
+  });
   it("isolates normal/global and account/quick-access reads", async () => {
     const guest = new ClubReadStore("guest:player:club"); const account = new ClubReadStore("other-account");
     await store.read(url);

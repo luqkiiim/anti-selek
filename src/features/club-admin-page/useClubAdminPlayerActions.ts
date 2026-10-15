@@ -2,13 +2,13 @@
 
 import {
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type FormEvent,
   type SetStateAction,
 } from "react";
 import type { ClubAdminPlayer } from "@/components/club-admin/clubAdminTypes";
-import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
 import {
   ClubRole,
   ClubPlayerStatus,
@@ -16,6 +16,7 @@ import {
   PlayerGender,
   SessionPool,
 } from "@/types/enums";
+import { useAdminRefresh } from "./useAdminRefresh";
 import { safeJson } from "./clubAdminApi";
 
 interface PendingPlayerAction {
@@ -33,7 +34,8 @@ export function useClubAdminPlayerActions({
   currentPlayerId,
   players,
   setPlayers,
-  refreshClubData,
+  refreshClubData: refresh,
+  onMutationStart,
   router,
   setError,
   setSuccess,
@@ -43,10 +45,21 @@ export function useClubAdminPlayerActions({
   players: ClubAdminPlayer[];
   setPlayers: Dispatch<SetStateAction<ClubAdminPlayer[]>>;
   refreshClubData: () => Promise<void>;
+  onMutationStart?: () => void;
   router: ClubAdminRouter;
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
 }) {
+  const { refreshClubData, refreshWarning, refreshing, retryRefresh, uncertain, request, guard } = useAdminRefresh(refresh, onMutationStart);
+  const createLock = useRef(false);
+  const [creatingPlayer, setCreatingPlayer] = useState(false);
+  const applyMember = (data: Partial<ClubAdminPlayer>) => {
+    if (!data.id) return;
+    setPlayers(prev => prev.some(item => item.id === data.id)
+      ? prev.map(item => item.id === data.id ? { ...item, ...data } : item)
+      : [...prev, data as ClubAdminPlayer]);
+  };
+  const [playerSaveWarning, setPlayerSaveWarning] = useState("");
   const [isCreatePlayerOpen, setIsCreatePlayerOpen] = useState(false);
   const [name, setName] = useState("");
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(
@@ -137,11 +150,14 @@ export function useClubAdminPlayerActions({
 
   const handleAddPlayer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (createLock.current || uncertain) return;
+    createLock.current = true;
+    setCreatingPlayer(true);
     setError("");
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/clubs/${clubId}/members`, {
+      const res = await request(`/api/clubs/${clubId}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -158,6 +174,7 @@ export function useClubAdminPlayerActions({
         throw new Error(data.error || "Failed to add player");
       }
 
+      applyMember(data);
       setSuccess(`Player profile for "${name}" added to club.`);
       setName("");
       setNewPlayerGender(PlayerGender.MALE);
@@ -165,10 +182,10 @@ export function useClubAdminPlayerActions({
       setNewPlayerStatus(ClubPlayerStatus.CORE);
       setNewPlayerPreferredPool(SessionPool.B);
       setIsCreatePlayerOpen(false);
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to add player");
-    }
+    } finally { createLock.current = false; setCreatingPlayer(false); }
   };
 
   const handleSavePlayerName = async (player: ClubAdminPlayer) => {
@@ -188,7 +205,7 @@ export function useClubAdminPlayerActions({
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
+      const res = await request(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nextName }),
@@ -198,44 +215,16 @@ export function useClubAdminPlayerActions({
         throw new Error(data.error || "Failed to update player name");
       }
 
+      applyMember(data);
       setSuccess(`Player name updated to "${nextName}".`);
       setEditorName(nextName);
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Failed to update player name"
       );
     } finally {
       setSavingName(false);
-    }
-  };
-
-  const handleSavePlayerRating = async (player: ClubAdminPlayer) => {
-    const nextRating = parseInt(editorRating, 10);
-    if (Number.isNaN(nextRating) || nextRating === player.elo) return;
-
-    setSavingRating(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ elo: nextRating }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to update rating");
-      }
-
-      setSuccess(`${player.name}'s rating updated to ${nextRating}.`);
-      setEditorRating(String(nextRating));
-      await refreshClubData();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to update rating");
-    } finally {
-      setSavingRating(false);
     }
   };
 
@@ -270,7 +259,7 @@ export function useClubAdminPlayerActions({
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
+      const res = await request(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
@@ -280,18 +269,9 @@ export function useClubAdminPlayerActions({
         throw new Error(data.error || "Failed to update role");
       }
 
-      setPlayers((prev) =>
-        prev.map((item) =>
-          item.id === player.id
-            ? {
-                ...item,
-                role: data.role === ClubRole.STAFF ? "STAFF" : "MEMBER",
-              }
-            : item
-        )
-      );
+      applyMember(data);
       setSuccess(successMessage);
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to update role");
     } finally {
@@ -328,7 +308,7 @@ export function useClubAdminPlayerActions({
     if (kind === "remove") {
       setRemovingPlayer(true);
       try {
-        const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
+        const res = await request(`/api/clubs/${clubId}/members/${player.id}`, {
           method: "DELETE",
         });
         const data = await safeJson(res);
@@ -336,6 +316,7 @@ export function useClubAdminPlayerActions({
           throw new Error(data.error || "Failed to remove player");
         }
 
+        setPlayers(prev => prev.filter(item => item.id !== player.id));
         const isSelfRemoval = player.id === currentPlayerId;
         setSuccess(
           isSelfRemoval
@@ -349,7 +330,7 @@ export function useClubAdminPlayerActions({
           return true;
         }
 
-        await refreshClubData();
+        refreshClubData();
         return true;
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to remove player");
@@ -364,7 +345,7 @@ export function useClubAdminPlayerActions({
 
       setSavingRole(true);
       try {
-        const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
+        const res = await request(`/api/clubs/${clubId}/members/${player.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: pendingPlayerAction.role }),
@@ -374,13 +355,14 @@ export function useClubAdminPlayerActions({
           throw new Error(data.error || "Failed to change admin role");
         }
 
+        applyMember(data);
         setSuccess(
           pendingPlayerAction.role === ClubRole.STAFF
             ? `${player.name} changed to staff.`
             : `${player.name} changed to member.`
         );
         setPendingPlayerAction(null);
-        await refreshClubData();
+        refreshClubData();
         return true;
       } catch (err: unknown) {
         setError(
@@ -394,7 +376,7 @@ export function useClubAdminPlayerActions({
 
     setSavingRole(true);
     try {
-      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
+      const res = await request(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: "ADMIN" }),
@@ -404,9 +386,10 @@ export function useClubAdminPlayerActions({
         throw new Error(data.error || "Failed to promote player");
       }
 
+      applyMember(data);
       setSuccess(`${player.name} promoted to admin.`);
       setPendingPlayerAction(null);
-      await refreshClubData();
+      refreshClubData();
       return true;
     } catch (err: unknown) {
       setError(
@@ -439,7 +422,7 @@ export function useClubAdminPlayerActions({
     setSavingPasswordReset(true);
 
     try {
-      const res = await fetch(
+      const res = await request(
         `/api/clubs/${clubId}/members/${passwordResetTarget.id}/password`,
         {
           method: "POST",
@@ -473,65 +456,30 @@ export function useClubAdminPlayerActions({
       preferredPool?: SessionPool;
     }
   ) => {
-    if (
-      updates.gender === undefined &&
-      updates.mixedSideOverride === undefined &&
-      updates.status === undefined &&
-      updates.preferredPool === undefined
-    ) {
-      return;
-    }
+    const changed = Object.fromEntries(Object.entries(updates).filter(([key, value]) =>
+      value !== undefined && value !== player[key as keyof ClubAdminPlayer] &&
+      (!(player.isClaimed && player.id !== currentPlayerId) || !["gender", "mixedSideOverride"].includes(key))
+    ));
+    if (Object.keys(changed).length === 0) return;
 
     setSavingPreferences(true);
     setError("");
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
+      const res = await request(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(changed),
       });
       const data = await safeJson(res);
       if (!res.ok) {
         throw new Error(data.error || "Failed to update player preferences");
       }
 
-      setPlayers((prev) =>
-        prev.map((item) =>
-          item.id === player.id
-            ? {
-                ...item,
-                gender:
-                  typeof data.gender === "string"
-                    ? (data.gender as PlayerGender)
-                    : item.gender,
-                partnerPreference:
-                  typeof data.partnerPreference === "string"
-                    ? data.partnerPreference
-                    : item.partnerPreference,
-                mixedSideOverride:
-                  typeof data.mixedSideOverride === "string"
-                    ? (data.mixedSideOverride as MixedSide)
-                    : data.mixedSideOverride === null
-                      ? null
-                      : item.mixedSideOverride,
-                status:
-                  data.status === ClubPlayerStatus.OCCASIONAL
-                    ? ClubPlayerStatus.OCCASIONAL
-                    : data.status === ClubPlayerStatus.CORE
-                      ? ClubPlayerStatus.CORE
-                      : item.status,
-                preferredPool:
-                  data.preferredPool === SessionPool.A
-                    ? SessionPool.A
-                    : data.preferredPool === SessionPool.B
-                      ? SessionPool.B
-                      : item.preferredPool,
-              }
-            : item
-        )
-      );
+      applyMember(data);
+      setPlayerSaveWarning(Array.isArray(data.warnings) ? data.warnings.map((warning: { message: string }) => warning.message).join(" ") : "");
+      refreshClubData();
       const immediateCount =
         typeof data.preferencePropagation?.immediateSessionCount === "number"
           ? data.preferencePropagation.immediateSessionCount
@@ -563,7 +511,10 @@ export function useClubAdminPlayerActions({
     setError("");
     setSuccess("");
 
-    const { avatarUrl } = await uploadUserAvatar(player.id, file, clubId);
+    const body = new FormData();
+    body.append("avatar", file);
+    const res = await request(`/api/users/${encodeURIComponent(player.id)}/avatar?clubId=${encodeURIComponent(clubId)}`, { method: "POST", body });
+    const { avatarUrl } = await safeJson(res);
     setPlayers((prev) =>
       prev.map((item) =>
         item.id === player.id
@@ -581,7 +532,7 @@ export function useClubAdminPlayerActions({
     setError("");
     setSuccess("");
 
-    await deleteUserAvatar(player.id, clubId);
+    await request(`/api/users/${encodeURIComponent(player.id)}/avatar?clubId=${encodeURIComponent(clubId)}`, { method: "DELETE" });
     setPlayers((prev) =>
       prev.map((item) =>
         item.id === player.id
@@ -596,6 +547,9 @@ export function useClubAdminPlayerActions({
   };
 
   return {
+    refreshWarning, refreshing, retryRefresh, uncertain,
+    playerSaveWarning,
+    creatingPlayer,
     isCreatePlayerOpen,
     name,
     setName,
@@ -631,21 +585,20 @@ export function useClubAdminPlayerActions({
     closePlayerEditor,
     openPasswordResetModal,
     closePasswordResetModal,
-    handleAddPlayer,
-    handleSavePlayerName,
-    handleSavePlayerRating,
+    handleAddPlayer: guard(handleAddPlayer),
+    handleSavePlayerName: guard(handleSavePlayerName),
     handleRemovePlayer: requestRemovePlayer,
     requestRemovePlayer,
     handlePromotePlayer: requestPromotePlayer,
     handleDemoteAdmin: requestDemoteAdmin,
-    handleGrantStaff,
-    handleRevokeStaff,
+    handleGrantStaff: guard(handleGrantStaff),
+    handleRevokeStaff: guard(handleRevokeStaff),
     requestPromotePlayer,
     closePendingPlayerAction,
-    confirmPendingPlayerAction,
-    handleResetPlayerPassword,
-    handleUpdatePreferences,
-    handleUploadPlayerAvatar,
-    handleRemovePlayerAvatar,
+    confirmPendingPlayerAction: guard(confirmPendingPlayerAction),
+    handleResetPlayerPassword: guard(handleResetPlayerPassword),
+    handleUpdatePreferences: guard(handleUpdatePreferences),
+    handleUploadPlayerAvatar: guard(handleUploadPlayerAvatar, true),
+    handleRemovePlayerAvatar: guard(handleRemovePlayerAvatar, true),
   };
 }

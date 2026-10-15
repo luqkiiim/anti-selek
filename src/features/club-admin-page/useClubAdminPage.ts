@@ -36,6 +36,7 @@ export function useClubAdminPage() {
     players: adminData.players,
     setPlayers: adminData.setPlayers,
     refreshClubData: adminData.fetchClubAndPlayers,
+    onMutationStart: adminData.invalidateReads,
     router,
     setError: adminData.setError,
     setSuccess: adminData.setSuccess,
@@ -45,6 +46,7 @@ export function useClubAdminPage() {
     clubId,
     club: adminData.club,
     refreshClubData: adminData.fetchClubAndPlayers,
+    onMutationStart: adminData.invalidateReads,
     router,
     setError: adminData.setError,
     setSuccess: adminData.setSuccess,
@@ -92,5 +94,11 @@ export function useClubAdminPage() {
     ...adminData,
     ...playerActions,
     ...clubActions,
+    refreshWarning: playerActions.refreshWarning || clubActions.refreshWarning,
+    refreshing: playerActions.refreshing || clubActions.refreshing,
+    uncertain: playerActions.uncertain || clubActions.uncertain,
+    retryRefresh: async () => {
+      await Promise.all([playerActions.retryRefresh(), clubActions.retryRefresh()]);
+    },
   };
 }

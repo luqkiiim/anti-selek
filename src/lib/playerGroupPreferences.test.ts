@@ -3,6 +3,7 @@ import { SessionPool } from "@/types/enums";
 import {
   applyPendingPlayerGroupChangesInTransaction,
   propagatePreferredPoolToClubSessions,
+  propagatePreferredPoolToClubSessionsInTransaction,
 } from "./playerGroupPreferences";
 
 function queuedMatch({
@@ -26,6 +27,12 @@ function queuedMatch({
 }
 
 describe("player group preference propagation", () => {
+  it("runs on an existing transaction without opening or committing one", async () => {
+    const tx = { sessionPlayer: { findMany: vi.fn().mockResolvedValue([]), update: vi.fn() }, queuedMatch: { deleteMany: vi.fn() }, $transaction: vi.fn() };
+    expect(await propagatePreferredPoolToClubSessionsInTransaction(tx as never, { clubId: "club-1", playerId: "player-1", preferredPool: SessionPool.A })).toEqual({ immediateSessionCount: 0, deferredSessionCount: 0, automaticQueueSessionIds: [] });
+    expect(tx.$transaction).not.toHaveBeenCalled();
+    expect(tx.sessionPlayer.findMany).toHaveBeenCalledOnce();
+  });
   it("updates idle sessions, defers busy sessions, and invalidates automatic queues", async () => {
     const sessionPlayerUpdate = vi.fn().mockResolvedValue({});
     const queuedMatchDeleteMany = vi.fn().mockResolvedValue({ count: 1 });

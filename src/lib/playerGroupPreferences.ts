@@ -46,127 +46,133 @@ export async function propagatePreferredPoolToClubSessions(
     preferredPool: SessionPool;
   }
 ): Promise<PreferredPoolPropagationResult> {
-  return db.$transaction(async (tx) => {
-    const sessionPlayers = await tx.sessionPlayer.findMany({
-      where: {
-        playerId,
-        session: {
-          poolsEnabled: true,
-          status: { not: SessionStatus.COMPLETED },
-          OR: [
-            { clubId },
-            {
-              sessionClubs: { some: { clubId } },
-              club: { members: { none: { playerId } } },
-            },
-          ],
-        },
+  return db.$transaction(tx => propagatePreferredPoolToClubSessionsInTransaction(tx, { clubId, playerId, preferredPool }));
+}
+
+/** Lets the roster preference and all affected session seats commit together. */
+export async function propagatePreferredPoolToClubSessionsInTransaction(
+  tx: Prisma.TransactionClient,
+  { clubId, playerId, preferredPool }: { clubId: string; playerId: string; preferredPool: SessionPool }
+): Promise<PreferredPoolPropagationResult> {
+  const sessionPlayers = await tx.sessionPlayer.findMany({
+    where: {
+      playerId,
+      session: {
+        poolsEnabled: true,
+        status: { not: SessionStatus.COMPLETED },
+        OR: [
+          { clubId },
+          {
+            sessionClubs: { some: { clubId } },
+            club: { members: { none: { playerId } } },
+          },
+        ],
       },
-      select: {
-        sessionId: true,
-        pool: true,
-        pendingPool: true,
-        session: {
-          select: {
-            autoQueueEnabled: true,
-            queuedMatch: {
-              select: {
-                id: true,
-                createdAt: true,
-                isAutomatic: true,
-                team1Player1Id: true,
-                team1Player2Id: true,
-                team2Player1Id: true,
-                team2Player2Id: true,
-              },
+    },
+    select: {
+      sessionId: true,
+      pool: true,
+      pendingPool: true,
+      session: {
+        select: {
+          autoQueueEnabled: true,
+          queuedMatch: {
+            select: {
+              id: true,
+              createdAt: true,
+              isAutomatic: true,
+              team1Player1Id: true,
+              team1Player2Id: true,
+              team2Player1Id: true,
+              team2Player2Id: true,
             },
-            courts: {
-              select: {
-                currentMatch: {
-                  select: {
-                    team1Player1Id: true,
-                    team1Player2Id: true,
-                    team2Player1Id: true,
-                    team2Player2Id: true,
-                  },
+          },
+          courts: {
+            select: {
+              currentMatch: {
+                select: {
+                  team1Player1Id: true,
+                  team1Player2Id: true,
+                  team2Player1Id: true,
+                  team2Player2Id: true,
                 },
               },
             },
           },
         },
       },
+    },
+  });
+
+  let immediateSessionCount = 0;
+  let deferredSessionCount = 0;
+  const automaticQueueSessionIds = new Set<string>();
+
+  for (const player of sessionPlayers) {
+    const queuedMatch = player.session.queuedMatch;
+    const isPlaying = player.session.courts.some((court) => {
+      const match = court.currentMatch;
+      return (
+        !!match &&
+        [
+          match.team1Player1Id,
+          match.team1Player2Id,
+          match.team2Player1Id,
+          match.team2Player2Id,
+        ].includes(playerId)
+      );
     });
+    const isManuallyQueued =
+      !!queuedMatch &&
+      !queuedMatch.isAutomatic &&
+      hasQueuedMatchUser(queuedMatch, playerId);
+    const changesCurrentPool = player.pool !== preferredPool;
 
-    let immediateSessionCount = 0;
-    let deferredSessionCount = 0;
-    const automaticQueueSessionIds = new Set<string>();
-
-    for (const player of sessionPlayers) {
-      const queuedMatch = player.session.queuedMatch;
-      const isPlaying = player.session.courts.some((court) => {
-        const match = court.currentMatch;
-        return (
-          !!match &&
-          [
-            match.team1Player1Id,
-            match.team1Player2Id,
-            match.team2Player1Id,
-            match.team2Player2Id,
-          ].includes(playerId)
-        );
-      });
-      const isManuallyQueued =
-        !!queuedMatch &&
-        !queuedMatch.isAutomatic &&
-        hasQueuedMatchUser(queuedMatch, playerId);
-      const changesCurrentPool = player.pool !== preferredPool;
-
-      if (changesCurrentPool && (isPlaying || isManuallyQueued)) {
-        if (player.pendingPool !== preferredPool) {
-          await tx.sessionPlayer.update({
-            where: {
-              sessionId_playerId: { sessionId: player.sessionId, playerId },
-            },
-            data: { pendingPool: preferredPool },
-          });
-        }
-        deferredSessionCount += 1;
-        continue;
-      }
-
-      if (changesCurrentPool || player.pendingPool !== null) {
+    if (changesCurrentPool && (isPlaying || isManuallyQueued)) {
+      if (player.pendingPool !== preferredPool) {
         await tx.sessionPlayer.update({
           where: {
             sessionId_playerId: { sessionId: player.sessionId, playerId },
           },
-          data: { pool: preferredPool, pendingPool: null },
+          data: { pendingPool: preferredPool },
         });
-        immediateSessionCount += 1;
       }
-
-      if (
-        (changesCurrentPool && queuedMatch?.isAutomatic) ||
-        (player.session.autoQueueEnabled && !queuedMatch)
-      ) {
-        automaticQueueSessionIds.add(player.sessionId);
-      }
+      deferredSessionCount += 1;
+      continue;
     }
 
-    if (automaticQueueSessionIds.size > 0) {
-      await tx.queuedMatch.deleteMany({
+    if (changesCurrentPool || player.pendingPool !== null) {
+      await tx.sessionPlayer.update({
         where: {
-          sessionId: { in: Array.from(automaticQueueSessionIds) },
-          isAutomatic: true,
+          sessionId_playerId: { sessionId: player.sessionId, playerId },
         },
+        data: { pool: preferredPool, pendingPool: null },
       });
+      immediateSessionCount += 1;
     }
 
-    return {
-      immediateSessionCount,
-      deferredSessionCount,
-      automaticQueueSessionIds: Array.from(automaticQueueSessionIds),
-    };
-  });
+    if (
+      (changesCurrentPool && queuedMatch?.isAutomatic) ||
+      (player.session.autoQueueEnabled && !queuedMatch)
+    ) {
+      automaticQueueSessionIds.add(player.sessionId);
+    }
+  }
+
+  if (automaticQueueSessionIds.size > 0) {
+    await tx.queuedMatch.deleteMany({
+      where: {
+        sessionId: { in: Array.from(automaticQueueSessionIds) },
+        isAutomatic: true,
+      },
+    });
+  }
+
+  return {
+    immediateSessionCount,
+    deferredSessionCount,
+    automaticQueueSessionIds: Array.from(automaticQueueSessionIds),
+  };
 }
 
 /**

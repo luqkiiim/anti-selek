@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
-import { getClubRoster } from "@/lib/clubRoster";
+import { getClubRoster, getClubRosterMember } from "@/lib/clubRoster";
 import { isQuickAccessSession, canQuickAccessClub, normalizeNameLookupKey } from "@/lib/quickAccess";
 import { isValidPlayerGender, isValidPartnerPreference, isValidMixedSide, resolveMixedSideState } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
@@ -41,15 +41,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (body.mixedSideOverride !== undefined && body.mixedSideOverride !== null && !isValidMixedSide(body.mixedSideOverride)) return NextResponse.json({ error: "Invalid player level" }, { status: 400 });
     if (body.status !== undefined && !["CORE", "OCCASIONAL"].includes(body.status)) return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
     if (body.preferredPool !== undefined && !isValidSessionPool(body.preferredPool)) return NextResponse.json({ error: "Invalid preferred game group" }, { status: 400 });
+    if (body.initialRating !== undefined && (!Number.isInteger(body.initialRating) || body.initialRating < 0 || body.initialRating > 5000)) return NextResponse.json({ error: "Enter an initial rating from 0 to 5000." }, { status: 400 });
     const existing = await prisma.clubMember.findMany({ where: { clubId: id, archivedAt: null }, include: { player: true } });
     const duplicate = existing.find(member => normalizeNameLookupKey(member.player.name) === normalizeNameLookupKey(body.name));
     if (duplicate && body.allowDuplicateName !== true) return NextResponse.json({ error: "A player with this name already exists. Review that profile before creating another.", existingPlayerId: duplicate.playerId }, { status: 409 });
     const mixed = resolveMixedSideState({ gender: body.gender, partnerPreference: body.partnerPreference, mixedSideOverride: body.mixedSideOverride });
-    const player = await prisma.$transaction(async tx => {
+    const initialRating = body.initialRating ?? 1000;
+    const member = await prisma.$transaction(async tx => {
       const created = await tx.player.create({ data: { name: body.name.trim(), gender: body.gender } });
-      await tx.clubMember.create({ data: { clubId: id, playerId: created.id, ownerUserId: null, mixedSideOverride: mixed.mixedSideOverride, status: body.status ?? "CORE", preferredPool: body.preferredPool ?? "B" } });
-      return created;
+      const membership = await tx.clubMember.create({ data: { clubId: id, playerId: created.id, ownerUserId: null, mixedSideOverride: mixed.mixedSideOverride, status: body.status ?? "CORE", preferredPool: body.preferredPool ?? "B", elo: initialRating } });
+      if (initialRating !== 1000) await tx.clubRatingAdjustment.create({ data: { memberId: membership.id, actorId: session.user.id, actorName: session.user.name || "Club admin", beforeElo: 1000, afterElo: initialRating, reason: "Initial rating" } });
+      const responseMember = await getClubRosterMember(tx, id, created.id);
+      if (!responseMember) throw new Error("Created club Player response is unavailable.");
+      return responseMember;
     });
-    return NextResponse.json((await getClubRoster(prisma, id)).find(member => member.id === player.id), { status: 201 });
+    return NextResponse.json(member, { status: 201 });
   } catch (error) { logError("Create offline club Player", error); return safeErrorResponse(); }
 }

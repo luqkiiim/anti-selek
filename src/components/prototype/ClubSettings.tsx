@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 import { Camera, CaretRight, LinkSimple, Trash } from "@phosphor-icons/react";
 import type { ClubPageClub } from "@/components/club/clubTypes";
-import { uploadClubAvatar, deleteClubAvatar } from "@/lib/avatarClient";
 import { createCroppedAvatarFile } from "@/lib/avatarCrop";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
-import { api, useAction } from "./api";
+import { adminApi } from "@/lib/adminClient";
+import { useAdminAction } from "@/components/club-admin/useAdminAction";
 
-export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggleJoins, refresh, onDeleted }: {
+export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggleJoins, refresh, onDeleted, onClubSaved }: {
   club: ClubPageClub; allowJoinRequests?: boolean; busy: boolean; onInvite: () => void;
-  onToggleJoins: () => void; refresh: () => Promise<unknown>; onDeleted: () => Promise<void>;
+  onToggleJoins: () => void; refresh: () => Promise<unknown>; onDeleted: () => Promise<void>; onClubSaved?: (club: Partial<ClubPageClub>) => void;
 }) {
   const [name, setName] = useState(club.name);
   const [rules, setRules] = useState(club.rules ?? "");
@@ -23,7 +23,7 @@ export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggle
   const [deleting, setDeleting] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const upload = useRef<HTMLInputElement>(null);
-  const action = useAction();
+  const action = useAdminAction(refresh);
   const endpoint = "/api/clubs/" + club.id;
   const changed = name.trim() !== club.name || rules.trim() !== (club.rules ?? "");
   useEffect(() => () => { if (source) URL.revokeObjectURL(source.url); }, [source]);
@@ -34,13 +34,13 @@ export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggle
     setCrop({ x: 0, y: 0 }); setZoom(1); setArea(null); setSource({ file, url: URL.createObjectURL(file) });
   }
   return <div className="club-settings">
-    <fieldset disabled={action.busy || busy} className="club-settings-fields">
+    <fieldset disabled={action.busy || busy || action.uncertain} className="club-settings-fields">
       <div className="club-settings-photo">
         <button className="club-photo-button" aria-label="Change club photo" onClick={() => upload.current?.click()}><Avatar large name={club.name} url={club.avatarUrl} /><span><Camera size={17} weight="bold" /></span></button>
-        <div><button className="text-button" onClick={() => upload.current?.click()}>{club.avatarUrl ? "Change photo" : "Add club photo"}</button>{club.avatarUrl && <button className="text-button muted" onClick={() => void action.run(async () => { await deleteClubAvatar(club.id); await refresh(); setNotice("Club photo removed."); })}>Remove photo</button>}</div>
+        <div><button className="text-button" onClick={() => upload.current?.click()}>{club.avatarUrl ? "Change photo" : "Add club photo"}</button>{club.avatarUrl && <button className="text-button muted" onClick={() => void action.run(signal => adminApi<{ avatarUrl: null }>(endpoint + "/avatar", "DELETE", undefined, { signal }), updated => { onClubSaved?.(updated); setNotice("Club photo removed."); })}>Remove photo</button>}</div>
         <input ref={upload} type="file" hidden accept="image/jpeg,image/png,image/webp" aria-label="Club photo file" onChange={e => { choose(e.target.files?.[0]); e.target.value = ""; }} />
       </div>
-      <form onSubmit={e => { e.preventDefault(); setNotice(""); void action.run(async () => { await api(endpoint, "PATCH", { name: name.trim(), rules: rules.trim() }); await refresh(); setNotice("Club details saved."); }); }}>
+      <form onSubmit={e => { e.preventDefault(); setNotice(""); void action.run(signal => adminApi<ClubPageClub>(endpoint, "PATCH", { ...(name.trim() !== club.name ? { name: name.trim() } : {}), ...(rules.trim() !== (club.rules ?? "") ? { rules: rules.trim() } : {}) }, { signal }), () => { onClubSaved?.({ name: name.trim(), rules: rules.trim() }); setNotice("Club details saved."); }); }}>
         <label className="field-label">Club name<input value={name} onChange={e => setName(e.target.value)} minLength={3} required /></label>
         <label className="field-label">Club rules (optional)<textarea aria-label="Club rules" value={rules} onChange={e => setRules(e.target.value)} maxLength={3000} rows={5} placeholder="e.g. Arrive 10 minutes early and let the host know if you can’t make it." /></label>
         <button type="submit" className="primary full" disabled={!changed || name.trim().length < 3 || action.busy}>{action.busy ? "Saving…" : "Save changes"}</button>
@@ -53,26 +53,26 @@ export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggle
           event.preventDefault();
           const password = joinCode;
           setJoinCode(""); setNotice("");
-          void action.run(async () => { await api(endpoint, "PATCH", { password, isPasswordProtected: true }); await refresh(); setNotice("Club join code updated."); });
+          void action.run(signal => adminApi(endpoint, "PATCH", { password, isPasswordProtected: true }, { signal }), () => { onClubSaved?.({ isPasswordProtected: true }); setNotice("Club join code updated."); });
         }}>
           <h4>Club join code</h4>
           <p className="club-settings-hint">{club.isPasswordProtected ? "A join code is required. The saved code cannot be displayed. Replacing it invalidates previously verified entry." : "Add a code that players enter before requesting to join."} Admin approval is still required.</p>
           <label className="field-label">{club.isPasswordProtected ? "New club join code" : "Club join code"}<input type="password" value={joinCode} onChange={event => setJoinCode(event.target.value)} minLength={4} maxLength={100} autoComplete="new-password" placeholder="At least 4 characters" /></label>
           <button className="secondary" type="submit" disabled={joinCode.length < 4 || action.busy}>{club.isPasswordProtected ? "Replace join code" : "Set join code"}</button>
-          {club.isPasswordProtected && <button className="text-button" type="button" onClick={() => { setJoinCode(""); setNotice(""); void action.run(async () => { await api(endpoint, "PATCH", { password: "", isPasswordProtected: false }); await refresh(); setNotice("Club join code removed."); }); }}>Remove join code</button>}
+          {club.isPasswordProtected && <button className="text-button" type="button" onClick={() => { setJoinCode(""); setNotice(""); void action.run(signal => adminApi(endpoint, "PATCH", { password: "", isPasswordProtected: false }, { signal }), () => { onClubSaved?.({ isPasswordProtected: false }); setNotice("Club join code removed."); }); }}>Remove join code</button>}
         </form>}
       </section>
       {!club.isTutorial && <div className="club-settings-danger"><button className="text-button danger" onClick={() => { action.setError(""); setConfirmation(""); setDeleting(true); }}><Trash size={18} />Delete club</button></div>}
     </fieldset>
-    <ErrorText error={action.error} />{notice && <p className="club-settings-notice" role="status">{notice}</p>}
+    <ErrorText error={action.error} />{(action.refreshWarning || action.uncertain) && <div role="status">{action.refreshWarning && <p>{action.refreshWarning}</p>}<button className="text-button" disabled={action.refreshing} onClick={() => void action.retryRefresh()}>{action.refreshing ? "Refreshing…" : "Refresh details"}</button></div>}{notice && <p className="club-settings-notice" role="status">{notice}</p>}
     <Sheet open={!!source} title="Club photo" busy={action.busy} onClose={() => setSource(null)}>{source && <>
       <div className="club-crop-area"><Cropper image={source.url} crop={crop} zoom={zoom} aspect={1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={(_, pixels) => setArea(pixels)} /></div>
       <label className="field-label">Zoom<input aria-label="Photo zoom" type="range" min={1} max={3} step={0.01} value={zoom} onChange={e => setZoom(Number(e.target.value))} /></label>
-      <ErrorText error={action.error} /><button className="primary full" disabled={!area || action.busy} onClick={() => void action.run(async () => { if (!area) return; const file = await createCroppedAvatarFile({ src: source.url, crop: area, fileName: source.file.name }); await uploadClubAvatar(club.id, file); await refresh(); setSource(null); setNotice("Club photo updated."); })}>Save photo</button>
+      <ErrorText error={action.error} /><button className="primary full" disabled={!area || action.busy || action.uncertain || busy} onClick={() => void action.run(async signal => { if (!area) throw new Error("Choose a crop first."); const file = await createCroppedAvatarFile({ src: source.url, crop: area, fileName: source.file.name }); const form = new FormData(); form.append("avatar", file); return adminApi<{ avatarUrl: string | null }>(endpoint + "/avatar", "POST", form, { signal }); }, updated => { onClubSaved?.(updated); setSource(null); setNotice("Club photo updated."); })}>Save photo</button>
     </>}</Sheet>
     <Sheet open={deleting} title="Delete club?" busy={action.busy} onClose={() => setDeleting(false)}>
       <p>This permanently deletes {club.name} and its session history.</p><label className="field-label">Type DELETE to confirm<input aria-label="Deletion confirmation" value={confirmation} onChange={e => setConfirmation(e.target.value)} autoComplete="off" /></label><ErrorText error={action.error} />
-      <button className="primary full" disabled={confirmation !== "DELETE" || action.busy} onClick={() => void action.run(async () => { await api(endpoint, "DELETE", { confirmation }); await onDeleted(); })}>Delete club</button>
+      <button className="primary full" disabled={confirmation !== "DELETE" || action.busy || action.uncertain || busy} onClick={() => void action.run(signal => adminApi(endpoint, "DELETE", { confirmation }, { signal }), () => { setDeleting(false); void onDeleted().catch(() => {}); })}>Delete club</button>
       <button className="text-button full" onClick={() => setDeleting(false)}>Keep club</button>
     </Sheet>
   </div>;

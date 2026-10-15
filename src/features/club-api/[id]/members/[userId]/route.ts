@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
-import { getClubRoster } from "@/lib/clubRoster";
+import { getClubRosterMember } from "@/lib/clubRoster";
 import { isValidClubRole } from "@/lib/clubRoles";
 import { isQuickAccessSession, normalizeNameLookupKey } from "@/lib/quickAccess";
 import { isValidMixedSide, isValidPartnerPreference, isValidPlayerGender, resolveMixedSideState } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
-import { propagatePreferredPoolToClubSessions } from "@/lib/playerGroupPreferences";
+import { propagatePreferredPoolToClubSessionsInTransaction } from "@/lib/playerGroupPreferences";
 import { tryRebuildAutomaticQueuedMatchForSessionId } from "@/app/api/sessions/[code]/queue-match/shared";
 import { rateLimit } from "@/lib/rateLimit";
 import { ClubAdmissionError } from "@/lib/clubAdmissions";
@@ -54,7 +54,7 @@ export async function PATCH(request: Request, { params }: Context) {
       if (!member.ownerUserId) return NextResponse.json({ error: "Only a registered account can receive club permissions." }, { status: 400 });
       if (member.ownerUserId === session.user.id || member.ownerUserId === access?.createdById) return NextResponse.json({ error: "Cannot change your own or the club owner's role." }, { status: 400 });
     }
-    await clubOwnershipTransaction(prisma, async tx => {
+    const result = await clubOwnershipTransaction(prisma, async tx => {
       const current = await tx.clubMember.findUnique({ where: { id: member.id }, include: { player: true } });
       const currentAccess = await getClubAdminAccess(tx, { clubId, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       if (!current || current.archivedAt || current.retiredByAdmissionEventId) throw new ClubAdmissionError("This player changed. Refresh before editing.", 409);
@@ -88,14 +88,27 @@ export async function PATCH(request: Request, { params }: Context) {
       }
       if (typeof body.isActive === "boolean") await tx.player.update({ where: { id: playerId }, data: { isActive: body.isActive } });
       if (body.status !== undefined || body.preferredPool !== undefined) await tx.clubMember.update({ where: { id: member.id }, data: { ...(body.status !== undefined ? { status: body.status } : {}), ...(body.preferredPool !== undefined ? { preferredPool: body.preferredPool } : {}) } });
+      const preferencePropagation = isValidSessionPool(body.preferredPool)
+        ? await propagatePreferredPoolToClubSessionsInTransaction(tx, { clubId, playerId, preferredPool: body.preferredPool })
+        : { immediateSessionCount: 0, deferredSessionCount: 0 };
+      const responseMember = await getClubRosterMember(tx, clubId, playerId);
+      if (!responseMember) throw new Error("Updated club Player response is unavailable.");
+      return { member: responseMember, preferencePropagation };
     });
-    let preferencePropagation = { immediateSessionCount: 0, deferredSessionCount: 0 };
-    if (isValidSessionPool(body.preferredPool)) {
-      const result = await propagatePreferredPoolToClubSessions(prisma, { clubId, playerId, preferredPool: body.preferredPool });
-      preferencePropagation = result;
-      await Promise.all(result.automaticQueueSessionIds.map(id => tryRebuildAutomaticQueuedMatchForSessionId(id)));
-    }
-    return NextResponse.json({ ...(await getClubRoster(prisma, clubId)).find(player => player.id === playerId), preferencePropagation });
+    const queueSessionIds = "automaticQueueSessionIds" in result.preferencePropagation ? result.preferencePropagation.automaticQueueSessionIds : [];
+    const queueResults = await Promise.allSettled(queueSessionIds.map(id => tryRebuildAutomaticQueuedMatchForSessionId(id)));
+    let queueRebuildFailed = false;
+    queueResults.forEach((queueResult, index) => {
+      if (queueResult.status !== "rejected") return;
+      queueRebuildFailed = true;
+      // Do not log raw adapter errors, which can contain connection credentials.
+      try { logError("Rebuild automatic queue after club Player update", { code: "QUEUE_REBUILD_FAILED", clubId, playerId, sessionId: queueSessionIds[index] }); } catch { /* Logging must not change a committed response. */ }
+    });
+    return NextResponse.json({
+      ...result.member,
+      preferencePropagation: result.preferencePropagation,
+      ...(queueRebuildFailed ? { warnings: [{ code: "QUEUE_REBUILD_FAILED", message: "Player saved. The automatic queue could not be refreshed." }] } : {}),
+    });
   } catch (error) { if (error instanceof ClubAdmissionError || error instanceof ClubPlayerOwnershipError || error instanceof AccountProfileSyncError) return NextResponse.json({ error: error.message }, { status: error.statusCode }); logError("Update club Player", error); return safeErrorResponse(); }
 }
 
