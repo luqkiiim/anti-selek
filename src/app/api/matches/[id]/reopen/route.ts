@@ -1,6 +1,7 @@
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { assertSessionMutationActor, assertSessionProfileContextsUnambiguous } from "@/lib/sessionProfileIdentity";
+import { bumpSessionResultsRevision } from "@/lib/matchCompletion";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -40,10 +41,12 @@ export async function POST(
         id: true,
         sessionId: true,
         status: true,
+        scoreRevision: true,
         session: {
           select: {
             clubId: true,
             ratingPolicyVersion: true,
+            collaborationVersion: true,
           },
         },
       },
@@ -56,6 +59,11 @@ export async function POST(
     if (match.status !== MatchStatus.PENDING_APPROVAL) {
       return sportingJson({ error: "Match is not pending approval" }, { status: 400 });
     }
+
+    const body = await _request.json().catch(() => ({}));
+    const scoreRevision = body && typeof body === "object" ? body.scoreRevision : undefined;
+    if ((match.session.collaborationVersion ?? 1) >= 2 && scoreRevision === undefined) return sportingJson({ error: "Refresh the match before reopening its score." }, { status: 409 });
+    if (scoreRevision !== undefined && (!Number.isSafeInteger(scoreRevision) || scoreRevision !== match.scoreRevision)) return sportingJson({ error: "This score changed. Refresh before reopening." }, { status: 409 });
 
     const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: { id: match.sessionId, clubId: match.session.clubId },
@@ -71,10 +79,12 @@ export async function POST(
     const updatedResult = await admissionTransaction(prisma, async tx => {
       await assertSessionMutationActor(tx, { session: { id: match.sessionId, ...match.session }, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       await assertSessionProfileContextsUnambiguous(tx, { id: match.sessionId, ...match.session });
-      return tx.match.updateMany({
-      where: { id, status: MatchStatus.PENDING_APPROVAL },
+      const changed = await tx.match.updateMany({
+      where: { id, status: MatchStatus.PENDING_APPROVAL, ...(match.scoreRevision !== undefined ? { scoreRevision: match.scoreRevision } : {}) },
       data: {
         status: MatchStatus.IN_PROGRESS,
+        gameScoresJson: null,
+        scoreRevision: { increment: 1 },
         team1Score: null,
         team2Score: null,
         winnerTeam: null,
@@ -85,7 +95,8 @@ export async function POST(
         scoreSubmittedByPlayerId: null,
       },
     });
-
+      if (changed.count > 0) await bumpSessionResultsRevision(tx, match.sessionId);
+      return changed;
     });
 
     if (updatedResult.count === 0) {

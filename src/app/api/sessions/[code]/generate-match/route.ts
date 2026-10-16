@@ -1,3 +1,4 @@
+import { assertFreePlayScheduling } from "./shared";
 import { ClubAdmissionError } from "@/lib/clubAdmissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
@@ -91,6 +92,7 @@ export async function POST(
       return sportingJson(await undoCurrentCourtMatch(targetCourt, sessionData.mutationActor));
     }
 
+    assertFreePlayScheduling(sessionData);
     ensureInterclubSessionReady(sessionData);
 
     if (matchType && sessionData.queuedMatch) {

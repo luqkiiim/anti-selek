@@ -1,3 +1,4 @@
+import { collaborationEvent, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
@@ -104,6 +105,11 @@ export async function PATCH(
     const updated = await admissionTransaction(prisma, async tx => {
       const freshContext = await getAccountClubContext(tx, { userId: session.user.id, clubId: partnerLink.clubId, isGlobalAdmin: !!session.user.isAdmin });
       if (!freshContext.canAdmin) throw new IdentityConflictError("Your partner club access changed. Refresh before reviewing this tournament.");
+      const current = await tx.session.findUnique({where:{id:sessionData.id},select:{status:true,collaborationVersion:true}});
+      if (current && isUpgradedCollaboration(current)) {
+        if(current.status !== "WAITING") throw new IdentityConflictError("This invitation is no longer open.");
+        await collaborationEvent(tx,sessionData.id,session.user.id,"INVITATION_REVIEW",{status,clubId:partnerLink.clubId});
+      }
       const freshLink = await tx.sessionClub.findUnique({ where: { id: partnerLink.id }, select: { status: true } });
       if (freshLink?.status !== SessionClubStatus.PENDING) throw new IdentityConflictError("This collaboration invitation was already reviewed.");
       return tx.sessionClub.update({

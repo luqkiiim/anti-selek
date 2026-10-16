@@ -1,3 +1,4 @@
+import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { prisma } from "@/lib/prisma";
 import { CourtGroupType, MatchStatus } from "@/types/enums";
@@ -57,6 +58,14 @@ async function assertAssignmentsAvailable(
     );
   }
 
+  const source = await tx.session.findUnique({ where: { id: sessionId }, select: { collaborationVersion: true } });
+  if (source && isUpgradedCollaboration(source)) {
+    const selected = await tx.sessionPlayer.findMany({ where: { sessionId, playerId: { in: [...uniqueSelectedIds] } }, select: { playerId: true, isPaused: true } });
+    if (selected.length !== uniqueSelectedIds.size || selected.some(player => player.isPaused)) {
+      throw new GenerateMatchError(409, "Selected players are no longer available. Refresh and try again.");
+    }
+  }
+
   const concurrentBusyMatches = await tx.match.findMany({
     where: {
       sessionId,
@@ -113,7 +122,7 @@ async function createMatchAssignment(
 
   const session = await tx.session.findUnique({
     where: { id: sessionId },
-    select: { poolsEnabled: true },
+    select: { poolsEnabled: true, scoringFormat: true, collaborationVersion: true },
   });
   if (session?.poolsEnabled) {
     const selectedPlayers = await tx.sessionPlayer.findMany({
@@ -168,6 +177,7 @@ async function createMatchAssignment(
   const match = await tx.match.create({
     data: {
       sessionId,
+      scoringFormat: session?.scoringFormat ?? "SINGLE_GAME",
       courtId: assignment.courtId,
       status: MatchStatus.IN_PROGRESS,
       team1Player1Id: assignment.partition.team1[0],
@@ -189,6 +199,11 @@ async function createMatchAssignment(
       team2Player2: { select: { id: true, name: true } },
     },
   });
+
+  if (session && isUpgradedCollaboration(session)) {
+    await tx.sessionPlayer.updateMany({ where: { sessionId, playerId: { in: [...assignment.partition.team1, ...assignment.partition.team2] } }, data: { hasStartedMatch: true } });
+    await tx.session.update({ where: { id: sessionId }, data: { resultsRevision: { increment: 1 } } });
+  }
 
   const updatedCourt = await tx.court.updateMany({
     where: { id: assignment.courtId, currentMatchId: null },

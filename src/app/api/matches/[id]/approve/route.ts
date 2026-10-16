@@ -5,7 +5,7 @@ import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { finalizeMatchResult } from "@/lib/matchCompletion";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
-import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
+import { MATCH_SCORE_ERROR_MESSAGE, SERIES_SCORE_ERROR_MESSAGE, resolveMatchScoreInput } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
@@ -52,6 +52,8 @@ export async function POST(
             type: true,
             balanceMetric: true,
             ratingPolicyVersion: true,
+            ratingMode: true,
+            collaborationVersion: true,
             isTest: true,
           },
         },
@@ -118,9 +120,11 @@ export async function POST(
 
     // Allow admin to override scores
     const body = await request.json().catch(() => ({}));
-    const { team1Score, team2Score } = body as {
+    const { team1Score, team2Score, gameScores, scoreRevision } = body as {
       team1Score?: unknown;
       team2Score?: unknown;
+      gameScores?: unknown;
+      scoreRevision?: unknown;
     };
     let finalTeam1Score = match.team1Score;
     let finalTeam2Score = match.team2Score;
@@ -130,24 +134,20 @@ export async function POST(
       finalTeam2Score = team2Score;
     }
 
-    if (typeof finalTeam1Score !== "number" || typeof finalTeam2Score !== "number") {
-      return sportingJson({ error: "Missing match scores" }, { status: 400 });
-    }
-    if (!isValidMatchScore(finalTeam1Score, finalTeam2Score)) {
-      return sportingJson(
-        { error: MATCH_SCORE_ERROR_MESSAGE },
-        { status: 400 }
-      );
-    }
-
+    if ((match.session.collaborationVersion ?? 1) >= 2 && scoreRevision === undefined) return sportingJson({ error: "Refresh the match before confirming its score." }, { status: 409 });
+    if (scoreRevision !== undefined && (!Number.isSafeInteger(scoreRevision) || scoreRevision !== match.scoreRevision)) return sportingJson({ error: "This score changed. Refresh before confirming." }, { status: 409 });
+    const resolvedScore = resolveMatchScoreInput({ ...match, team1Score: finalTeam1Score, team2Score: finalTeam2Score, ...(isOperator && gameScores !== undefined ? { gameScores } : {}) });
+    if (!resolvedScore) return sportingJson({ error: match.scoringFormat === "BEST_OF_THREE" ? SERIES_SCORE_ERROR_MESSAGE : MATCH_SCORE_ERROR_MESSAGE }, { status: 400 });
     try {
       const result = await finalizeMatchResult({
         match,
         actorUserId: session.user.id,
         actorIsGlobalAdmin: !!session.user.isAdmin,
         expectedStatus: MatchStatus.PENDING_APPROVAL,
-        finalTeam1Score,
-        finalTeam2Score,
+        finalTeam1Score: resolvedScore.team1Score,
+        finalTeam2Score: resolvedScore.team2Score,
+        finalGameScores: match.scoringFormat === "BEST_OF_THREE" ? resolvedScore.gameScores : undefined,
+        expectedScoreRevision: match.scoreRevision,
       });
 
       const automaticQueueInvalidated =

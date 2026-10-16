@@ -1,3 +1,6 @@
+import { assertCollaborationPermission, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
+import { ClubAdmissionError } from "@/lib/clubAdmissions";
+import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
@@ -9,6 +12,7 @@ import { createQueuedMatchAssignment } from "../../generate-match/assignments";
 import { buildMatchmakingState } from "../../generate-match/selection";
 import {
   GenerateMatchError,
+  assertFreePlayScheduling,
   loadSessionRecord,
 } from "../../generate-match/shared";
 import { getInterclubTeamClubIdsForPartition } from "../../generate-match/interclub";
@@ -72,6 +76,8 @@ export async function POST(
       !!session.user.isAdmin
     );
 
+    if (isUpgradedCollaboration(sessionData)) await assertCollaborationPermission(prisma, { sessionId: sessionData.id, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, kind: "host" });
+    assertFreePlayScheduling(sessionData);
     if (sessionData.status !== "ACTIVE") {
       throw new GenerateMatchError(400, "Tournament not active");
     }
@@ -125,6 +131,7 @@ export async function POST(
 
     const match = await createQueuedMatchAssignment({
       sessionId: sessionData.id,
+      actor: { userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin },
       queuedMatchId: sessionData.queuedMatch.id,
       courtId: targetCourt.id,
       partition,
@@ -149,6 +156,7 @@ export async function POST(
       queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: error.statusCode });
     if (error instanceof GenerateMatchError) {
       if (error.status === 403) {
         return invalidTargetResponse(_request, "api:sessions:code:queue-match:assign");

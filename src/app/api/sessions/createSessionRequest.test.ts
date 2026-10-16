@@ -408,6 +408,14 @@ describe("parseCreateSessionRequest", () => {
     );
   });
 
+  it("upgrades every new collaboration and defaults club-vs-club to unrated free play", () => {
+    const input = { name: "Friendly", clubId: "home", partnerClubId: "away", collabFormat: "INTERCLUB" };
+    expect(parseCreateSessionRequest(input)).toMatchObject({ collaborationVersion: 2, schedulingMode: "FREE_PLAY", scoringFormat: "SINGLE_GAME", ratingMode: "UNRATED" });
+    expect(() => parseCreateSessionRequest({ ...input, collaborationVersion: 1 })).toThrow("Invalid collaboration version");
+    expect(parseCreateSessionRequest({ ...input, schedulingMode: "LINEUP", autoQueueEnabled: true })).toMatchObject({ autoQueueEnabled: false });
+    expect(parseCreateSessionRequest({ ...input, collabFormat: "FREE_PLAY" })).toMatchObject({ collaborationVersion: 2, ratingMode: "RATED", scoringFormat: "SINGLE_GAME" });
+  });
+
   it("accepts legacy community identifiers", () => {
     const parsed = parseCreateSessionRequest({
       name: "Legacy Collab Night",

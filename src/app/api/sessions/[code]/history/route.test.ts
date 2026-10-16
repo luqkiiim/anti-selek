@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   accountFindUnique: vi.fn(),
   clubFindUnique: vi.fn(),
+  clubAccessFindFirst: vi.fn(),
   canQuickAccessClub: vi.fn(),
   canQuickAccessSessionRead: vi.fn(),
   getSessionAdminMembership: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: mocks.accountFindUnique },
     club: { findUnique: mocks.clubFindUnique },
+    clubAccess: { findFirst: mocks.clubAccessFindFirst },
     match: {
       findFirst: mocks.matchFindFirst,
     },
@@ -180,6 +182,17 @@ describe("session history route correction availability", () => {
     mocks.getSessionOperatorMembership.mockResolvedValue({ role: "ADMIN" });
     mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
     mocks.matchFindFirst.mockResolvedValue(null);
+  });
+
+  it("keeps visiting admins able to correct but reserves upgraded completed undo for host operators", async () => {
+    mocks.sessionFindUnique.mockResolvedValue({ ...createHistorySession(), status: SessionStatus.ACTIVE, collaborationVersion: 2, ratingMode: "UNRATED" });
+    mocks.clubAccessFindFirst.mockResolvedValue(null);
+    let response = await getHistory();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ viewerCanManage: true, viewerCanUndoCompletedScores: false, undoableMatchId: null, canCorrectCompletedScores: true });
+    mocks.clubAccessFindFirst.mockResolvedValue({ clubId: "community-1" });
+    response = await getHistory();
+    expect(await response.json()).toMatchObject({ viewerCanUndoCompletedScores: true, undoableMatchId: "match-1", canCorrectCompletedScores: true });
   });
 
   it("marks completed sessions correctable for admins when replay is exact", async () => {

@@ -1,3 +1,4 @@
+import { assertCollaborationPermission, collaborationEvent, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { reconcileSessionQueueAfterCourtChange } from "@/app/api/matches/_lib/reconcileSessionQueue";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
@@ -61,6 +62,10 @@ export async function loadGenerateMatchContext({
     requesterIsAdmin
   );
 
+  if (isUpgradedCollaboration(sessionData)) {
+    await assertCollaborationPermission(prisma, { sessionId: sessionData.id, userId: requesterAccountId, isGlobalAdmin: requesterIsAdmin, kind: "host" });
+  }
+
   const targetCourts = await loadCourtRecords(
     sessionData.id,
     requestedCourtIds
@@ -115,9 +120,21 @@ export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt, act
     throw new GenerateMatchError(400, "Only unscored matches can be undone.");
   }
 
+  let skipQueueReconcile = false;
   const pendingPlayerGroupChanges = await sessionMatchMutationTransaction(prisma, targetCourt.sessionId, actor, async (tx) => {
+    const freshSession = await tx.session.findUnique({ where: { id: targetCourt.sessionId }, select: { collaborationVersion: true, schedulingMode: true } });
+    if (freshSession && isUpgradedCollaboration(freshSession)) {
+      const freshMatch = await tx.match.findFirst({ where: { id: targetCourt.currentMatch!.id, sessionId: targetCourt.sessionId, courtId: targetCourt.id, status: { in: undoableStatuses } }, select: { id: true } });
+      if (!freshMatch) throw new GenerateMatchError(409, "This match has changed. Refresh and try again.");
+      await tx.sessionLineupRow.updateMany({ where: { sessionId: targetCourt.sessionId, matchId: freshMatch.id }, data: { matchId: null, revision: { increment: 1 }, hostConfirmedRevision: null, partnerConfirmedRevision: null } });
+      await tx.session.update({ where: { id: targetCourt.sessionId }, data: { resultsRevision: { increment: 1 } } });
+      skipQueueReconcile = freshSession.schedulingMode === "LINEUP";
+      const clearedCourt = await tx.court.updateMany({ where: { id: targetCourt.id, sessionId: targetCourt.sessionId, currentMatchId: freshMatch.id }, data: { currentMatchId: null } });
+      if (clearedCourt.count !== 1) throw new GenerateMatchError(409, "This court has changed. Refresh and try again.");
+      if (actor) await collaborationEvent(tx, targetCourt.sessionId, actor.userId, "undoMatch", { matchId: freshMatch.id });
+    }
     await tx.match.delete({ where: { id: targetCourt.currentMatch!.id } });
-    await tx.court.update({
+    if (!freshSession || !isUpgradedCollaboration(freshSession)) await tx.court.update({
       where: { id: targetCourt.id },
       data: { currentMatchId: null },
     });
@@ -130,10 +147,11 @@ export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt, act
         targetCourt.currentMatch!.team2Player2Id,
       ],
     });
-  });
+  }, { operation: "undo" });
 
-  const { autoAssignedMatch, queuedMatchCleared, queuedMatch } =
-    await (pendingPlayerGroupChanges.automaticQueueInvalidated
+  const { autoAssignedMatch, queuedMatchCleared, queuedMatch } = skipQueueReconcile
+    ? { autoAssignedMatch: null, queuedMatchCleared: false, queuedMatch: null }
+    : await (pendingPlayerGroupChanges.automaticQueueInvalidated
       ? reconcileSessionQueueAfterCourtChange(targetCourt.sessionId, {
           generateAutomaticIfMissing: true,
         })

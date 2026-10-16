@@ -1,4 +1,5 @@
-import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
+import { assertScopedSessionMutation } from "../players/collaborationPermissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
@@ -58,6 +59,7 @@ export async function POST(
       mixedSideOverride,
       pool,
       representingClubId,
+      profileClubId,
     } =
       body as {
       name?: unknown;
@@ -67,6 +69,7 @@ export async function POST(
       mixedSideOverride?: unknown;
       pool?: unknown;
       representingClubId?: unknown;
+      profileClubId?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
       return sportingJson({ error: "Guest name must be at least 2 characters" }, { status: 400 });
@@ -110,6 +113,7 @@ export async function POST(
         id: true,
         clubId: true,
         collabFormat: true,
+        collaborationVersion: true,
         status: true,
         mode: true,
         poolsEnabled: true,
@@ -176,6 +180,15 @@ export async function POST(
       normalizedRepresentingClubId = representingClubId;
     }
 
+    const guestClubId = isUpgradedCollaboration(sessionData)
+      ? normalizedRepresentingClubId ?? (typeof profileClubId === "string" && profileClubId ? profileClubId : typeof representingClubId === "string" && representingClubId ? representingClubId : null)
+      : null;
+    if (isUpgradedCollaboration(sessionData) && (!guestClubId || !acceptedSessionClubIds.includes(guestClubId))) {
+      return sportingJson({ error: "Choose which club is adding this guest" }, { status: 400 });
+    }
+
+    if (guestClubId) normalizedRepresentingClubId = guestClubId;
+
     const guestName = name.trim();
     const targetPool =
       sessionData.poolsEnabled && isValidSessionPool(pool)
@@ -209,7 +222,7 @@ export async function POST(
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
 
     const createdGuest = await admissionTransaction(prisma, async (tx) => {
-      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, allowContextlessParticipant: true });
+      await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, clubId: guestClubId, allowContextlessParticipant: true });
       const user = await tx.player.create({
         data: {
           name: guestName,
@@ -264,6 +277,7 @@ export async function POST(
       partnerPreference: createdGuest.partnerPreference,
       mixedSideOverride: createdGuest.mixedSideOverride,
       representingClubId: normalizedRepresentingClubId,
+      profileClubId: null,
       pool: targetPool,
       ladderEntryAt: joinedAt.toISOString(),
       queuedMatch,

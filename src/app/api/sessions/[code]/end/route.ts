@@ -1,3 +1,4 @@
+import { assertCollaborationPermission, collaborationEvent, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
@@ -48,6 +49,7 @@ export async function POST(
         id: true,
         clubId: true,
         endedAt: true,
+        collaborationVersion: true,
       },
     });
 
@@ -64,9 +66,19 @@ export async function POST(
       return sportingJson({ error: "Admin or staff only" }, { status: 403 });
     }
 
+    const endBody = await _request.json().catch(() => ({}));
     const endedAt = sessionData.endedAt ?? new Date();
     const updated = await admissionTransaction(prisma, async (tx) => {
       await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      if (isUpgradedCollaboration(sessionData)) {
+        const {session: current} = await assertCollaborationPermission(tx, {sessionId: sessionData.id, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, kind: "host"});
+        if (current.status !== "ACTIVE") throw new IdentityConflictError("Only an active session can be ended.");
+        if (await tx.match.count({where:{sessionId:current.id,status:{in:["PENDING","IN_PROGRESS","PENDING_APPROVAL"]}}})) throw new IdentityConflictError("Complete or undo the unfinished matches before ending this session.");
+        const remaining = await tx.sessionLineupRow.count({where:{sessionId:current.id,matchId:null,cancelled:false}});
+        if (remaining && endBody?.acknowledgeRemainingLineup !== true) throw new IdentityConflictError("Confirm ending with unplayed lineup matches.");
+        await tx.sessionLineupRow.updateMany({where:{sessionId:current.id,matchId:null,cancelled:false},data:{cancelled:true,revision:{increment:1},hostConfirmedRevision:null,partnerConfirmedRevision:null}});
+        await collaborationEvent(tx,current.id,session.user.id,"SESSION_END",{unplayedRows:remaining});
+      }
       await tx.queuedMatch.deleteMany({
         where: { sessionId: sessionData.id },
       });
@@ -146,7 +158,6 @@ export async function POST(
       queuedMatch: null,
     });
   } catch (error) {
-    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("End session error", error);
     return safeErrorResponse();

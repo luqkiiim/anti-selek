@@ -1,3 +1,4 @@
+import { isCloseMatchResult } from "./matchRules";
 export type AchievementId = "first-serve" | "familiar-face" | "mix-it-up" | "rhythm" | "on-the-board" | "down-to-wire" | "clean-sweep" | "back-in-business" | "raising-bar" | "good-together" | "making-it-happen";
 export interface AchievementTier { tier: number; target: number; earnedAt: string | null; sessionCode: string | null; sessionName: string | null; }
 export interface ClubAchievement { id: AchievementId; name: string; description: string; unit: string; progress: number; progressLabel: string; tiers: AchievementTier[]; earnedTier: number; optional: boolean; }
@@ -19,7 +20,7 @@ export interface PublicAchievementCollection {
   earned: PublicAchievement[];
 }
 
-export interface AchievementMatch { id: string; date: string; team1: string[]; team2: string[]; winner: number; score1: number; score2: number; ratingDelta: Record<string, number>; }
+export interface AchievementMatch { scoringFormat?: string; gameScoresJson?: string | null; id: string; date: string; team1: string[]; team2: string[]; winner: number; score1: number; score2: number; ratingDelta: Record<string, number>; }
 export interface AchievementSession { id: string; code: string; name: string; date: string; hostId: string | null; eligibleIds: string[]; guests: string[]; matches: AchievementMatch[]; }
 const definitions: { id: AchievementId; name: string; description: string; unit: string; targets: number[]; optional?: boolean }[] = [
   { id: "first-serve", name: "First Serve", description: "Finish a session with at least one recorded game.", unit: "sessions", targets: [1] },
@@ -66,7 +67,7 @@ export function buildClubAchievements(userId: string, currentMemberIds: string[]
       if(partner && !guests.has(partner)) partners.add(partner);
       if(match.winner===side) {
         wins++; sessionWins++;
-        if(Math.abs(match.score1-match.score2)>=1 && Math.abs(match.score1-match.score2)<=2) close++;
+        if(isCloseMatchResult({ ...match, team1Score: match.score1, team2Score: match.score2, winnerTeam: match.winner })) close++;
         if(lossRun>=2) comebacks++;
         lossRun=0;
         if(partner) partnerWins.set(partner,(partnerWins.get(partner)??0)+1);

@@ -44,6 +44,9 @@ export interface Player {
 export interface Match {
   id: string;
   createdAt?: string;
+  scoringFormat?: "SINGLE_GAME" | "BEST_OF_THREE";
+  gameScoresJson?: string | null;
+  scoreRevision?: number;
   status: string;
   scoreSubmittedByUserId?: string | null;
   scoreSubmittedByPlayerId?: string | null;
@@ -81,6 +84,9 @@ export interface QueuedMatch {
 
 export interface CompletedMatchInfo {
   id: string;
+  scoringFormat?: "SINGLE_GAME" | "BEST_OF_THREE";
+  gameScoresJson?: string | null;
+  scoreRevision?: number;
   createdAt?: string;
   team1User1Id: string;
   team1User2Id: string;
@@ -129,6 +135,12 @@ export interface SessionData {
   type: string;
   mode: SessionMode;
   collabFormat?: SessionCollabFormat;
+  collaborationVersion?: number;
+  schedulingMode?: "FREE_PLAY" | "LINEUP";
+  scoringFormat?: "SINGLE_GAME" | "BEST_OF_THREE";
+  ratingMode?: "RATED" | "UNRATED";
+  rulesRevision?: number;
+  resultsRevision?: number;
   scoringType?: SessionScoringType;
   matchmakingStyle?: SessionMatchmakingStyle;
   balanceMetric?: SessionBalanceMetric;

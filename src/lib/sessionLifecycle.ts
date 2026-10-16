@@ -90,7 +90,7 @@ export async function reverseSessionEloChanges(
     clubId: string | null;
   }
 ): Promise<number> {
-  const policy = await tx.session.findUnique({ where: { id: sessionId }, select: { ratingPolicyVersion: true } });
+  const policy = await tx.session.findUnique({ where: { id: sessionId }, select: { ratingPolicyVersion: true, ratingMode: true } });
   const sessionPlayers = await tx.sessionPlayer.findMany({
     where: { sessionId },
     select: { playerId: true, isGuest: true },
@@ -114,6 +114,10 @@ export async function reverseSessionEloChanges(
     where: { matchId: { in: completedMatches.map((match) => match.id) } },
     select: { matchId: true, clubId: true, playerId: true, delta: true },
   });
+  if (policy?.ratingMode === "UNRATED") {
+    if (ledgerAdjustments.length > 0) throw new Error("Unrated results unexpectedly contain rating ledger rows; reversal is blocked.");
+    return 0;
+  }
   if (policy?.ratingPolicyVersion === 2) {
     for (const match of completedMatches) await assertSelectedProfileLedger(tx, sessionId, [match.team1Player1Id, match.team1Player2Id, match.team2Player1Id, match.team2Player2Id], ledgerAdjustments.filter(a => a.matchId === match.id));
   }

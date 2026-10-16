@@ -4,12 +4,12 @@ import { IdentityConflictError } from "@/lib/playerIdentity";
 import { getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
-import { finalizeMatchResult } from "@/lib/matchCompletion";
+import { bumpSessionResultsRevision, finalizeMatchResult } from "@/lib/matchCompletion";
 import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
-import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
+import { MATCH_SCORE_ERROR_MESSAGE, SERIES_SCORE_ERROR_MESSAGE, resolveMatchScoreInput } from "@/lib/matchRules";
 import { MatchStatus, SessionClubStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -44,9 +44,12 @@ export async function POST(
       return sportingJson({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { team1Score, team2Score } = body as {
+    const { team1Score, team2Score, gameScores, finalize, scoreRevision } = body as {
       team1Score?: unknown;
       team2Score?: unknown;
+      gameScores?: unknown;
+      finalize?: unknown;
+      scoreRevision?: unknown;
     };
 
     const match = await prisma.match.findUnique({
@@ -56,6 +59,9 @@ export async function POST(
         sessionId: true,
         courtId: true,
         status: true,
+        scoringFormat: true,
+        gameScoresJson: true,
+        scoreRevision: true,
         session: {
           select: {
             clubId: true,
@@ -66,6 +72,9 @@ export async function POST(
             type: true,
             balanceMetric: true,
             ratingPolicyVersion: true,
+            ratingMode: true,
+            collaborationVersion: true,
+            status: true,
             isTest: true,
           },
         },
@@ -117,17 +126,16 @@ export async function POST(
       return invalidTargetResponse(request, "api:matches:id:score");
     }
 
-    if (typeof team1Score !== "number" || typeof team2Score !== "number") {
-      return sportingJson({ error: "Invalid score" }, { status: 400 });
-    }
-    if (!isValidMatchScore(team1Score, team2Score)) {
-      return sportingJson(
-        { error: MATCH_SCORE_ERROR_MESSAGE },
-        { status: 400 }
-      );
-    }
-
-    const winnerTeam = team1Score > team2Score ? 1 : 2;
+    if (finalize !== undefined && typeof finalize !== "boolean") return sportingJson({ error: "Invalid finalize option" }, { status: 400 });
+    if ((match.session.collaborationVersion ?? 1) >= 2 && scoreRevision === undefined) return sportingJson({ error: "Refresh the match before saving its score." }, { status: 409 });
+    if (scoreRevision !== undefined && (!Number.isSafeInteger(scoreRevision) || (scoreRevision as number) < 0)) return sportingJson({ error: "Invalid score revision" }, { status: 400 });
+    if (typeof scoreRevision === "number" && scoreRevision !== match.scoreRevision) return sportingJson({ error: "This score changed. Refresh before saving." }, { status: 409 });
+    if (match.session.status && match.session.status !== "ACTIVE") return sportingJson({ error: "Only active tournaments can record scores" }, { status: 409 });
+    const saveDraft = finalize === false;
+    if (saveDraft && match.scoringFormat !== "BEST_OF_THREE") return sportingJson({ error: "Progress saving is available for best of three" }, { status: 400 });
+    const result = resolveMatchScoreInput({ scoringFormat: match.scoringFormat, team1Score, team2Score, gameScores }, { allowIncomplete: saveDraft });
+    if (!result) return sportingJson({ error: match.scoringFormat === "BEST_OF_THREE" ? SERIES_SCORE_ERROR_MESSAGE : MATCH_SCORE_ERROR_MESSAGE }, { status: 400 });
+    const winnerTeam = result.winnerTeam;
     const claimedByUserId = new Map([...participantOwners].map(([id, owner]) => [id, !!owner]));
     const requiresApproval = shouldRequireOpponentApproval({
       match,
@@ -137,15 +145,17 @@ export async function POST(
       claimedByUserId,
     });
 
-    if (!requiresApproval) {
+    if (!requiresApproval && !saveDraft) {
       try {
         const updated = await finalizeMatchResult({
           match,
           actorUserId: session.user.id,
           actorIsGlobalAdmin: !!session.user.isAdmin,
           expectedStatus: MatchStatus.IN_PROGRESS,
-          finalTeam1Score: team1Score,
-          finalTeam2Score: team2Score,
+          finalTeam1Score: result.team1Score,
+          finalTeam2Score: result.team2Score,
+          finalGameScores: match.scoringFormat === "BEST_OF_THREE" ? result.gameScores : undefined,
+          expectedScoreRevision: typeof scoreRevision === "number" ? scoreRevision : match.scoreRevision,
           scoreSubmittedByUserId: session.user.id,
           scoreSubmittedByPlayerId: participant?.id ?? null,
         });
@@ -181,19 +191,22 @@ export async function POST(
       const freshOperator = session.user.isAdmin || await getSessionOperatorMembership(tx, { session: { id: match.sessionId, clubId: match.session.clubId }, userId: session.user.id, acceptedOnly: true });
       const freshOwners = await getSessionParticipantOwners(tx, { id: match.sessionId, clubId: match.session.clubId }, [match.team1Player1Id, match.team1Player2Id, match.team2Player1Id, match.team2Player2Id]);
       if (!freshOperator && (!participant || freshOwners.get(participant.id) !== session.user.id)) throw new IdentityConflictError("Your ownership or club access changed. Refresh before submitting the score.");
-      return tx.match.updateMany({
-      where: { id, status: MatchStatus.IN_PROGRESS },
+      const changed = await tx.match.updateMany({
+      where: { id, status: MatchStatus.IN_PROGRESS, ...(match.scoreRevision !== undefined ? { scoreRevision: typeof scoreRevision === "number" ? scoreRevision : match.scoreRevision } : {}) },
       data: {
-        team1Score,
-        team2Score,
-        winnerTeam,
-        status: MatchStatus.PENDING_APPROVAL,
-        completedAt: new Date(),
+        team1Score: result.team1Score,
+        team2Score: result.team2Score,
+        ...(match.scoringFormat === "BEST_OF_THREE" ? { gameScoresJson: JSON.stringify(result.gameScores) } : {}),
+        scoreRevision: { increment: 1 },
+        winnerTeam: saveDraft ? null : winnerTeam,
+        status: saveDraft ? MatchStatus.IN_PROGRESS : MatchStatus.PENDING_APPROVAL,
+        completedAt: saveDraft ? null : new Date(),
         scoreSubmittedByUserId: session.user.id,
         scoreSubmittedByPlayerId: participant?.id ?? null,
       },
     });
-
+      if (changed.count > 0) await bumpSessionResultsRevision(tx, match.sessionId);
+      return changed;
     });
 
     if (updatedResult.count === 0) {

@@ -1,3 +1,4 @@
+import { COMMUNITY_OPERATOR_ROLES } from "@/lib/clubRoles";
 import { isGlobalClubView, canReadSessionGlobally } from "@/lib/globalClubViewer";
 import { sportingJson } from "@/lib/sportingResponse";
 import { NextResponse } from "next/server";
@@ -31,6 +32,7 @@ const NEWER_OUTSIDE_MATCH_BLOCKED_REASON =
 interface CorrectionAvailabilitySession {
   id: string;
   clubId?: string | null;
+  ratingMode?: string;
   players: Array<{ playerId: string }>;
   sessionClubs: Array<{ clubId: string; status: string }>;
   matches: Array<{
@@ -57,6 +59,7 @@ async function getCompletedScoreCorrectionBlockedReason(
     return "There are no completed matches to correct.";
   }
 
+  if (sessionData.ratingMode === "UNRATED") return null;
   const firstReplayTime = completedMatches
     .map(getMatchHistoryOrderTime)
     .sort((left, right) => left.getTime() - right.getTime())[0];
@@ -84,6 +87,7 @@ async function getCompletedScoreCorrectionBlockedReason(
             OR: newerCompletedMatchTimeFilter,
             session: {
               isTest: false,
+              ratingMode: "RATED",
               OR: [
                 { clubId: { in: acceptedClubIds } },
                 {
@@ -103,7 +107,7 @@ async function getCompletedScoreCorrectionBlockedReason(
           where: {
             sessionId: { not: sessionData.id },
             status: MatchStatus.COMPLETED,
-            session: { isTest: false },
+            session: { isTest: false, ratingMode: "RATED" },
             AND: [
               { OR: newerCompletedMatchTimeFilter },
               {
@@ -176,6 +180,10 @@ async function getSessionHistory(
       code: true,
       clubId: true,
       ratingPolicyVersion: true,
+      ratingMode: true,
+      scoringFormat: true,
+      collaborationVersion: true,
+      resultsRevision: true,
       name: true,
       status: true,
       isTest: true,
@@ -219,6 +227,9 @@ async function getSessionHistory(
           team2Player2Id: true,
           team1ClubId: true,
           team2ClubId: true,
+          scoringFormat: true,
+          gameScoresJson: true,
+          scoreRevision: true,
           winnerTeam: true,
           team1Score: true,
           team2Score: true,
@@ -285,8 +296,15 @@ async function getSessionHistory(
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
 
+  const viewerCanUndoCompletedScores = viewerCanManage && (
+    (sessionData.collaborationVersion ?? 1) < 2 || !!session.user.isAdmin ||
+    (!!sessionData.clubId && !!await prisma.clubAccess.findFirst({
+      where: { clubId: sessionData.clubId, userId: session.user.id, status: "ACTIVE", role: { in: [...COMMUNITY_OPERATOR_ROLES] } },
+      select: { clubId: true },
+    }))
+  );
   const undoableMatchId =
-    viewerCanManage && sessionData.status === SessionStatus.ACTIVE
+    viewerCanUndoCompletedScores && sessionData.status === SessionStatus.ACTIVE
       ? (sessionData.matches.find(
           (match) => match.status === MatchStatus.COMPLETED
         )?.id ?? null)
@@ -318,6 +336,10 @@ async function getSessionHistory(
       code: sessionData.code,
       clubId: sessionData.clubId,
       ratingPolicyVersion: sessionData.ratingPolicyVersion,
+      ratingMode: sessionData.ratingMode,
+      scoringFormat: sessionData.scoringFormat,
+      collaborationVersion: sessionData.collaborationVersion,
+      resultsRevision: sessionData.resultsRevision,
       name: sessionData.name,
       status: sessionData.status,
       isTest: sessionData.isTest,
@@ -332,6 +354,7 @@ async function getSessionHistory(
       endedAt: sessionData.endedAt,
     },
     viewerCanManage,
+    viewerCanUndoCompletedScores,
     canCorrectCompletedScores,
     correctionBlockedReason,
     undoableMatchId,

@@ -13,7 +13,7 @@ import {
 export interface MemberProfileTimelineEntry {
   id: string;
   reconstructed?: boolean;
-  kind: "SESSION" | "MANUAL" | "ACTIVE" | "GAP";
+  kind: "SESSION" | "MANUAL" | "ACTIVE" | "GAP" | "UNRATED";
   date: string | null;
   rating: number | null;
   delta: number | null;
@@ -30,6 +30,7 @@ export interface MemberProfileSessionSource {
   name: string;
   status?: string | null;
   isTest?: boolean;
+  ratingMode?: string;
   type?: string | null;
   createdAt?: Date | string | null;
   endedAt?: Date | string | null;
@@ -58,6 +59,7 @@ export interface MemberProfileMatchSource extends ProfileMatchSource {
     clubId?: string | null;
     status?: string | null;
     isTest?: boolean;
+    ratingMode?: string;
     type?: string | null;
     createdAt?: Date | string | null;
     endedAt?: Date | string | null;
@@ -353,6 +355,10 @@ function buildTimeline(
       sessionId,
       (coveredMatchesBySession.get(sessionId) ?? 0) + 1
     );
+    if (match.session.ratingMode === "UNRATED") {
+      if (!points.some(point => point.sessionId === sessionId && point.kind === "UNRATED")) points.push({ id: `unrated:${sessionId}`, kind: "UNRATED", date: asIso(match.completedAt), rating: null, delta: null, sessionId, sessionCode: match.session.code, session: sessionSummaries.get(sessionId), label: `${match.session.name} · unrated` });
+      continue;
+    }
     const adjustment = getMatchAdjustment(match, userId, matchAdjustments);
     if (!adjustment) {
       if (match.session.status === "COMPLETED") points.push({ id: `gap:${match.id}`, kind: "GAP", date: asIso(match.completedAt), rating: null, delta: null, sessionId, sessionCode: match.session.code, session: sessionSummaries.get(sessionId), label: `${match.session.name} - rating unavailable` });
@@ -397,6 +403,7 @@ function buildTimeline(
         name: match.session.name,
         status: match.session.status ?? "COMPLETED",
         isTest: match.session.isTest,
+        ratingMode: match.session.ratingMode,
         createdAt: match.session.createdAt,
         endedAt: match.session.endedAt,
       });
@@ -416,6 +423,10 @@ function buildTimeline(
       rating: null,
       delta: null,
     } as const;
+    if (session.ratingMode === "UNRATED") {
+      if (!points.some(point => point.sessionId === session.id)) points.push({ id: `unrated:${session.id}`, kind: "UNRATED", ...base, label: `${session.name || session.code} · unrated` });
+      continue;
+    }
     if (status !== "COMPLETED") {
       if (status !== "ACTIVE" || points.some(p => p.sessionId === session.id)) continue;
       points.push({ id: `active:${session.id}`, kind: "ACTIVE", ...base });
@@ -586,7 +597,7 @@ export function buildMemberProfileData({
 
   for (const [id, summary] of allSessionSummaries) {
     const played = completedMatches.filter(m => m.session.id === id);
-    Object.assign(summary, { ratingVerified: played.every(m => !!getMatchAdjustment(m, userId, matchEloAdjustments)) });
+    Object.assign(summary, { ratingMode: played[0]?.session.ratingMode, ratingVerified: played[0]?.session.ratingMode !== "UNRATED" && played.every(m => !!getMatchAdjustment(m, userId, matchEloAdjustments)) });
   }
   const summaries = [...allSessionSummaries.values()].sort(
     (left, right) => asTime(right.date) - asTime(left.date) || left.id.localeCompare(right.id)

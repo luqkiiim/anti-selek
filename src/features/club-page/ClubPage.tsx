@@ -774,13 +774,7 @@ export default function ClubPage() {
     />
   ) : null;
   const interclubClubOptions = partnerClubId
-    ? [
-        { id: clubId, name: club?.name ?? "Host club" },
-        {
-          id: partnerClubId,
-          name: selectedPartnerClub?.name ?? "Partner club",
-        },
-      ]
+    ? [{ id: clubId, name: club?.name ?? "Host club" }]
     : [];
   const overviewPanel = (
     <ClubOverviewPulsePanel

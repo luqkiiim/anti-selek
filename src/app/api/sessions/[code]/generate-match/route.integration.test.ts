@@ -42,14 +42,6 @@ let POST: RouteHandler;
 let mockedAuth: MockedFunction<typeof import("@/lib/auth")["auth"]>;
 let rebuildAutomaticQueuedMatchForSessionId: RebuildAutomaticQueuedMatchForSessionId;
 
-function getPrismaBinary() {
-  return path.join(
-    process.cwd(),
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? "prisma.cmd" : "prisma"
-  );
-}
 
 function getSelectedIds(match: {
   team1Player1Id?: string;
@@ -196,6 +188,10 @@ async function createSessionWithCourtsAndPlayers({
   poolsEnabled?: boolean;
   players: Array<{
     playerId: string;
+    isGuest?: boolean;
+    representingClubId?: string | null;
+    profileClubId?: string | null;
+    participantAccountId?: string | null;
     gender?: PlayerGender;
     partnerPreference?: PartnerPreference;
     mixedSideOverride?: MixedSide | null;
@@ -227,7 +223,10 @@ async function createSessionWithCourtsAndPlayers({
       players: {
         create: players.map((player) => ({
           playerId: player.playerId,
-          isGuest: false,
+          isGuest: player.isGuest ?? false,
+          representingClubId: player.representingClubId ?? null,
+          profileClubId: player.profileClubId ?? null,
+          participantAccountId: player.participantAccountId ?? null,
           gender: player.gender ?? PlayerGender.MALE,
           partnerPreference:
             player.partnerPreference ?? PartnerPreference.OPEN,
@@ -1766,5 +1765,153 @@ describe("generate match route integration", () => {
     expect(payload).toEqual({
       error: "Resolve the queued match before creating a Women's Court.",
     });
+  });
+});
+
+// These cases use the real local SQLite writer, role checks and assignment services.
+describe("upgraded collaboration mutation boundaries", () => {
+  async function upgradedFixture(schedulingMode = "FREE_PLAY", collabFormat = "INTERCLUB", ownedFirst = false) {
+    const prefix = `collaboration-${randomUUID()}`;
+    const host = await createClubAdmin(`${prefix}-host`);
+    const partner = await createClubAdmin(`${prefix}-partner`);
+    await createUsers(prefix, ["H1", "H2", "P1", "P2"].map(key => ({ key })));
+    const playerIds = ["H1", "H2", "P1", "P2"].map(key => `${prefix}-${key}`);
+    const courtId = `${prefix}-court`;
+    if (ownedFirst) {
+      await prisma.clubAccess.create({ data: { clubId: host.clubId, userId: `account-${playerIds[0]}`, role: "MEMBER", status: "ACTIVE" } });
+      await prisma.clubMember.create({ data: { clubId: host.clubId, playerId: playerIds[0] } });
+      const { clubOwnershipTransaction, claimClubPlayer } = await import("@/lib/clubPlayerOwnership");
+      await clubOwnershipTransaction(prisma, tx => claimClubPlayer(tx, { clubId: host.clubId, playerId: playerIds[0], userId: `account-${playerIds[0]}`, actorUserId: host.adminUserId }));
+    }
+    const fixture = await createSessionWithCourtsAndPlayers({ prefix, clubId: host.clubId, type: SessionType.POINTS, mode: SessionMode.MEXICANO, autoQueueEnabled: true, courtIds: [courtId], players: playerIds.map((playerId, index) => ({ playerId, isGuest: !(ownedFirst && index === 0), representingClubId: index < 2 ? host.clubId : partner.clubId, ...(ownedFirst && index === 0 ? { profileClubId: host.clubId, participantAccountId: `account-${playerId}` } : {}) })) });
+    await prisma.session.update({ where: { id: fixture.sessionId }, data: {
+      collaborationVersion: 2, collabFormat, schedulingMode, scoringFormat: "BEST_OF_THREE", ratingMode: "UNRATED",
+      sessionClubs: { create: [{ clubId: host.clubId, role: "HOST", status: "ACCEPTED" }, { clubId: partner.clubId, role: "PARTNER", status: "ACCEPTED" }] },
+    } });
+    const as = (userId: string) => mockedAuth.mockResolvedValue({ user: { id: userId, isAdmin: false } } as never);
+    as(host.adminUserId);
+    return { ...fixture, prefix, host, partner, playerIds, courtId, as };
+  }
+
+  it.each(["host", "partner"] as const)("blocks the %s club from mutating the opposite roster through every player endpoint", async side => {
+    const f = await upgradedFixture();
+    f.as(f[side].adminUserId);
+    const targetId = side === "host" ? f.playerIds[2] : f.playerIds[0];
+    const params = { params: Promise.resolve({ code: f.code, userId: targetId }) };
+    const request = (suffix: string, method: string, body?: unknown) => new Request(`http://localhost/api/sessions/${f.code}/${suffix}`, { method, ...(body ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}) });
+    const { PATCH: preferences } = await import("../players/[userId]/preferences/route");
+    const { PATCH: skip } = await import("../players/[userId]/skip-next/route");
+    const { PATCH: rename, DELETE: remove } = await import("../players/[userId]/route");
+    const { POST: pause } = await import("../pause-player/route");
+    const responses = [
+      await preferences(request("preferences", "PATCH", { gender: "FEMALE" }), params),
+      await skip(request("skip", "PATCH", { skipNextMatch: true }), params),
+      await rename(request("rename", "PATCH", { name: "Cross-club rename" }), params),
+      await remove(request("remove", "DELETE"), params),
+      await pause(request("pause", "POST", { playerId: targetId, isPaused: true }), { params: Promise.resolve({ code: f.code }) }),
+    ];
+    expect(responses.map(r => r.status)).toEqual([409, 409, 409, 409, 409]);
+    const seat = await prisma.sessionPlayer.findUniqueOrThrow({ where: { sessionId_playerId: { sessionId: f.sessionId, playerId: targetId } } });
+    expect(seat).toMatchObject({ isPaused: false, gender: "MALE", skipNextMatchAt: null });
+    expect((await prisma.player.findUniqueOrThrow({ where: { id: targetId } })).name).toBe(targetId);
+  });
+
+  it("preserves own availability for a participant without granting roster controls", async () => {
+    const f = await upgradedFixture("FREE_PLAY", "INTERCLUB", true); f.as(`account-${f.playerIds[0]}`);
+    const { POST: pause } = await import("../pause-player/route");
+    const { PATCH: skip } = await import("../players/[userId]/skip-next/route");
+    const { PATCH: preferences } = await import("../players/[userId]/preferences/route");
+    const params = { params: Promise.resolve({ code: f.code, userId: f.playerIds[0] }) };
+    expect((await pause(new Request(`http://localhost/api/sessions/${f.code}/pause-player`, { method: "POST", body: JSON.stringify({ playerId: f.playerIds[0], isPaused: true }) }), { params: Promise.resolve({ code: f.code }) })).status).toBe(200);
+    expect((await skip(new Request(`http://localhost/api/sessions/${f.code}/skip`, { method: "PATCH", body: JSON.stringify({ skipNextMatch: true }) }), params)).status).toBe(200);
+    expect((await preferences(new Request(`http://localhost/api/sessions/${f.code}/preferences`, { method: "PATCH", body: JSON.stringify({ gender: "FEMALE" }) }), params)).status).toBe(403);
+    expect(await prisma.sessionPlayer.findUniqueOrThrow({ where: { sessionId_playerId: { sessionId: f.sessionId, playerId: f.playerIds[0] } } })).toMatchObject({ isPaused: true, gender: "MALE" });
+  });
+
+  it("associates mixed-collaboration guests with their own club without assigning a member profile", async () => {
+    const f = await upgradedFixture("FREE_PLAY", "FREE_PLAY"); f.as(f.partner.adminUserId);
+    const { POST: addGuest } = await import("../guests/route");
+    const response = await addGuest(new Request(`http://localhost/api/sessions/${f.code}/guests`, { method: "POST", body: JSON.stringify({ name: "Mixed guest", profileClubId: f.partner.clubId }) }), { params: Promise.resolve({ code: f.code }) });
+    expect(response.status).toBe(200);
+    const guest = await response.json();
+    expect(await prisma.sessionPlayer.findUniqueOrThrow({ where: { sessionId_playerId: { sessionId: f.sessionId, playerId: guest.id } } })).toMatchObject({ isGuest: true, profileClubId: null, participantAccountId: null, representingClubId: f.partner.clubId });
+  });
+
+  it("allows visiting staff to add only visiting guests and rejects host court controls", async () => {
+    const f = await upgradedFixture(); f.as(f.partner.adminUserId);
+    const { POST: addGuest } = await import("../guests/route");
+    const { PATCH: labels } = await import("../courts/labels/route");
+    const params = { params: Promise.resolve({ code: f.code }) };
+    const guestRequest = (clubId: string) => new Request(`http://localhost/api/sessions/${f.code}/guests`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Visiting guest", representingClubId: clubId }) });
+    expect((await addGuest(guestRequest(f.host.clubId), params)).status).toBe(409);
+    const own = await addGuest(guestRequest(f.partner.clubId), params);
+    expect(own.status).toBe(200);
+    const added = await own.json();
+    expect(added).toMatchObject({ profileClubId: null, representingClubId: f.partner.clubId });
+    expect((await postGenerateMatch(f.code, { courtId: f.courtId })).status).toBe(409);
+    const labelRequest = new Request(`http://localhost/api/sessions/${f.code}/courts/labels`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ courts: [{ courtId: f.courtId, label: "Stolen court" }] }) });
+    expect((await labels(labelRequest, params)).status).toBe(409);
+    expect((await prisma.court.findUniqueOrThrow({ where: { id: f.courtId } })).label).toBeNull();
+  });
+
+  it("blocks automatic, manual and queued generation in LINEUP without touching stored assignments", async () => {
+    const f = await upgradedFixture("LINEUP");
+    const { POST: queue, DELETE: deleteQueue } = await import("../queue-match/route");
+    const { POST: assign } = await import("../queue-match/assign/route");
+    const params = { params: Promise.resolve({ code: f.code }) };
+    for (const extra of [{}, { forceReshuffle: true }, { manualTeams: { team1: f.playerIds.slice(0, 2), team2: f.playerIds.slice(2) } }]) {
+      const response = await postGenerateMatch(f.code, { courtId: f.courtId, ...extra });
+      expect(response.status).toBe(409); expect((await response.json()).error).toContain("agreed lineup");
+    }
+    for (const body of [{}, { manualTeams: { team1: f.playerIds.slice(0, 2), team2: f.playerIds.slice(2) } }, { reshuffle: true }]) {
+      expect((await queue(new Request(`http://localhost/api/sessions/${f.code}/queue-match`, { method: "POST", body: JSON.stringify(body) }), params)).status).toBe(409);
+    }
+    expect((await assign(new Request(`http://localhost/api/sessions/${f.code}/queue-match/assign`, { method: "POST" }), params)).status).toBe(409);
+    expect((await deleteQueue(new Request(`http://localhost/api/sessions/${f.code}/queue-match`, { method: "DELETE" }), params)).status).toBe(409);
+    expect(await rebuildAutomaticQueuedMatchForSessionId(f.sessionId)).toBeNull();
+    expect(await prisma.match.count({ where: { sessionId: f.sessionId } })).toBe(0);
+    expect(await prisma.queuedMatch.count({ where: { sessionId: f.sessionId } })).toBe(0);
+  });
+
+  it("allows removing an unplayed guest referenced only by cancelled rows while retaining durable guest identity", async () => {
+    const f = await upgradedFixture("LINEUP");
+    const row = await prisma.sessionLineupRow.create({ data: { sessionId: f.sessionId, position: 1, cancelled: true, team1Player1Id: f.playerIds[0] } });
+    const { DELETE: remove } = await import("../players/[userId]/route");
+    const response = await remove(new Request(`http://localhost/api/sessions/${f.code}/players/${f.playerIds[0]}`, { method: "DELETE" }), { params: Promise.resolve({ code: f.code, userId: f.playerIds[0] }) });
+    expect(response.status).toBe(200);
+    expect(await prisma.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: f.sessionId, playerId: f.playerIds[0] } } })).toBeNull();
+    expect(await prisma.player.findUnique({ where: { id: f.playerIds[0] } })).not.toBeNull();
+    expect((await prisma.sessionLineupRow.findUniqueOrThrow({ where: { id: row.id } })).team1Player1Id).toBe(f.playerIds[0]);
+  });
+
+  it("returns undone lineup rows to review and never automatically fills their court", async () => {
+    const f = await upgradedFixture("LINEUP");
+    const match = await prisma.match.create({ data: { sessionId: f.sessionId, courtId: f.courtId, status: "IN_PROGRESS", scoringFormat: "BEST_OF_THREE", team1Player1Id: f.playerIds[0], team1Player2Id: f.playerIds[1], team2Player1Id: f.playerIds[2], team2Player2Id: f.playerIds[3] } });
+    await prisma.court.update({ where: { id: f.courtId }, data: { currentMatchId: match.id } });
+    const row = await prisma.sessionLineupRow.create({ data: { sessionId: f.sessionId, position: 1, revision: 7, hostConfirmedRevision: 7, partnerConfirmedRevision: 7, matchId: match.id, team1Player1Id: f.playerIds[0], team1Player2Id: f.playerIds[1], team2Player1Id: f.playerIds[2], team2Player2Id: f.playerIds[3] } });
+    const response = await postGenerateMatch(f.code, { courtId: f.courtId, undoCurrentMatch: true });
+    expect(response.status).toBe(200);
+    expect(await prisma.sessionLineupRow.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ revision: 8, hostConfirmedRevision: null, partnerConfirmedRevision: null, matchId: null });
+    expect(await prisma.court.findUniqueOrThrow({ where: { id: f.courtId } })).toMatchObject({ currentMatchId: null });
+    expect(await prisma.queuedMatch.count({ where: { sessionId: f.sessionId } })).toBe(0);
+    expect((await prisma.session.findUniqueOrThrow({ where: { id: f.sessionId } })).resultsRevision).toBe(1);
+    expect(await prisma.sessionCollaborationEvent.count({ where: { sessionId: f.sessionId, action: "undoMatch" } })).toBe(1);
+    const { DELETE: remove } = await import("../players/[userId]/route");
+    const denied = await remove(new Request(`http://localhost/api/sessions/${f.code}/players/${f.playerIds[0]}`, { method: "DELETE" }), { params: Promise.resolve({ code: f.code, userId: f.playerIds[0] }) });
+    expect(denied.status).toBe(409); expect((await denied.json()).error).toContain("Remove this player from the lineup first");
+  });
+
+  it("snapshots BO3 rules and retains participation lock after undo", async () => {
+    const f = await upgradedFixture();
+    const response = await postGenerateMatch(f.code, { courtId: f.courtId, manualTeams: { team1: f.playerIds.slice(0, 2), team2: f.playerIds.slice(2) } });
+    expect(response.status).toBe(200);
+    const match = await prisma.match.findFirstOrThrow({ where: { sessionId: f.sessionId } });
+    expect(match.scoringFormat).toBe("BEST_OF_THREE");
+    expect(await prisma.sessionPlayer.count({ where: { sessionId: f.sessionId, hasStartedMatch: true } })).toBe(4);
+    expect((await postGenerateMatch(f.code, { courtId: f.courtId, undoCurrentMatch: true })).status).toBe(200);
+    expect(await prisma.match.count({ where: { sessionId: f.sessionId } })).toBe(0);
+    const { DELETE: remove } = await import("../players/[userId]/route");
+    const denied = await remove(new Request(`http://localhost/api/sessions/${f.code}/players/${f.playerIds[0]}`, { method: "DELETE" }), { params: Promise.resolve({ code: f.code, userId: f.playerIds[0] }) });
+    expect(denied.status).toBe(409); expect((await denied.json()).error).toContain("already started a match");
   });
 });

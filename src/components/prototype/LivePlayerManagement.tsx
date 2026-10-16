@@ -47,6 +47,7 @@ export interface LivePlayerManagementProps {
   open: boolean;
   onClose: () => void;
   onChanged: () => Promise<unknown> | unknown;
+  manageableClubIds?: string[];
 }
 
 function messageFor(error: unknown, fallback: string) {
@@ -72,6 +73,7 @@ export function LivePlayerManagement({
   open,
   onClose,
   onChanged,
+  manageableClubIds,
 }: LivePlayerManagementProps) {
   const [listScreen, setListScreen] = useState<ListScreen>("players");
   const [optionsScreen, setOptionsScreen] = useState<PlayerOptionsScreen | null>(null);
@@ -91,7 +93,9 @@ export function LivePlayerManagement({
   const [guestMixedSideOverride, setGuestMixedSideOverride] = useState<MixedSide | null>(null);
   const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
 
-  const canManage = Boolean(session.viewerCanManage && !session.viewerIsQuickAccess);
+  const canManage = Boolean(!session.viewerIsQuickAccess && (manageableClubIds ? manageableClubIds.length > 0 : session.viewerCanManage));
+  const ownPlayer = (player: Player) => !manageableClubIds || manageableClubIds.includes(player.representingClubId ?? player.profileClubId ?? session.clubId ?? "");
+  const managedClubs = (session.clubs ?? []).filter(club => club.status === "ACCEPTED" && (!manageableClubIds || manageableClubIds.includes(club.id)));
   const isMixicano = session.mode === SessionMode.MIXICANO;
   const isInterclub = session.collabFormat === SessionCollabFormat.INTERCLUB;
   const hasAcceptedCollabRoster = new Set(
@@ -178,7 +182,7 @@ export function LivePlayerManagement({
       if (!Array.isArray(response)) {
         throw new Error("Club member roster returned an invalid response.");
       }
-      const members = response as SessionRosterMember[];
+      const members = (response as SessionRosterMember[]).filter(member => !manageableClubIds || manageableClubIds.includes(member.profileClubId ?? member.representingClubId ?? session.clubId ?? ""));
       setRoster(members);
       setPoolByRosterEntry((current) => {
         const next = { ...current };
@@ -203,7 +207,7 @@ export function LivePlayerManagement({
     setGuestRating("1000");
     setGuestGender(PlayerGender.UNSPECIFIED);
     setGuestMixedSideOverride(null);
-    setGuestRepresentingClubId("");
+    setGuestRepresentingClubId(managedClubs.length === 1 ? managedClubs[0].id : "");
     setError("");
     setAddingGuest(true);
   }
@@ -217,7 +221,7 @@ export function LivePlayerManagement({
     }
     if (![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGender)) return setError("Choose Male or Female for this guest.");
     if (!guestRating.trim() || !Number.isInteger(rating) || rating < 0 || rating > 5000) return setError("Enter a whole-number rating from 0 to 5000.");
-    const representingClubId = isInterclub ? guestRepresentingClubId : undefined;
+    const representingClubId = isInterclub || manageableClubIds ? guestRepresentingClubId : undefined;
     if (isInterclub && !(session.clubs ?? []).some((club) => club.status === "ACCEPTED" && club.id === representingClubId)) return setError("Choose a club before adding an interclub guest.");
     return runAction(
       () => api(`/api/sessions/${code}/guests`, "POST", {
@@ -384,7 +388,7 @@ export function LivePlayerManagement({
                         </small>
                         {player.skipNextMatchAt ? <small className="pm-skip-state">Skipping next</small> : null}
                       </div>
-                      {canManage ? (
+                      {canManage && ownPlayer(player) ? (
                         <button
                           type="button"
                           className="pm-icon-action"
@@ -490,8 +494,8 @@ export function LivePlayerManagement({
                 {guestGender !== PlayerGender.UNSPECIFIED ? (
                   <label className="pm-label"><span>Mixed side</span><select className={fieldClass()} value={guestMixedSideOverride ?? ""} onChange={(event) => setGuestMixedSideOverride(event.target.value ? event.target.value as MixedSide : null)}><option value="">{defaultMixedSideLabel(guestGender)}</option>{(() => { const option = getMixedSideOverrideOptionForGender(guestGender); return option ? <option value={option.value}>{option.label}</option> : null; })()}</select></label>
                 ) : null}
-                {isInterclub ? (
-                  <label className="pm-label"><span>Represents</span><select className={fieldClass()} value={guestRepresentingClubId} onChange={(event) => setGuestRepresentingClubId(event.target.value)}><option value="">Choose club</option>{(session.clubs ?? []).filter((club) => club.status === "ACCEPTED").map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
+                {(isInterclub || manageableClubIds) ? (
+                  <label className="pm-label"><span>Represents</span><select className={fieldClass()} value={guestRepresentingClubId} onChange={(event) => setGuestRepresentingClubId(event.target.value)}><option value="">Choose club</option>{managedClubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
                 ) : null}
                 <button type="button" className="pm-secondary" disabled={busy} onClick={() => { setAddingGuest(false); setError(""); }}>Cancel</button>
                 <button type="submit" className="pm-primary" disabled={busy || guestGender === PlayerGender.UNSPECIFIED}>{busy ? "Adding…" : "Add guest"}</button>
@@ -602,7 +606,7 @@ export function LivePlayerManagement({
                   })}
                 >
                   <option value="">Unassigned</option>
-                  {(session.clubs ?? []).filter((club) => club.status === "ACCEPTED").map((club) => (
+                  {managedClubs.map((club) => (
                     <option value={club.id} key={club.id}>{club.name}</option>
                   ))}
                 </select>

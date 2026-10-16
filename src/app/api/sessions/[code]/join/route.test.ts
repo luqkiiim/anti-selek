@@ -3,7 +3,7 @@ import { SessionMode, SessionStatus } from "@/types/enums";
 const state = vi.hoisted(() => ({
   auth: vi.fn(), reserve: vi.fn(), update: vi.fn(),
   accepted: ["a", "b"],
-  session: { id: "s", clubId: "a", code: "ABC", ratingPolicyVersion: 2, status: "WAITING", mode: "MEXICANO", poolsEnabled: false, players: [] as Array<{ playerId: string; pool: string; matchesPlayed: number; matchmakingMatchesCredit: number; isPaused: boolean }> },
+  session: { id: "s", clubId: "a", code: "ABC", ratingPolicyVersion: 2, collaborationVersion: 1, sessionClubs: [{ clubId: "a", role: "HOST", status: "ACCEPTED", club: { name: "A" } }, { clubId: "b", role: "PARTNER", status: "ACCEPTED", club: { name: "B" } }], status: "WAITING", mode: "MEXICANO", poolsEnabled: false, players: [] as Array<{ playerId: string; pool: string; matchesPlayed: number; matchmakingMatchesCredit: number; isPaused: boolean }> },
   members: [] as Array<{ clubId: string; playerId: string; ownerUserId: string | null; archivedAt: Date | null; retiredByAdmissionEventId: string | null; preferredPool: string; elo: number; mixedSideOverride: string | null; club: { name: string }; player: { name: string; isActive: boolean; gender: string } }>,
   accesses: [] as Array<{ clubId: string; userId: string; status: string; role: string }>,
   seats: [] as Array<{ playerId: string; profileClubId: string | null; participantAccountId: string | null; representingClubId: string | null; isGuest: boolean }>,
@@ -49,9 +49,19 @@ describe("join exact local club profile", () => {
     state.reserve.mockReset().mockResolvedValue(0);
     state.update.mockReset().mockImplementation(async args => ({ ...state.session, courts: [], players: [{ ...args.data.players.create, player: { id: args.data.players.create.playerId, name: "Person", elo: 9999 } }] }));
     state.accepted = ["a", "b"];
-    Object.assign(state.session, { ratingPolicyVersion: 2, status: SessionStatus.WAITING, mode: SessionMode.MEXICANO, poolsEnabled: false, players: [] });
+    Object.assign(state.session, { ratingPolicyVersion: 2, collaborationVersion: 1, status: SessionStatus.WAITING, mode: SessionMode.MEXICANO, poolsEnabled: false, players: [] });
     state.members = [member("pa", "a")]; state.seats = [];
     state.accesses = [{ clubId: "a", userId: "actor", status: "ACTIVE", role: "MEMBER" }, { clubId: "b", userId: "actor", status: "ACTIVE", role: "MEMBER" }];
+  });
+  it("allows only own-club operators to add roster entries in upgraded collaboration", async () => {
+    state.session.collaborationVersion = 2;
+    expect((await post({ playerId: "pa", profileClubId: "a" })).status).toBe(409);
+    state.accesses[0].role = "STAFF";
+    expect((await post({ playerId: "pa", profileClubId: "a" })).status).toBe(200);
+    state.members.push(member("pb", "b"));
+    state.update.mockClear();
+    expect((await post({ playerId: "pb", profileClubId: "b" })).status).toBe(409);
+    expect(state.update).not.toHaveBeenCalled();
   });
   it("auto-selects the only eligible local pair and snapshots the Account separately from Player", async () => {
     const response = await post(); expect(response.status).toBe(200);

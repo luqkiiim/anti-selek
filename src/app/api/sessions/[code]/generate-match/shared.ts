@@ -1,3 +1,4 @@
+import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { type SessionMutationActor, withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
 import { prisma } from "@/lib/prisma";
 import { withLegacySportingAliases } from "@/lib/sportingIdentity";
@@ -87,4 +88,11 @@ export interface GenerateMatchContext {
   targetCourt: GenerateMatchCourt;
   freedCourtIds: Set<string>;
   reshuffleSource: ReshuffleSource | null;
+}
+
+/** Preflight only; the shared match writer rechecks after reserving SQLite. */
+export function assertFreePlayScheduling(session: { collaborationVersion?: number; schedulingMode?: string }) {
+  if (isUpgradedCollaboration(session) && session.schedulingMode === "LINEUP") {
+    throw new GenerateMatchError(409, "Start matches from the agreed lineup.");
+  }
 }

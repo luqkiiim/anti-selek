@@ -464,7 +464,7 @@ export function HostTournamentPanel({
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <SegmentedGameplayOption
-                        label="Free play"
+                        label="Play together"
                         selected={collabFormat === SessionCollabFormat.FREE_PLAY}
                         onClick={() =>
                           onCollabFormatChange(SessionCollabFormat.FREE_PLAY)

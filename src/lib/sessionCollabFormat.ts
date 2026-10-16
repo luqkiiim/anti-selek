@@ -51,7 +51,7 @@ export function getSessionCollabFormatLabel(
     case SessionCollabFormat.INTERCLUB:
       return "Club vs club";
     case SessionCollabFormat.FREE_PLAY:
-      return "Free play";
+      return "Play together";
     default:
       return format;
   }

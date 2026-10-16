@@ -10,8 +10,10 @@ import {
   PencilSimple,
   Trophy,
 } from "@phosphor-icons/react";
+import { parseGameScores, resolveMatchResult, resolveMatchScoreInput } from "@/lib/matchRules";
 import { ErrorText, Sheet } from "./Primitives";
 import styles from "./SessionMatchHistory.module.css";
+import "./club-collaboration.css";
 import { useScrollRestoration } from "@/components/app/useScrollRestoration";
 
 type HistoryPlayer = { id: string; name: string };
@@ -19,6 +21,9 @@ type HistoryPlayer = { id: string; name: string };
 type HistoryMatch = {
   id: string;
   status: string;
+  scoringFormat?: "SINGLE_GAME" | "BEST_OF_THREE";
+  gameScoresJson?: string | null;
+  scoreRevision?: number;
   createdAt: string;
   completedAt?: string | null;
   winnerTeam?: number | null;
@@ -38,12 +43,15 @@ type SessionHistoryResponse = {
     code: string;
     clubId?: string | null;
     ratingPolicyVersion?: number;
+    ratingMode?: "RATED" | "UNRATED";
+    collaborationVersion?: number;
     name: string;
     status: string;
     createdAt: string;
     endedAt?: string | null;
   };
   viewerCanManage?: boolean;
+  viewerCanUndoCompletedScores?: boolean;
   canCorrectCompletedScores?: boolean;
   correctionBlockedReason?: string | null;
   undoableMatchId?: string | null;
@@ -118,6 +126,7 @@ export default function SessionMatchHistory({
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<MatchAction | null>(null);
+  const [gameDraft, setGameDraft] = useState<Array<[string,string]>>([]);
   const [scores, setScores] = useState<[string, string]>(["", ""]);
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -188,6 +197,7 @@ export default function SessionMatchHistory({
     setActionError("");
     setDraft({ kind, match });
     if (kind === "correct") {
+      setGameDraft((parseGameScores(match.gameScoresJson) ?? []).map(game=>[String(game.team1Score),String(game.team2Score)]));
       setScores([
         typeof match.team1Score === "number" ? String(match.team1Score) : "",
         typeof match.team2Score === "number" ? String(match.team2Score) : "",
@@ -206,8 +216,15 @@ export default function SessionMatchHistory({
     setActionError("");
 
     let url = `/api/matches/${encodeURIComponent(draft.match.id)}/${draft.kind === "approve" ? "approve" : "undo"}`;
-    let options: RequestInit = { method: "POST" };
-    if (draft.kind === "correct") {
+    let options: RequestInit = draft.kind === "approve" && draft.match.scoreRevision !== undefined
+      ? {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scoreRevision:draft.match.scoreRevision??0})}
+      : { method: "POST" };
+    if (draft.kind === "correct" && draft.match.scoringFormat === "BEST_OF_THREE") {
+      const gameScores=gameDraft.map(([a,b])=>({team1Score:Number(a),team2Score:Number(b)}));
+      if (gameDraft.some(game=>game.some(score=>!score.trim())) || !resolveMatchScoreInput({scoringFormat:"BEST_OF_THREE",gameScores})) {setActionError("Record a 2–0 or 2–1 result with unequal, nonnegative whole scores.");return;}
+      url=`/api/matches/${encodeURIComponent(draft.match.id)}/correction`;
+      options={method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({gameScores,scoreRevision:draft.match.scoreRevision})};
+    } else if (draft.kind === "correct") {
       const [team1ScoreText, team2ScoreText] = scores;
       if (!team1ScoreText.trim() || !team2ScoreText.trim()) {
         setActionError("Enter a score for both teams.");
@@ -216,14 +233,13 @@ export default function SessionMatchHistory({
       const team1Score = Number(team1ScoreText);
       const team2Score = Number(team2ScoreText);
       if (
-        !Number.isInteger(team1Score) ||
-        !Number.isInteger(team2Score) ||
+        !Number.isSafeInteger(team1Score) ||
+        !Number.isSafeInteger(team2Score) ||
         team1Score < 0 ||
         team2Score < 0 ||
-        team1Score > 99 ||
-        team2Score > 99
+        ((data?.session.collaborationVersion ?? 1) < 2 && (team1Score > 99 || team2Score > 99))
       ) {
-        setActionError("Enter whole-number scores from 0 to 99.");
+        setActionError("Enter nonnegative whole-number scores.");
         return;
       }
       if (team1Score === team2Score) {
@@ -241,7 +257,7 @@ export default function SessionMatchHistory({
       options = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ team1Score, team2Score }),
+        body: JSON.stringify({ team1Score, team2Score, ...(draft.match.scoreRevision !== undefined ? {scoreRevision:draft.match.scoreRevision} : {}) }),
       };
     }
 
@@ -321,7 +337,7 @@ export default function SessionMatchHistory({
         <p className={styles.summary}>
           {loading && !data
             ? "Loading recorded matches…"
-            : `${completedCount} completed ${completedCount === 1 ? "match" : "matches"}${pendingCount ? ` · ${pendingCount} awaiting approval` : ""}`}
+            : `${session?.ratingMode === "UNRATED" ? "Unrated · " : ""}${completedCount} completed ${completedCount === 1 ? "match" : "matches"}${pendingCount ? ` · ${pendingCount} awaiting approval` : ""}`}
         </p>
       </header>
 
@@ -386,14 +402,16 @@ export default function SessionMatchHistory({
               const timestamp = matchTime(match);
               const isPending = match.status === "PENDING_APPROVAL";
               const canUndo =
-                !globalClubId && data.viewerCanManage === true &&
+                !globalClubId && (data.viewerCanUndoCompletedScores ?? data.viewerCanManage) === true &&
                 data.undoableMatchId === match.id &&
                 match.status === "COMPLETED";
               const canCorrect =
                 !globalClubId && data.canCorrectCompletedScores === true &&
                 match.status === "COMPLETED";
-              const team1Won = match.winnerTeam === 1;
-              const team2Won = match.winnerTeam === 2;
+              const result = resolveMatchResult(match);
+              const team1Won = result?.winnerTeam === 1;
+              const team2Won = result?.winnerTeam === 2;
+              const games = parseGameScores(match.gameScoresJson) ?? [];
               const hasScore =
                 typeof match.team1Score === "number" &&
                 typeof match.team2Score === "number";
@@ -453,8 +471,8 @@ export default function SessionMatchHistory({
                           </span>
                         ) : null}
                       </div>
-                      <div className={styles.score} aria-label={hasScore ? `${match.team1Score} to ${match.team2Score}` : "Score pending"}>
-                        {hasScore ? (
+                      <div className={styles.score} aria-label={match.scoringFormat === "BEST_OF_THREE" ? "Best of three game scores" : hasScore ? `${match.team1Score} to ${match.team2Score}` : "Score pending"}>
+                        {match.scoringFormat === "BEST_OF_THREE" ? <span aria-label="Game scores" className="series-game-results">{games.map((game,index)=><span key={index}>G{index+1} {game.team1Score}–{game.team2Score}{index<games.length-1?<br/>:null}</span>)}</span> : hasScore ? (
                           <>
                             <strong>{match.team1Score}</strong>
                             <span>:</span>
@@ -510,10 +528,10 @@ export default function SessionMatchHistory({
                 {draft.match.team2User1.name} &amp; {draft.match.team2User2.name}
               </strong>
               {draft.kind === "approve" ? (
-                <span className={styles.approvalScore}>{draft.match.team1Score} : {draft.match.team2Score}</span>
+                <span className={styles.approvalScore}>{draft.match.scoringFormat === "BEST_OF_THREE" ? (parseGameScores(draft.match.gameScoresJson)??[]).map(game=>`${game.team1Score}–${game.team2Score}`).join(" · ") : `${draft.match.team1Score} : ${draft.match.team2Score}`}</span>
               ) : null}
             </div>
-            {draft.kind === "correct" ? (
+            {draft.kind === "correct" && draft.match.scoringFormat === "BEST_OF_THREE" ? <div className="series-score">{gameDraft.map((game,index)=><div className="series-game" key={index}><span>Game {index+1}</span>{[0,1].map(team=><input key={team} inputMode="numeric" type="text" maxLength={16} aria-label={`Game ${index+1} team ${team+1} corrected score`} value={game[team]} onChange={e=>setGameDraft(current=>current.map((item,i)=>i===index?item.map((value,j)=>j===team?e.target.value.replace(/\D/g,"").slice(0,16):value) as [string,string]:item))}/>).reduce<React.ReactNode[]>((items,input,i)=>i?[...items,<span key="divider">:</span>,input]:[input],[])}</div>)}<div className="series-actions">{gameDraft.length<3&&<button type="button" className="secondary" onClick={()=>setGameDraft(current=>[...current,["",""]])}>Add game</button>}{gameDraft.length>2&&<button type="button" className="text-button" onClick={()=>setGameDraft(current=>current.slice(0,-1))}>Remove last game</button>}</div></div> : draft.kind === "correct" ? (
               <div className={styles.scoreFields}>
                 <label>
                   <span>Team A score</span>

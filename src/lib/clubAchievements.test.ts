@@ -20,5 +20,12 @@ describe("club achievements",()=>{
  it("preserves earned peak after match losses",()=>{const games=Array.from({length:10},(_,i)=>match(i,true,"a",0));expect(badge("raising-bar",[session([...games,match(11,true,"a",50),match(12,false,"a",-30)])]).earnedTier).toBe(1);});
  it("counts close wins only at a one or two point margin",()=>{expect(badge("down-to-wire",[session([match(1),match(2),{...match(3),score2:18}])]).progress).toBe(2);});
  it("credits only recorded creator and qualified hosting sessions",()=>{const games=Array.from({length:4},(_,i)=>match(i));expect(badge("making-it-happen",[session(games)]).earnedTier).toBe(1);expect(badge("making-it-happen",[session(games,0,{hostId:null})]).earnedTier).toBe(0);});
- it("keeps weekly tier earned after inactivity without faking current streak",()=>{const ss=[0,1,2].map(i=>session([match(i)],i));const a=buildClubAchievements("me",members,ss,new Date("2026-04-01")).find(a=>a.id==="rhythm")!;expect(a.earnedTier).toBe(1);expect(a.progress).toBe(0);});
+ it("keeps weekly tier earned after inactivity without faking current streak",()=>{const ss=[0,1,2].map(i=>session([match(i)],i));const a=buildClubAchievements("me",members,ss,new Date("2026-04-01")).find(a=>a.id==="rhythm")!;expect(a.earnedTier).toBe(1);expect(a.progress).toBe(0);}); it("counts unrated series wins once and only a close third game earns a close win",()=>{
+   const makeSeries = (i:number,games:[number,number][]) => ({...match(i),scoringFormat:"BEST_OF_THREE",gameScoresJson:JSON.stringify(games.map(([team1Score,team2Score])=>({team1Score,team2Score}))),score1:games.reduce((sum,g)=>sum+g[0],0),score2:games.reduce((sum,g)=>sum+g[1],0)});
+   const ss=[session([makeSeries(1,[[21,20],[21,20]]),makeSeries(2,[[21,1],[1,21],[21,19]]),makeSeries(3,[[21,20],[20,21],[21,17]])])];
+   expect(badge("on-the-board",ss).progress).toBe(3);
+   expect(badge("down-to-wire",ss).progress).toBe(1);
+   expect(badge("raising-bar",ss).progress).toBe(0);
+ });
+
 });

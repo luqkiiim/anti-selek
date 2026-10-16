@@ -98,8 +98,7 @@ export function useClubHostSetup({
   const [selectedPartnerClub, setSelectedPartnerClub] =
     useState<ClubCollabCandidate | null>(null);
   const [loadingCollabCandidates, setLoadingCollabCandidates] = useState(false);
-  const [collabRoster, setCollabRoster] = useState<ClubPageMember[]>([]);
-  const [loadingCollabRoster, setLoadingCollabRoster] = useState(false);
+  const loadingCollabRoster = false;
   const [selectedPlayerPools, setSelectedPlayerPools] = useState<
     Record<string, SessionPool>
   >({});
@@ -144,8 +143,6 @@ export function useClubHostSetup({
     setCollabCandidates([]);
     setSelectedPartnerClub(null);
     setLoadingCollabCandidates(false);
-    setCollabRoster([]);
-    setLoadingCollabRoster(false);
     setSelectedPlayerPools({});
     setSelectedPlayerRepresentingClubs({});
     setGuestConfigs([]);
@@ -211,51 +208,8 @@ export function useClubHostSetup({
     };
   }, [clubId, partnerClubId, partnerClubSearch, setError]);
 
-  useEffect(() => {
-    if (!partnerClubId || !clubId) {
-      setCollabRoster([]);
-      setLoadingCollabRoster(false);
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      setLoadingCollabRoster(true);
-      setError("");
-      try {
-        const res = await fetch(
-          `/api/clubs/${clubId}/collab-roster?partnerClubId=${encodeURIComponent(partnerClubId)}`
-        );
-        const data = await safeJson(res);
-        if (!res.ok) {
-          throw new Error(data.error || "Failed to load collab roster");
-        }
-        if (!cancelled) {
-          setCollabRoster(Array.isArray(data) ? data : []);
-        }
-      } catch (err: unknown) {
-        if (!cancelled) {
-          setCollabRoster([]);
-          setError(
-            err instanceof Error ? err.message : "Failed to load collab roster"
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingCollabRoster(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clubId, partnerClubId, setError]);
-
-  const effectiveSelectablePlayers = partnerClubId
-    ? collabRoster
-    : selectablePlayers;
-  const interclubClubIds = partnerClubId ? [clubId, partnerClubId] : [];
+  const effectiveSelectablePlayers = selectablePlayers;
+  const interclubClubIds = partnerClubId ? [clubId] : [];
   const isInterclub = collabFormat === SessionCollabFormat.INTERCLUB;
   const preferredPoolByPlayerId = useMemo(
     () =>
@@ -271,24 +225,8 @@ export function useClubHostSetup({
   const getPreferredPool = (playerId: string) =>
     preferredPoolByPlayerId.get(playerId) ?? SessionPool.B;
 
-  function getEligibleRepresentingClubIds(player: ClubPageMember) {
-    if (!partnerClubId) {
-      return [];
-    }
-
-    const validIds = new Set([clubId, partnerClubId]);
-    const badges = [
-      ...(player.communityBadges ?? []),
-      ...(player.linkedClubBadges ?? []),
-    ];
-
-    return Array.from(
-      new Set(
-        badges
-          .map((badge) => badge.id)
-          .filter((badgeClubId) => validIds.has(badgeClubId))
-      )
-    );
+  function getEligibleRepresentingClubIds() {
+    return partnerClubId ? [clubId] : [];
   }
 
   function getDefaultRepresentingClubId(playerId: string) {
@@ -303,7 +241,7 @@ export function useClubHostSetup({
       return null;
     }
 
-    const eligibleClubIds = getEligibleRepresentingClubIds(player);
+    const eligibleClubIds = getEligibleRepresentingClubIds();
     return eligibleClubIds.length === 1 ? eligibleClubIds[0] : null;
   }
 
@@ -348,7 +286,7 @@ export function useClubHostSetup({
         getDefaultRepresentingClubId(player.id);
       return (
         !representingClubId ||
-        !getEligibleRepresentingClubIds(player).includes(representingClubId)
+        !getEligibleRepresentingClubIds().includes(representingClubId)
       );
     }) ||
       guestConfigs.some(
@@ -383,8 +321,8 @@ export function useClubHostSetup({
 
   const creationIssues = getSessionCreationIssues({
     name: newSessionName,
-    participantCount: selectedPlayerIds.length + guestConfigs.length,
-    poolsEnabled,
+    participantCount: partnerClubId ? Math.max(2, selectedPlayerIds.length + guestConfigs.length) : selectedPlayerIds.length + guestConfigs.length,
+    poolsEnabled: partnerClubId ? false : poolsEnabled,
     competitiveCount:
       selectedPoolCounts[SessionPool.A] + guestPoolCounts[SessionPool.A],
     socialCount:
@@ -492,6 +430,7 @@ export function useClubHostSetup({
           clubId,
           collabFormat,
           partnerClubId: partnerClubId || undefined,
+          ...(partnerClubId ? {collaborationVersion:2,schedulingMode:"FREE_PLAY",scoringFormat:"SINGLE_GAME",ratingMode:isInterclub?"UNRATED":"RATED"} : {}),
           playerIds: selectedPlayerIds.map((selectionId) => {
             const player = effectiveSelectablePlayers.find(
               (candidate) => candidate.id === selectionId
@@ -528,7 +467,7 @@ export function useClubHostSetup({
               representingClubId,
             };
           }),
-          guestConfigs,
+          guestConfigs: partnerClubId ? guestConfigs.map(guest=>({...guest,representingClubId:clubId})) : guestConfigs,
           poolsEnabled,
           crossoverFrequency,
           poolAName,
@@ -561,9 +500,7 @@ export function useClubHostSetup({
       setPartnerClubSearch("");
       setSelectedPartnerClub(null);
       setCollabCandidates([]);
-      setCollabRoster([]);
-      setLoadingCollabRoster(false);
-      setSelectedPlayerRepresentingClubs({});
+          setSelectedPlayerRepresentingClubs({});
       setGuestRepresentingClubInput("");
       router.push(`/session/${data.code}`);
       return true;
@@ -798,9 +735,8 @@ export function useClubHostSetup({
     setPartnerClubId(candidate.id);
     setPartnerClubSearch("");
     setCollabCandidates([]);
-    setSelectedPlayerIds([]);
-    setSelectedPlayerPools({});
-    setSelectedPlayerRepresentingClubs({});
+    setSelectedPlayerRepresentingClubs(Object.fromEntries(selectedPlayerIds.map(id=>[id,clubId])));
+    setGuestConfigs(current=>current.map(guest=>({...guest,representingClubId:clubId})));
   };
 
   const clearPartnerClub = () => {
@@ -808,10 +744,6 @@ export function useClubHostSetup({
     setPartnerClubId("");
     setPartnerClubSearch("");
     setCollabCandidates([]);
-    setCollabRoster([]);
-    setLoadingCollabRoster(false);
-    setSelectedPlayerIds([]);
-    setSelectedPlayerPools({});
     setSelectedPlayerRepresentingClubs({});
     setCollabFormatState(SessionCollabFormat.FREE_PLAY);
     setGuestRepresentingClubInput("");

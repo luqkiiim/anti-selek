@@ -28,6 +28,7 @@ export function reconstructLegacyRatings(userId: string, clubId: string | undefi
       continue;
     }
     const match=event.match!;
+    if (match.session.ratingMode === "UNRATED") continue;
     if (match.session.clubId!==clubId || match.session.status!=="COMPLETED" ||
       !match.session.players?.some(p=>p.userId===userId&&!p.isGuest)) break;
     const delta=[match.team1User1Id,match.team1User2Id].includes(userId)?match.team1EloChange:match.team2EloChange;

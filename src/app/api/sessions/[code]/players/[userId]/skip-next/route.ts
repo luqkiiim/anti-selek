@@ -1,4 +1,4 @@
-import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { assertScopedSessionMutation } from "../../collaborationPermissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
@@ -130,7 +130,7 @@ export async function PATCH(
     }
 
     const queuedMatchAffected = await admissionTransaction(prisma, async (tx) => {
-      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId });
+      await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId, availability: true });
       const queuedMatch = await tx.queuedMatch.findUnique({
         where: { sessionId: sessionData.id },
       });

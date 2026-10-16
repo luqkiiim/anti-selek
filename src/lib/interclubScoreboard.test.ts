@@ -31,6 +31,15 @@ describe("getInterclubScore", () => {
     expect(result?.leaderId).toBe("b");
   });
 
+  it("keeps equal match wins a draw for new club collaboration rules", () => {
+    const result = getInterclubScore(session({ collaborationVersion: 2, matches: [
+      { status: MatchStatus.COMPLETED, team1ClubId: "a", team2ClubId: "b", team1Score: 21, team2Score: 1, winnerTeam: 1 },
+      { status: MatchStatus.COMPLETED, team1ClubId: "a", team2ClubId: "b", team1Score: 19, team2Score: 21, winnerTeam: 2 },
+    ] as SessionData["matches"] }));
+    expect(result?.clubs.map(club => club.wins)).toEqual([1, 1]);
+    expect(result?.leaderId).toBeNull();
+  });
+
   it("shows no scoreboard without exactly two accepted interclub clubs", () => {
     expect(getInterclubScore(session({ collabFormat: SessionCollabFormat.FREE_PLAY }))).toBeNull();
     expect(getInterclubScore(session({ clubs: [clubs[0]] }))).toBeNull();

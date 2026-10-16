@@ -53,7 +53,7 @@ describe("manual queue cancellation", () => {
 
   it("releases pending players based on isAutomatic, not reason presence", async () => {
     const queuedMatchDeleteMany = vi.fn().mockResolvedValue({ count: 1 });
-    const tx = { queuedMatch: { deleteMany: queuedMatchDeleteMany } };
+    const tx = { session: { findUnique: vi.fn().mockResolvedValue({ id: "session-1", collaborationVersion: 1 }) }, queuedMatch: { deleteMany: queuedMatchDeleteMany } };
     mocks.transaction.mockImplementation(async (callback) => callback(tx));
     mocks.loadSessionRecord.mockResolvedValue({
       id: "session-1",
@@ -91,6 +91,7 @@ describe("manual queue cancellation", () => {
 
   it("does not treat an automatic queue as a manual blocker when reason is absent", async () => {
     const tx = {
+      session: { findUnique: vi.fn().mockResolvedValue({ id: "session-1", collaborationVersion: 1 }) },
       queuedMatch: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
     };
     mocks.transaction.mockImplementation(async (callback) => callback(tx));

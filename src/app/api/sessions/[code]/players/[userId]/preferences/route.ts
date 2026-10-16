@@ -1,4 +1,4 @@
-import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { assertScopedSessionMutation } from "../../collaborationPermissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
@@ -292,7 +292,6 @@ export async function PATCH(
     });
 
     const mutation = await admissionTransaction(prisma, async (tx) => {
-      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       const [freshSession, freshPlayer] = await Promise.all([
         tx.session.findUnique({
           where: { id: sessionData.id },
@@ -341,6 +340,8 @@ export async function PATCH(
       if (freshSession.status === SessionStatus.COMPLETED) {
         return { kind: "completed" } as const;
       }
+
+      await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId });
 
       const changesCurrentPool =
         freshSession.poolsEnabled &&

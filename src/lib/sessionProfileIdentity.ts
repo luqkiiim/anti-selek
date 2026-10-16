@@ -1,3 +1,4 @@
+import { assertCollaborationPermission, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { deriveClubPairingPreferences } from "./clubPairingPreferences";
 import type { MixedSide } from "@/types/enums";
@@ -124,11 +125,16 @@ export async function assertSessionMutationActor(db: Db, args: { session: { id: 
 
 export interface SessionMutationActor { userId: string; isGlobalAdmin?: boolean }
 /** Match/queue writers validate a fresh roster and actor after reserving SQLite. */
-export async function sessionMatchMutationTransaction<T>(db: PrismaClient, sessionId: string, actor: SessionMutationActor | undefined, op: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+export async function sessionMatchMutationTransaction<T>(db: PrismaClient, sessionId: string, actor: SessionMutationActor | undefined, op: (tx: Prisma.TransactionClient) => Promise<T>, options: { operation?: "undo" } = {}): Promise<T> {
   return admissionTransaction(db, async tx => {
-    const session = await tx.session.findUnique({ where: { id: sessionId }, select: { id: true, clubId: true, status: true, ratingPolicyVersion: true } });
+    const session = await tx.session.findUnique({ where: { id: sessionId }, select: { id: true, clubId: true, status: true, ratingPolicyVersion: true, collaborationVersion: true, schedulingMode: true } });
     if (!session || session.status !== "ACTIVE") throw new IdentityConflictError("This tournament is no longer active. Refresh before creating or changing a match.");
-    if (actor) await assertSessionMutationActor(tx, { session, ...actor });
+    if (isUpgradedCollaboration(session)) {
+      if (session.schedulingMode === "LINEUP" && options.operation !== "undo") {
+        throw new IdentityConflictError("Start matches from the agreed lineup.");
+      }
+      if (actor) await assertCollaborationPermission(tx, { sessionId, userId: actor.userId, isGlobalAdmin: !!actor.isGlobalAdmin, kind: "host" });
+    } else if (actor) await assertSessionMutationActor(tx, { session, ...actor });
     await assertSessionProfileContextsUnambiguous(tx, session);
     return op(tx);
   });

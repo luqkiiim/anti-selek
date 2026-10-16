@@ -1,4 +1,4 @@
-import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { assertScopedSessionMutation, assertPlayerNotInLineup } from "../collaborationPermissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
@@ -103,15 +103,15 @@ export async function PATCH(
       );
     }
 
-    const updatedUser = await prisma.player.update({
-      where: { id: playerId },
-      data: {
-        name: name.trim(),
-      },
-      select: {
-        id: true,
-        name: true,
-      },
+    const updatedUser = await admissionTransaction(prisma, async tx => {
+      await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId });
+      const guest = await tx.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: sessionData.id, playerId } }, select: { isGuest: true } });
+      if (!guest?.isGuest) throw new IdentityConflictError("Only session guests can be renamed.");
+      return tx.player.update({
+        where: { id: playerId },
+        data: { name: name.trim() },
+        select: { id: true, name: true },
+      });
     });
 
     return sportingJson({
@@ -119,6 +119,7 @@ export async function PATCH(
       name: updatedUser.name,
     });
   } catch (error) {
+    if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: error.statusCode });
     logError("Rename session guest error", error);
     return safeErrorResponse();
   }
@@ -248,9 +249,12 @@ export async function DELETE(
     }
 
     const result = await admissionTransaction(prisma, async (tx) => {
-      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId });
+      await assertPlayerNotInLineup(tx, sessionData.id, playerId);
+      const freshSeat = await tx.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: sessionData.id, playerId } }, select: { hasStartedMatch: true } });
+      if (freshSeat?.hasStartedMatch) throw new IdentityConflictError("This player has already started a match. Pause them to change availability.");
       const recorded = await tx.match.findFirst({ where: playerMatchWhere, select: { id: true } });
-      if (recorded) throw new Error("This player has match history and cannot be removed.");
+      if (recorded) throw new IdentityConflictError("This player has match history and cannot be removed.");
       const queuedMatch = await tx.queuedMatch.findUnique({
         where: { sessionId: sessionData.id },
       });

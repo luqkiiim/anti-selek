@@ -27,6 +27,9 @@ export interface MatchPayload {
   courtId?: string | null;
   status: string;
   winnerTeam?: number | null;
+  scoringFormat?: Match["scoringFormat"];
+  gameScoresJson?: string | null;
+  scoreRevision?: number;
   team1Score?: number | null;
   team2Score?: number | null;
   team1EloChange?: number | null;
@@ -61,6 +64,12 @@ export interface SessionSnapshotLike {
   selectedSelf?: SessionData["selectedSelf"];
   eligibleProfiles?: SessionData["eligibleProfiles"];
   status?: string;
+  collaborationVersion?: number;
+  schedulingMode?: SessionData["schedulingMode"];
+  scoringFormat?: SessionData["scoringFormat"];
+  ratingMode?: SessionData["ratingMode"];
+  rulesRevision?: number;
+  resultsRevision?: number;
   type?: string;
   mode?: SessionData["mode"];
   scoringType?: SessionData["scoringType"];
@@ -214,6 +223,9 @@ function buildLiveMatch(
   return {
     id: payload.id,
     status: payload.status,
+    scoringFormat: payload.scoringFormat ?? fallbackMatch?.scoringFormat,
+    gameScoresJson: payload.gameScoresJson !== undefined ? payload.gameScoresJson : fallbackMatch?.gameScoresJson,
+    scoreRevision: payload.scoreRevision ?? fallbackMatch?.scoreRevision,
     createdAt: normalizeOptionalDate(payload.createdAt) ?? fallbackMatch?.createdAt,
     scoreSubmittedByUserId: payload.scoreSubmittedByUserId ?? null,
     scoreSubmittedByPlayerId:
@@ -264,6 +276,9 @@ function buildCompletedMatchInfo(
     team2ClubId: payload.team2ClubId ?? fallbackMatch?.team2ClubId ?? null,
     team1Score: normalizeOptionalNumber(payload.team1Score),
     team2Score: normalizeOptionalNumber(payload.team2Score),
+    scoringFormat: payload.scoringFormat ?? fallbackMatch?.scoringFormat,
+    gameScoresJson: payload.gameScoresJson !== undefined ? payload.gameScoresJson : fallbackMatch?.gameScoresJson,
+    scoreRevision: payload.scoreRevision ?? fallbackMatch?.scoreRevision,
     winnerTeam:
       typeof payload.winnerTeam === "number" ? payload.winnerTeam : 0,
     status: payload.status,
@@ -328,9 +343,7 @@ function updatePlayersForCompletedMatch(
   payload: MatchPayload
 ) {
   if (
-    (payload.winnerTeam !== 1 && payload.winnerTeam !== 2) ||
-    typeof payload.team1EloChange !== "number" ||
-    typeof payload.team2EloChange !== "number"
+    (payload.winnerTeam !== 1 && payload.winnerTeam !== 2)
   ) {
     return players;
   }
@@ -374,7 +387,7 @@ function updatePlayersForCompletedMatch(
               ? player.user.elo
               : player.user.elo +
                 (playerEloChangeByUserId.get(player.userId) ??
-                  payload.team1EloChange!),
+                  (payload.team1EloChange ?? 0)),
         },
       };
     }
@@ -392,7 +405,7 @@ function updatePlayersForCompletedMatch(
               ? player.user.elo
               : player.user.elo +
                 (playerEloChangeByUserId.get(player.userId) ??
-                  payload.team2EloChange!),
+                  (payload.team2EloChange ?? 0)),
         },
       };
     }
@@ -539,7 +552,7 @@ export function applyScoreSubmission(
     };
   });
 
-  const historyMatch = buildCompletedMatchInfo(payload, fallbackMatch);
+  const historyMatch = payload.status === "IN_PROGRESS" ? null : buildCompletedMatchInfo(payload, fallbackMatch);
 
   return {
     ...current,

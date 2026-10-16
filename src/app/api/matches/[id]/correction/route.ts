@@ -7,7 +7,7 @@ import {
   correctCompletedMatchScore,
   CorrectCompletedMatchScoreError,
 } from "@/lib/matchCompletion";
-import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
+import { MATCH_SCORE_ERROR_MESSAGE, SERIES_SCORE_ERROR_MESSAGE, resolveMatchScoreInput } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import {
@@ -90,25 +90,20 @@ export async function POST(
       );
     }
 
-    const { team1Score, team2Score } = body as {
+    const { team1Score, team2Score, gameScores, scoreRevision } = body as {
       team1Score?: unknown;
       team2Score?: unknown;
+      gameScores?: unknown;
+      scoreRevision?: unknown;
     };
-    if (typeof team1Score !== "number" || typeof team2Score !== "number") {
-      return sportingJson({ error: "Invalid score" }, { status: 400 });
-    }
-    if (!isValidMatchScore(team1Score, team2Score)) {
-      return sportingJson(
-        { error: MATCH_SCORE_ERROR_MESSAGE },
-        { status: 400 }
-      );
-    }
-
     const match = await prisma.match.findUnique({
       where: { id },
       select: {
         id: true,
         status: true,
+        scoringFormat: true,
+        gameScoresJson: true,
+        scoreRevision: true,
         team1Score: true,
         team2Score: true,
         sessionId: true,
@@ -118,6 +113,7 @@ export async function POST(
             code: true,
             name: true,
             clubId: true,
+            collaborationVersion: true,
             isTest: true,
             status: true,
           },
@@ -158,12 +154,11 @@ export async function POST(
         { status: 400 }
       );
     }
-    if (match.team1Score === team1Score && match.team2Score === team2Score) {
-      return sportingJson(
-        { error: "Enter a different score to correct this match." },
-        { status: 400 }
-      );
-    }
+    if ((match.session.collaborationVersion ?? 1) >= 2 && scoreRevision === undefined) return sportingJson({ error: "Refresh the match before correcting its score." }, { status: 409 });
+    if (scoreRevision !== undefined && (!Number.isSafeInteger(scoreRevision) || scoreRevision !== match.scoreRevision)) return sportingJson({ error: "This score changed. Refresh before correcting." }, { status: 409 });
+    const resolvedScore = resolveMatchScoreInput({ scoringFormat: match.scoringFormat, team1Score, team2Score, gameScores });
+    if (!resolvedScore) return sportingJson({ error: match.scoringFormat === "BEST_OF_THREE" ? SERIES_SCORE_ERROR_MESSAGE : MATCH_SCORE_ERROR_MESSAGE }, { status: 400 });
+    if (match.team1Score === resolvedScore.team1Score && match.team2Score === resolvedScore.team2Score && (match.scoringFormat !== "BEST_OF_THREE" || match.gameScoresJson === JSON.stringify(resolvedScore.gameScores))) return sportingJson({ error: "Enter a different score to correct this match." }, { status: 400 });
 
     const adminMembership = await getSessionAdminMembership(prisma, {
       session: match.session,
@@ -182,8 +177,10 @@ export async function POST(
       matchId: match.id,
       actorUserId: session.user.id,
       actorIsGlobalAdmin: !!session.user.isAdmin,
-      finalTeam1Score: team1Score,
-      finalTeam2Score: team2Score,
+      finalTeam1Score: resolvedScore.team1Score,
+      finalTeam2Score: resolvedScore.team2Score,
+      finalGameScores: match.scoringFormat === "BEST_OF_THREE" ? resolvedScore.gameScores : undefined,
+      expectedScoreRevision: match.scoreRevision,
     });
 
     logAuditEvent({

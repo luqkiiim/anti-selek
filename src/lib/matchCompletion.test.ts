@@ -50,6 +50,7 @@ const finalizableMatch: FinalizableMatch = {
 
 function createTransactionMock(storedMatch: unknown) {
   return {
+    session: { update: vi.fn().mockResolvedValue({}) },
     match: {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       findUnique: vi.fn().mockResolvedValue(storedMatch),
@@ -123,6 +124,7 @@ function createUndoTransactionMock({
   },
 } = {}) {
   return {
+    session: { update: vi.fn().mockResolvedValue({}) },
     match: {
       findUnique: vi.fn().mockResolvedValue(match),
       findFirst: vi
@@ -214,6 +216,7 @@ function createCorrectionTransactionMock({
   newerOutsideMatch?: { id: string } | null;
 } = {}) {
   return {
+    session: { update: vi.fn().mockResolvedValue({}) },
     match: {
       findUnique: vi.fn().mockResolvedValue(targetMatch),
       findMany: vi.fn().mockResolvedValue([targetMatch, laterMatch]),
@@ -982,5 +985,74 @@ describe("selected club rating policy", () => {
     await expect(assertSelectedProfileLedger(tx as never, "s", ["p"], [])).rejects.toThrow("ledger is missing");
     await expect(assertSelectedProfileLedger(tx as never, "s", ["p"], [{ playerId: "p", clubId: "club-a" }])).rejects.toThrow("ledger is missing");
     await expect(assertSelectedProfileLedger(tx as never, "s", ["p"], [{ playerId: "p", clubId: "club-b" }])).resolves.toBeUndefined();
+  });
+});
+
+describe("series and unrated completion", () => {
+  const games = [{ team1Score: 21, team2Score: 19 }, { team1Score: 1, team2Score: 21 }, { team1Score: 21, team2Score: 19 }];
+  it("rates a series once with neutral margin and awards one standing result", async () => {
+    const match = { ...finalizableMatch, scoringFormat: "BEST_OF_THREE", session: { ...finalizableMatch.session, isTest: false } };
+    const tx = createTransactionMock({ id: match.id, status: MatchStatus.COMPLETED });
+    mocks.transaction.mockImplementation((callback) => callback(tx));
+    await finalizeMatchResult({ match, expectedStatus: MatchStatus.IN_PROGRESS, finalTeam1Score: 43, finalTeam2Score: 59, finalGameScores: games });
+    expect(tx.match.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ winnerTeam: 1, team1Score: 43, team2Score: 59, team1EloChange: 16, team2EloChange: -16, gameScoresJson: JSON.stringify(games), scoreRevision: { increment: 1 } }) }));
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ playerId: { in: ["a1", "a2"] } }), data: expect.objectContaining({ matchesPlayed: { increment: 1 }, sessionPoints: { increment: 3 } }) }));
+    expect(tx.session.update).toHaveBeenCalledWith({ where: { id: match.sessionId }, data: { resultsRevision: { increment: 1 } } });
+  });
+  it("completes an unrated selected-profile fixture without reading or writing any ratings", async () => {
+    const match = { ...finalizableMatch, scoringFormat: "BEST_OF_THREE", session: { ...finalizableMatch.session, isTest: false, ratingPolicyVersion: 2, ratingMode: "UNRATED" } };
+    const tx = createTransactionMock({ id: match.id, status: MatchStatus.COMPLETED });
+    mocks.transaction.mockImplementation((callback) => callback(tx));
+    await finalizeMatchResult({ match, expectedStatus: MatchStatus.IN_PROGRESS, finalTeam1Score: 43, finalTeam2Score: 59, finalGameScores: games });
+    expect(tx.match.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ winnerTeam: 1, team1EloChange: null, team2EloChange: null }) }));
+    expect(tx.player.findMany).not.toHaveBeenCalled();
+    expect(tx.player.updateMany).not.toHaveBeenCalled();
+    expect(tx.clubMember.findMany).not.toHaveBeenCalled();
+    expect(tx.clubMember.updateMany).not.toHaveBeenCalled();
+  });
+  it("corrects unrated results with no ledger and no outside-rating replay dependency", async () => {
+    const original = createReplayMatch({ id: "match-1", completedAt: new Date("2026-05-02T10:00:00Z") });
+    const target = { ...original, team1EloChange: null, team2EloChange: null, session: { ...original.session, ratingMode: "UNRATED", ratingPolicyVersion: 2 } };
+    const tx = createCorrectionTransactionMock({ targetMatch: target as never, laterMatch: target as never, newerOutsideMatch: { id: "outside" } });
+    tx.match.findMany.mockResolvedValue([target] as never);
+    tx.matchEloAdjustment.findMany.mockResolvedValue([]);
+    mocks.transaction.mockImplementation((callback) => callback(tx));
+    await correctCompletedMatchScore({ matchId: target.id, finalTeam1Score: 18, finalTeam2Score: 21 });
+    expect(tx.match.findFirst).not.toHaveBeenCalled();
+    expect(tx.matchEloAdjustment.createMany).not.toHaveBeenCalled();
+    expect(tx.clubMember.updateMany).not.toHaveBeenCalled();
+    expect(tx.match.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ winnerTeam: 2, team1EloChange: null, team2EloChange: null }) }));
+  });
+});
+
+
+describe("collaboration scoring authorization under the writer lock", () => {
+  it("reserves upgraded completed undo for the host and preserves legacy visiting operators", async () => {
+    const original = createReplayMatch({ id: "match-1", completedAt: new Date("2026-05-02T10:00:00Z"), sessionStatus: SessionStatus.ACTIVE });
+    const match = { ...original, team1EloChange: null, team2EloChange: null, session: { ...original.session, ratingMode: "UNRATED", collaborationVersion: 2 } };
+    const tx = Object.assign(createUndoTransactionMock({ match: match as never }), {
+      $executeRaw: vi.fn(),
+      clubAccess: { findFirst: vi.fn(async ({ where }) => where.clubId === "community-1" ? null : { clubId: "visiting-club", role: "STAFF" }) },
+      sessionClub: { findMany: vi.fn().mockResolvedValue([{ clubId: "community-1", role: "HOST", status: "ACCEPTED" }, { clubId: "visiting-club", role: "PARTNER", status: "ACCEPTED" }]) },
+    });
+    mocks.transaction.mockImplementation(callback => callback(tx));
+    await expect(undoCompletedMatchResult({ matchId: match.id, actorUserId: "visiting-operator" })).rejects.toThrow("Your ownership or club access changed");
+    expect(tx.clubAccess.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ clubId: "community-1" }) }));
+    expect(tx.match.deleteMany).not.toHaveBeenCalled();
+    tx.match.findUnique.mockResolvedValue({ ...match, session: { ...match.session, collaborationVersion: 1 } } as never);
+    await expect(undoCompletedMatchResult({ matchId: match.id, actorUserId: "visiting-operator" })).resolves.toMatchObject({ ok: true });
+    expect(tx.match.deleteMany).toHaveBeenCalledOnce();
+  });
+  it("rechecks the correcting actor as an admin instead of accepting a downgraded staff grant", async () => {
+    const tx = Object.assign(createCorrectionTransactionMock(), {
+      $executeRaw: vi.fn(),
+      clubAccess: { findFirst: vi.fn(async ({ where }) => where.role.in.includes("STAFF") ? { clubId: "visiting-club", role: "STAFF" } : null) },
+      sessionClub: { findMany: vi.fn().mockResolvedValue([{ clubId: "community-1", role: "HOST", status: "ACCEPTED" }, { clubId: "visiting-club", role: "PARTNER", status: "ACCEPTED" }]) },
+    });
+    mocks.transaction.mockImplementation(callback => callback(tx));
+    await expect(correctCompletedMatchScore({ matchId: "match-1", actorUserId: "downgraded-visiting-admin", finalTeam1Score: 18, finalTeam2Score: 21 })).rejects.toThrow("Your ownership or club access changed");
+    expect(tx.clubAccess.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ role: { in: ["OWNER", "ADMIN"] } }) }));
+    expect(tx.match.update).not.toHaveBeenCalled();
+    expect(tx.clubMember.updateMany).not.toHaveBeenCalled();
   });
 });

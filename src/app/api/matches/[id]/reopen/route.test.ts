@@ -13,6 +13,7 @@ vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    session: { update: vi.fn().mockResolvedValue({}) },
     match: {
       findUnique: mocks.matchFindUnique,
       updateMany: mocks.matchUpdateMany,
@@ -78,6 +79,18 @@ describe("reopen pending match route", () => {
     mocks.matchUpdateMany.mockResolvedValue({ count: 1 });
   });
 
+  it("allows an accepted visiting club operator to reopen score entry", async () => {
+    mocks.sessionClubFindMany.mockResolvedValue([
+      { sessionId: "session-1", clubId: "club-1", role: "HOST", status: "ACCEPTED" },
+      { sessionId: "session-1", clubId: "club-2", role: "PARTNER", status: "ACCEPTED" },
+    ]);
+    mocks.clubAccessFindFirst.mockResolvedValue({ clubId: "club-2", role: "STAFF" });
+    const response = await postReopen();
+    expect(response.status).toBe(200);
+    expect(mocks.clubAccessFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ clubId: { in: ["club-1", "club-2"] }, role: { in: ["OWNER", "ADMIN", "STAFF"] } }) }));
+    expect(mocks.matchUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: MatchStatus.IN_PROGRESS, gameScoresJson: null, scoreRevision: { increment: 1 } }) }));
+  });
+
   it("uses active Account access and clears both submitter identities without changing players or reversing ratings", async () => {
     const response = await postReopen();
 
@@ -105,6 +118,8 @@ describe("reopen pending match route", () => {
       where: { id: "match-1", status: MatchStatus.PENDING_APPROVAL },
       data: {
         status: MatchStatus.IN_PROGRESS,
+        gameScoresJson: null,
+        scoreRevision: { increment: 1 },
         team1Score: null,
         team2Score: null,
         winnerTeam: null,

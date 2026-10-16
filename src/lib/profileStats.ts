@@ -1,3 +1,4 @@
+import { isCloseMatchResult, resolveMatchResult } from "./matchRules";
 import {
   getWeightedRecordScore,
   PREFERRED_CONNECTION_MIN_MATCHES,
@@ -30,6 +31,8 @@ interface ProfileSessionMatchSource {
   team1User2Id: string;
   team2User1Id: string;
   team2User2Id: string;
+  scoringFormat?: string;
+  gameScoresJson?: string | null;
   team1Score: number | null;
   team2Score: number | null;
   winnerTeam: number | null;
@@ -43,6 +46,7 @@ export interface ProfileMatchSource {
     code: string;
     name: string;
     ratingPolicyVersion?: number;
+    ratingMode?: string;
     players?: ProfileSessionPlayerSource[];
     matches?: ProfileSessionMatchSource[];
   };
@@ -54,6 +58,8 @@ export interface ProfileMatchSource {
   team1User2: ProfileParticipant;
   team2User1: ProfileParticipant;
   team2User2: ProfileParticipant;
+  scoringFormat?: string;
+  gameScoresJson?: string | null;
   team1Score: number | null;
   team2Score: number | null;
   winnerTeam: number | null;
@@ -100,6 +106,7 @@ export interface PlayerProfileConnectionSummary {
 }
 
 export interface PlayerProfileSessionSummary {
+  ratingMode?: string;
   id: string;
   code: string;
   name: string;
@@ -127,6 +134,9 @@ export interface PlayerProfileTrendSummary {
 
 export interface PlayerProfileMatchHistoryEntry {
   id: string;
+  ratingMode?: string;
+  scoringFormat?: string;
+  gameScoresJson?: string | null;
   date: string | null;
   sessionId: string;
   sessionCode: string;
@@ -782,14 +792,17 @@ export function buildPlayerProfileDerivedData(
     const isTeam1 =
       match.team1User1Id === userId || match.team1User2Id === userId;
     const myTeam = isTeam1 ? 1 : 2;
-    const result = match.winnerTeam === myTeam ? "WIN" : "LOSS";
+    const resolvedResult = resolveMatchResult(match);
+    const result = (resolvedResult?.winnerTeam ?? match.winnerTeam) === myTeam ? "WIN" : "LOSS";
     const myScore = isTeam1 ? match.team1Score ?? 0 : match.team2Score ?? 0;
     const opponentScore =
       isTeam1 ? match.team2Score ?? 0 : match.team1Score ?? 0;
     const ratingChange =
       (isTeam1 ? match.team1EloChange : match.team2EloChange) ?? 0;
     const pointDifferential = myScore - opponentScore;
-    const scoreDifference = Math.abs(myScore - opponentScore);
+    const scoreDifference = match.scoringFormat === "BEST_OF_THREE"
+      ? (isCloseMatchResult(match) ? Math.abs(resolvedResult!.gameScores[2].team1Score - resolvedResult!.gameScores[2].team2Score) : Number.POSITIVE_INFINITY)
+      : Math.abs(myScore - opponentScore);
     const partnerSource = isTeam1
       ? match.team1User1Id === userId
         ? match.team1User2
@@ -831,6 +844,7 @@ export function buildPlayerProfileDerivedData(
 
     const existingSession = sessionAggregates.get(match.session.id) ?? {
       id: match.session.id,
+      ratingMode: match.session.ratingMode,
       code: match.session.code,
       name: match.session.name,
       latestCompletedAtMs: 0,
@@ -902,7 +916,10 @@ export function buildPlayerProfileDerivedData(
       sessionName: match.session.name,
       partner,
       opponents,
-      score: `${myScore} - ${opponentScore}`,
+      ratingMode: match.session.ratingMode,
+      scoringFormat: match.scoringFormat,
+      gameScoresJson: match.gameScoresJson,
+      score: match.scoringFormat === "BEST_OF_THREE" && resolvedResult ? `${isTeam1 ? resolvedResult.team1GameWins : resolvedResult.team2GameWins} - ${isTeam1 ? resolvedResult.team2GameWins : resolvedResult.team1GameWins}` : `${myScore} - ${opponentScore}`,
       result,
       eloChange:
         (isTeam1 ? match.team1EloChange : match.team2EloChange) ?? null,

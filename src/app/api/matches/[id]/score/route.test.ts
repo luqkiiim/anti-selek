@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
-vi.mock("@/lib/matchCompletion", () => ({ finalizeMatchResult: mocks.finalizeMatchResult }));
+vi.mock("@/lib/matchCompletion", () => ({ finalizeMatchResult: mocks.finalizeMatchResult, bumpSessionResultsRevision: vi.fn() }));
 vi.mock("@/lib/matchApprovalRules", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/matchApprovalRules")>();
   return { ...actual, shouldRequireOpponentApproval: mocks.shouldRequireOpponentApproval };
@@ -159,6 +159,7 @@ describe("score match route", () => {
         team1Score: 15,
         team2Score: 14,
         winnerTeam: 1,
+        scoreRevision: { increment: 1 },
         status: MatchStatus.PENDING_APPROVAL,
         scoreSubmittedByUserId: "account-a1",
         scoreSubmittedByPlayerId: "player-a1",

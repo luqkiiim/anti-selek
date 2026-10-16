@@ -67,6 +67,12 @@ describe("ladder records", () => {
     });
   });
 
+  it("counts a series winner once even with lower rally totals", () => {
+    const records = deriveLadderRecords(["A", "B", "C", "D"], [{ team1: ["A", "B"], team2: ["C", "D"], status: "COMPLETED", scoringFormat: "BEST_OF_THREE", gameScoresJson: JSON.stringify([{ team1Score: 21, team2Score: 19 }, { team1Score: 1, team2Score: 21 }, { team1Score: 21, team2Score: 19 }]), winnerTeam: 1, team1Score: 43, team2Score: 59 }]);
+    expect(records.get("A")).toMatchObject({ wins: 1, losses: 0, ladderScore: 1, pointDiff: -16 });
+    expect(records.get("C")).toMatchObject({ wins: 0, losses: 1, ladderScore: -1, pointDiff: 16 });
+  });
+
   it("ignores matches that are not completed or have missing scores", () => {
     const records = deriveLadderRecords(
       ["A", "B", "C", "D"],
