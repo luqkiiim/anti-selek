@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   clubAccessFindUnique: vi.fn(),
   clubMemberFindMany: vi.fn(),
   parseMatchmakingReasonJson: vi.fn(),
+  tryRebuildQueuedMatchForSessionId: vi.fn(async () => null),
+  queuedMatchFindUnique: vi.fn(async () => null),
   rateLimit: vi.fn(async () => null),
 }));
 
@@ -49,7 +51,12 @@ vi.mock("@/lib/prisma", () => ({
     clubAccess: {
       findUnique: mocks.clubAccessFindUnique,
     },
+    queuedMatch: { findUnique: mocks.queuedMatchFindUnique },
   },
+}));
+
+vi.mock("./queue-match/shared", () => ({
+  tryRebuildQueuedMatchForSessionId: mocks.tryRebuildQueuedMatchForSessionId,
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
@@ -101,6 +108,8 @@ describe("session route GET", () => {
     vi.clearAllMocks();
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
     mocks.rateLimit.mockResolvedValue(null);
+    mocks.tryRebuildQueuedMatchForSessionId.mockResolvedValue(null);
+    mocks.queuedMatchFindUnique.mockResolvedValue(null);
 
     mocks.auth.mockResolvedValue({
       user: { id: "account-u1", isAdmin: false },
@@ -254,6 +263,72 @@ describe("session route GET", () => {
     expect(body.players[0].user.ownerUserId).toBeUndefined();
   });
 
+  it("recovers a deferred automatic queue on an operator refresh", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    const queuedMatch = sessionData.queuedMatch;
+    mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, queuedMatch: null });
+    mocks.getSessionOperatorMembership.mockResolvedValue({ role: "OPERATOR" });
+    mocks.queuedMatchFindUnique.mockResolvedValue(queuedMatch);
+
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123?recoverDeferredQueue=1"), {
+      params: Promise.resolve({ code: "ABC123" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.tryRebuildQueuedMatchForSessionId).toHaveBeenCalledExactlyOnceWith(
+      "session-1",
+      undefined,
+      { userId: "account-u1", isGlobalAdmin: false },
+    );
+    expect(mocks.queuedMatchFindUnique).toHaveBeenCalledWith({ where: { sessionId: "session-1" } });
+    expect(body.queuedMatch.id).toBe("queue-1");
+  });
+
+  it("does not create a deferred queue during a participant-only read", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, queuedMatch: null });
+
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123?recoverDeferredQueue=1"), {
+      params: Promise.resolve({ code: "ABC123" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.tryRebuildQueuedMatchForSessionId).not.toHaveBeenCalled();
+    expect(mocks.queuedMatchFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("does not let an unapproved account use a recovery query to write", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, queuedMatch: null });
+    mocks.auth.mockResolvedValue({ user: { id: "outsider", isAdmin: false } });
+    mocks.getSessionMembership.mockResolvedValue(null);
+    mocks.isAccountSessionPlayer.mockResolvedValue(false);
+
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123?recoverDeferredQueue=1"), {
+      params: Promise.resolve({ code: "ABC123" }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(mocks.tryRebuildQueuedMatchForSessionId).not.toHaveBeenCalled();
+    expect(mocks.queuedMatchFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("keeps an ordinary operator refresh read-only after a queue was cleared", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, queuedMatch: null });
+    mocks.getSessionOperatorMembership.mockResolvedValue({ role: "OPERATOR" });
+
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123"), {
+      params: Promise.resolve({ code: "ABC123" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).queuedMatch).toBeNull();
+    expect(mocks.tryRebuildQueuedMatchForSessionId).not.toHaveBeenCalled();
+    expect(mocks.queuedMatchFindUnique).not.toHaveBeenCalled();
+  });
+
   it("leaves the viewer Player identity unset when the account owns multiple participants", async () => {
     const sessionData = await mocks.sessionFindUnique();
     mocks.sessionFindUnique.mockResolvedValue({
@@ -334,17 +409,21 @@ describe("session route GET", () => {
   });
 
   it("global browsing suppresses an actual member's participation, identities and every management control", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, queuedMatch: null });
     vi.stubEnv("GLOBAL_CLUB_VIEWER_EMAILS", "h.luqman1998@gmail.com");
     mocks.accountFindUnique.mockResolvedValue({ email: "h.luqman1998@gmail.com", isActive: true, passwordHash: "hash" });
     mocks.auth.mockResolvedValue({ user: { id: "account-u1", canBrowseAllClubs: true, isAdmin: false } });
     mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
     mocks.getSessionOperatorMembership.mockResolvedValue({ role: "OWNER" });
-    const response = await GET(new Request("http://localhost/api/sessions/ABC123?view=global&clubId=community-1"), { params: Promise.resolve({ code: "ABC123" }) });
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123?view=global&clubId=community-1&recoverDeferredQueue=1"), { params: Promise.resolve({ code: "ABC123" }) });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ readOnly: true, viewerClubRole: null, viewerPlayerId: null, selectedSelf: null, eligibleProfiles: [], viewerCanParticipate: false, viewerCanScore: false, viewerCanManage: false, viewerCanUseAdminSessionControls: false, viewerCanDelete: false, viewerCanRollback: false });
     expect(mocks.getSessionMembership).not.toHaveBeenCalled();
     expect(mocks.getSessionAdminMembership).not.toHaveBeenCalled();
     expect(mocks.getSessionOperatorMembership).not.toHaveBeenCalled();
+    expect(mocks.tryRebuildQueuedMatchForSessionId).not.toHaveBeenCalled();
+    expect(mocks.queuedMatchFindUnique).not.toHaveBeenCalled();
   });
 
   it.each(["?view=global", "?view=global&clubId=other", "?view=global&clubId=community-1&clubId=other"])("denies invalid global context even when the user has normal member rights: %s", async query => {

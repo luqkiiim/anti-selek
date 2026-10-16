@@ -44,11 +44,16 @@ export function useSessionData({
   const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
   const hasLoadedSessionRef = useRef(false);
   const revalidateTimeoutRef = useRef<number | null>(null);
+  const deferredRecoveryTimeoutRef = useRef<number | null>(null);
+  const deferredRecoveryRef = useRef<Promise<void> | null>(null);
+  const deferredRecoveryGenerationRef = useRef(0);
   const inFlightRef = useRef<{
     controller: AbortController;
     id: number;
     code: string;
-    timeoutId: number;
+    timeoutId: number | null;
+    settled: Promise<void>;
+    resolveSettled: () => void;
   } | null>(null);
   const requestIdRef = useRef(0);
   const activeGenerationRef = useRef(0);
@@ -58,23 +63,30 @@ export function useSessionData({
   const lastServerSnapshotRef = useRef<string | null>(null);
   const nextRequestAllowedAtRef = useRef(0);
   const fetchSession = useCallback(
-    async ({ silent = false }: { silent?: boolean } = {}) => {
+    async ({ silent = false, recoverDeferredQueue = false }: { silent?: boolean; recoverDeferredQueue?: boolean } = {}) => {
       if (!code || !isActiveRef.current) return;
-      if (inFlightRef.current?.code === code) return;
-      if (Date.now() < nextRequestAllowedAtRef.current) return;
+      if (inFlightRef.current?.code === code) return "retry";
+      if (Date.now() < nextRequestAllowedAtRef.current) return "retry";
 
       const generation = activeGenerationRef.current;
       const localRevision = localRevisionRef.current;
       const controller = new AbortController();
       const requestId = ++requestIdRef.current;
-      const timeoutId = window.setTimeout(
+      // A Clear action waits for a recovery writer to finish. Aborting its fetch
+      // would not prove that the server-side writer had stopped.
+      const timeoutId = recoverDeferredQueue ? null : window.setTimeout(
         () => controller.abort(),
         REQUEST_TIMEOUT_MS
       );
-      inFlightRef.current = { controller, id: requestId, code, timeoutId };
+      let resolveSettled = () => {};
+      const settled = new Promise<void>((resolve) => { resolveSettled = resolve; });
+      inFlightRef.current = { controller, id: requestId, code, timeoutId, settled, resolveSettled };
 
       try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(code)}${readQuery}`, {
+        const recoveryQuery = recoverDeferredQueue
+          ? `${readQuery ? "&" : "?"}recoverDeferredQueue=1`
+          : "";
+        const res = await fetch(`/api/sessions/${encodeURIComponent(code)}${readQuery}${recoveryQuery}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -82,8 +94,7 @@ export function useSessionData({
         if (
           !isActiveRef.current ||
           activeCodeRef.current !== code ||
-          activeGenerationRef.current !== generation ||
-          localRevisionRef.current !== localRevision
+          activeGenerationRef.current !== generation
         ) {
           return;
         }
@@ -93,12 +104,11 @@ export function useSessionData({
             const retryAfterMs = getRetryAfterDelay(
               res.headers.get("Retry-After")
             );
-            if (retryAfterMs > 0) {
-              nextRequestAllowedAtRef.current = Date.now() + retryAfterMs;
-            }
+            nextRequestAllowedAtRef.current = Date.now() +
+              (retryAfterMs > 0 ? retryAfterMs : POLL_INTERVAL_MS);
           }
 
-          if (!silent) {
+          if (!silent && localRevisionRef.current === localRevision) {
             const message = getErrorMessage(data, "Failed to load tournament");
 
             if (hasLoadedSessionRef.current) {
@@ -110,10 +120,11 @@ export function useSessionData({
               });
             }
           }
-          return;
+          return res.status === 429 ? "retry" : undefined;
         }
 
         nextRequestAllowedAtRef.current = 0;
+        if (localRevisionRef.current !== localRevision) return;
         hasLoadedSessionRef.current = true;
         const snapshotSignature = JSON.stringify(data);
         if (snapshotSignature === lastServerSnapshotRef.current) {
@@ -151,10 +162,11 @@ export function useSessionData({
           }
         }
       } finally {
-        window.clearTimeout(timeoutId);
+        if (timeoutId !== null) window.clearTimeout(timeoutId);
         if (inFlightRef.current?.id === requestId) {
           inFlightRef.current = null;
         }
+        resolveSettled();
       }
     },
     [code, readQuery, safeJson, setError]
@@ -195,6 +207,53 @@ export function useSessionData({
     [fetchSession]
   );
 
+  const scheduleDeferredQueueRecovery = useCallback(() => {
+    const recoveryGeneration = ++deferredRecoveryGenerationRef.current;
+    if (deferredRecoveryTimeoutRef.current !== null) {
+      window.clearTimeout(deferredRecoveryTimeoutRef.current);
+    }
+    const startRecovery = () => {
+      const recovery = (async () => {
+        // A normal poll may already be loading. Wait for it so the one-shot
+        // recovery request is not silently discarded by fetchSession.
+        while (inFlightRef.current?.code === code) {
+          await inFlightRef.current.settled;
+          if (deferredRecoveryGenerationRef.current !== recoveryGeneration) return;
+        }
+        if (deferredRecoveryGenerationRef.current !== recoveryGeneration) return;
+        const outcome = await fetchSession({ silent: true, recoverDeferredQueue: true });
+        if (outcome === "retry" && deferredRecoveryGenerationRef.current === recoveryGeneration) {
+          // Preserve the one-shot intent across an existing cooldown or 429.
+          // Clear invalidates this generation and cancels this timer.
+          const retryDelay = Math.max(100, nextRequestAllowedAtRef.current - Date.now());
+          deferredRecoveryTimeoutRef.current = window.setTimeout(() => {
+            deferredRecoveryTimeoutRef.current = null;
+            if (deferredRecoveryGenerationRef.current === recoveryGeneration) startRecovery();
+          }, retryDelay);
+        }
+      })();
+      deferredRecoveryRef.current = recovery;
+      void recovery.finally(() => {
+        if (deferredRecoveryRef.current === recovery) deferredRecoveryRef.current = null;
+      });
+    };
+    deferredRecoveryTimeoutRef.current = window.setTimeout(() => {
+      deferredRecoveryTimeoutRef.current = null;
+      if (deferredRecoveryGenerationRef.current === recoveryGeneration) startRecovery();
+    }, DEFAULT_REVALIDATE_DELAY_MS);
+  }, [code, fetchSession]);
+
+  const cancelDeferredQueueRecovery = useCallback(async () => {
+    deferredRecoveryGenerationRef.current += 1;
+    if (deferredRecoveryTimeoutRef.current !== null) {
+      window.clearTimeout(deferredRecoveryTimeoutRef.current);
+      deferredRecoveryTimeoutRef.current = null;
+    }
+    // Sequence DELETE after the dispatched recovery response. A network
+    // failure cannot prove the server-side writer has stopped.
+    await deferredRecoveryRef.current;
+  }, []);
+
   const retryInitialLoad = useCallback(() => {
     if (!enabled || !code) {
       return;
@@ -215,6 +274,11 @@ export function useSessionData({
         window.clearTimeout(revalidateTimeoutRef.current);
         revalidateTimeoutRef.current = null;
       }
+      if (deferredRecoveryTimeoutRef.current !== null) {
+        window.clearTimeout(deferredRecoveryTimeoutRef.current);
+        deferredRecoveryTimeoutRef.current = null;
+      }
+      deferredRecoveryGenerationRef.current += 1;
     };
   }, []);
 
@@ -229,7 +293,7 @@ export function useSessionData({
       nextRequestAllowedAtRef.current = 0;
       if (inFlightRef.current) {
         inFlightRef.current.controller.abort();
-        window.clearTimeout(inFlightRef.current.timeoutId);
+        if (inFlightRef.current.timeoutId !== null) window.clearTimeout(inFlightRef.current.timeoutId);
         inFlightRef.current = null;
       }
       startTransition(() => {
@@ -284,9 +348,14 @@ export function useSessionData({
         window.clearTimeout(revalidateTimeoutRef.current);
         revalidateTimeoutRef.current = null;
       }
+      if (deferredRecoveryTimeoutRef.current !== null) {
+        window.clearTimeout(deferredRecoveryTimeoutRef.current);
+        deferredRecoveryTimeoutRef.current = null;
+      }
+      deferredRecoveryGenerationRef.current += 1;
       if (inFlightRef.current?.code === code) {
         inFlightRef.current.controller.abort();
-        window.clearTimeout(inFlightRef.current.timeoutId);
+        if (inFlightRef.current.timeoutId !== null) window.clearTimeout(inFlightRef.current.timeoutId);
         inFlightRef.current = null;
       }
     };
@@ -300,5 +369,7 @@ export function useSessionData({
     retryInitialLoad,
     patchSessionData,
     scheduleSessionRefresh,
+    scheduleDeferredQueueRecovery,
+    cancelDeferredQueueRecovery,
   };
 }

@@ -7,8 +7,13 @@ export interface UseSessionMatchActionsDependencies {
   code: string;
   sessionData: SessionData | null;
   safeJson: SafeJson;
-  patchSessionData: (updater: (current: SessionData) => SessionData) => void;
+  patchSessionData: (
+    updater: (current: SessionData) => SessionData,
+    options?: { urgent?: boolean },
+  ) => void;
   scheduleSessionRefresh: (delay?: number) => void;
+  scheduleDeferredQueueRecovery: () => void;
+  cancelDeferredQueueRecovery: () => Promise<void>;
   setError: (message: string) => void;
 }
 

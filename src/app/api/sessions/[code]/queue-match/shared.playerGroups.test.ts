@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CourtGroupType, PlayerGender, SessionMode, SessionPool, SessionStatus, SessionType } from "@/types/enums";
+import { createMatchmakingSearchBudget, MatchmakingSearchBudgetExceededError } from "@/lib/matchmaking/v3/searchBudget";
+import { GenerateMatchError } from "../generate-match/shared";
 
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
@@ -56,6 +58,7 @@ import {
   replaceQueuedMatchPlayerForSession,
   reshuffleQueuedMatchForSession,
   tryRebuildAutomaticQueuedMatchForSessionId,
+  tryRebuildQueuedMatchForSessionId,
 } from "./shared";
 
 function player(playerId: string, pool: SessionPool = SessionPool.B) {
@@ -152,7 +155,10 @@ function createTransactionMock() {
 
   return {
     session: {
-      findUnique: vi.fn().mockResolvedValue({ poolsEnabled: true, type: SessionType.POINTS, mode: SessionMode.MEXICANO }),
+      findUnique: vi.fn().mockResolvedValue({ poolsEnabled: true, autoQueueEnabled: true, type: SessionType.POINTS, mode: SessionMode.MEXICANO }),
+    },
+    court: {
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     queuedMatch: {
       create: queuedMatchCreate,
@@ -297,6 +303,71 @@ describe("queued player-group lifecycle", () => {
       }),
     });
     expect(result.isAutomatic).toBe(true);
+  });
+
+  it("rejects an implicit queue when auto-queue is disabled after selection", async () => {
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({ autoQueueEnabled: false });
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    mocks.loadSessionRecordById.mockResolvedValue(sessionRecord());
+
+    expect(await tryRebuildQueuedMatchForSessionId("session-1")).toBeNull();
+    expect(tx.session.findUnique).toHaveBeenCalledWith({
+      where: { id: "session-1" }, select: { autoQueueEnabled: true },
+    });
+    expect(tx.queuedMatch.create).not.toHaveBeenCalled();
+  });
+
+  it("persists an implicit queue when automatic conditions still hold at the writer", async () => {
+    const tx = createTransactionMock();
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    mocks.loadSessionRecordById.mockResolvedValue(sessionRecord());
+
+    expect((await tryRebuildQueuedMatchForSessionId("session-1"))?.id).toBe("created-queue");
+    expect(tx.session.findUnique).toHaveBeenCalledWith({
+      where: { id: "session-1" }, select: { autoQueueEnabled: true },
+    });
+    expect(tx.court.findFirst).toHaveBeenCalledWith({
+      where: { sessionId: "session-1", currentMatchId: null }, select: { id: true },
+    });
+    expect(tx.queuedMatch.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an implicit queue when a court becomes free after selection", async () => {
+    const tx = createTransactionMock();
+    tx.court.findFirst.mockResolvedValue({ id: "court-1" });
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    mocks.loadSessionRecordById.mockResolvedValue(sessionRecord());
+
+    expect(await tryRebuildQueuedMatchForSessionId("session-1")).toBeNull();
+    expect(tx.court.findFirst).toHaveBeenCalledWith({
+      where: { sessionId: "session-1", currentMatchId: null }, select: { id: true },
+    });
+    expect(tx.queuedMatch.create).not.toHaveBeenCalled();
+  });
+
+  it("retains explicit operator queue creation when the auto-queue toggle is off", async () => {
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({ autoQueueEnabled: false, poolsEnabled: true });
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+
+    expect((await createQueuedMatchForSession(sessionRecord({ autoQueueEnabled: false }))).isAutomatic).toBe(true);
+    expect(tx.session.findUnique).not.toHaveBeenCalledWith({
+      where: { id: "session-1" }, select: { autoQueueEnabled: true },
+    });
+    expect(tx.queuedMatch.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves a budgeted matcher time-limit outcome for deferred recovery", async () => {
+    mocks.loadSessionRecordById.mockResolvedValue(sessionRecord());
+    mocks.selectSingleCourtMatchRespectingSkips.mockImplementation(() => {
+      throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
+    });
+
+    await expect(tryRebuildQueuedMatchForSessionId(
+      "session-1", createMatchmakingSearchBudget(),
+    )).rejects.toBeInstanceOf(MatchmakingSearchBudgetExceededError);
+    expect(await tryRebuildQueuedMatchForSessionId("session-1")).toBeNull();
   });
 
   it("routes automatic Social queue creation through the beneficial-rescue gate and persists its outcome", async () => {

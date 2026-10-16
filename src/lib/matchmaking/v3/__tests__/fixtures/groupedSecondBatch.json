@@ -1,0 +1,345 @@
+{
+  "completedCount": 3,
+  "players": [
+    {
+      "userId": "P1",
+      "pool": "A",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 1,
+      "sessionPoints": 10,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P5"
+    },
+    {
+      "userId": "P2",
+      "pool": "A",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 0,
+      "sessionPoints": 11,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P3",
+      "pool": "A",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 1,
+      "sessionPoints": 15,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P9"
+    },
+    {
+      "userId": "P4",
+      "pool": "A",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 0,
+      "sessionPoints": 13,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P5",
+      "pool": "A",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 1,
+      "sessionPoints": 14,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P1"
+    },
+    {
+      "userId": "P6",
+      "pool": "A",
+      "gender": "FEMALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 0,
+      "sessionPoints": 15,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P7",
+      "pool": "A",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 0,
+      "sessionPoints": 10,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P8",
+      "pool": "A",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 0,
+      "sessionPoints": 11,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P9",
+      "pool": "A",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 1,
+      "sessionPoints": 15,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P3"
+    },
+    {
+      "userId": "P10",
+      "pool": "A",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 1,
+      "sessionPoints": 16,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P23"
+    },
+    {
+      "userId": "P11",
+      "pool": "A",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 1,
+      "sessionPoints": 14,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P22"
+    },
+    {
+      "userId": "P12",
+      "pool": "A",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 0,
+      "sessionPoints": 15,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P13",
+      "pool": "B",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 0,
+      "sessionPoints": 10,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P14",
+      "pool": "B",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 0,
+      "sessionPoints": 11,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P15",
+      "pool": "B",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 1,
+      "sessionPoints": 12,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P24"
+    },
+    {
+      "userId": "P16",
+      "pool": "B",
+      "gender": "FEMALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 0,
+      "sessionPoints": 13,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P17",
+      "pool": "B",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 0,
+      "sessionPoints": 14,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P18",
+      "pool": "B",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 1,
+      "sessionPoints": 18,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P21"
+    },
+    {
+      "userId": "P19",
+      "pool": "B",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 0,
+      "sessionPoints": 10,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P20",
+      "pool": "B",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 0,
+      "sessionPoints": 11,
+      "availableSince": "2026-10-15T00:00:00Z",
+      "lastPartnerId": null
+    },
+    {
+      "userId": "P21",
+      "pool": "B",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 1,
+      "sessionPoints": 15,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P18"
+    },
+    {
+      "userId": "P22",
+      "pool": "B",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 1,
+      "sessionPoints": 13,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P11"
+    },
+    {
+      "userId": "P23",
+      "pool": "B",
+      "gender": "MALE",
+      "partnerPreference": "OPEN",
+      "mixedSideOverride": "UPPER",
+      "matchesPlayed": 1,
+      "sessionPoints": 17,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P10"
+    },
+    {
+      "userId": "P24",
+      "pool": "B",
+      "gender": "FEMALE",
+      "partnerPreference": "FEMALE_FLEX",
+      "mixedSideOverride": "LOWER",
+      "matchesPlayed": 1,
+      "sessionPoints": 15,
+      "availableSince": "2026-10-15T00:20:00Z",
+      "lastPartnerId": "P15"
+    }
+  ],
+  "matches": [
+    {
+      "id": "trajectory-0-0",
+      "courtId": "court-1",
+      "status": "COMPLETED",
+      "createdAt": "2026-10-15T00:00:00Z",
+      "team1User1Id": "P23",
+      "team1User2Id": "P10",
+      "team2User1Id": "P22",
+      "team2User2Id": "P11",
+      "team1Player1Id": "P23",
+      "team1Player2Id": "P10",
+      "team2Player1Id": "P22",
+      "team2Player2Id": "P11",
+      "courtGroupType": "CROSSOVER",
+      "poolASeatCount": 2,
+      "poolBSeatCount": 2,
+      "completedAt": "2026-10-15T00:20:00Z",
+      "team1Score": 21,
+      "team2Score": 18
+    },
+    {
+      "id": "trajectory-0-1",
+      "courtId": "court-2",
+      "status": "COMPLETED",
+      "createdAt": "2026-10-15T00:00:00Z",
+      "team1User1Id": "P9",
+      "team1User2Id": "P3",
+      "team2User1Id": "P5",
+      "team2User2Id": "P1",
+      "team1Player1Id": "P9",
+      "team1Player2Id": "P3",
+      "team2Player1Id": "P5",
+      "team2Player2Id": "P1",
+      "courtGroupType": "COMPETITIVE",
+      "poolASeatCount": 4,
+      "poolBSeatCount": 0,
+      "completedAt": "2026-10-15T00:20:00Z",
+      "team1Score": 21,
+      "team2Score": 18
+    },
+    {
+      "id": "trajectory-0-2",
+      "courtId": "court-3",
+      "status": "COMPLETED",
+      "createdAt": "2026-10-15T00:00:00Z",
+      "team1User1Id": "P21",
+      "team1User2Id": "P18",
+      "team2User1Id": "P15",
+      "team2User2Id": "P24",
+      "team1Player1Id": "P21",
+      "team1Player2Id": "P18",
+      "team2Player1Id": "P15",
+      "team2Player2Id": "P24",
+      "courtGroupType": "SOCIAL",
+      "poolASeatCount": 0,
+      "poolBSeatCount": 4,
+      "completedAt": "2026-10-15T00:20:00Z",
+      "team1Score": 21,
+      "team2Score": 18
+    }
+  ],
+  "courts": [
+    {
+      "id": "court-1",
+      "currentMatchId": null
+    },
+    {
+      "id": "court-2",
+      "currentMatchId": null
+    },
+    {
+      "id": "court-3",
+      "currentMatchId": null
+    }
+  ]
+}

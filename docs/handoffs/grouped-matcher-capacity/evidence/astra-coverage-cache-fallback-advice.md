@@ -1,0 +1,21 @@
+# Astra bounded coverage-cache and production-fallback contract review
+
+2026-10-16. Read-only inspection of current engines/acceptance and HEAD baseline. No tests or application edits. Reported seed4729 result4.414s was not independently rerun. Entry allowance20% five-hour/10% weekly remaining.
+
+## Core-only fallback is the unchanged acceptance contract
+
+HEAD:src/lib/matchmaking/v3/balancedCandidateAcceptance.ts already defines certificationScope core-only/core-and-production-ranking, accepts a valid production selection when core certificates are valid even if late variety exhausts, and explicitly sets recurrenceCertified:false and lateVarietyCertified:false. Current validateFallback around1043-1140 retains that logic: certified requires selection, fairness, schedule, starvation, balance, replay and coverage plus no validation reasons. When searchLimitReached is true or varietyOptimal is not true, scope is core-only. It does not assert globally optimal production ranking or exact candidate recurrence. Current budget wrapper additionally checks expiry before/after validation and rejects an interrupted verification.
+
+Existing acceptance test around319-329 explicitly changes a valid fallback to varietyOptimal:false/searchLimitReached:true and expects certified:true with core-only scope. This is direct source/test evidence that a certified core fallback after late variety exhaustion is not a newly weakened gate. It must be reported accurately as fallback/core-only, not as candidate-exact or fully ranking-certified. Any requirement stricter than the existing production fallback contract would need separate evidence; this review grants no overall acceptance.
+
+## Coverage upper bound and compatibility cache
+
+Inspected getOptimisticCoverageGainUnits in recurrence1190-1213 and production875-898. It now accepts the already constructed per-node compatibleByCourt map, sums exact chosen coverage plus the independent maximum of each remaining court, and still relaxes overlaps among future courts. Thus every admissible completion remains bounded above. Missing map entries fall back to the original list with used-mask exclusion; present empty arrays correctly contribute zero. Coverage gains are nonnegative BigInts. Current call sites invoke the bound in coverage certification and applicable final replay-exception pruning, before later social-priority list mutation; replay-only completion filters are in a different phase branch.
+
+Compatibility-cache extension at recurrence2666 and production2222 adds Balanced coverage to the existing cached helper. Source keys are candidate-array identity via WeakMap, then used mask plus minimum ordinal. Filtering is order-preserving and excludes overlaps; results publish only after the full filter and a forced checkCandidateScanBudget. An interrupted filter never publishes a partial candidate list. New per-node map reads therefore do not turn a partial list into a falsely low upper bound.
+
+Production Balanced coverage builds its own balance-envelope array (2088 onwards), scores/sorts it before DFS, and does not mutate its membership during cached visits; source identity separates phase/profile lists. Production candidateOrdinal is only enabled for socialCourtmateBeneficialRescue identical courts, so the new BalancedC use has null ordinal. The recurrence engine already routes ordinal-enabled lists through this helper; the new use does not change its ordinal scheme. Preserve the invariant that an array is not later repurposed with different membership or ordinal mapping while its cached results remain live.
+
+The upper-bound routine forces a deadline check at entry and exit and checks each scanned candidate. The compatible helper similarly checks before reading cached state and before publication. Court choice and surviving candidate order use the same complete compatible lists as before; the reuse avoids rescanning unfiltered source lists and introduces no RNG calls.
+
+No concrete error found in these narrowly inspected changes. Mandatory-count-band pruning was reviewed separately. Keep focused cache/deadline/differential evidence from the owner; avoid interpreting this static review or one successful reproduction as full matrix/release approval.

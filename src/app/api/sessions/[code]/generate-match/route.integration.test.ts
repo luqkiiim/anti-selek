@@ -39,6 +39,8 @@ const previousEnv = {
 
 let prisma: PrismaInstance;
 let POST: RouteHandler;
+let GET_SESSION: typeof import("../route")["GET"];
+let DELETE_QUEUE: typeof import("../queue-match/route")["DELETE"];
 let mockedAuth: MockedFunction<typeof import("@/lib/auth")["auth"]>;
 let rebuildAutomaticQueuedMatchForSessionId: RebuildAutomaticQueuedMatchForSessionId;
 
@@ -295,6 +297,8 @@ beforeAll(async () => {
 
   const routeModule = await import("./route");
   POST = routeModule.POST;
+  GET_SESSION = (await import("../route")).GET;
+  DELETE_QUEUE = (await import("../queue-match/route")).DELETE;
 
   const queueModule = await import("../queue-match/shared");
   rebuildAutomaticQueuedMatchForSessionId =
@@ -901,6 +905,38 @@ describe("generate match route integration", () => {
     );
   });
 
+  it("creates three grouped Mixed courts from 23 eligible players", async () => {
+    const prefix = `group-mixed-23-${randomUUID().slice(0, 8)}`;
+    const { clubId } = await createClubAdmin(prefix);
+    const playerKeys = Array.from({ length: 23 }, (_, index) => `p${index + 1}`);
+    const courtIds = Array.from({ length: 3 }, (_, index) => `${prefix}-court-${index + 1}`);
+    const genderFor = (index: number) => index % 2 === 0 ? PlayerGender.MALE : PlayerGender.FEMALE;
+    await createUsers(prefix, playerKeys.map((key, index) => ({ key, gender: genderFor(index) })));
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      clubId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MIXICANO,
+      poolsEnabled: true,
+      autoQueueEnabled: false,
+      players: playerKeys.map((key, index) => ({
+        playerId: `${prefix}-${key}`,
+        gender: genderFor(index),
+        pool: index < 12 ? SessionPool.A : SessionPool.B,
+      })),
+      courtIds,
+    });
+
+    const response = await postGenerateMatch(code, { courtIds });
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    expect(payload.matches).toHaveLength(3);
+    expect(new Set(payload.matches.flatMap(getSelectedIds)).size).toBe(12);
+    expect(await prisma.match.count({ where: { sessionId } })).toBe(3);
+    const storedCourts = await prisma.court.findMany({ where: { sessionId } });
+    expect(storedCourts.filter((court) => court.currentMatchId)).toHaveLength(3);
+  }, 20_000);
+
   it("creates a queued next match after filling the last open courts", async () => {
     const prefix = `batch-queue-${randomUUID().slice(0, 8)}`;
     const { clubId } = await createClubAdmin(prefix);
@@ -952,6 +988,115 @@ describe("generate match route integration", () => {
     });
 
     expect(storedQueuedMatch).not.toBeNull();
+  });
+
+  it("keeps a cleared automatic queue absent through an ordinary session GET", async () => {
+    const prefix = `clear-refresh-${randomUUID().slice(0, 8)}`;
+    const { clubId } = await createClubAdmin(prefix);
+    const playerKeys = Array.from({ length: 12 }, (_, index) => `p${index + 1}`);
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtIds = [`${prefix}-court-1`, `${prefix}-court-2`];
+    await createUsers(prefix, playerKeys.map((key) => ({ key })));
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      clubId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((playerId) => ({ playerId })),
+      courtIds,
+    });
+    expect((await postGenerateMatch(code, { courtIds })).status).toBe(200);
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId } })).not.toBeNull();
+
+    const clearResponse = await DELETE_QUEUE(
+      new Request(`http://localhost/api/sessions/${code}/queue-match`, { method: "DELETE" }),
+      { params: Promise.resolve({ code }) },
+    );
+    expect(clearResponse.status).toBe(200);
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId } })).toBeNull();
+
+    const refreshResponse = await GET_SESSION(
+      new Request(`http://localhost/api/sessions/${code}`),
+      { params: Promise.resolve({ code }) },
+    );
+    expect(refreshResponse.status).toBe(200);
+    expect((await refreshResponse.json()).queuedMatch).toBeNull();
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId } })).toBeNull();
+  }, 20_000);
+
+  it("returns committed batch courts when optional queue creation fails", async () => {
+    const prefix = `batch-queue-error-${randomUUID().slice(0, 8)}`;
+    const { clubId } = await createClubAdmin(prefix);
+    const playerKeys = Array.from({ length: 12 }, (_, index) => `p${index + 1}`);
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtIds = [`${prefix}-court-1`, `${prefix}-court-2`];
+    await createUsers(prefix, playerKeys.map((key) => ({ key })));
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      clubId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((playerId) => ({ playerId })),
+      courtIds,
+    });
+
+    const originalFindMany = prisma.court.findMany.bind(prisma.court);
+    const queueFailure = vi.spyOn(prisma.court, "findMany")
+      .mockImplementationOnce(originalFindMany)
+      .mockRejectedValueOnce(new Error("Queue lookup failed after commit"));
+    let response: Response;
+    try {
+      response = await postGenerateMatch(code, { courtIds });
+    } finally {
+      queueFailure.mockRestore();
+    }
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload.matches).toHaveLength(2);
+    expect(payload.queuedMatch).toBeNull();
+    expect(await prisma.match.count({ where: { sessionId } })).toBe(2);
+    const storedCourts = await prisma.court.findMany({ where: { sessionId } });
+    expect(storedCourts.every((court) => court.currentMatchId !== null)).toBe(true);
+  });
+
+  it("does not create a deferred queue after the operator loses access", async () => {
+    const prefix = `batch-revoked-${randomUUID().slice(0, 8)}`;
+    const { clubId, adminUserId } = await createClubAdmin(prefix);
+    const playerKeys = Array.from({ length: 12 }, (_, index) => `p${index + 1}`);
+    const courtIds = [`${prefix}-court-1`, `${prefix}-court-2`];
+    await createUsers(prefix, playerKeys.map((key) => ({ key })));
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      clubId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerKeys.map((key) => ({ playerId: `${prefix}-${key}` })),
+      courtIds,
+    });
+
+    const originalFindMany = prisma.court.findMany.bind(prisma.court);
+    const revokeBeforeQueueLookup = (async (args: Parameters<typeof originalFindMany>[0]) => {
+      await prisma.clubAccess.update({
+        where: { clubId_userId: { clubId, userId: adminUserId } },
+        data: { status: "REVOKED" },
+      });
+      return originalFindMany(args);
+    }) as unknown as typeof prisma.court.findMany;
+    const queueLookup = vi.spyOn(prisma.court, "findMany")
+      .mockImplementationOnce(originalFindMany)
+      .mockImplementationOnce(revokeBeforeQueueLookup);
+    let response: Response;
+    try {
+      response = await postGenerateMatch(code, { courtIds });
+    } finally {
+      queueLookup.mockRestore();
+    }
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload.matches).toHaveLength(2);
+    expect(payload.queuedMatch).toBeNull();
+    expect(await prisma.match.count({ where: { sessionId } })).toBe(2);
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId } })).toBeNull();
   });
 
   it("reshuffles an in-progress match to a different quartet when alternates exist", async () => {

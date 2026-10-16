@@ -4,7 +4,13 @@ import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { getSideSpecificCourtCreateLabel } from "@/lib/courtCreate";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
-import { tryRebuildQueuedMatchForSessionId } from "../queue-match/shared";
+import { getEffectiveSessionMode, getEffectiveSessionType } from "@/lib/sessionSettings";
+import {
+  createMatchmakingSearchBudget,
+  MatchmakingSearchBudgetExceededError,
+} from "@/lib/matchmaking/v3/searchBudget";
+import { usesGroupedMixedCapacityBudget } from "./queueBudget";
+import { rebuildQueueAfterCommit, rebuildQueueAfterCommitDetailed } from "./postCommitQueue";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
@@ -130,7 +136,7 @@ export async function POST(
 
       return sportingJson({
         ...createdMatch,
-        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+        queuedMatch: await rebuildQueueAfterCommit(sessionData.id, undefined, sessionData.mutationActor),
       });
     }
 
@@ -225,7 +231,7 @@ export async function POST(
 
       return sportingJson({
         ...replacementMatch,
-        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+        queuedMatch: await rebuildQueueAfterCommit(sessionData.id, undefined, sessionData.mutationActor),
       });
     }
 
@@ -309,26 +315,26 @@ export async function POST(
         ),
       });
 
-      let queuedMatch: Awaited<ReturnType<typeof tryRebuildQueuedMatchForSessionId>>;
-      try {
-        queuedMatch = await tryRebuildQueuedMatchForSessionId(sessionData.id);
-      } catch (error) {
-        if (!restUserId) throw error;
-        logError("Failed to rebuild queued match after player rest", error);
-        queuedMatch = null;
-      }
+      const queuedMatch = await rebuildQueueAfterCommit(sessionData.id, undefined, sessionData.mutationActor);
 
       return sportingJson({ ...newMatch, queuedMatch });
     }
-
-    const { busyPlayerIds, playersById, rotationHistory } =
-      await buildMatchmakingState(sessionData);
 
     const requestedOpenCourts = getRequestedOpenCourts(
       orderedTargetCourts,
       freedCourtIds
     );
     const requestedMatchCount = requestedOpenCourts.length;
+    const eligiblePlayerCount = sessionData.players.filter((player) => !player.isPaused).length;
+    const searchBudget = usesGroupedMixedCapacityBudget({
+      poolsEnabled: sessionData.poolsEnabled,
+      sessionType: getEffectiveSessionType(sessionData),
+      sessionMode: getEffectiveSessionMode(sessionData),
+      requestedMatchCount,
+      eligiblePlayerCount,
+    }) ? createMatchmakingSearchBudget() : undefined;
+    const { busyPlayerIds, playersById, rotationHistory } =
+      await buildMatchmakingState(sessionData);
     const { availableCandidates, rankedCandidates } = getRankedCandidates(
       sessionData,
       busyPlayerIds
@@ -386,7 +392,7 @@ export async function POST(
 
       return sportingJson({
         ...newMatch,
-        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+        queuedMatch: await rebuildQueueAfterCommit(sessionData.id, searchBudget, sessionData.mutationActor),
       });
     }
 
@@ -398,6 +404,7 @@ export async function POST(
         rotationHistory,
         requestedMatchCount,
         requestedCourtIds: requestedOpenCourts.map((court) => court.id),
+        searchBudget,
       });
     const selectedCourtAssignments =
       batchSelection.selections.length === requestedOpenCourts.length
@@ -454,11 +461,23 @@ export async function POST(
         (requestedCourtOrder.get(right.courtId) ?? Number.MAX_SAFE_INTEGER)
     );
 
+    const queueResult = await rebuildQueueAfterCommitDetailed(
+      sessionData.id, searchBudget, sessionData.mutationActor,
+    );
     return sportingJson({
       matches: newMatches,
-      queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+      queuedMatch: queueResult.queuedMatch,
+      ...(queueResult.deferred && sessionData.autoQueueEnabled && !queueResult.queuedMatch
+        ? { deferredQueueRecovery: true }
+        : {}),
     });
   } catch (error: unknown) {
+    if (error instanceof MatchmakingSearchBudgetExceededError) {
+      return sportingJson(
+        { error: "Match search reached its time limit before establishing a fair batch. Try again." },
+        { status: 400 },
+      );
+    }
     if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof GenerateMatchError) {
       if (error.status === 403 || error.status === 404) {

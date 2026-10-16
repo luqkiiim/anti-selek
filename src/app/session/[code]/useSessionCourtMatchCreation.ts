@@ -28,6 +28,7 @@ interface MatchGenerationResponse {
   error?: string;
   matches?: GeneratedMatchesPayload;
   queuedMatch?: QueuedMatchPayload | null;
+  deferredQueueRecovery?: boolean;
 }
 
 interface SingleMatchGenerationResponse extends GeneratedMatchPayload {
@@ -46,6 +47,8 @@ export function useSessionCourtMatchCreation({
   safeJson,
   patchSessionData,
   scheduleSessionRefresh,
+  scheduleDeferredQueueRecovery,
+  cancelDeferredQueueRecovery,
   setError,
 }: UseSessionMatchActionsDependencies) {
   const [creatingOpenMatches, setCreatingOpenMatches] = useState(false);
@@ -69,7 +72,8 @@ export function useSessionCourtMatchCreation({
 
   const syncMatchGenerationResult = (
     matches: GeneratedMatchesPayload,
-    queuedMatch?: QueuedMatchPayload | null
+    queuedMatch?: QueuedMatchPayload | null,
+    deferredQueueRecovery = false
   ) => {
     patchSessionData((current) => {
       let next = applyGeneratedMatches(current, matches);
@@ -79,8 +83,9 @@ export function useSessionCourtMatchCreation({
       }
 
       return next;
-    });
-    scheduleSessionRefresh();
+    }, { urgent: true });
+    if (deferredQueueRecovery) scheduleDeferredQueueRecovery();
+    else scheduleSessionRefresh();
   };
 
   const syncQueuedMatch = (queuedMatch: QueuedMatchPayload) => {
@@ -124,7 +129,8 @@ export function useSessionCourtMatchCreation({
           : [data as SingleMatchGenerationResponse];
         syncMatchGenerationResult(
           matches,
-          "queuedMatch" in data ? (data.queuedMatch ?? null) : undefined
+          "queuedMatch" in data ? (data.queuedMatch ?? null) : undefined,
+          "deferredQueueRecovery" in data && data.deferredQueueRecovery === true
         );
       } else {
         setError(getErrorMessage(data, "Failed to create matches"));
@@ -315,6 +321,7 @@ export function useSessionCourtMatchCreation({
     setClearingQueuedMatch(true);
     setError("");
     try {
+      await cancelDeferredQueueRecovery();
       const { res, data } = await deleteSessionAction<{ error?: string }>(
         `/api/sessions/${code}/queue-match`,
         { safeJson }
