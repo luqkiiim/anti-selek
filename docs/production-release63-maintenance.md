@@ -1,6 +1,6 @@
-# Maintenance fallback — club collaboration release63
+# Maintenance procedure — club collaboration release63
 
-Status: retained for reference only. The user requested an online-first reassessment on 17 October 2026. This path is not selected or approved for execution. Use only after documenting why the online readiness gates cannot be met and obtaining explicit approval for the maintenance window. Its existing exact-commit review does not approve a changed source or the online path.
+Status: selected preparation path after the user agreed to prioritise a practical hobby-app release over building new online rollout infrastructure. Existing reviews and tests should be reused, with only relevant source-binding changes reviewed. Policy edits alone do not authorize production execution; confirm approval of this concrete maintenance procedure and window before writes. Do not remove the existing writer guards.
 
 # Club collaboration production release63
 

@@ -1,33 +1,20 @@
-# Database release policy
+# Database releases for this hobby app
 
-Prefer a zero-downtime rollout whenever evidence shows it can preserve correctness and availability. Choose the release method from the actual schema, application versions, traffic, and recovery requirements. Additive SQL is a strong candidate, but is not sufficient proof on its own. Use a coordinated write freeze only when the change or unproven compatibility requires it, and explain that reason before requesting approval.
+Choose the simplest reliable way to ship. Prefer zero downtime when the migration and application versions already support it. A brief approved maintenance window is reasonable when avoiding downtime would require substantial new infrastructure or compatibility work. Do not turn a one-off release into a rollout-platform project.
 
-## Choosing the path
+## Essential checks
 
-| Condition | Preferred approach |
-| --- | --- |
-| Additive schema, old/new code compatible, bounded locking and safe activation demonstrated | Online schema expansion, application rollout, then feature activation |
-| Backfill needed but can be batched and resumed without changing old-reader semantics | Expand first, run bounded idempotent backfill, verify, then activate |
-| Rename/drop/type or meaning change | Introduce compatible fields first; migrate usage and data; remove obsolete fields in a later reviewed release |
-| Old/new readers or writers cannot safely overlap, locking exceeds the tested budget, or recovery cannot be proven | Document the specific blocker and prepare an approved maintenance window |
+- Use the correct production target and separate reader/writer credentials. Keep secrets private. Builds never migrate databases; development migration commands are never production commands.
+- Take a fresh consistent backup before changing production data. Reuse completed preservation rehearsals when the SQL and relevant schema are unchanged; refresh only the evidence the actual writer needs.
+- Inspect migration compatibility and the affected application behavior. Use focused tests for complex transformations, permissions, scoring/ratings, concurrency, or realistic data-loss risks. Do not test trivial operations or repeat the full application suite for an unchanged release.
+- Reuse the existing tested writer and deployment procedure. Keep its safety guards intact. A new or materially changed production writer needs separate review and explicit user approval; previously reviewed code needs only review of relevant changes, not a restart of all verification.
+- Keep a practical recovery path. Do not blindly repeat an uncertain migration, restore an old backup over newer legitimate data, or roll back to an app that cannot understand newly created records.
+- After migration and deployment, confirm the expected schema/version, check a few important public flows, and inspect fresh runtime logs for errors. Broaden checks only if something fails or a concrete concern remains.
 
-“Zero downtime” means no planned application outage and no lost or duplicate accepted operations. A successful SQL command or a fast local migration alone does not prove it. Measure latency and failures under representative concurrent load; report any unresolved provider behavior or validation gap.
+## Choosing online or maintenance
 
-## Required evidence before an online production writer
+For a straightforward additive change, inspect old/new compatibility and use focused concurrency checks where locking or overlapping writers could affect users. A fast local rehearsal alone is not a guarantee of uninterrupted production writes. Only add feature gates or staged promotion controls if they are actually needed and worth the complexity.
 
-- Pin the exact source, endpoint, prior migration chain, schema and intended SQL. Keep production reader and short-lived writer credentials separate and protected. Build and deployment commands never apply migrations.
-- Take a consistent read-only backup and rehearse preservation. With live traffic, the database may legitimately change after the backup. An online writer must verify against its transaction's current baseline, not require the whole database to remain equal to a stale snapshot. Preserve the backup as recovery evidence; never restore it over newer legitimate writes as an automatic rollback.
-- Prove old code reads and writes the expanded schema correctly, and new code remains safe while old requests finish. Include old browser clients, background jobs, previews, immutable deployment hosts and direct API calls. Compatibility must hold at the server boundary, not merely through hidden UI controls.
-- Keep incompatible new behavior disabled server-side until only compatible code can access its records. Pin and verify activation state; missing or unrecognized state fails closed. Disabling creation after activation must still allow existing new-format records to be read and managed safely.
-- Test actual application/driver concurrency around DDL, lock contention, stale prepared statements and commit acknowledgement loss. Use bounded retry only where rollback is known or operation identity makes replay safe. Never blindly retry an ambiguously committed mutation.
-- Bound the writer's lock duration. Perform expensive rehearsal outside the production write transaction; include the cost of any in-transaction preservation checks when assessing the lock budget. If the budget or availability criteria cannot be met, stop before writing and reassess rather than quietly accepting request failures.
-- Validate schema/ledger receipts and application health after expansion, before promotion, after promotion and after activation. Capture fresh runtime errors and real public flows. Verify old-host restrictions without blocking the active public application.
-- Review recovery at every stage. Before activation, a compatible predecessor may be usable without undoing schema. After new-format records exist, recovery must retain a compatible reader/writer; switching a feature off does not make an incompatible predecessor safe.
+If safe version overlap requires significant extra work, use the existing maintenance path with an approved window instead. Explain the actual trade-off in plain language. Do not routinely require a new online writer, exhaustive provider failure simulation, or a full deployment-inventory system for every migration.
 
-## Approval and execution
-
-Prepare the concrete writer, rollout controls, tests, evidence and recovery procedure before asking for final production approval. Independent review must cover the selected path and exact source. User approval names that path; approval of a maintenance writer does not authorize an online variant, or vice versa.
-
-A project-wide HTTP fence or database write freeze must not be introduced as a routine prerequisite for every release. If needed, document the reason, affected operations and expected window, then obtain approval. A surprise failure during an approved online rollout does not automatically authorize switching to a long maintenance cutover. Stop new activation and follow the specifically reviewed containment/recovery procedure.
-
-Keep live usage capacity sufficient for the whole cutover and verification. Preserve protected evidence. Do not call a release complete until matching migration, application deployment, activation state, fresh runtime logs and public flow checks pass; state any unavailable validation explicitly.
+Keep existing access protections and any safeguards required by the selected writer. Reducing unnecessary process is not permission to disable guards in an already-reviewed tool. Approval is for the selected release path; do not ask again for the same authorized action unless its scope or material risk changes.

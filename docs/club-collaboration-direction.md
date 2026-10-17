@@ -1,6 +1,6 @@
 # Club collaboration
 
-Implementation: October 2026. Local verification precedes release. Production release preparation is being revised for a staged online rollout; the new procedure needs implementation and independent review.
+Implementation: October 2026. Local verification precedes release. Production release preparation uses the existing tested maintenance procedure, with focused checks and reuse of completed verification.
 
 ## Goal and setup
 
@@ -49,7 +49,7 @@ Retired test sessions remain legacy records. Ordinary session creation still rej
 
 ## Release boundary
 
-The normal build does not migrate a database. Local SQLite verification uses disposable databases; back up any populated local database before applying migrations. Production requires a separately reviewed, explicitly approved writer procedure, matching deployment, and fresh runtime-log/public-flow verification. Prefer a zero-downtime staged migration when compatibility, concurrent writes, activation and recovery are proven; a coordinated write freeze is a conditional fallback. The user authorized release preparation through deployment and requested this online-first policy. See `database-release-policy.md` and the revised `production-release63.md` for the remaining readiness and approval gates.
+The normal build does not migrate a database. Local SQLite verification uses disposable databases; back up any populated local database before applying migrations. Production requires a separately reviewed, explicitly approved writer procedure, matching deployment, and fresh runtime-log/public-flow verification. Prefer zero downtime when straightforward; for this hobby app, a brief approved maintenance window is preferable to substantial new rollout infrastructure. Test complex logic and meaningful risks, and reuse passing checks for unchanged code. The user authorized release preparation through deployment and requested this proportional approach. See `database-release-policy.md` and the revised `production-release63.md` for the remaining readiness and approval gates.
 
 ## Local verification — 16 October 2026
 
