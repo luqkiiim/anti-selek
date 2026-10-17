@@ -1,7 +1,7 @@
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
-import { isValidMatchScore } from "@/lib/matchRules";
+import { resolveMatchScoreInput, type GameScore } from "@/lib/matchRules";
 import { getLinkedClubUserResolver } from "@/lib/offlineIdentities";
 import { assertSessionMutationActor, getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
 import { getAcceptedSessionClubIds, getSessionOperatorMembership } from "@/lib/sessionCollab";
@@ -59,6 +59,9 @@ export interface FinalizableMatch {
   team1Player2Id: string;
   team2Player1Id: string;
   team2Player2Id: string;
+  scoringFormat?: string;
+  gameScoresJson?: string | null;
+  scoreRevision?: number;
   team1Score?: number | null;
   team2Score?: number | null;
   session: {
@@ -66,6 +69,8 @@ export interface FinalizableMatch {
     type: string;
     balanceMetric?: string;
     ratingPolicyVersion?: number;
+    ratingMode?: string;
+    collaborationVersion?: number;
     isTest: boolean;
   };
   team1Player1: MatchUserSnapshot;
@@ -79,6 +84,8 @@ interface FinalizeMatchResultArgs {
   expectedStatus: MatchStatus.IN_PROGRESS | MatchStatus.PENDING_APPROVAL;
   finalTeam1Score: number;
   finalTeam2Score: number;
+  finalGameScores?: GameScore[];
+  expectedScoreRevision?: number;
   scoreSubmittedByUserId?: string | null;
   scoreSubmittedByPlayerId?: string | null;
   completedAt?: Date;
@@ -131,6 +138,8 @@ interface CorrectCompletedMatchScoreArgs {
   matchId: string;
   finalTeam1Score: number;
   finalTeam2Score: number;
+  finalGameScores?: GameScore[];
+  expectedScoreRevision?: number;
 }
 
 async function getUserEloByUserIdInTransaction(
@@ -499,8 +508,8 @@ interface MatchRatingOutcome {
   awardsStandingPoints: boolean;
   clubEloResult: Awaited<ReturnType<typeof buildClubEloAdjustments>>;
   isGuestByUserId: Map<string, boolean>;
-  persistedTeam1EloChange: number;
-  persistedTeam2EloChange: number;
+  persistedTeam1EloChange: number | null;
+  persistedTeam2EloChange: number | null;
   team1StandingPoints: number;
   team2StandingPoints: number;
   winnerTeam: 1 | 2;
@@ -512,19 +521,20 @@ async function buildMatchRatingOutcomeInTransaction(
     match,
     finalTeam1Score,
     finalTeam2Score,
+    finalGameScores,
   }: {
     match: FinalizableMatch;
     finalTeam1Score: number;
     finalTeam2Score: number;
+    finalGameScores?: GameScore[];
   }
 ): Promise<MatchRatingOutcome> {
-  if (!isValidMatchScore(finalTeam1Score, finalTeam2Score)) {
-    throw new Error("INVALID_SCORE");
-  }
-
-  const team1Points = finalTeam1Score;
-  const team2Points = finalTeam2Score;
-  const winnerTeam = team1Points > team2Points ? 1 : 2;
+  const result = resolveMatchScoreInput({ ...match, team1Score: finalTeam1Score, team2Score: finalTeam2Score, ...(finalGameScores ? { gameScores: finalGameScores } : {}) });
+  if (!result?.winnerTeam) throw new Error("INVALID_SCORE");
+  // A series is rated once, with the existing neutral two-point margin.
+  const team1Points = match.scoringFormat === "BEST_OF_THREE" ? (result.winnerTeam === 1 ? 2 : 0) : result.team1Score;
+  const team2Points = match.scoringFormat === "BEST_OF_THREE" ? (result.winnerTeam === 2 ? 2 : 0) : result.team2Score;
+  const winnerTeam = result.winnerTeam;
   const team1StandingPoints = getStandingPointsForTeam(winnerTeam, 1);
   const team2StandingPoints = getStandingPointsForTeam(winnerTeam, 2);
   const awardsStandingPoints = match.session.type !== SessionType.LADDER;
@@ -548,6 +558,9 @@ async function buildMatchRatingOutcomeInTransaction(
   const isGuestByUserId = new Map<string, boolean>(
     sessionPlayerRows.map((player) => [player.playerId, player.isGuest])
   );
+  if (match.session.ratingMode === "UNRATED") {
+    return { awardsStandingPoints, clubEloResult: { adjustments: [], sourceEloByUserId: new Map(), teamDeltasByClubId: new Map() }, isGuestByUserId, persistedTeam1EloChange: null, persistedTeam2EloChange: null, team1StandingPoints, team2StandingPoints, winnerTeam };
+  }
   const guestCount = playerIds.filter(
     (playerId) => isGuestByUserId.get(playerId) === true
   ).length;
@@ -625,7 +638,7 @@ async function applyRatingOutcomeInTransaction(
     outcome: MatchRatingOutcome;
   }
 ) {
-  if (match.session.isTest) return;
+  if (match.session.isTest || match.session.ratingMode === "UNRATED") return;
 
   const team1Ids = [match.team1Player1Id, match.team1Player2Id];
   const team2Ids = [match.team2Player1Id, match.team2Player2Id];
@@ -669,7 +682,7 @@ async function applyRatingOutcomeInTransaction(
           clubId: match.session.clubId,
           playerId: { in: team1ClubMemberIds },
         },
-        data: { elo: { increment: outcome.persistedTeam1EloChange } },
+        data: { elo: { increment: outcome.persistedTeam1EloChange ?? 0 } },
       });
     }
     if (team2ClubMemberIds.length > 0) {
@@ -678,7 +691,7 @@ async function applyRatingOutcomeInTransaction(
           clubId: match.session.clubId,
           playerId: { in: team2ClubMemberIds },
         },
-        data: { elo: { increment: outcome.persistedTeam2EloChange } },
+        data: { elo: { increment: outcome.persistedTeam2EloChange ?? 0 } },
       });
     }
     return;
@@ -694,15 +707,20 @@ async function applyRatingOutcomeInTransaction(
   if (team1CoreIds.length > 0) {
     await tx.player.updateMany({
       where: { id: { in: team1CoreIds } },
-      data: { elo: { increment: outcome.persistedTeam1EloChange } },
+      data: { elo: { increment: outcome.persistedTeam1EloChange ?? 0 } },
     });
   }
   if (team2CoreIds.length > 0) {
     await tx.player.updateMany({
       where: { id: { in: team2CoreIds } },
-      data: { elo: { increment: outcome.persistedTeam2EloChange } },
+      data: { elo: { increment: outcome.persistedTeam2EloChange ?? 0 } },
     });
   }
+}
+
+/** Results and reset approvals share this transactionally incremented revision. */
+export async function bumpSessionResultsRevision(tx: Prisma.TransactionClient, sessionId: string) {
+  await tx.session.update({ where: { id: sessionId }, data: { resultsRevision: { increment: 1 } } });
 }
 
 export async function finalizeMatchResultInTransaction(
@@ -712,6 +730,8 @@ export async function finalizeMatchResultInTransaction(
     expectedStatus,
     finalTeam1Score,
     finalTeam2Score,
+    finalGameScores,
+    expectedScoreRevision,
     scoreSubmittedByUserId,
     scoreSubmittedByPlayerId,
     completedAt,
@@ -740,14 +760,18 @@ export async function finalizeMatchResultInTransaction(
     match,
     finalTeam1Score,
     finalTeam2Score,
+    finalGameScores,
   });
+  const result = resolveMatchScoreInput({ ...match, team1Score: finalTeam1Score, team2Score: finalTeam2Score, ...(finalGameScores ? { gameScores: finalGameScores } : {}) })!;
   const finalizedAt = completedAt ?? new Date();
 
   const updatedMatchResult = await tx.match.updateMany({
-    where: { id: match.id, status: expectedStatus },
+    where: { id: match.id, status: expectedStatus, ...(expectedScoreRevision !== undefined ? { scoreRevision: expectedScoreRevision } : {}) },
     data: {
-      team1Score: finalTeam1Score,
-      team2Score: finalTeam2Score,
+      team1Score: result.team1Score,
+      team2Score: result.team2Score,
+      ...(match.scoringFormat === "BEST_OF_THREE" ? { gameScoresJson: JSON.stringify(result.gameScores) } : {}),
+      scoreRevision: { increment: 1 },
       winnerTeam: outcome.winnerTeam,
       team1EloChange: outcome.persistedTeam1EloChange,
       team2EloChange: outcome.persistedTeam2EloChange,
@@ -762,6 +786,7 @@ export async function finalizeMatchResultInTransaction(
     throw new Error("ALREADY_PROCESSED");
   }
 
+  await bumpSessionResultsRevision(tx, match.sessionId);
   const updatedMatch = await tx.match.findUnique({
     where: { id: match.id },
   });
@@ -1019,6 +1044,7 @@ async function assertNoNewerOutsideRatingMatches(
             OR: newerCompletedMatchTimeFilter,
             session: {
               isTest: false,
+              ratingMode: "RATED",
               OR: [
                 { clubId: { in: clubIds } },
                 {
@@ -1040,6 +1066,7 @@ async function assertNoNewerOutsideRatingMatches(
             status: MatchStatus.COMPLETED,
             session: {
               isTest: false,
+              ratingMode: "RATED",
             },
             AND: [
               { OR: newerCompletedMatchTimeFilter },
@@ -1074,7 +1101,7 @@ async function reverseLegacyMatchRatingInTransaction(
     isGuestByUserId: Map<string, boolean>;
   }
 ) {
-  if (match.session.isTest) return;
+  if (match.session.isTest || match.session.ratingMode === "UNRATED") return;
 
   const team1ReverseEloDelta = -(match.team1EloChange ?? 0);
   const team2ReverseEloDelta = -(match.team2EloChange ?? 0);
@@ -1189,7 +1216,8 @@ async function reverseReplayRatingEffectsInTransaction(
     { clubId: string; playerId: string; delta: number }
   >();
   for (const match of replayMatches) {
-    if (match.session.ratingPolicyVersion === 2 && !match.session.isTest) await assertSelectedProfileLedger(tx, match.sessionId, getMatchUserIds(match), ledgerRowsByMatchId.get(match.id) ?? []);
+    if (match.session.ratingMode === "UNRATED" && ledgerRowsByMatchId.has(match.id)) throw new IdentityConflictError("Unrated result unexpectedly contains rating ledger rows; reversal is blocked.");
+    if (match.session.ratingPolicyVersion === 2 && !match.session.isTest && match.session.ratingMode !== "UNRATED") await assertSelectedProfileLedger(tx, match.sessionId, getMatchUserIds(match), ledgerRowsByMatchId.get(match.id) ?? []);
   }
   for (const adjustment of ledgerAdjustments) {
     const key = `${adjustment.clubId}:${adjustment.playerId}`;
@@ -1214,7 +1242,7 @@ async function reverseReplayRatingEffectsInTransaction(
   }
 
   for (const match of replayMatches) {
-    if (ledgerRowsByMatchId.has(match.id) || match.session.ratingPolicyVersion === 2 || match.session.isTest) continue;
+    if (ledgerRowsByMatchId.has(match.id) || match.session.ratingPolicyVersion === 2 || match.session.isTest || match.session.ratingMode === "UNRATED") continue;
     if (clubIds.length > 1) {
       throw new CorrectCompletedMatchScoreError(
         "LEGACY_COLLAB_REPLAY_UNSUPPORTED",
@@ -1285,17 +1313,12 @@ export async function correctCompletedMatchScoreInTransaction(
     matchId,
     finalTeam1Score,
     finalTeam2Score,
+    finalGameScores,
+    expectedScoreRevision,
     actorUserId,
     actorIsGlobalAdmin,
   }: CorrectCompletedMatchScoreArgs
 ) {
-  if (!isValidMatchScore(finalTeam1Score, finalTeam2Score)) {
-    throw new CorrectCompletedMatchScoreError(
-      "INVALID_SCORE",
-      "Invalid score"
-    );
-  }
-
   if (actorUserId) await tx.$executeRaw`UPDATE "ClubJoinRequest" SET "revision" = "revision" WHERE 0`;
   const targetMatch = await tx.match.findUnique({
     where: { id: matchId },
@@ -1308,6 +1331,8 @@ export async function correctCompletedMatchScoreInTransaction(
           type: true,
           balanceMetric: true,
           ratingPolicyVersion: true,
+          ratingMode: true,
+          collaborationVersion: true,
         },
       },
       team1Player1: { select: { id: true, name: true, elo: true } },
@@ -1324,7 +1349,7 @@ export async function correctCompletedMatchScoreInTransaction(
     );
   }
   if (actorUserId) {
-    await assertSessionMutationActor(tx, { session: { id: targetMatch.sessionId, clubId: targetMatch.session.clubId }, userId: actorUserId, isGlobalAdmin: actorIsGlobalAdmin });
+    await assertSessionMutationActor(tx, { session: { id: targetMatch.sessionId, clubId: targetMatch.session.clubId }, userId: actorUserId, isGlobalAdmin: actorIsGlobalAdmin, adminOnly: true });
   }
   if (targetMatch.status !== MatchStatus.COMPLETED) {
     throw new CorrectCompletedMatchScoreError(
@@ -1347,9 +1372,13 @@ export async function correctCompletedMatchScoreInTransaction(
       "Test tournaments do not support completed score correction."
     );
   }
+  const correctedResult = resolveMatchScoreInput({ ...targetMatch, team1Score: finalTeam1Score, team2Score: finalTeam2Score, ...(finalGameScores ? { gameScores: finalGameScores } : {}) });
+  if (!correctedResult?.winnerTeam) throw new CorrectCompletedMatchScoreError("INVALID_SCORE", "Invalid match result");
+  if (expectedScoreRevision !== undefined && targetMatch.scoreRevision !== expectedScoreRevision) throw new IdentityConflictError("This score changed. Refresh before correcting it.");
   if (
     targetMatch.team1Score === finalTeam1Score &&
-    targetMatch.team2Score === finalTeam2Score
+    targetMatch.team2Score === finalTeam2Score &&
+    (targetMatch.scoringFormat !== "BEST_OF_THREE" || targetMatch.gameScoresJson === JSON.stringify(correctedResult.gameScores))
   ) {
     throw new CorrectCompletedMatchScoreError(
       "UNCHANGED_SCORE",
@@ -1371,6 +1400,8 @@ export async function correctCompletedMatchScoreInTransaction(
           type: true,
           balanceMetric: true,
           ratingPolicyVersion: true,
+          ratingMode: true,
+          collaborationVersion: true,
         },
       },
       team1Player1: { select: { id: true, name: true, elo: true } },
@@ -1405,7 +1436,7 @@ export async function correctCompletedMatchScoreInTransaction(
       })
     : [];
 
-  await assertNoNewerOutsideRatingMatches(tx, {
+  if (targetMatch.session.ratingMode !== "UNRATED") await assertNoNewerOutsideRatingMatches(tx, {
     sessionId: targetMatch.sessionId,
     clubIds,
     completedAfter: getMatchOrderTime(targetMatch as CompletedReplayMatch),
@@ -1440,12 +1471,14 @@ export async function correctCompletedMatchScoreInTransaction(
       match,
       finalTeam1Score: replayTeam1Score,
       finalTeam2Score: replayTeam2Score,
+      finalGameScores: isTargetMatch ? finalGameScores : undefined,
     });
     const updatedMatch = await tx.match.update({
       where: { id: match.id },
       data: {
-        team1Score: replayTeam1Score,
-        team2Score: replayTeam2Score,
+        team1Score: isTargetMatch ? correctedResult.team1Score : replayTeam1Score,
+        team2Score: isTargetMatch ? correctedResult.team2Score : replayTeam2Score,
+        ...(isTargetMatch ? { scoreRevision: { increment: 1 }, ...(match.scoringFormat === "BEST_OF_THREE" ? { gameScoresJson: JSON.stringify(correctedResult.gameScores) } : {}) } : {}),
         winnerTeam: outcome.winnerTeam,
         team1EloChange: outcome.persistedTeam1EloChange,
         team2EloChange: outcome.persistedTeam2EloChange,
@@ -1462,6 +1495,7 @@ export async function correctCompletedMatchScoreInTransaction(
     }
   }
 
+  await bumpSessionResultsRevision(tx, targetMatch.sessionId);
   return {
     success: true,
     correctedMatch,
@@ -1469,10 +1503,12 @@ export async function correctCompletedMatchScoreInTransaction(
     oldScore: {
       team1Score: targetMatch.team1Score,
       team2Score: targetMatch.team2Score,
+      ...(targetMatch.scoringFormat === "BEST_OF_THREE" ? { gameScoresJson: targetMatch.gameScoresJson } : {}),
     },
     newScore: {
-      team1Score: finalTeam1Score,
-      team2Score: finalTeam2Score,
+      team1Score: correctedResult.team1Score,
+      team2Score: correctedResult.team2Score,
+      ...(targetMatch.scoringFormat === "BEST_OF_THREE" ? { gameScoresJson: JSON.stringify(correctedResult.gameScores) } : {}),
     },
   };
 }
@@ -1506,6 +1542,8 @@ export async function undoCompletedMatchResultInTransaction(
           type: true,
           balanceMetric: true,
           ratingPolicyVersion: true,
+          ratingMode: true,
+          collaborationVersion: true,
         },
       },
     },
@@ -1516,7 +1554,7 @@ export async function undoCompletedMatchResultInTransaction(
   }
 
   if (actorUserId) {
-    await assertSessionMutationActor(tx, { session: { id: match.sessionId, clubId: match.session.clubId }, userId: actorUserId, isGlobalAdmin: actorIsGlobalAdmin });
+    await assertSessionMutationActor(tx, { session: { id: match.sessionId, clubId: match.session.clubId }, userId: actorUserId, isGlobalAdmin: actorIsGlobalAdmin, hostOnly: (match.session.collaborationVersion ?? 1) >= 2 });
   }
   if (match.status !== MatchStatus.COMPLETED) {
     throw new UndoCompletedMatchError(
@@ -1576,10 +1614,11 @@ export async function undoCompletedMatchResultInTransaction(
     })) ?? [];
   const team1ReverseEloDelta = -(match.team1EloChange ?? 0);
   const team2ReverseEloDelta = -(match.team2EloChange ?? 0);
+  if (match.session.ratingMode === "UNRATED" && ledgerAdjustments.length > 0) throw new IdentityConflictError("Unrated result unexpectedly contains rating ledger rows; reversal is blocked.");
 
-  if (!match.session.isTest && match.session.ratingPolicyVersion === 2) await assertSelectedProfileLedger(tx, match.sessionId, affectedUserIds, ledgerAdjustments);
+  if (!match.session.isTest && match.session.ratingMode !== "UNRATED" && match.session.ratingPolicyVersion === 2) await assertSelectedProfileLedger(tx, match.sessionId, affectedUserIds, ledgerAdjustments);
 
-  if (!match.session.isTest && ledgerAdjustments.length > 0) {
+  if (!match.session.isTest && match.session.ratingMode !== "UNRATED" && ledgerAdjustments.length > 0) {
     for (const adjustment of ledgerAdjustments) {
       if (adjustment.delta === 0) continue;
 
@@ -1593,7 +1632,7 @@ export async function undoCompletedMatchResultInTransaction(
         },
       });
     }
-  } else if (!match.session.isTest && match.session.ratingPolicyVersion !== 2) {
+  } else if (!match.session.isTest && match.session.ratingMode !== "UNRATED" && match.session.ratingPolicyVersion !== 2) {
     const team1CoreIds = team1Ids.filter(
       (playerId) => isGuestByUserId.get(playerId) !== true
     );
@@ -1688,6 +1727,7 @@ export async function undoCompletedMatchResultInTransaction(
     );
   }
 
+  await bumpSessionResultsRevision(tx, match.sessionId);
   await restoreSessionPlayerRotationState(tx, {
     sessionId: match.sessionId,
     userIds: affectedUserIds,

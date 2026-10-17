@@ -59,7 +59,7 @@ describe("delete session", () => {
       sessionPlayer: { findMany: vi.fn(async () => []), deleteMany: vi.fn(async () => ({ count: 0 })) },
       court: { updateMany: vi.fn(async () => ({ count: 0 })) },
       match: { deleteMany: vi.fn(async () => ({ count: 0 })) },
-      session: { delete: vi.fn(async () => ({})) },
+      session: { findUnique: vi.fn(async () => ({ status: "ACTIVE", collaborationVersion: 1 })), delete: vi.fn(async () => ({})) },
     };
     vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(tx as never));
 
@@ -67,6 +67,15 @@ describe("delete session", () => {
     expect(response.status).toBe(200);
     expect(reverseSessionEloChanges).toHaveBeenCalledWith(tx, { sessionId: "session", clubId: "club" });
     expect(tx.session.delete).toHaveBeenCalledWith({ where: { id: "session" } });
+  });
+
+  it("prevents deleting active shared results without both clubs approving reset", async () => {
+    const tx = { session: { findUnique: vi.fn(async () => ({ status: "ACTIVE", collaborationVersion: 2 })), delete: vi.fn() } };
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(tx as never));
+    const response = await request();
+    expect(response.status).toBe(409);
+    expect(reverseSessionEloChanges).not.toHaveBeenCalled();
+    expect(tx.session.delete).not.toHaveBeenCalled();
   });
 
   it("rejects an ordinary member before deleting any data", async () => {

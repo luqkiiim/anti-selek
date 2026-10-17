@@ -35,6 +35,7 @@ describe("undo current court player-group lifecycle", () => {
 
   it("applies released players' pending groups and regenerates an invalidated auto queue", async () => {
     const tx = {
+      session: { findUnique: vi.fn().mockResolvedValue({ collaborationVersion: 1 }) },
       match: { delete: vi.fn().mockResolvedValue({}) },
       court: { update: vi.fn().mockResolvedValue({}) },
     };
@@ -75,6 +76,7 @@ describe("undo current court player-group lifecycle", () => {
 
   it("keeps ordinary reconciliation when no automatic queue was invalidated", async () => {
     const tx = {
+      session: { findUnique: vi.fn().mockResolvedValue({ collaborationVersion: 1 }) },
       match: { delete: vi.fn().mockResolvedValue({}) },
       court: { update: vi.fn().mockResolvedValue({}) },
     };

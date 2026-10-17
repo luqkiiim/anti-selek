@@ -309,14 +309,12 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
   });
 
-  it("carries the test-session flag", () => {
-    const parsed = parseCreateSessionRequest({
+  it("rejects retired test-session creation instead of silently creating a rated session", () => {
+    expect(() => parseCreateSessionRequest({
       name: "Dry Run",
       clubId: "community-1",
       isTest: true,
-    });
-
-    expect(parsed.isTest).toBe(true);
+    })).toThrow("Test sessions are no longer available. Create a regular session instead.");
   });
 
   it("allows auto queue to be disabled explicitly", () => {
@@ -408,6 +406,14 @@ describe("parseCreateSessionRequest", () => {
         400
       )
     );
+  });
+
+  it("upgrades every new collaboration and defaults club-vs-club to unrated free play", () => {
+    const input = { name: "Friendly", clubId: "home", partnerClubId: "away", collabFormat: "INTERCLUB" };
+    expect(parseCreateSessionRequest(input)).toMatchObject({ collaborationVersion: 2, schedulingMode: "FREE_PLAY", scoringFormat: "SINGLE_GAME", ratingMode: "UNRATED" });
+    expect(() => parseCreateSessionRequest({ ...input, collaborationVersion: 1 })).toThrow("Invalid collaboration version");
+    expect(parseCreateSessionRequest({ ...input, schedulingMode: "LINEUP", autoQueueEnabled: true })).toMatchObject({ autoQueueEnabled: false });
+    expect(parseCreateSessionRequest({ ...input, collabFormat: "FREE_PLAY" })).toMatchObject({ collaborationVersion: 2, ratingMode: "RATED", scoringFormat: "SINGLE_GAME" });
   });
 
   it("accepts legacy community identifiers", () => {

@@ -109,6 +109,7 @@ export async function POST(
           createdAt: true,
           isTest: true,
           ratingPolicyVersion: true,
+          ratingMode: true,
           club: {
             select: {
               isTutorial: true,
@@ -161,6 +162,8 @@ export async function POST(
         },
         select: {
           id: true,
+          createdAt: true,
+          completedAt: true,
           team1Player1Id: true,
           team1Player2Id: true,
           team2Player1Id: true,
@@ -182,11 +185,51 @@ export async function POST(
         },
       });
 
-      if (freshTarget.ratingPolicyVersion === 2) {
+      const isRated = freshTarget.ratingMode !== "UNRATED";
+      if (!isRated && ledgerAdjustments.length > 0) throw new IdentityConflictError("Unrated results unexpectedly contain rating ledger rows; rollback is blocked.");
+      if (isRated && freshTarget.ratingPolicyVersion === 2) {
         for (const match of completedMatches) await assertSelectedProfileLedger(tx, freshTarget.id, [match.team1Player1Id, match.team1Player2Id, match.team2Player1Id, match.team2Player2Id], ledgerAdjustments.filter(a => a.matchId === match.id));
       }
+      // Removing earlier Elo updates would change the inputs used by later
+      // results. This endpoint reverses one tournament; it cannot replay others.
+      if (isRated && completedMatches.length > 0) {
+        const affectedProfiles = ledgerAdjustments.length > 0
+          ? ledgerAdjustments.filter(adjustment => adjustment.delta !== 0).map(({ clubId, playerId }) => ({ clubId, playerId }))
+          : freshTarget.ratingPolicyVersion !== 2 && freshTarget.clubId
+            ? completedMatches.flatMap(match => [
+                ...((match.team1EloChange ?? 0) !== 0 ? [match.team1Player1Id, match.team1Player2Id] : []),
+                ...((match.team2EloChange ?? 0) !== 0 ? [match.team2Player1Id, match.team2Player2Id] : []),
+              ].filter(playerId => !isGuestByUserId.get(playerId)).map(playerId => ({ clubId: freshTarget.clubId!, playerId })))
+            : [];
+        if (affectedProfiles.length > 0) {
+          const affectedClubIds = [...new Set(affectedProfiles.map(profile => profile.clubId))];
+          const affectedPlayerIds = [...new Set(affectedProfiles.map(profile => profile.playerId))];
+          const firstResultAt = new Date(Math.min(...completedMatches.map(match => (match.completedAt ?? match.createdAt).getTime())));
+          const laterAffectedMatch = await tx.match.findFirst({
+            where: {
+              sessionId: { not: freshTarget.id },
+              status: MatchStatus.COMPLETED,
+              session: { isTest: false, ratingMode: "RATED" },
+              AND: [
+                { OR: [{ completedAt: { gte: firstResultAt } }, { completedAt: null, createdAt: { gte: firstResultAt } }] },
+                { OR: [
+                  { eloAdjustments: { some: { OR: affectedProfiles } } },
+                  {
+                    AND: [
+                      { session: { OR: [{ clubId: { in: affectedClubIds } }, { sessionClubs: { some: { clubId: { in: affectedClubIds }, status: "ACCEPTED" } } }] } },
+                      { OR: [{ team1Player1Id: { in: affectedPlayerIds } }, { team1Player2Id: { in: affectedPlayerIds } }, { team2Player1Id: { in: affectedPlayerIds } }, { team2Player2Id: { in: affectedPlayerIds } }] },
+                    ],
+                  },
+                ] },
+              ],
+            },
+            select: { id: true },
+          });
+          if (laterAffectedMatch) throw new IdentityConflictError("Later rated results use these club ratings. Roll back those tournaments first.");
+        }
+      }
       const reversedPlayerKeys = new Set<string>();
-      if (ledgerAdjustments.length > 0) {
+      if (isRated && ledgerAdjustments.length > 0) {
         const reverseDeltaByClubAndUserId = new Map<
           string,
           { clubId: string; playerId: string; delta: number }
@@ -215,7 +258,7 @@ export async function POST(
           });
           reversedPlayerKeys.add(`${item.clubId}:${item.playerId}`);
         }
-      } else if (freshTarget.ratingPolicyVersion !== 2) {
+      } else if (isRated && freshTarget.ratingPolicyVersion !== 2) {
         const eloReverseDeltaByUserId = computeRollbackEloDeltas(
           completedMatches,
           isGuestByUserId
@@ -323,7 +366,6 @@ export async function POST(
       );
     }
 
-    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Rollback tournament error", error);
     return safeErrorResponse();

@@ -343,3 +343,71 @@ describe("score and approval identity integration", () => {
   });
 
 });
+
+describe("club collaboration series scoring", () => {
+  it.each(["RATED", "UNRATED"])("preserves %s policy through draft, final, correction, undo and reset reversal", async (ratingMode) => {
+    const prefix = `series-${ratingMode.toLowerCase()}`;
+    const seriesSessionId = `${prefix}-session`, seriesCourtId = `${prefix}-court`, seriesMatchId = `${prefix}-match`;
+    const selectedClubs = [clubBId, clubAId, clubAId, null];
+    await prisma.session.create({ data: {
+      id: seriesSessionId, code: prefix, name: prefix, clubId: clubAId, status: "ACTIVE", type: "POINTS", mode: "MEXICANO", collaborationVersion: 2, ratingPolicyVersion: 2, ratingMode, scoringFormat: "BEST_OF_THREE", collabFormat: "INTERCLUB",
+      sessionClubs: { create: [{ clubId: clubAId, role: "HOST", status: "ACCEPTED" }, { clubId: clubBId, role: "PARTNER", status: "ACCEPTED" }] },
+      courts: { create: { id: seriesCourtId, courtNumber: 1 } },
+    } });
+    await prisma.sessionPlayer.createMany({ data: playerIds.map((playerId, index) => ({ sessionId: seriesSessionId, playerId, profileClubId: selectedClubs[index], participantAccountId: index === 3 ? null : accountIds[index], representingClubId: index === 0 || index === 3 ? clubBId : clubAId, isGuest: index === 3 })) });
+    const makeMatch = async (id: string) => {
+      await prisma.match.create({ data: { id, sessionId: seriesSessionId, courtId: seriesCourtId, scoringFormat: "BEST_OF_THREE", status: "IN_PROGRESS", team1ClubId: clubAId, team2ClubId: clubBId, team1Player1Id: playerIds[1], team1Player2Id: playerIds[2], team2Player1Id: playerIds[0], team2Player2Id: playerIds[3] } });
+      await prisma.court.update({ where: { id: seriesCourtId }, data: { currentMatchId: id } });
+    };
+    const submit = async (body: Record<string, unknown>, id = seriesMatchId) => POSTScore(new Request(`http://localhost/api/matches/${id}/score`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), routeContext(id));
+    const memberships = () => prisma.clubMember.findMany({ where: { OR: playerIds.slice(0,3).map((playerId, index) => ({ playerId, clubId: selectedClubs[index]! })) }, orderBy: [{ clubId: "asc" }, { playerId: "asc" }], select: { id: true, elo: true } });
+    const before = await memberships();
+    const { getGuestRating } = await import("@/lib/guestRating");
+    const guestBefore = await getGuestRating(prisma as never, playerIds[3], 1000);
+    mockedAuth.mockResolvedValue({ user: { id: "score-admin", isAdmin: true } } as never);
+    await makeMatch(seriesMatchId);
+    const gameScores = [{ team1Score: 21, team2Score: 19 }, { team1Score: 1, team2Score: 21 }, { team1Score: 21, team2Score: 19 }];
+    expect((await submit({ gameScores, finalize: false })).status).toBe(409);
+    const draft = await submit({ gameScores: gameScores.slice(0,1), finalize: false, scoreRevision: 0 });
+    expect(draft.status).toBe(200);
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: seriesMatchId } })).toMatchObject({ status: "IN_PROGRESS", winnerTeam: null, scoreRevision: 1, team1EloChange: null });
+    expect(await prisma.session.findUniqueOrThrow({ where: { id: seriesSessionId } })).toMatchObject({ resultsRevision: 1 });
+    expect(await prisma.matchEloAdjustment.count({ where: { matchId: seriesMatchId } })).toBe(0);
+    expect((await submit({ gameScores, scoreRevision: 0 })).status).toBe(409);
+    expect((await submit({ gameScores: gameScores.slice(0,1), scoreRevision: 1 })).status).toBe(400);
+    const finalResponse = await submit({ gameScores, scoreRevision: 1 });
+    expect(finalResponse.status).toBe(200);
+    const completed = await prisma.match.findUniqueOrThrow({ where: { id: seriesMatchId } });
+    expect(completed).toMatchObject({ status: "COMPLETED", winnerTeam: 1, team1Score: 43, team2Score: 59, scoreRevision: 2, gameScoresJson: JSON.stringify(gameScores) });
+    const seats = await prisma.sessionPlayer.findMany({ where: { sessionId: seriesSessionId }, orderBy: { playerId: "asc" } });
+    expect(seats.every(seat => seat.matchesPlayed === 1)).toBe(true);
+    expect(seats.filter(seat => [playerIds[1],playerIds[2]].includes(seat.playerId)).every(seat => seat.sessionPoints === 3)).toBe(true);
+    expect(await prisma.matchEloAdjustment.count({ where: { matchId: seriesMatchId } })).toBe(ratingMode === "RATED" ? 3 : 0);
+    if (ratingMode === "UNRATED") {
+      expect(completed).toMatchObject({ team1EloChange: null, team2EloChange: null });
+      expect(await memberships()).toEqual(before);
+      expect(await getGuestRating(prisma as never, playerIds[3], 1000)).toBe(guestBefore);
+    }
+    const { correctCompletedMatchScore, undoCompletedMatchResult } = await import("@/lib/matchCompletion");
+    const reversedGames = [{ team1Score: 1, team2Score: 21 }, { team1Score: 21, team2Score: 19 }, { team1Score: 19, team2Score: 21 }];
+    await correctCompletedMatchScore({ matchId: seriesMatchId, finalTeam1Score: 41, finalTeam2Score: 61, finalGameScores: reversedGames, expectedScoreRevision: 2 });
+    expect(await prisma.match.findUniqueOrThrow({ where: { id: seriesMatchId } })).toMatchObject({ winnerTeam: 2, gameScoresJson: JSON.stringify(reversedGames), scoreRevision: 3 });
+    expect(await prisma.session.findUniqueOrThrow({ where: { id: seriesSessionId } })).toMatchObject({ resultsRevision: 3 });
+    await undoCompletedMatchResult({ matchId: seriesMatchId });
+    expect(await memberships()).toEqual(before);
+    expect(await getGuestRating(prisma as never, playerIds[3], 1000)).toBe(guestBefore);
+    expect(await prisma.match.count({ where: { id: seriesMatchId } })).toBe(0);
+    expect(await prisma.session.findUniqueOrThrow({ where: { id: seriesSessionId } })).toMatchObject({ resultsRevision: 4 });
+    expect((await prisma.sessionPlayer.findMany({ where: { sessionId: seriesSessionId } })).every(seat => seat.matchesPlayed === 0 && seat.sessionPoints === 0)).toBe(true);
+    const secondId = `${seriesMatchId}-reset`;
+    await makeMatch(secondId);
+    expect((await submit({ gameScores, scoreRevision: 0 }, secondId)).status).toBe(200);
+    const { reverseSessionEloChanges } = await import("@/lib/sessionLifecycle");
+    await prisma.$transaction(async tx => {
+      await reverseSessionEloChanges(tx, { sessionId: seriesSessionId, clubId: clubAId });
+      await tx.match.delete({ where: { id: secondId } });
+    });
+    expect(await memberships()).toEqual(before);
+    expect(await getGuestRating(prisma as never, playerIds[3], 1000)).toBe(guestBefore);
+  });
+});

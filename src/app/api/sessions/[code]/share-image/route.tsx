@@ -1,6 +1,5 @@
 import { sportingJson } from "@/lib/sportingResponse";
 import { ImageResponse } from "next/og";
-import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -136,9 +135,11 @@ async function getSessionShareImageRoute(
           team1Player2Id: true,
           team2Player1Id: true,
           team2Player2Id: true,
+          scoringFormat: true,
+          gameScoresJson: true,
+          winnerTeam: true,
           team1Score: true,
           team2Score: true,
-          winnerTeam: true,
           status: true,
           completedAt: true,
         },

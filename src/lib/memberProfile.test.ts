@@ -61,5 +61,14 @@ describe("member profile", () => {
     expect(data.history.nextOffset).toBeNull();
     expect(data.history.items.at(-1)?.id).toBe("s0");
     expect(data.timeline).toHaveLength(130);
+  });  it("shows unrated session history without a missing-rating gap while counting results", () => {
+    const game = { ...match(0), team1EloChange: null, team2EloChange: null, session: { ...match(0).session, ratingMode: "UNRATED" } };
+    const data = buildMemberProfileData({ userId: "a", matches: [game] })!;
+    expect(data.latestSession).toMatchObject({ wins: 1, matches: 1, ratingMode: "UNRATED", ratingChange: 0 });
+    expect(data.timeline).toHaveLength(1);
+    expect(data.timeline[0]).toMatchObject({ kind: "UNRATED", rating: null, delta: null, label: "Session 0 · unrated" });
+    expect(data.matchHistory[0]).toMatchObject({ ratingMode: "UNRATED", eloChange: null, result: "WIN" });
+    expect(data.records.highestRating).toBeNull();
   });
+
 });

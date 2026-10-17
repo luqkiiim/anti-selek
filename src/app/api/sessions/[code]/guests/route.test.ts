@@ -86,6 +86,7 @@ function mockGuestTransaction() {
   mocks.sessionPlayerCreate.mockResolvedValue({});
   mocks.transaction.mockImplementation((callback) =>
     callback({
+      session: { findUnique: vi.fn().mockResolvedValue({ id: "session-1", collaborationVersion: 1, status: "ACTIVE" }) },
       player: { create: mocks.playerCreate },
       sessionPlayer: { create: mocks.sessionPlayerCreate },
     })

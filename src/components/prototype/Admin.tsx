@@ -16,7 +16,9 @@ import type { ClubPageMember } from "@/components/club/clubTypes";
 import { getClubRoleLabel } from "@/lib/clubRoles";
 import { getMixedSideOverrideOptionForGender, getStoredPartnerPreference, normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
 import type { Snapshot } from "./Club";
-import { api, useAction, useResource } from "./api";
+import { adminApi } from "@/lib/adminClient";
+import { useAdminAction } from "@/components/club-admin/useAdminAction";
+import { useAdminResource } from "@/components/club-admin/useAdminResource";
 import type { AdminAdmissionList, AdmissionCandidate, AdmissionRequest } from "./admissionTypes";
 import { AdjustClubRating } from "@/components/profile/AdjustClubRating";
 import { MemberPhotoEditor } from "./MemberPhotoEditor";
@@ -37,6 +39,9 @@ export default function Admin({
   loadError,
   onRetry,
   retryDisabled,
+  onMemberSaved,
+  onMemberRemoved,
+  onClubSaved,
 }: {
   snapshot: Snapshot;
   refresh: () => Promise<unknown>;
@@ -46,6 +51,9 @@ export default function Admin({
   onOpenProfile: (id: string) => void;
   onRoute?: (href: string, replace?: boolean) => void;
   disabled?: boolean; loadError?: string; onRetry?: () => void; retryDisabled?: boolean;
+  onMemberSaved?: (member: ClubPageMember) => void;
+  onMemberRemoved?: (id: string) => void;
+  onClubSaved?: (club: Partial<Snapshot["club"]>) => void;
 }) {
   const { club, clubMembers: players, viewer } = snapshot;
   const href = useAppLocation();
@@ -69,16 +77,21 @@ export default function Admin({
     [preferredGroup, setPreferredGroup] = useState("B");
   const [pendingRole, setPendingRole] = useState<ClubPageMember["role"] | null>(null);
   const [roleNotice, setRoleNotice] = useState("");
-  const roleAction = useAction(refresh);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [saveWarning, setSaveWarning] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const roleAction = useAdminAction(refresh);
   const currentPlayer = edit ? players.find(player => player.id === edit.id) ?? edit : null;
   const isCurrentPlayer = !!currentPlayer && (currentPlayer.ownerUserId === viewer.id || currentPlayer.id === viewer.playerId);
   const canChangeRole = club.role === "ADMIN" && !club.readOnly && !viewer.isQuickAccess && !!currentPlayer?.isClaimed && !currentPlayer.isOwner && !isCurrentPlayer &&
     (currentPlayer.role !== "ADMIN" || !!club.viewerIsOwner || !!viewer.isAdmin);
-  const joins = useResource<AdminAdmissionList>("/api/clubs/" + club.id + "/join-requests");
-  const action = useAction(async () => {
+  const joins = useAdminResource<AdmissionList>("/api/clubs/" + club.id + "/join-requests");
+  const action = useAdminAction(async () => {
     await Promise.all([refresh(), joins.refresh()]);
   });
-  const busy = disabled || action.busy || roleAction.busy;
+  const mutationBusy = action.busy || roleAction.busy || photoBusy;
+  const busy = disabled || mutationBusy || action.uncertain || roleAction.uncertain;
+  const canEditPreferences = !!edit && (!edit.isClaimed || isCurrentPlayer);
   const levelOption = edit ? getMixedSideOverrideOptionForGender(edit.gender) : null;
   const endpoint = "/api/clubs/" + club.id;
   const requests = joins.data?.requests ?? [];
@@ -98,10 +111,20 @@ export default function Admin({
     return candidatesFor(request).find(candidate => candidate.id === id) ?? null;
   }
   function reviewAdmission(request: AdmissionRequest, body: { action: "APPROVE" | "REJECT"; playerId?: string; asNew?: boolean; reason?: string }) {
-    void action.run(() => api(endpoint + "/join-requests/" + request.id, "PATCH", { ...body, revision: request.revision }));
+    void action.run(signal => adminApi(endpoint + "/join-requests/" + request.id, "PATCH", { ...body, revision: request.revision }, { signal }), () => {
+      joins.update(current => ({ ...current, requests: current.requests.filter(item => item.id !== request.id) }));
+    });
+  }
+  function toggleJoinRequests() {
+    const allowJoinRequests = !joins.data?.allowJoinRequests;
+    void action.run(signal => adminApi(endpoint + "/join-requests", "PATCH", { allowJoinRequests }, { signal }), () => {
+      joins.update(current => ({ ...current, allowJoinRequests }));
+    });
   }
   function editor(player: ClubPageMember | null) {
     setEdit(player);
+    setSaveNotice("");
+    setSaveWarning("");
     setName(player?.name || "");
     setRating(String(player?.elo ?? 1000));
     setMembership(player?.status || "CORE");
@@ -115,10 +138,9 @@ export default function Admin({
     setPendingRole(null);
   }
   function changeRole(player: ClubPageMember, role: ClubPageMember["role"]) {
-    void roleAction.run(async () => {
-      const updated = await api<ClubPageMember>(endpoint + "/members/" + player.id, "PATCH", { role });
-      setEdit(current => current?.id === player.id ? { ...current, role: updated.role } : current);
-    }, () => {
+    void roleAction.run(signal => adminApi<ClubPageMember>(endpoint + "/members/" + player.id, "PATCH", { role }, { signal }), updated => {
+      onMemberSaved?.(updated);
+      setEdit(current => current?.id === player.id ? { ...current, ...updated, wins: current.wins, losses: current.losses, matchesPlayed: current.matchesPlayed } : current);
       setRoleNotice(`${player.name} is now ${getClubRoleLabel(role).toLowerCase()}.`);
       setPendingRole(null);
       setSheet("player");
@@ -133,39 +155,33 @@ export default function Admin({
       setSheet("role");
     } else changeRole(currentPlayer, role);
   }
-  async function save() {
-    if (
-      name.trim().length < 2 ||
-      !rating.trim() ||
-      !Number.isInteger(Number(rating)) ||
-      Number(rating) < 0 ||
-      Number(rating) > 5000
-    )
-      throw new Error("Enter a name and a whole rating from 0 to 5000.");
-    if (!edit && !["MALE", "FEMALE"].includes(gender)) throw new Error("Choose the player’s gender.");
-    let player = edit;
-    if (!player) {
-      player = await api<ClubPageMember>(endpoint + "/members", "POST", {
-        name: name.trim(),
-        status: membership,
-        gender,
-      });
-      setEdit(player);
-    } else
-      await api(endpoint + "/members/" + player.id, "PATCH", {
-        ...(!player.isClaimed && name.trim() !== player.name
-          ? { name: name.trim() }
-          : {}),
-        status: membership,
-        ...(levelOption ? { mixedSideOverride: playerLevel || null, partnerPreference: getStoredPartnerPreference(player.gender, playerLevel || null) } : {}),
-        preferredPool: preferredGroup,
-      });
-    if (Number(rating) !== player.elo)
-      await api(endpoint + "/members/" + player.id + "/rating", "POST", {
-        rating: Number(rating),
-        expectedRating: player.elo,
-        reason: "Manual rating change from player editor",
-      });
+  async function save(signal: AbortSignal) {
+    if (!edit) {
+      if (name.trim().length < 2 || !rating.trim() || !Number.isInteger(Number(rating)) || Number(rating) < 0 || Number(rating) > 5000)
+        throw new Error("Enter a name and a whole rating from 0 to 5000.");
+      if (!["MALE", "FEMALE"].includes(gender)) throw new Error("Choose the player’s gender.");
+      return adminApi<ClubPageMember>(endpoint + "/members", "POST", {
+        name: name.trim(), status: membership, gender, initialRating: Number(rating),
+      }, { signal });
+    }
+    if (!edit.isClaimed && name.trim().length < 2) throw new Error("Enter a player name of at least 2 characters.");
+    const originalLevel = normalizeMixedSideOverrideForGender(edit.gender, edit.mixedSideOverride, edit.partnerPreference) ?? "";
+    const body = {
+      ...(!edit.isClaimed && name.trim() !== edit.name ? { name: name.trim() } : {}),
+      ...(membership !== edit.status ? { status: membership } : {}),
+      ...(canEditPreferences && levelOption && playerLevel !== originalLevel
+        ? { mixedSideOverride: playerLevel || null, partnerPreference: getStoredPartnerPreference(edit.gender, playerLevel || null) } : {}),
+      ...(preferredGroup !== edit.preferredPool ? { preferredPool: preferredGroup } : {}),
+    };
+    if (!Object.keys(body).length) return edit;
+    return adminApi<ClubPageMember>(endpoint + "/members/" + edit.id, "PATCH", body, { signal });
+  }
+  function savedMember(updated: ClubPageMember & { warnings?: Array<{ code: string; message: string }> }) {
+    onMemberSaved?.(updated);
+    setSaveNotice(edit ? "Player details saved." : "Player added.");
+    setSaveWarning(updated.warnings?.map(warning => warning.message).join(" ") ?? "");
+    setEdit(current => current?.id === updated.id ? { ...current, ...updated, wins: current.wins, losses: current.losses, matchesPlayed: current.matchesPlayed } : updated);
+    setSheet("");
   }
   return (
     <div className="pc-app manage-club">
@@ -201,7 +217,12 @@ export default function Admin({
           <ErrorText error={loadError ?? ""} />
           {loadError && <button className="secondary" disabled={retryDisabled} onClick={onRetry}>Try again</button>}
           <ErrorText error={action.error || roleAction.error || joins.error} />
-          <fieldset disabled={disabled} className="club-permission-fields">
+          {joins.data?.warnings?.map(warning => <p key={warning.code} role="status">{warning.message}</p>)}
+          {saveNotice && <p role="status">{saveNotice}</p>}
+          {saveWarning && <p role="status">{saveWarning}</p>}
+          <AdminRefreshStatus action={action} />
+          <AdminRefreshStatus action={roleAction} />
+          <fieldset disabled={busy} className="club-permission-fields">
           {onRoute && <a className="text-button specialist-tools" href={changeAppQuery(href, { tools: "advanced" })}>More club tools</a>}
           {tab === "Players" ? (
             <>
@@ -270,7 +291,7 @@ export default function Admin({
               {!joins.data && !joins.error && <p role="status">Loading requests…</p>}
             </>
           ) : (
-            <ClubSettings club={club} allowJoinRequests={joins.data?.allowJoinRequests} busy={action.busy} onInvite={() => setSheet("invite")} onToggleJoins={() => void action.run(() => api(endpoint + "/join-requests", "PATCH", { allowJoinRequests: !joins.data?.allowJoinRequests }))} refresh={refresh} onDeleted={onDeleted} />
+            <ClubSettings club={club} allowJoinRequests={joins.data?.allowJoinRequests} busy={busy} onInvite={() => setSheet("invite")} onToggleJoins={toggleJoinRequests} refresh={refresh} onDeleted={onDeleted} onClubSaved={onClubSaved} />
           )}
           </fieldset>
         </main>
@@ -290,16 +311,22 @@ export default function Admin({
                   ? "Invite to your club"
                   : "Manage club"
           }
-          busy={busy}
+          busy={mutationBusy}
           onClose={() => setSheet("")}
         >
           <ErrorText error={action.error || roleAction.error} />
+          <AdminRefreshStatus action={action} />
+          <AdminRefreshStatus action={roleAction} />
           {roleNotice && <p role="status">{roleNotice}</p>}
+          <fieldset disabled={disabled || action.uncertain || roleAction.uncertain} className="club-permission-fields">
           {sheet === "player" ? (
             <>
-              {edit && <MemberPhotoEditor key={edit.id} member={edit} clubId={club.id} onSaved={async avatarUrl => { setEdit(current => current?.id === edit.id ? { ...current, avatarUrl } : current); await refresh(); }} />}
+              {edit && <MemberPhotoEditor key={edit.id} member={edit} clubId={club.id} refresh={refresh} onBusyChange={setPhotoBusy} onSaved={avatarUrl => { const updated = { ...edit, avatarUrl }; setEdit(updated); onMemberSaved?.(updated); }} />}
               {edit && <PlayerInvitationPanel key={`invite:${edit.id}`} clubId={club.id} playerId={edit.id} playerName={edit.name} rating={edit.elo} matchesPlayed={edit.matchesPlayed} connected={edit.isClaimed} />}
-              {edit && <details className="manage-rating-history"><summary>Rating history</summary><AdjustClubRating clubId={club.id} userId={edit.id} name={edit.name} onChanged={updated => { setRating(String(updated)); setEdit(current => current ? { ...current, elo: updated } : null); void refresh(); }} /></details>}
+              {edit && <section className="manage-player-rating" aria-label="Club rating">
+                <h3>Rating · {currentPlayer?.elo ?? edit.elo}</h3>
+                <AdjustClubRating clubId={club.id} userId={edit.id} name={edit.name} onChanged={updated => { setRating(String(updated)); setEdit(current => current ? { ...current, elo: updated } : null); onMemberSaved?.({ ...edit, elo: updated }); void refresh().catch(() => {}); }} />
+              </section>}
               {currentPlayer && <section className="manage-player-role" aria-label="Club role">
                 <h3>Club role · {currentPlayer.isOwner ? "Owner" : getClubRoleLabel(currentPlayer.role)}</h3>
                 <p className="muted">Staff can host and run sessions. Admins can also manage club settings, players, and requests.</p>
@@ -323,7 +350,7 @@ export default function Admin({
                 </small>
               )}
               {!edit && <label className="field-label">Gender<select aria-label="Gender" value={gender} onChange={e => setGender(e.target.value)} required><option value="" disabled>Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}
-              <label className="field-label">
+              {!edit && <label className="field-label">
                 Rating
                 <input
                   type="number"
@@ -333,7 +360,7 @@ export default function Admin({
                   value={rating}
                   onChange={(e) => setRating(e.target.value)}
                 />
-              </label>
+              </label>}
               <label className="field-label">
                 Membership
                 <select
@@ -345,13 +372,13 @@ export default function Admin({
                 </select>
               </label>
               {edit && <div className="manage-player-preferences">
-                <label className="field-label">Player level<select aria-label="Player level" value={playerLevel} onChange={e => setPlayerLevel(e.target.value)} disabled={!levelOption}><option value="">Default</option>{levelOption && <option value={levelOption.value}>{edit.gender === "FEMALE" ? "High level" : "Low level"}</option>}</select></label>
-                <p className="manage-preference-hint">Used when forming mixed pairs.</p>
+                {canEditPreferences && <><label className="field-label">Player level<select aria-label="Player level" value={playerLevel} onChange={e => setPlayerLevel(e.target.value)} disabled={!levelOption}><option value="">Default</option>{levelOption && <option value={levelOption.value}>{edit.gender === "FEMALE" ? "High level" : "Low level"}</option>}</select></label>
+                <p className="manage-preference-hint">Used when forming mixed pairs.</p></>}
                 <label className="field-label">Preferred game group<select aria-label="Preferred game group" value={preferredGroup} onChange={e => setPreferredGroup(e.target.value)}><option value="A">Competitive</option><option value="B">Social</option></select></label>
               </div>}
               <button
                 className="primary"
-                onClick={() => void action.run(save, () => setSheet(""))}
+                onClick={() => void action.run(save, savedMember)}
               >
                 {edit ? "Save changes" : "Add player"}
               </button>
@@ -379,8 +406,8 @@ export default function Admin({
                 className="primary"
                 onClick={() =>
                   void action.run(
-                    () => api(endpoint + "/members/" + edit?.id, "DELETE"),
-                    () => setSheet(""),
+                    signal => adminApi(endpoint + "/members/" + edit?.id, "DELETE", undefined, { signal }),
+                    () => { if (edit) onMemberRemoved?.(edit.id); setSheet(""); },
                   )
                 }
               >
@@ -414,7 +441,17 @@ export default function Admin({
           ) : (
             <p className="muted">Choose a player or club setting to continue.</p>
           )}
+          </fieldset>
         </Sheet>
     </div>
   );
 }
+
+function AdminRefreshStatus({ action }: { action: ReturnType<typeof useAdminAction> }) {
+  return action.refreshWarning || action.uncertain ? <div role="status">
+    {action.refreshWarning && <p>{action.refreshWarning}</p>}
+    <button type="button" className="text-button" disabled={action.refreshing} onClick={() => void action.retryRefresh()}>{action.refreshing ? "Refreshing…" : "Refresh details"}</button>
+  </div> : null;
+}
+
+type AdmissionList = AdminAdmissionList & { warnings?: Array<{ code: string; message: string }> };

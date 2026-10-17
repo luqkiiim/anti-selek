@@ -1,3 +1,5 @@
+import { assertCollaborationPermission, assertRulesAgreed, isUpgradedCollaboration, collaborationEvent } from "@/lib/sessionCollaboration";
+import { isLineupRowReady, validateLineupPlayers } from "@/lib/sessionLineup";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { assertSessionMutationActor, assertSessionProfileContextsUnambiguous } from "@/lib/sessionProfileIdentity";
 import { IdentityConflictError } from "@/lib/playerIdentity";
@@ -131,7 +133,25 @@ export async function POST(
     const startedAt = new Date();
     const updated = await admissionTransaction(prisma, async tx => {
       await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
-      const fresh = await tx.session.findUnique({ where: { id: sessionData.id }, select: { status: true } });
+      const fresh = await tx.session.findUnique({ where: { id: sessionData.id }, select: { status: true, collaborationVersion: true } });
+      if (fresh && isUpgradedCollaboration(fresh)) {
+        const { session: current } = await assertCollaborationPermission(tx, { sessionId: sessionData.id, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, kind: "host" });
+        assertRulesAgreed(current);
+        if (current.schedulingMode === "LINEUP") {
+          const rows = await tx.sessionLineupRow.findMany({ where: { sessionId: current.id, matchId: null, cancelled: false } });
+          let ready = false;
+          for (const row of rows.filter(isLineupRowReady)) {
+            try { await validateLineupPlayers(tx, current.id, row, true); ready = true; break; }
+            catch (error) { if (!(error instanceof IdentityConflictError)) throw error; }
+          }
+          if (!ready) throw new IdentityConflictError("Confirm at least one available lineup match before starting.");
+        } else {
+          const players = await tx.sessionPlayer.findMany({ where: { sessionId: current.id, isPaused: false } });
+          if (current.collabFormat === "INTERCLUB" && current.sessionClubs.some(club => players.filter(p => p.representingClubId === club.clubId).length < 2)) throw new IdentityConflictError("Each club needs at least two available players.");
+          if (current.collabFormat !== "INTERCLUB" && players.length < 4) throw new IdentityConflictError("Choose at least four available players.");
+        }
+        await collaborationEvent(tx, current.id, session.user.id, "SESSION_START");
+      }
       if (fresh?.status !== SessionStatus.WAITING) throw new IdentityConflictError("Tournament already started");
       const links = await getSessionClubLinks(tx, sessionData);
       if (links.some(link => link.status !== SessionClubStatus.ACCEPTED)) throw new IdentityConflictError("Partner club must approve this collab before it can start");

@@ -240,7 +240,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
       .toContain("players");
 
     await page.goto(`/club/${playground.clubId}?tab=host`);
-    await expect(page.getByText("Create a test tournament").first()).toBeVisible();
+    await expect(page.getByText("Create a practice tournament").first()).toBeVisible();
     await page.locator('[data-tutorial-target="admin-onboarding-session-name"]')
       .filter({ visible: true })
       .fill("Tutorial Walkthrough Test");

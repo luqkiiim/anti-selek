@@ -172,16 +172,20 @@ it("revalidates operator access under the writer before creating a manual court 
   writer.mockRestore();
 });
 
-it("blocks ambiguous unfinished legacy contexts while admitting a pending partner profile only to a waiting new session", async () => {
+it("blocks ambiguous legacy contexts and defers visiting profiles until invitation acceptance", async () => {
   await session({ policy: 1, status: "WAITING" });
   // Legacy null contexts can remain readable, but cannot be silently assigned.
   await db.$executeRaw`DROP TRIGGER IF EXISTS SessionPlayer_profile_update_guard`;
   await db.sessionPlayer.update({ where: { sessionId_playerId: { sessionId: "s", playerId: "p1" } }, data: { profileClubId: null, participantAccountId: null } });
   await tx(t => expect(assertSessionProfileContextsUnambiguous(t, { id: "s", clubId: "a", ratingPolicyVersion: 1 })).rejects.toThrow("ambiguous"));
   const created = await create(new Request("http://localhost/api/sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Pending partner", clubId: "a", partnerClubId: "b", playerIds: ["p1", "p2", "p3"], playerConfigs: [{ playerId: "p1", profileClubId: "b" }, { playerId: "p2", profileClubId: "a" }, { playerId: "p3", profileClubId: "b" }], guestNames: ["Guest"], courtCount: 1 }) }));
-  expect(created.status, JSON.stringify(await created.clone().json())).toBe(200);
-  const body = await created.json(); expect(body.ratingPolicyVersion).toBe(2); expect(body.status).toBe("WAITING");
-  expect(await db.sessionPlayer.findFirst({ where: { sessionId: body.id, playerId: "p1" } })).toMatchObject({ profileClubId: "b", participantAccountId: "owner" });
+  expect(created.status, JSON.stringify(await created.clone().json())).toBe(403);
+  expect(await created.json()).toMatchObject({ error: "Each club adds its own players after accepting the invitation" });
+  const hostOnly = await create(new Request("http://localhost/api/sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Pending partner", clubId: "a", partnerClubId: "b", playerIds: ["p2"], courtCount: 1 }) }));
+  expect(hostOnly.status, JSON.stringify(await hostOnly.clone().json())).toBe(200);
+  const body = await hostOnly.json(); expect(body.ratingPolicyVersion).toBe(2); expect(body.collaborationVersion).toBe(2); expect(body.status).toBe("WAITING");
+  expect(await db.sessionPlayer.findFirst({ where: { sessionId: body.id, playerId: "p2" } })).toMatchObject({ profileClubId: "a", representingClubId: "a" });
+  expect(await db.sessionPlayer.count({ where: { sessionId: body.id } })).toBe(1);
   expect(await db.sessionClub.findFirst({ where: { sessionId: body.id, clubId: "b" } })).toMatchObject({ status: "PENDING" });
 });
 

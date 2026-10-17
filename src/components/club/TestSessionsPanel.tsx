@@ -7,6 +7,7 @@ import type { ClubPageSession } from "./clubTypes";
 
 interface TestSessionsPanelProps {
   sessions: ClubPageSession[];
+  isTutorial?: boolean;
   currentUserId?: string | null;
   currentClubId: string;
   canReviewCollabs: boolean;
@@ -19,6 +20,7 @@ interface TestSessionsPanelProps {
 
 export function TestSessionsPanel({
   sessions,
+  isTutorial = false,
   currentUserId,
   currentClubId,
   canReviewCollabs,
@@ -30,10 +32,10 @@ export function TestSessionsPanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="app-section-eyebrow">
-            Test Tournaments
+            {isTutorial ? "Practice sessions" : "Legacy test sessions"}
           </h3>
           <p className="mt-1 text-xs font-semibold text-gray-500">
-            Rehearsals kept separate from real tournament history
+            {isTutorial ? "Guided practice" : "Existing rehearsals kept separate from session history"}
           </p>
         </div>
         <span className="app-chip app-chip-neutral">{sessions.length} total</span>
@@ -43,7 +45,7 @@ export function TestSessionsPanel({
         {sessions.length === 0 ? (
           <div className="app-empty p-4 text-center">
             <p className="text-sm font-semibold text-gray-500">
-              No test tournaments
+              {isTutorial ? "No practice sessions" : "No legacy test sessions"}
             </p>
           </div>
         ) : (

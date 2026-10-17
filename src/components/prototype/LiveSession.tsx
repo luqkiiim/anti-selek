@@ -30,7 +30,7 @@ import {
   MixedSide,
   PlayerGender,
 } from "@/types/enums";
-import { api, useResource, useAction } from "./api";
+import { api, ApiError, useResource, useAction } from "./api";
 import { useSessionController } from "./useSessionController";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { SessionJoinProfilePanel } from "@/components/session/SessionJoinProfilePanel";
@@ -64,6 +64,8 @@ import {
 } from "@/app/session/[code]/sessionDataMutations";
 import { MatchStatus } from "@/types/enums";
 import { saveScoreWithBackgroundRefresh } from "./scoreSave";
+import { ClubCollaboration, useClubCollaboration } from "./ClubCollaboration";
+import { SeriesScoreEditor } from "./SeriesScoreEditor";
 import { CourtPairingDetails } from "./CourtPairingDetails";
 type LiveSettingsDraft = {
   autoQueueEnabled: boolean;
@@ -150,6 +152,13 @@ export default function LiveSession({
   const [queuedMatchOverlay, setQueuedMatchOverlay] = useState<QueuedMatchOverlay | null>(null);
   const pauseRequestsRef = useRef(new Set<string>());
   const rawSession = resource.data;
+  const isCollaboration = rawSession?.collaborationVersion === 2 && (rawSession.clubs?.length ?? 0) > 1;
+  const collaboration = useClubCollaboration(code, !!isCollaboration && !globalClubId);
+  const lineupMode = !!isCollaboration && rawSession?.schedulingMode === "LINEUP";
+  const manageableClubIds = isCollaboration ? collaboration.data?.capabilities.manageClubIds ?? [] : undefined;
+  const mayManagePlayer = (player: SessionData["players"][number]) => !isCollaboration || !!manageableClubIds?.includes(player.representingClubId ?? player.profileClubId ?? rawSession?.clubId ?? "");
+  const canManageRoster = !globalClubId && !rawSession?.viewerIsQuickAccess && (isCollaboration ? !!manageableClubIds?.length : !!rawSession?.viewerCanManage);
+  const [acknowledgeRemainingLineup, setAcknowledgeRemainingLineup] = useState(false);
   const s = useMemo(
     () => rawSession && queuedMatchOverlay
       ? { ...rawSession, queuedMatch: queuedMatchOverlay.queuedMatch }
@@ -169,7 +178,7 @@ export default function LiveSession({
     [confirmingMatchIds, setConfirmingMatchIds] = useState<Set<string>>(() => new Set()),
     [savingScoreMatchIds, setSavingScoreMatchIds] = useState<Set<string>>(() => new Set()),
     [scoreErrors, setScoreErrors] = useState<Record<string, string>>({}),
-    [scores, setScores] = useState<Record<string, [string, string]>>({}),
+    [scores, setScores] = useState<Record<string, { values: [string, string]; revision: number }>>({}),
     [courtControlId, setCourtControlId] = useState<string | null>(null),
     [courtPlayerAction, setCourtPlayerAction] = useState<CourtPlayerAction | null>(null),
     [confirmation, setConfirmation] = useState<ControlConfirmation | null>(null),
@@ -209,7 +218,7 @@ export default function LiveSession({
     }
   }, [s, globalClubId]);
   async function refresh() {
-    await Promise.all([resource.refresh(), standings.refresh()]);
+    await Promise.all([resource.refresh(), standings.refresh(), collaboration.refresh()]);
   }
   const action = useAction(refresh);
   const refreshSession=resource.refresh,refreshStandings=standings.refresh;
@@ -245,10 +254,10 @@ export default function LiveSession({
         void refreshSession().catch(() => {});
         void refreshStandings().catch(() => {});
       }
-    }, 15000);
+    }, isCollaboration ? 2000 : 15000);
     return () => clearInterval(timer);
-  }, [refreshSession, refreshStandings, action.busy, savingScoreMatchIds]);
-  const canManage = !globalClubId && !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
+  }, [refreshSession, refreshStandings, action.busy, savingScoreMatchIds, isCollaboration]);
+  const canManage = !globalClubId && !s?.viewerIsQuickAccess && (isCollaboration ? !!collaboration.data?.capabilities.host : !!s?.viewerCanManage);
   const canJoin = !!s && !globalClubId && !s.viewerIsQuickAccess && !s.selectedSelf && !!s.eligibleProfiles?.length && s.status !== "COMPLETED";
   const ended = s?.status === "COMPLETED";
   const sessionPlayerById = new Map(s?.players.map((player) => [player.userId, player]) ?? []);
@@ -260,12 +269,12 @@ export default function LiveSession({
   const viewerPlayerId = s?.viewerPlayerId ?? s?.selectedSelf?.playerId ?? "";
   function maySubmitScore(match: Match) {
     return !globalClubId && !s?.viewerIsQuickAccess && match.status === MatchStatus.IN_PROGRESS &&
-      (canManage || playersInMatch(match).some(p => p.id === viewerPlayerId));
+      (canManageRoster || playersInMatch(match).some(p => p.id === viewerPlayerId));
   }
   function mayApproveScore(match: Match) {
     return !globalClubId && !s?.viewerIsQuickAccess && match.status === MatchStatus.PENDING_APPROVAL && canApprovePendingSubmission({
       match: { team1User1Id: match.team1User1.id, team1User2Id: match.team1User2.id, team2User1Id: match.team2User1.id, team2User2Id: match.team2User2.id },
-      approverUserId: s?.viewerUserId ?? "", approverPlayerId: viewerPlayerId, approverIsAdmin: canManage,
+      approverUserId: s?.viewerUserId ?? "", approverPlayerId: viewerPlayerId, approverIsAdmin: canManageRoster,
       approverIsClaimed: true, scoreSubmittedByUserId: match.scoreSubmittedByUserId, scoreSubmittedByPlayerId: match.scoreSubmittedByPlayerId,
     });
   }
@@ -273,7 +282,9 @@ export default function LiveSession({
     if (savingScoreMatchIdsRef.current.has(match.id)) return;
     setMatchSaving(match.id, true);
     try {
-      const response = await api<ScoreSaveResponse>(`/api/matches/${encodeURIComponent(match.id)}/${operation}`, "POST");
+      const response = match.scoringFormat === "BEST_OF_THREE"
+        ? await api<ScoreSaveResponse>(`/api/matches/${encodeURIComponent(match.id)}/${operation}`, "POST", {scoreRevision:match.scoreRevision??0})
+        : await api<ScoreSaveResponse>(`/api/matches/${encodeURIComponent(match.id)}/${operation}`, "POST");
       if (operation === "approve") setQueuedMatchOverlay(null);
       resource.update(current => operation === "reopen" ? applyScoreReopen(current, response) : applyQueuedMatch(
         response.autoAssignedMatch ? applyGeneratedMatches(applyScoreApproval(current, response), [response.autoAssignedMatch]) : applyScoreApproval(current, response), response.queuedMatch ?? null));
@@ -382,7 +393,7 @@ export default function LiveSession({
       m.team2Score === 0 &&
       !m.completedAt;
     return (
-      scores[m.id] ?? [
+      scores[m.id]?.values ?? [
         freshMatch || m.team1Score == null ? "" : String(m.team1Score),
         freshMatch || m.team2Score == null ? "" : String(m.team2Score),
       ]
@@ -410,13 +421,13 @@ export default function LiveSession({
       delete next[m.id];
       return next;
     });
-    const value = v.replace(/\D/g, "").slice(0, 2);
+    const value = v.replace(/\D/g, "").slice(0, isCollaboration ? 16 : 2);
     setScores((prev) => {
       const next: [string, string] = [...score(m)];
       next[i] = value;
-      return { ...prev, [m.id]: next };
+      return { ...prev, [m.id]: { values: next, revision: prev[m.id]?.revision ?? m.scoreRevision ?? 0 } };
     });
-    if (autoAdvance && i === 0 && value.length === 2) {
+    if (!isCollaboration && autoAdvance && i === 0 && value.length === 2) {
       requestAnimationFrame(() => {
         scoreRefs.current[`${autoAdvance === "sheet" ? "sheet" : m.id}-1`]?.focus();
       });
@@ -532,10 +543,10 @@ export default function LiveSession({
     const values = score(match).map(Number);
     if (
       score(match).some((v) => v.trim() === "") ||
-      values.some((v) => !Number.isInteger(v) || v < 0 || v > 99) ||
+      values.some((v) => !Number.isSafeInteger(v) || v < 0 || (!isCollaboration && v > 99)) ||
       values[0] === values[1]
     )
-      throw new Error("Enter unequal whole scores from 0 to 99.");
+      throw new Error(isCollaboration ? "Enter unequal, nonnegative whole scores." : "Enter unequal whole scores from 0 to 99.");
     return values;
   }
   function confirmScore(match: Match) {
@@ -568,7 +579,7 @@ export default function LiveSession({
         () => api<ScoreSaveResponse>(
           "/api/matches/" + match.id + "/score",
           "POST",
-          { team1Score: values[0], team2Score: values[1] },
+          { team1Score: values[0], team2Score: values[1], ...(match.scoreRevision !== undefined ? {scoreRevision:scores[match.id]?.revision ?? match.scoreRevision} : {}) },
         ),
         (response) => {
           if (response.status === MatchStatus.COMPLETED) {
@@ -596,6 +607,11 @@ export default function LiveSession({
         () => Promise.all([refreshSession(), refreshStandings()]),
       );
     } catch (error) {
+      if (isCollaboration && error instanceof ApiError && error.status === 409) {
+        setScores(current=>{const next={...current};delete next[match.id];return next;});
+        setMatchConfirmation(match.id,false);
+        await refresh();
+      }
       setScoreErrors((previous) => ({
         ...previous,
         [match.id]: error instanceof Error ? error.message : "Unable to save score.",
@@ -939,6 +955,7 @@ export default function LiveSession({
             void resource.refresh().catch(() => {});
           }} />}
           {canJoin && s?.status === "ACTIVE" && tab === "Courts" && <button className="secondary full" onClick={() => setTab("Players")}>Join session</button>}
+          {s && isCollaboration && !globalClubId && (s.status === "WAITING" || tab === "Courts" || ended) && <ClubCollaboration session={s} data={collaboration.data} error={collaboration.error} onChanged={refresh} onManagePlayers={() => setManagePlayersOpen(true)} onReset={() => setSheet("reset")} />}
           {s && ended ? (
             <>
               {standings.data ? (
@@ -972,6 +989,8 @@ export default function LiveSession({
             <SessionStandbyView
               session={s}
               canManage={canManage}
+              canManagePlayers={canManageRoster}
+              startBlocked={!!isCollaboration && (!collaboration.data || collaboration.data.clubs.filter(club=>club.status === "ACCEPTED").length !== 2 || !collaboration.data.clubs.filter(club=>club.status === "ACCEPTED").every(club=>club.rulesConfirmedRevision === collaboration.data?.rulesRevision))}
               busy={action.busy}
               onSettings={openLiveSettings}
               onManagePlayers={() => setManagePlayersOpen(true)}
@@ -994,9 +1013,9 @@ export default function LiveSession({
                 </small>
               </div>
               <InterclubScoreboard session={s} />
-              {canManage && (creatableOpenCourtIds.length > 0 || canQueueNextMatch) && (
+              {canManage && !lineupMode && (creatableOpenCourtIds.length > 0 || canQueueNextMatch) && (
                 <SessionMatchCreationToolbar
-                  isHost={canManage}
+                  isHost={canManage && !lineupMode}
                   isActive={s.status === "ACTIVE"}
                   hasQueuedMatch={!!s.queuedMatch}
                   creatableOpenCourtIds={creatableOpenCourtIds}
@@ -1033,7 +1052,7 @@ export default function LiveSession({
                         ].map((team, i) => (
                           <div className="team-row" key={i}>
                             <div className="team-players">
-                              {team.map((player) => canManage ? (
+                              {team.map((player) => canManage && !lineupMode ? (
                                 <button
                                   type="button"
                                   className="match-player court-player-action"
@@ -1052,7 +1071,7 @@ export default function LiveSession({
                                 </span>
                               ))}
                             </div>
-                            {maySubmitScore(match) ? (
+                            {match.scoringFormat === "BEST_OF_THREE" ? null : maySubmitScore(match) ? (
                               <>
                                 <input
                                   ref={(node) => {
@@ -1061,7 +1080,7 @@ export default function LiveSession({
                                   type="text"
                                   inputMode="numeric"
                                   pattern="[0-9]*"
-                                  maxLength={2}
+                                  maxLength={isCollaboration ? 16 : 2}
                                   aria-label={"Team " + (i + 1) + " score"}
                                   disabled={savingScoreMatchIds.has(match.id)}
                                   value={score(match)[i]}
@@ -1077,8 +1096,9 @@ export default function LiveSession({
                             )}
                           </div>
                         ))}
+                        {match.scoringFormat === "BEST_OF_THREE" && <SeriesScoreEditor key={match.id} match={match} canEdit={maySubmitScore(match)} onSaved={refresh} />}
                         <ErrorText error={scoreErrors[match.id] ?? ""} />
-                        {maySubmitScore(match) && (
+                        {maySubmitScore(match) && match.scoringFormat !== "BEST_OF_THREE" && (
                           <button
                             className="primary"
                             disabled={action.busy || savingScoreMatchIds.has(match.id)}
@@ -1091,13 +1111,13 @@ export default function LiveSession({
                         {match.status === MatchStatus.PENDING_APPROVAL && <div className="pending-score-actions">
                           <p role="status">Waiting for score approval</p>
                           {mayApproveScore(match) && <button className="primary" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(match, "approve")}>Approve score</button>}
-                          {canManage && <button className="secondary full" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(match, "reopen")}>Edit score</button>}
+                          {canManageRoster && <button className="secondary full" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(match, "reopen")}>Edit score</button>}
                         </div>}
                       </>
                     ) : (
                       <>
                         <CourtMatchCreateMenu
-                          isHost={canManage}
+                          isHost={canManage && !lineupMode}
                           isActive={s.status === "ACTIVE"}
                           court={court}
                           players={s.players}
@@ -1140,7 +1160,7 @@ export default function LiveSession({
                   <DotsThree size={23} />
                 </button>
               )}
-              {canManage && !queued && s.courts.length > 0 && s.courts.every((court) => !!court.currentMatch) && s.players.filter((player) => !player.isPaused && !playingCourtFor(player.userId)).length >= 4 && (
+              {canManage && !lineupMode && !queued && s.courts.length > 0 && s.courts.every((court) => !!court.currentMatch) && s.players.filter((player) => !player.isPaused && !playingCourtFor(player.userId)).length >= 4 && (
                 <button
                   className="secondary full"
                   onClick={() => startManual({ kind: "queue", replaceQueuedMatch: false })}
@@ -1157,7 +1177,7 @@ export default function LiveSession({
                   {s.players.filter((p) => isRosterPlayerPaused(p)).length} taking a break
                 </small>
               </div>
-              {canManage && (
+              {canManageRoster && (isCollaboration ? <button className="primary full" onClick={() => setManagePlayersOpen(true)}>Manage my club’s players</button> : (
                 <div className="button-pair">
                   <button
                     className="primary"
@@ -1177,7 +1197,7 @@ export default function LiveSession({
                     Manage players
                   </button>
                 </div>
-              )}
+              ))}
               <div className="roster">
                 {activePlayers.map((p) => {
                   const isPaused = isRosterPlayerPaused(p);
@@ -1189,7 +1209,7 @@ export default function LiveSession({
                         <small>{playerStatus(p)} · {p.user.elo}</small>
                       </span>
                       {ownsSessionSeat(p) && <button className="icon-button" aria-label={`Rest options for ${p.user.name}`} onClick={() => { setRestPlayerId(p.userId); setSheet("self-rest"); }}><DotsThree size={20} /></button>}
-                      {(canManage || ownsSessionSeat(p)) && (
+                      {((canManageRoster && mayManagePlayer(p)) || ownsSessionSeat(p)) && (
                         <button
                           className="icon-button"
                           aria-label={
@@ -1219,7 +1239,7 @@ export default function LiveSession({
                           <strong>{p.user.name}</strong>
                           <small>{playerStatus(p)}</small>
                         </span>
-                        {(canManage || ownsSessionSeat(p)) && (
+                        {((canManageRoster && mayManagePlayer(p)) || ownsSessionSeat(p)) && (
                           <button
                             className="icon-button"
                             aria-label={`Resume ${p.user.name}`}
@@ -1634,7 +1654,7 @@ export default function LiveSession({
                       </div>
                     </details>
                   ) : null}
-                  {s.status === "ACTIVE" && canManage ? (
+                  {s.status === "ACTIVE" && canManage && !isCollaboration ? (
                     <button
                       type="button"
                       className="secondary full danger-outline"
@@ -1654,7 +1674,7 @@ export default function LiveSession({
               <button
                 type="button"
                 className="secondary full danger-outline"
-                disabled={action.busy}
+                disabled={action.busy || (!!isCollaboration && (!collaboration.data?.capabilities.host || !collaboration.data.clubs.filter(club=>club.status === "ACCEPTED").every(club=>club.resetConfirmedRevision === collaboration.data?.resultsRevision)))}
                 onClick={resetSession}
               >
                 {action.busy ? "Resetting session…" : "Reset session"}
@@ -1675,12 +1695,15 @@ export default function LiveSession({
                   to keep them.
                 </p>
               )}
+              {lineupMode && collaboration.data?.lineup.some(row=>!row.cancelled&&!row.matchId) && <label className="setup-toggle"><span>Acknowledge remaining unplayed matches</span><input type="checkbox" checked={acknowledgeRemainingLineup} onChange={e=>setAcknowledgeRemainingLineup(e.target.checked)} /></label>}
               <button
                 className="primary"
+                disabled={lineupMode && (!acknowledgeRemainingLineup && !!collaboration.data?.lineup.some(row=>!row.cancelled&&!row.matchId) || !!s?.courts.some(court=>court.currentMatch))}
                 onClick={() =>
                   void action.run(
                     async () => {
-                      await api(endpoint + "/end", "POST");
+                      if (lineupMode) await api(endpoint + "/end", "POST", {acknowledgeRemainingLineup});
+                      else await api(endpoint + "/end", "POST");
                       setCelebrateFinish(true);
                     },
                     async () => {
@@ -1770,7 +1793,7 @@ export default function LiveSession({
                   >
                     Details
                   </button>
-                  {canManage && <>
+                  {canManage && !lineupMode && <>
                   <button
                     type="button"
                     className="court-action-row"
@@ -1790,7 +1813,7 @@ export default function LiveSession({
                   </>}
                 </div>
               </>
-            ) : canManage ? (
+            ) : canManage && !lineupMode ? (
               <>
                 <p className="control-intro">Set a specific 2v2 lineup for this open court.</p>
                 <button
@@ -1985,9 +2008,10 @@ export default function LiveSession({
       {s && <LivePlayerManagement
         code={code}
         session={s}
-        open={managePlayersOpen && canManage && !ended}
+        open={managePlayersOpen && canManageRoster && !ended}
         onClose={() => setManagePlayersOpen(false)}
         onChanged={refresh}
+        manageableClubIds={manageableClubIds}
       />}
     </div>
   );

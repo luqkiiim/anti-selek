@@ -62,12 +62,13 @@ function queuedMatch(isAutomatic: boolean) {
 
 function setupTransaction(queue: ReturnType<typeof queuedMatch>) {
   const tx = {
+    session: { findUnique: vi.fn().mockResolvedValue({ id: "session-1", collaborationVersion: 1, status: "ACTIVE" }) },
     match: { findFirst: vi.fn().mockResolvedValue(null) },
     queuedMatch: {
       findUnique: vi.fn().mockResolvedValue(queue),
       delete: vi.fn().mockResolvedValue({}),
     },
-    sessionPlayer: { delete: vi.fn().mockResolvedValue({}) },
+    sessionPlayer: { findUnique: vi.fn().mockResolvedValue({ hasStartedMatch: false }), delete: vi.fn().mockResolvedValue({}) },
   };
   mocks.transaction.mockImplementation(async (callback) => callback(tx));
   return tx;

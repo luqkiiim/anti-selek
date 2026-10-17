@@ -27,6 +27,9 @@ export interface MatchmakerLadderPlayer extends LadderRecord {
 }
 
 export interface LadderHistoryMatch {
+  winnerTeam?: number | null;
+  scoringFormat?: string;
+  gameScoresJson?: string | null;
   team1: [string, string];
   team2: [string, string];
   team1Score?: number | null;

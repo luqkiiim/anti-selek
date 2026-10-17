@@ -1,3 +1,4 @@
+import { assertCollaborationPermission, collaborationEvent, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
@@ -44,6 +45,7 @@ export async function POST(
         id: true,
         clubId: true,
         isTest: true,
+        collaborationVersion: true,
         status: true,
       },
     });
@@ -74,6 +76,14 @@ export async function POST(
     const resetAt = new Date();
     const updatedSession = await admissionTransaction(prisma, async (tx) => {
       await assertSessionMutationActor(tx, { session: targetSession, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      if (isUpgradedCollaboration(targetSession)) {
+        const {session: current} = await assertCollaborationPermission(tx,{sessionId:targetSession.id,userId:session.user.id,isGlobalAdmin:!!session.user.isAdmin,kind:"host"});
+        if(current.status!=="ACTIVE"||current.sessionClubs.length!==2||current.sessionClubs.some(c=>c.status!=="ACCEPTED"||c.resetConfirmedRevision!==current.resultsRevision)) throw new IdentityConflictError("Both clubs must approve resetting the current results.");
+        await collaborationEvent(tx,current.id,session.user.id,"SESSION_RESET",{resultsRevision:current.resultsRevision});
+        await tx.sessionLineupRow.updateMany({where:{sessionId:current.id},data:{matchId:null,revision:{increment:1},hostConfirmedRevision:null,partnerConfirmedRevision:null}});
+        await tx.sessionClub.updateMany({where:{sessionId:current.id},data:{rulesConfirmedRevision:null,resetConfirmedRevision:null}});
+        await tx.session.update({where:{id:current.id},data:{resultsRevision:{increment:1},rulesRevision:{increment:1}}});
+      }
       if (!targetSession.isTest) {
         await reverseSessionEloChanges(tx, {
           sessionId: targetSession.id,
@@ -110,6 +120,7 @@ export async function POST(
         where: { sessionId: targetSession.id },
         data: {
           sessionPoints: 0,
+          hasStartedMatch: false,
           lastPartnerPlayerId: null,
           isPaused: false,
           matchesPlayed: 0,
@@ -233,9 +244,8 @@ export async function POST(
       queuedMatch: null,
     });
   } catch (error) {
-    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
-    logError("Reset test session error", error);
+    logError("Reset session error", error);
     return safeErrorResponse();
   }
 }

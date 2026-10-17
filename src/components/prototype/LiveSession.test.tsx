@@ -244,6 +244,23 @@ describe("LiveSession score and player controls", () => {
     expect(Array.from(container.querySelectorAll("nav[aria-label='Session tabs'] button")).map(button => button.textContent)).toEqual(["Players", "Courts", "Standings"]);
   });
 
+  it("keeps the original score revision with an unsaved draft across shared refreshes", async () => {
+    const currentMatch = { ...match("match-1", 1, 0, 0), scoreRevision: 2 };
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]);
+    setup(session);
+    const render = () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />);
+    await act(async () => render());
+    const inputs = container.querySelectorAll<HTMLInputElement>('.court-card input[aria-label$="score"]');
+    await act(async () => setInputValue(inputs[0], "21"));
+    await act(async () => setInputValue(inputs[1], "19"));
+    currentMatch.scoreRevision = 3;
+    await act(async () => render());
+    const save = container.querySelector<HTMLButtonElement>(".court-card .primary")!;
+    await act(async () => save.click());
+    await act(async () => save.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/matches/match-1/score", "POST", { team1Score: 21, team2Score: 19, scoreRevision: 2 });
+  });
+
   it("clears an approved court as soon as the score POST resolves, while refreshes remain pending", async () => {
     const currentMatch = match("match-1", 1, 0, 0);
     const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]);

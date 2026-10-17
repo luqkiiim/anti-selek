@@ -46,6 +46,7 @@ function createTransactionMock() {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     session: {
+      update: vi.fn().mockResolvedValue({}),
       findUnique: vi.fn().mockResolvedValue({ poolsEnabled: true }),
     },
     sessionPlayer: {
@@ -80,6 +81,16 @@ describe("player-group assignment lifecycle", () => {
       appliedUserIds: [],
       automaticQueueInvalidated: false,
     });
+  });
+
+  it("snapshots the current scoring format and freezes participation even if the match is later undone", async () => {
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({ poolsEnabled: false, scoringFormat: "BEST_OF_THREE", collaborationVersion: 2 } as never);
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    const [match] = await createMatchesForAssignments("session-1", [{ courtId: "court-1", selectedIds: [...partition.team1, ...partition.team2], partition }]);
+    expect(match.scoringFormat).toBe("BEST_OF_THREE");
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({ where: { sessionId: "session-1", playerId: { in: [...partition.team1, ...partition.team2] } }, data: { hasStartedMatch: true } });
+    expect(tx.session.update).toHaveBeenCalledWith({ where: { id: "session-1" }, data: { resultsRevision: { increment: 1 } } });
   });
 
   it("revalidates and persists the planner snapshot inside the transaction", async () => {

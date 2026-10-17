@@ -56,6 +56,7 @@ function mockTransactions({
   const deleteQueued = vi.fn();
 
   const tx = {
+    session: { findUnique: vi.fn().mockResolvedValue({ id: "session-1", collaborationVersion: 1, status: "ACTIVE" }) },
     queuedMatch: {
       findUnique: vi.fn().mockResolvedValue(queuedMatch),
       delete: deleteQueued,

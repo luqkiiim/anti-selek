@@ -5,7 +5,7 @@ import type {
   ClubAdminClaimRequest,
   ClubAdminClub,
 } from "@/components/club-admin/clubAdminTypes";
-import { deleteClubAvatar, uploadClubAvatar } from "@/lib/avatarClient";
+import { useAdminRefresh } from "./useAdminRefresh";
 import { safeJson } from "./clubAdminApi";
 
 interface ClubAdminRouter {
@@ -19,7 +19,8 @@ interface PendingClubAction {
 export function useClubAdminClubActions({
   clubId,
   club,
-  refreshClubData,
+  refreshClubData: refresh,
+  onMutationStart,
   router,
   setError,
   setSuccess,
@@ -27,10 +28,12 @@ export function useClubAdminClubActions({
   clubId: string;
   club: ClubAdminClub | null;
   refreshClubData: () => Promise<void>;
+  onMutationStart?: () => void;
   router: ClubAdminRouter;
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
 }) {
+  const { refreshClubData, refreshWarning, refreshing, retryRefresh, uncertain, request, guard } = useAdminRefresh(refresh, onMutationStart);
   const [clubNameInput, setClubNameInput] = useState("");
   const [clubPasswordInput, setClubPasswordInput] = useState("");
   const [clubPasswordProtectionEnabled, setClubPasswordProtectionEnabled] =
@@ -117,7 +120,7 @@ export function useClubAdminClubActions({
         body.password = nextPassword;
       }
 
-      const res = await fetch(`/api/clubs/${clubId}`, {
+      const res = await request(`/api/clubs/${clubId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -129,7 +132,7 @@ export function useClubAdminClubActions({
 
       setClubPasswordInput("");
       setSuccess("Club settings updated.");
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Failed to update club"
@@ -146,9 +149,11 @@ export function useClubAdminClubActions({
     setSuccess("");
 
     try {
-      await uploadClubAvatar(clubId, file);
+      const body = new FormData();
+      body.append("avatar", file);
+      await request(`/api/clubs/${clubId}/avatar`, { method: "POST", body });
       setSuccess("Club profile picture updated.");
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Failed to update club photo"
@@ -164,9 +169,9 @@ export function useClubAdminClubActions({
     setSuccess("");
 
     try {
-      await deleteClubAvatar(clubId);
+      await request(`/api/clubs/${clubId}/avatar`, { method: "DELETE" });
       setSuccess("Club profile picture removed.");
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Failed to remove club photo"
@@ -205,8 +210,8 @@ export function useClubAdminClubActions({
       setResettingClub(true);
       try {
         const res = club?.isTutorial
-          ? await fetch("/api/tutorial-playground/reset", { method: "POST" })
-          : await fetch(`/api/clubs/${clubId}/reset`, {
+          ? await request("/api/tutorial-playground/reset", { method: "POST" })
+          : await request(`/api/clubs/${clubId}/reset`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ confirmation: "RESET" }),
@@ -228,7 +233,7 @@ export function useClubAdminClubActions({
         );
         setPendingClubAction(null);
         setClubActionConfirmationValue("");
-        await refreshClubData();
+        refreshClubData();
         return true;
       } catch (err: unknown) {
         setError(
@@ -246,7 +251,7 @@ export function useClubAdminClubActions({
 
     setDeletingClub(true);
     try {
-      const res = await fetch(`/api/clubs/${clubId}`, {
+      const res = await request(`/api/clubs/${clubId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation: "DELETE" }),
@@ -279,7 +284,7 @@ export function useClubAdminClubActions({
     setSuccess("");
 
     try {
-      const res = await fetch(
+      const res = await request(
         `/api/clubs/${clubId}/claim-requests/${claimRequest.id}`,
         {
           method: "PATCH",
@@ -297,7 +302,7 @@ export function useClubAdminClubActions({
           ? `Approved ${claimRequest.requesterName}'s claim for ${claimRequest.targetName}.`
           : `Rejected ${claimRequest.requesterName}'s claim for ${claimRequest.targetName}.`
       );
-      await refreshClubData();
+      refreshClubData();
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Failed to review claim request"
@@ -308,6 +313,7 @@ export function useClubAdminClubActions({
   };
 
   return {
+    refreshWarning, refreshing, retryRefresh, uncertain,
     clubNameInput,
     setClubNameInput,
     clubPasswordInput,
@@ -322,12 +328,12 @@ export function useClubAdminClubActions({
     clubActionConfirmationValue,
     setClubActionConfirmationValue,
     handleResetClub,
-    handleUpdateClubSettings,
-    handleUploadClubAvatar,
-    handleRemoveClubAvatar,
+    handleUpdateClubSettings: guard(handleUpdateClubSettings),
+    handleUploadClubAvatar: guard(handleUploadClubAvatar, true),
+    handleRemoveClubAvatar: guard(handleRemoveClubAvatar, true),
     handleDeleteClub,
     closePendingClubAction,
-    confirmPendingClubAction,
-    handleReviewClaimRequest,
+    confirmPendingClubAction: guard(confirmPendingClubAction),
+    handleReviewClaimRequest: guard(handleReviewClaimRequest),
   };
 }

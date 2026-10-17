@@ -1,4 +1,5 @@
-import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { collaborationEvent, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
+import { assertScopedSessionMutation } from "../players/collaborationPermissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { sportingJson } from "@/lib/sportingResponse";
@@ -224,8 +225,10 @@ export async function POST(
       shouldResetResumeQueue && sessionData.status === SessionStatus.ACTIVE;
 
     const { nextPlayer, queuedMatchAffected } = await admissionTransaction(prisma, async (tx) => {
-      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId: isCourtPause ? undefined : playerId });
+      await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId, availability: !isCourtPause, hostOnly: isCourtPause });
       if (courtPauseTarget) {
+        const freshScheduling = await tx.session.findUnique({ where: { id: sessionData.id }, select: { collaborationVersion: true, schedulingMode: true } });
+        if (freshScheduling && isUpgradedCollaboration(freshScheduling) && freshScheduling.schedulingMode === "LINEUP") throw new CourtPauseConflictError("Undo the lineup match first, then pause this player.");
         const clearedCourt = await tx.court.updateMany({
           where: {
             id: courtPauseTarget.courtId,
@@ -258,6 +261,10 @@ export async function POST(
           throw new CourtPauseConflictError(
             "This court match has changed. Refresh and try again."
           );
+        }
+        if (freshScheduling && isUpgradedCollaboration(freshScheduling)) {
+          await tx.session.update({ where: { id: sessionData.id }, data: { resultsRevision: { increment: 1 } } });
+          await collaborationEvent(tx, sessionData.id, session.user.id, "pauseCourtPlayer", { playerId, matchId: courtPauseTarget.currentMatchId });
         }
       }
 

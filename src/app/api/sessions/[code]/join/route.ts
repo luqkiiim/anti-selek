@@ -1,3 +1,5 @@
+import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
+import { assertScopedSessionMutation } from "../players/collaborationPermissions";
 import { assertSessionProfileContextsUnambiguous } from "@/lib/sessionProfileIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
 import { resolveSessionProfilePair, assertSessionAccountSeatAvailable, withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
@@ -253,6 +255,9 @@ export async function POST(
       if (!freshSession || freshSession.status === SessionStatus.COMPLETED) throw new IdentityConflictError("Tournament already ended");
       await assertSessionProfileContextsUnambiguous(tx, sessionData);
       const pair = await resolveSessionProfilePair(tx, { userId: session.user.id, clubIds: await getAcceptedSessionClubIds(tx, sessionData), playerId: playerIdToJoin, profileClubId: chosenPair.profileClubId, isGlobalAdmin: !!session.user.isAdmin });
+      if (isUpgradedCollaboration(sessionData)) {
+        await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, clubId: pair.profileClubId });
+      }
       await assertSessionAccountSeatAvailable(tx, sessionData.id, pair);
       const freshMixedState = hasMixedSideOverrideInput || hasPartnerPreferenceInput || hasOverrideGender
         ? resolvedMixedState

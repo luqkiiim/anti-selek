@@ -65,7 +65,7 @@ export function getHostSessionOnboardingOverride({
     return {
       stepId: "host-session",
       targetId: "admin-onboarding-host-players",
-      coachmark: "Next, press Add players and select who will play in this test tournament.",
+      coachmark: "Next, press Add players and select who will play in this practice tournament.",
       actionLabel: "Choose players",
     };
   }
@@ -73,8 +73,8 @@ export function getHostSessionOnboardingOverride({
   return {
     stepId: "host-session",
     targetId: "admin-onboarding-create-session",
-    coachmark: "Now the setup is ready. Press Create Test Tournament to open the live tournament.",
-    actionLabel: "Create test tournament",
+    coachmark: "Now the setup is ready. Press Create Tournament to open the live tournament.",
+    actionLabel: "Create practice tournament",
   };
 }
 
@@ -178,12 +178,12 @@ export function buildAdminOnboardingProgress({
     },
     {
       id: "host-session",
-      title: "Create a test tournament",
-      detail: "Use the Host flow to create your own test tournament inside the playground.",
+      title: "Create a practice tournament",
+      detail: "Use the Host flow to create your own practice tournament inside the playground.",
       actionLabel: "Open host setup",
       href: hostHref,
       targetId: "admin-onboarding-create-session",
-      coachmark: "Name a practice tournament, keep it as a test tournament, then create it.",
+      coachmark: "Name a practice tournament, choose players, then create it.",
       manual: false,
     },
     {
@@ -212,7 +212,7 @@ export function buildAdminOnboardingProgress({
     },
     {
       id: "end-session",
-      title: "End the test tournament",
+      title: "End the practice tournament",
       detail: "Close the practice tournament once scoring is done to see final standings.",
       actionLabel: "Open tournament settings",
       href: primarySessionCode ? `${sessionHref}#settings` : hostHref,

@@ -53,6 +53,10 @@ export interface NormalizedGuestConfig {
 }
 
 export interface ParsedCreateSessionRequest {
+  collaborationVersion: number;
+  schedulingMode: "FREE_PLAY" | "LINEUP";
+  scoringFormat: "SINGLE_GAME" | "BEST_OF_THREE";
+  ratingMode: "RATED" | "UNRATED";
   name: string;
   type: SessionType;
   mode: SessionMode;

@@ -1,5 +1,6 @@
+import { assertCollaborationPermission, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
-import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { assertScopedSessionMutation } from "../players/collaborationPermissions";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
@@ -8,6 +9,7 @@ import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPr
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import {
   GenerateMatchError,
+  assertFreePlayScheduling,
   loadSessionRecord,
 } from "../generate-match/shared";
 import {
@@ -97,6 +99,8 @@ export async function POST(
       session.user.id,
       !!session.user.isAdmin
     );
+    if (isUpgradedCollaboration(sessionData)) await assertCollaborationPermission(prisma, { sessionId: sessionData.id, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, kind: "host" });
+    assertFreePlayScheduling(sessionData);
     Object.assign(sessionData, { mutationActor: { userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin } });
 
     const body = await parseQueueMatchBody(request);
@@ -243,10 +247,14 @@ export async function DELETE(
       session.user.id,
       !!session.user.isAdmin
     );
+    if (isUpgradedCollaboration(sessionData)) await assertCollaborationPermission(prisma, { sessionId: sessionData.id, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, kind: "host" });
+    assertFreePlayScheduling(sessionData);
     Object.assign(sessionData, { mutationActor: { userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin } });
 
     await admissionTransaction(prisma, async (tx) => {
-      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, hostOnly: true });
+      const freshSession = await tx.session.findUnique({ where: { id: sessionData.id }, select: { collaborationVersion: true, schedulingMode: true } });
+      if (freshSession) assertFreePlayScheduling(freshSession);
       const queuedMatch = sessionData.queuedMatch;
       await tx.queuedMatch.deleteMany({
         where: { sessionId: sessionData.id },

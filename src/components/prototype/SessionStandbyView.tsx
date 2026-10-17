@@ -15,6 +15,8 @@ import styles from "./SessionStandbyView.module.css";
 export interface SessionStandbyViewProps {
   session: SessionData;
   canManage: boolean;
+  canManagePlayers?: boolean;
+  startBlocked?: boolean;
   busy: boolean;
   onSettings: () => void;
   onManagePlayers: () => void;
@@ -34,6 +36,8 @@ function includesProfileMember(
 export function SessionStandbyView({
   session,
   canManage,
+  canManagePlayers = canManage,
+  startBlocked = false,
   busy,
   onSettings,
   onManagePlayers,
@@ -112,7 +116,7 @@ export function SessionStandbyView({
               {players.length} {players.length === 1 ? "player" : "players"}
             </span>
           </div>
-          {canManage ? (
+          {canManagePlayers ? (
             <button
               type="button"
               className={styles.manageButton}
@@ -190,13 +194,13 @@ export function SessionStandbyView({
       </section>
 
       <div className={styles.startArea}>
-        {pendingClub && <p className={styles.waitingMessage} role="status">{pendingClub.status === "REJECTED" ? `${pendingClub.name} declined the invitation` : `Waiting for ${pendingClub.name} to approve`}</p>}
+        {pendingClub && <p className={styles.waitingMessage} role="status">{pendingClub.status === "REJECTED" ? `${pendingClub.name} declined the invitation` : pendingClub.status === "CANCELLED" ? "Invitation cancelled" : pendingClub.status === "WITHDRAWN" ? `${pendingClub.name} withdrew` : `Waiting for ${pendingClub.name} to approve`}</p>}
         {canManage ? (
           <button
             type="button"
             className={styles.startButton}
             onClick={onStart}
-            disabled={busy || !!pendingClub}
+            disabled={busy || !!pendingClub || startBlocked}
           >
             {busy ? "Starting…" : "Start session"}
           </button>

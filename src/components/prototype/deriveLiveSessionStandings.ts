@@ -1,3 +1,4 @@
+import { resolveMatchResult, type MatchResultSource } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
 import type { CompletedMatchInfo } from "@/components/session/sessionTypes";
 
@@ -17,7 +18,7 @@ type StandingsMatch = Pick<
   | "team1Score"
   | "team2Score"
   | "status"
->;
+> & MatchResultSource;
 
 const EMPTY_STATS: LiveSessionPlayerStats = {
   matchesPlayed: 0,
@@ -42,22 +43,10 @@ export function deriveLiveSessionPlayerStats(
   }
 
   for (const match of matches) {
-    const team1Score = match.team1Score;
-    const team2Score = match.team2Score;
-    if (
-      match.status !== MatchStatus.COMPLETED ||
-      typeof team1Score !== "number" ||
-      typeof team2Score !== "number" ||
-      !Number.isInteger(team1Score) ||
-      !Number.isInteger(team2Score) ||
-      team1Score < 0 ||
-      team2Score < 0 ||
-      team1Score === team2Score
-    ) {
-      continue;
-    }
-
-    const team1Won = team1Score > team2Score;
+    const result = resolveMatchResult(match);
+    if (match.status !== MatchStatus.COMPLETED || !result) continue;
+    const { team1Score, team2Score } = result;
+    const team1Won = result.winnerTeam === 1;
     const team1Diff = team1Score - team2Score;
     const team2Diff = -team1Diff;
     const team1Ids = new Set([match.team1User1Id, match.team1User2Id]);

@@ -90,6 +90,16 @@ describe("undo completed match route", () => {
     });
   });
 
+  it("uses only host-club access for upgraded completed undo", async () => {
+    const match = createMatch();
+    mocks.matchFindUnique.mockResolvedValue({ ...match, session: { ...match.session, collaborationVersion: 2 } });
+    mocks.clubAccessFindFirst.mockResolvedValue(null);
+    const response = await postUndo();
+    expect(response.status).toBe(403);
+    expect(mocks.clubAccessFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ clubId: "community-1" }) }));
+    expect(mocks.undoCompletedMatchResult).not.toHaveBeenCalled();
+  });
+
   it("allows club staff to undo a latest completed match in an active session", async () => {
     const response = await postUndo();
 

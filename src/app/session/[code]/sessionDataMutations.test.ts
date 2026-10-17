@@ -715,5 +715,12 @@ describe("sessionDataMutations", () => {
     expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(
       1010
     );
+  });  it("updates standings for an unrated completion with null rating deltas", () => {
+    const current = createSessionData();
+    const next = applyScoreApproval(current, { id: "unrated", status: "COMPLETED", winnerTeam: 1, team1User1Id: "p1", team1User2Id: "p2", team2User1Id: "p3", team2User2Id: "p4", team1Score: 43, team2Score: 59, team1EloChange: null, team2EloChange: null, scoringFormat: "BEST_OF_THREE" });
+    expect(next.players.map(player => player.sessionPoints)).toEqual([3, 3, 0, 0]);
+    expect(next.players.map(player => player.user.elo)).toEqual([1000, 1000, 1000, 1000]);
+    expect(next.matches?.[0]).toMatchObject({ winnerTeam: 1, scoringFormat: "BEST_OF_THREE" });
   });
+
 });

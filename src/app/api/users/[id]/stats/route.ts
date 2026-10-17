@@ -272,6 +272,7 @@ async function getUserStatsRoute(
           status: true,
           clubId: true,
           ratingPolicyVersion: true,
+          ratingMode: true,
           isTest: true,
           type: true,
           createdAt: true,
@@ -293,6 +294,8 @@ async function getUserStatsRoute(
               team1Player2Id: true,
               team2Player1Id: true,
               team2Player2Id: true,
+              scoringFormat: true,
+              gameScoresJson: true,
               team1Score: true,
               team2Score: true,
               winnerTeam: true,
@@ -304,7 +307,7 @@ async function getUserStatsRoute(
   });
   if (!usesClubRating) {
     effectiveElo = guestRatingFromMatches(id, effectiveElo, withLegacySportingAliases(matches.filter((match) =>
-      match.session.players.some((player) => player.playerId === id && player.isGuest))
+      match.session.ratingMode !== "UNRATED" && match.session.players.some((player) => player.playerId === id && player.isGuest))
     ));
   }
   const profileData = buildPlayerProfileDerivedData(

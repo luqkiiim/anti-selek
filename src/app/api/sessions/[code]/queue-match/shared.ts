@@ -1,3 +1,4 @@
+import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -78,6 +79,7 @@ export type QueuedMatchResponse = ReturnType<typeof buildQueuedMatchResponse>;
 async function shouldSuppressAutomaticQueueCreation(
   sessionData: QueueSessionRecord
 ) {
+  if (isUpgradedCollaboration(sessionData) && sessionData.schedulingMode === "LINEUP") return true;
   if (!sessionData.autoQueueEnabled) {
     return true;
   }
@@ -158,10 +160,15 @@ async function resolveQueuedGroupSnapshot(
 ) {
   const session = await tx.session.findUnique({
     where: { id: sessionId },
-    select: { poolsEnabled: true },
+    select: { poolsEnabled: true, collaborationVersion: true },
   });
   if (!session) {
     throw new GenerateMatchError(404, "Tournament not found");
+  }
+  if (isUpgradedCollaboration(session)) {
+    const selectedIds = [...partition.team1, ...partition.team2];
+    const seats = await tx.sessionPlayer.findMany({ where: { sessionId, playerId: { in: selectedIds } }, select: { playerId: true, isPaused: true } });
+    if (new Set(selectedIds).size !== 4 || seats.length !== 4 || seats.some(player => player.isPaused)) throw new GenerateMatchError(409, "Selected players are no longer available. Refresh and try again.");
   }
   if (!session.poolsEnabled) return null;
 
@@ -712,7 +719,7 @@ async function tryRebuildAutomaticQueuedMatch(
   loadSessionData: () => Promise<QueueSessionRecord | null>
 ) {
   const sessionData = await loadSessionData();
-  if (!sessionData) {
+  if (!sessionData || (isUpgradedCollaboration(sessionData) && sessionData.schedulingMode === "LINEUP")) {
     return null;
   }
 
@@ -766,7 +773,7 @@ async function tryRebuildQueuedMatch(
   searchBudget?: MatchmakingSearchBudget,
 ) {
   const sessionData = await loadSessionData();
-  if (!sessionData) {
+  if (!sessionData || (isUpgradedCollaboration(sessionData) && sessionData.schedulingMode === "LINEUP")) {
     return null;
   }
 

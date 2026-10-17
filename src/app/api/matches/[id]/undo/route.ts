@@ -7,6 +7,7 @@ import {
 } from "@/lib/matchCompletion";
 import { prisma } from "@/lib/prisma";
 import { isQuickAccessSession } from "@/lib/quickAccess";
+import { COMMUNITY_OPERATOR_ROLES } from "@/lib/clubRoles";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -52,6 +53,7 @@ export async function POST(
         session: {
           select: {
             clubId: true,
+            collaborationVersion: true,
             status: true,
           },
         },
@@ -76,11 +78,16 @@ export async function POST(
       );
     }
 
-    const operatorMembership = await getSessionOperatorMembership(prisma, {
-      session: { id: match.sessionId, clubId: match.session.clubId },
-      userId: session.user.id,
-      acceptedOnly: true,
-    });
+    const operatorMembership = (match.session.collaborationVersion ?? 1) >= 2
+      ? match.session.clubId ? await prisma.clubAccess.findFirst({
+          where: { clubId: match.session.clubId, userId: session.user.id, status: "ACTIVE", role: { in: [...COMMUNITY_OPERATOR_ROLES] } },
+          select: { clubId: true, role: true },
+        }) : null
+      : await getSessionOperatorMembership(prisma, {
+          session: { id: match.sessionId, clubId: match.session.clubId },
+          userId: session.user.id,
+          acceptedOnly: true,
+        });
 
     const canManage =
       !isQuickAccessSession(session) &&

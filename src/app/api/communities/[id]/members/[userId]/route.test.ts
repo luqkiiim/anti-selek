@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   access: vi.fn(),
   roster: vi.fn(),
+  rosterMember: vi.fn(),
   rateLimit: vi.fn(),
   memberFind: vi.fn(),
   memberFindFirst: vi.fn(),
@@ -37,9 +38,9 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/clubAdminPermissions", () => ({ getClubAdminAccess: mocks.access }));
-vi.mock("@/lib/clubRoster", () => ({ getClubRoster: mocks.roster }));
+vi.mock("@/lib/clubRoster", () => ({ getClubRoster: mocks.roster, getClubRosterMember: mocks.rosterMember }));
 vi.mock("@/lib/rateLimit", () => ({ rateLimit: mocks.rateLimit }));
-vi.mock("@/lib/playerGroupPreferences", () => ({ propagatePreferredPoolToClubSessions: mocks.propagate }));
+vi.mock("@/lib/playerGroupPreferences", () => ({ propagatePreferredPoolToClubSessionsInTransaction: mocks.propagate }));
 vi.mock("@/app/api/sessions/[code]/queue-match/shared", () => ({ tryRebuildAutomaticQueuedMatchForSessionId: mocks.rebuild }));
 vi.mock("@/lib/prisma", () => ({ prisma: {
   club: { findUnique: vi.fn(async () => ({ id: "club", createdById: "account-owner", isTutorial: false })) },
@@ -217,6 +218,7 @@ beforeEach(() => {
   });
   mocks.transaction.mockImplementation(async (operation: (tx: typeof prisma) => unknown) => operation(prisma));
   mocks.roster.mockResolvedValue([{ id: playerId, name: "Historical Player", role: "MEMBER" }]);
+  mocks.rosterMember.mockResolvedValue({ id: playerId, name: "Historical Player", role: "MEMBER" });
   mocks.rateLimit.mockResolvedValue(null);
   mocks.propagate.mockResolvedValue({ immediateSessionCount: 1, deferredSessionCount: 0, automaticQueueSessionIds: ["session"] });
 });

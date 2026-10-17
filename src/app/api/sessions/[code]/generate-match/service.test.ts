@@ -127,6 +127,7 @@ function createSessionPlayer(
     id: `seat-${userId}`,
     sessionId: "session-1",
     pendingPool: null,
+    hasStartedMatch: false,
     profileClubId: null,
     participantAccountId: null,
     lastPlayedAt: null,

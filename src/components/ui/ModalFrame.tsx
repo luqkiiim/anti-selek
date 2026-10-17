@@ -82,6 +82,7 @@ interface ModalFrameProps {
   frameClassName?: string;
   fullscreenUntilDesktop?: boolean;
   initialFocusRef?: RefObject<HTMLElement | null>;
+  portalContainer?: HTMLElement | null;
 }
 
 export function ModalFrame({
@@ -96,6 +97,7 @@ export function ModalFrame({
   frameClassName,
   fullscreenUntilDesktop = false,
   initialFocusRef,
+  portalContainer,
 }: ModalFrameProps) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const touchStartYRef = useRef<number | null>(null);
@@ -276,5 +278,5 @@ export function ModalFrame({
     return null;
   }
 
-  return createPortal(modalContent, document.body);
+  return createPortal(modalContent, portalContainer ?? document.body);
 }

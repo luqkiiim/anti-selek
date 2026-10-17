@@ -110,6 +110,8 @@ export enum SessionClubStatus {
   PENDING = "PENDING",
   ACCEPTED = "ACCEPTED",
   REJECTED = "REJECTED",
+  CANCELLED = "CANCELLED",
+  WITHDRAWN = "WITHDRAWN",
 }
 
 export enum OfflineIdentityLinkStatus {

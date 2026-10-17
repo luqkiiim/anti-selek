@@ -12,6 +12,7 @@ import {
 
 interface CreateClubPlayerModalProps {
   open: boolean;
+  saving?: boolean;
   name: string;
   newPlayerGender: PlayerGender;
   newPlayerMixedSideOverride: MixedSide | null;
@@ -28,6 +29,7 @@ interface CreateClubPlayerModalProps {
 
 export function CreateClubPlayerModal({
   open,
+  saving = false,
   name,
   newPlayerGender,
   newPlayerMixedSideOverride,
@@ -62,9 +64,10 @@ export function CreateClubPlayerModal({
           <button
             type="submit"
             form="create-player-form"
+            disabled={saving}
             className="app-button-primary px-4 py-2"
           >
-            Create profile
+            {saving ? "Saving…" : "Create profile"}
           </button>
         </div>
       }

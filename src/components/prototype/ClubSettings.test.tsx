@@ -76,4 +76,32 @@ describe("ClubSettings join code", () => {
     await render({ role: "MEMBER" }); expect(container.querySelector('.club-join-code-form')).toBeNull();
     await render({ isTutorial: true }); expect(container.querySelector('.club-join-code-form')).toBeNull();
   });
+  it("confirms a saved join code even if the refresh fails and retries only reads", async () => {
+    refresh.mockRejectedValue(new Error("Snapshot unavailable"));
+    await render(); await type("1234");
+    await act(async () => button("Set join code").click());
+    expect(container.textContent).toContain("Club join code updated.");
+    expect(container.textContent).toContain("Saved. Couldn’t refresh the latest details.");
+    expect(container.textContent).not.toContain("Snapshot unavailable");
+    expect(button("Set join code").disabled).toBe(true);
+    refresh.mockResolvedValue(undefined);
+    await act(async () => button("Refresh details").click());
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toContain("Couldn’t refresh");
+  });
+  it("preserves settings inputs and blocks another write until an unknown save is checked", async () => {
+    await render(); await type("1234");
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError("Connection lost"));
+    await act(async () => button("Set join code").click());
+    expect(container.textContent).toContain("Couldn’t confirm the save. Refresh to check.");
+    expect(refresh).not.toHaveBeenCalled();
+    await type("5678");
+    await act(async () => button("Set join code").click());
+    expect(fetch).toHaveBeenCalledOnce();
+    await act(async () => button("Refresh details").click());
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
 });

@@ -43,7 +43,7 @@ describe("getHostSessionOnboardingOverride", () => {
     ).toMatchObject({
       stepId: "host-session",
       targetId: "admin-onboarding-create-session",
-      actionLabel: "Create test tournament",
+      actionLabel: "Create practice tournament",
     });
   });
 });
@@ -74,10 +74,10 @@ describe("buildAdminOnboardingProgress", () => {
     expect(progress.steps.map((step) => step.title)).toEqual([
       "Open playground",
       "Review practice players",
-      "Create a test tournament",
+      "Create a practice tournament",
       "Explore a live practice tournament",
       "Score a practice match",
-      "End the test tournament",
+      "End the practice tournament",
       "Reset playground",
     ]);
   });

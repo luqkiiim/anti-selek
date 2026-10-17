@@ -175,6 +175,9 @@ function buildPlayerPerformanceMaps(sessionData: SessionData) {
     const historyMatches = (sessionData.matches ?? []).map((match) => ({
       team1: [match.team1User1Id, match.team1User2Id] as [string, string],
       team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      winnerTeam: match.winnerTeam,
+      scoringFormat: match.scoringFormat,
+      gameScoresJson: match.gameScoresJson,
       team1Score: match.team1Score,
       team2Score: match.team2Score,
       status: match.status,
@@ -330,7 +333,7 @@ function buildInterclubScoreboard(
       ? left.matchWins > right.matchWins
         ? left
         : right
-      : left.pointDiff !== right.pointDiff
+      : (sessionData.collaborationVersion ?? 1) < 2 && left.pointDiff !== right.pointDiff
         ? left.pointDiff > right.pointDiff
           ? left
           : right

@@ -23,7 +23,7 @@ describe('earned guest ratings', () => {
     const findMany = vi.fn(async () => [match]);
     const tx = { match: { findMany } } as unknown as Prisma.TransactionClient;
     expect(await getGuestRating(tx, 'guest-one', 1000)).toBe(1012);
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: 'COMPLETED', session: { isTest: false, players: { some: { playerId: 'guest-one', isGuest: true } } } }) }));
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: 'COMPLETED', session: { isTest: false, ratingMode: "RATED", players: { some: { playerId: 'guest-one', isGuest: true } } } }) }));
   });
 
   it('batches guest history without counting another identity or member appearances', async () => {

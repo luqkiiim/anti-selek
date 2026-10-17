@@ -83,8 +83,6 @@ export default function ClubPage() {
     pairingMode,
     setPairingMode,
     sessionMode,
-    isTestSession,
-    setIsTestSession,
     autoQueueEnabled,
     setAutoQueueEnabled,
     collabFormat,
@@ -744,8 +742,6 @@ export default function ClubPage() {
       onBalanceMetricChange={setBalanceMetric}
       pairingMode={pairingMode}
       onPairingModeChange={setPairingMode}
-      isTestSession={isTestSession}
-      onIsTestSessionChange={setIsTestSession}
       autoQueueEnabled={autoQueueEnabled}
       onAutoQueueEnabledChange={setAutoQueueEnabled}
       collabFormat={collabFormat}
@@ -778,13 +774,7 @@ export default function ClubPage() {
     />
   ) : null;
   const interclubClubOptions = partnerClubId
-    ? [
-        { id: clubId, name: club?.name ?? "Host club" },
-        {
-          id: partnerClubId,
-          name: selectedPartnerClub?.name ?? "Partner club",
-        },
-      ]
+    ? [{ id: clubId, name: club?.name ?? "Host club" }]
     : [];
   const overviewPanel = (
     <ClubOverviewPulsePanel
@@ -823,6 +813,7 @@ export default function ClubPage() {
       />
       <TestSessionsPanel
         sessions={testSessions}
+        isTutorial={isTutorialPlayground}
         currentUserId={user?.playerId}
         currentClubId={clubId}
         canReviewCollabs={canAdminClub}

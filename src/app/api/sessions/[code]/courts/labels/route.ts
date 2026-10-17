@@ -1,6 +1,6 @@
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
-import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
+import { assertScopedSessionMutation } from "../../players/collaborationPermissions";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -113,7 +113,7 @@ export async function PATCH(
     }
 
     await admissionTransaction(prisma, async tx => {
-      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, hostOnly: true });
       for (const court of updates) await tx.court.update({ where: { id: court.courtId }, data: { label: court.label } });
     });
 

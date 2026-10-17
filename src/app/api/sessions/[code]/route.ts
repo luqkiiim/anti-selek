@@ -1,3 +1,4 @@
+import { assertCollaborationPermission, isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { isGlobalClubView, canReadSessionGlobally } from "@/lib/globalClubViewer";
 import { withMatchLocalClaimLabels } from "@/lib/matchApprovalRules";
 import { IdentityConflictError } from "@/lib/playerIdentity";
@@ -187,6 +188,9 @@ async function getSessionRoute(
               team1ClubId: true,
               team2ClubId: true,
               team1Score: true,
+              scoringFormat: true,
+              gameScoresJson: true,
+              scoreRevision: true,
               team2Score: true,
               completedAt: true,
               scoreSubmittedByUserId: true,
@@ -241,6 +245,9 @@ async function getSessionRoute(
           team1ClubId: true,
           team2ClubId: true,
           team1Score: true,
+              scoringFormat: true,
+              gameScoresJson: true,
+              scoreRevision: true,
           team2Score: true,
           winnerTeam: true,
           status: true,
@@ -565,6 +572,8 @@ export async function PATCH(
         clubId: true,
         status: true,
         collabFormat: true,
+        collaborationVersion: true,
+        schedulingMode: true,
         poolAssignmentsInitialized: true,
         courts: {
           select: {
@@ -635,6 +644,10 @@ export async function PATCH(
     }
 
     await admissionTransaction(prisma, async (tx) => {
+      if (isUpgradedCollaboration(sessionData)) {
+        const {session: current} = await assertCollaborationPermission(tx,{sessionId:sessionData.id,userId:session.user.id,isGlobalAdmin:!!session.user.isAdmin,kind:"host"});
+        if(current.schedulingMode === "LINEUP" && autoQueueEnabled) throw new IdentityConflictError("Lineup sessions use manual court assignments.");
+      }
       await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
       let initializeLegacyPools = false;
       if (

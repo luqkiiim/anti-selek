@@ -207,7 +207,7 @@ export async function createSessionForUser({
 
   const memberRows = await prisma.clubMember.findMany({
     where: {
-      clubId: { in: involvedClubIds },
+      clubId: { in: input.collaborationVersion === 2 ? [input.clubId] : involvedClubIds },
       retiredByAdmissionEventId: null,
     },
     select: {
@@ -235,6 +235,12 @@ export async function createSessionForUser({
       );
     }
   }
+  if (input.collaborationVersion === 2) {
+    const hostPlayerIds = new Set(memberRows.filter(m => m.clubId === input.clubId).map(m => m.playerId));
+    if (input.requestedPlayerIds.some(id => !hostPlayerIds.has(id)) || [...input.playerConfigMap.values()].some(c => (c.profileClubId && c.profileClubId !== input.clubId) || (c.representingClubId && c.representingClubId !== input.clubId)) || input.normalizedGuests.some(g => g.representingClubId && g.representingClubId !== input.clubId)) throw new SessionRouteError("Each club adds its own players after accepting the invitation", 403);
+    for (const id of input.requestedPlayerIds) input.playerConfigMap.set(id, { ...input.playerConfigMap.get(id), profileClubId: input.clubId, representingClubId: input.clubId });
+    for (const guest of input.normalizedGuests) guest.representingClubId = input.clubId;
+  }
   const uniquePlayerIds = Array.from(new Set(input.requestedPlayerIds)).filter(
     (id) => memberSet.has(id)
   );
@@ -252,7 +258,7 @@ export async function createSessionForUser({
     );
   }
 
-  if (uniquePlayerIds.length + input.normalizedGuests.length < 2) {
+  if (input.collaborationVersion !== 2 && uniquePlayerIds.length + input.normalizedGuests.length < 2) {
     throw new SessionRouteError(
       "At least 2 total players (members and/or guests) are required to create a tournament",
       400
@@ -288,7 +294,7 @@ export async function createSessionForUser({
     clubBadgesByUserId,
   });
 
-  if (input.poolsEnabled) {
+  if (input.poolsEnabled && input.collaborationVersion !== 2) {
     const allPools = [
       ...memberSessionConfigs.map((player) => player.pool),
       ...input.normalizedGuests.map((guest) => guest.pool),
@@ -335,6 +341,10 @@ export async function createSessionForUser({
 
   const sessionId = randomUUID();
   const newSession = await admissionTransaction(prisma, async (tx) => {
+    if (input.collaborationVersion === 2 && !requesterIsAdmin) {
+      const currentAccess = await tx.clubAccess.findUnique({ where: { clubId_userId: { clubId: input.clubId, userId: requesterId } } });
+      if (currentAccess?.status !== "ACTIVE" || !isClubOperatorRole(currentAccess.role)) throw new SessionRouteError("Club access changed. Refresh before creating a session.", 403);
+    }
     const profileConfigs = [];
     const accountIds = new Set<string>();
     for (const config of memberSessionConfigs) {
@@ -345,7 +355,7 @@ export async function createSessionForUser({
       const pairing = override?.mixedSideOverride !== undefined || override?.partnerPreference !== undefined || override?.gender !== undefined
         ? { mixedSideOverride: config.mixedSideOverride, partnerPreference: config.partnerPreference }
         : resolveMixedSideState({ gender: config.gender, mixedSideOverride: pair.mixedSideOverride });
-      profileConfigs.push({ ...config, ...pairing, profileClubId: pair.profileClubId, participantAccountId: pair.ownerUserId });
+      profileConfigs.push({ ...config, ...pairing, representingClubId: input.collaborationVersion === 2 ? input.clubId : config.representingClubId, profileClubId: pair.profileClubId, participantAccountId: pair.ownerUserId });
     }
     const createdSession = await tx.session.create({
       data: {
@@ -356,12 +366,17 @@ export async function createSessionForUser({
         type: input.type,
         mode: input.mode,
         collabFormat: input.collabFormat,
+        collaborationVersion: input.collaborationVersion,
+        schedulingMode: input.schedulingMode,
+        scoringFormat: input.scoringFormat,
+        ratingMode: input.ratingMode,
         scoringType: input.scoringType,
         matchmakingStyle: input.matchmakingStyle,
         balanceMetric: input.balanceMetric,
         pairingMode: input.pairingMode,
         status: SessionStatus.WAITING,
-        isTest: input.isTest,
+        // Guided practice stays isolated; ordinary clubs cannot create legacy test sessions.
+        isTest: Boolean(hostClub?.isTutorial),
         ratingPolicyVersion: 2,
         autoQueueEnabled: input.autoQueueEnabled,
         respectPlayerRest: input.respectPlayerRest,
@@ -432,7 +447,7 @@ export async function createSessionForUser({
           sessionId: createdSession.id,
           playerId: guest.id,
           representingClubId:
-            input.collabFormat === SessionCollabFormat.INTERCLUB
+            input.collaborationVersion === 2 ? input.clubId : input.collabFormat === SessionCollabFormat.INTERCLUB
               ? getGuestRepresentingClubId(
                   input.normalizedGuests[index],
                   interclubClubIds

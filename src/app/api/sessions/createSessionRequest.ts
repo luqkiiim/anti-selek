@@ -46,6 +46,10 @@ import {
 } from "@/lib/clubContractAliases";
 
 interface CreateSessionBody {
+  collaborationVersion?: unknown;
+  schedulingMode?: unknown;
+  scoringFormat?: unknown;
+  ratingMode?: unknown;
   name?: unknown;
   type?: unknown;
   mode?: unknown;
@@ -275,6 +279,10 @@ export function parseCreateSessionRequest(
     poolsEnabled = false,
     crossoverFrequency = DEFAULT_SESSION_CROSSOVER_FREQUENCY,
   } = bodyRecord;
+  if (isTest !== false) {
+    throw new SessionRouteError("Test sessions are no longer available. Create a regular session instead.", 400);
+  }
+
   let clubId: unknown;
   let partnerClubId: unknown;
   try {
@@ -299,6 +307,13 @@ export function parseCreateSessionRequest(
     throw error;
   }
 
+  const collaborationVersion = partnerClubId ? 2 : 1;
+  if (bodyRecord.collaborationVersion !== undefined && bodyRecord.collaborationVersion !== collaborationVersion) throw new SessionRouteError("Invalid collaboration version", 400);
+  const schedulingMode = bodyRecord.schedulingMode ?? "FREE_PLAY";
+  const scoringFormat = bodyRecord.scoringFormat ?? "SINGLE_GAME";
+  const ratingMode = bodyRecord.ratingMode ?? (collaborationVersion === 2 && collabFormat === SessionCollabFormat.INTERCLUB ? "UNRATED" : "RATED");
+  if (!["FREE_PLAY", "LINEUP"].includes(String(schedulingMode)) || !["SINGLE_GAME", "BEST_OF_THREE"].includes(String(scoringFormat)) || !["RATED", "UNRATED"].includes(String(ratingMode))) throw new SessionRouteError("Invalid friendly settings", 400);
+  if ((collaborationVersion !== 2 || collabFormat !== SessionCollabFormat.INTERCLUB) && (schedulingMode !== "FREE_PLAY" || scoringFormat !== "SINGLE_GAME" || ratingMode !== "RATED")) throw new SessionRouteError("Friendly settings require an upgraded Club vs club session", 400);
   if (typeof name !== "string" || !name.trim()) {
     throw new SessionRouteError("Tournament name required", 400);
   }
@@ -419,6 +434,10 @@ export function parseCreateSessionRequest(
   const legacyMode = getLegacySessionModeForSettings(settings);
 
   return {
+    collaborationVersion,
+    schedulingMode: schedulingMode as "FREE_PLAY" | "LINEUP",
+    scoringFormat: scoringFormat as "SINGLE_GAME" | "BEST_OF_THREE",
+    ratingMode: ratingMode as "RATED" | "UNRATED",
     name: name.trim(),
     type: legacyType,
     mode: legacyMode,
@@ -430,7 +449,7 @@ export function parseCreateSessionRequest(
     clubId,
     partnerClubId:
       typeof partnerClubId === "string" ? partnerClubId : null,
-    isTest: isTest === true,
+    isTest: false,
     courtCount: courtCount as number,
     requestedPlayerIds,
     playerConfigMap: normalizePlayerConfigMap(playerConfigs),
@@ -439,7 +458,7 @@ export function parseCreateSessionRequest(
       guestConfigs,
       legacyMode
     ),
-    autoQueueEnabled: normalizedAutoQueueEnabled,
+    autoQueueEnabled: schedulingMode === "LINEUP" ? false : normalizedAutoQueueEnabled,
     respectPlayerRest: normalizedRespectPlayerRest,
     poolsEnabled: normalizedPoolsEnabled,
     poolAName: normalizedPoolAName,

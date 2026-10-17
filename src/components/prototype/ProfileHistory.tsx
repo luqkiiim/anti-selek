@@ -8,7 +8,7 @@ import { api } from "./api";
 import { ErrorText, Sheet } from "./Primitives";
 
 function SessionRow({ session, onOpen }: { session: PlayerProfileSessionSummary; onOpen: (session: PlayerProfileSessionSummary) => void }) {
-  return <button className="profile-history-row" onClick={() => onOpen(session)}><CalendarBlank size={22} weight="duotone" /><span><strong>{session.name}</strong><small>{formatProfileDate(session.date)} · {session.wins}W–{session.losses}L</small></span><b className={session.ratingChange >= 0 ? "positive" : "negative"}>{(session as RecordedSessionSummary).ratingVerified === false ? "—" : `${session.ratingChange > 0 ? "+" : ""}${session.ratingChange}`}</b><CaretRight size={16} /></button>;
+  return <button className="profile-history-row" onClick={() => onOpen(session)}><CalendarBlank size={22} weight="duotone" /><span><strong>{session.name}</strong><small>{formatProfileDate(session.date)} · {session.wins}W–{session.losses}L</small></span><b className={session.ratingChange >= 0 ? "positive" : "negative"}>{(session as RecordedSessionSummary).ratingMode === "UNRATED" ? "Unrated" : (session as RecordedSessionSummary).ratingVerified === false ? "—" : `${session.ratingChange > 0 ? "+" : ""}${session.ratingChange}`}</b><CaretRight size={16} /></button>;
 }
 export function ProfileHistory({ globalView = false, clubId, playerId, history, onOpen, controls, title = "Session history" }: { globalView?: boolean; controls?: ReactNode; title?: string; clubId: string; playerId: string; history: MemberProfileData["history"]; onOpen: (session: PlayerProfileSessionSummary) => void }) {
   const [open,setOpen]=useState(false);

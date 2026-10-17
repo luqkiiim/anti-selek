@@ -127,5 +127,17 @@ describe("session lifecycle rollback", () => {
       where: { clubId: "club-1", playerId: "B" },
       data: { elo: { increment: 7 } },
     });
+  });  it("accepts an explicit unrated policy with no ledger even under selected-profile policy", async () => {
+    const tx = {
+      session: { findUnique: vi.fn().mockResolvedValue({ ratingPolicyVersion: 2, ratingMode: "UNRATED" }) },
+      sessionPlayer: { findMany: vi.fn().mockResolvedValue([{ playerId: "A", isGuest: false }]) },
+      match: { findMany: vi.fn().mockResolvedValue([{ id: "m", team1Player1Id: "A", team1Player2Id: "B", team2Player1Id: "C", team2Player2Id: "D", team1EloChange: null, team2EloChange: null }]) },
+      matchEloAdjustment: { findMany: vi.fn().mockResolvedValue([]) },
+      clubMember: { updateMany: vi.fn() }, player: { updateMany: vi.fn() },
+    };
+    expect(await reverseSessionEloChanges(tx as never, { sessionId: "s", clubId: "club" })).toBe(0);
+    expect(tx.clubMember.updateMany).not.toHaveBeenCalled();
+    expect(tx.player.updateMany).not.toHaveBeenCalled();
   });
+
 });

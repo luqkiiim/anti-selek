@@ -1,3 +1,4 @@
+import { resolveMatchResult } from "@/lib/matchRules";
 import type { LadderHistoryMatch, LadderRecord } from "./types";
 
 export function createEmptyLadderRecord(): LadderRecord {
@@ -60,8 +61,9 @@ function deriveRecords(
 
     const team1Diff = match.team1Score - match.team2Score;
     const team2Diff = match.team2Score - match.team1Score;
-    const team1Won = match.team1Score > match.team2Score;
-    const team2Won = match.team2Score > match.team1Score;
+    const result = resolveMatchResult(match);
+    const team1Won = result?.winnerTeam === 1;
+    const team2Won = result?.winnerTeam === 2;
 
     for (const userId of match.team1) {
       const record = ensureRecord(records, userId);
@@ -109,8 +111,9 @@ function deriveRecordsByEntryTime(
     const matchCompletedAt = match.completedAt?.getTime() ?? 0;
     const team1Diff = match.team1Score - match.team2Score;
     const team2Diff = match.team2Score - match.team1Score;
-    const team1Won = match.team1Score > match.team2Score;
-    const team2Won = match.team2Score > match.team1Score;
+    const result = resolveMatchResult(match);
+    const team1Won = result?.winnerTeam === 1;
+    const team2Won = result?.winnerTeam === 2;
 
     for (const userId of match.team1) {
       const entryAt = playerEntryAtById.get(userId);

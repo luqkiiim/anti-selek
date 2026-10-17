@@ -289,4 +289,15 @@ describe("SessionMatchHistory", () => {
     expect(container.textContent).not.toContain("Stale session");
   });
 
+  it("uses game wins and displays each BO3 game when the rally total favors the loser", async () => {
+    await render(historyData({}, {scoringFormat:"BEST_OF_THREE", team1Score:42, team2Score:59, winnerTeam:1,gameScoresJson:JSON.stringify([{team1Score:21,team2Score:19},{team1Score:0,team2Score:21},{team1Score:21,team2Score:19}])}));
+    const games=container.querySelector('[aria-label="Game scores"]');
+    expect(games?.textContent).toContain("G1 21–19");
+    expect(games?.textContent).toContain("G2 0–21");
+    expect(games?.textContent).toContain("G3 21–19");
+    const winner=container.querySelector('[class*="winnerLabel"]')?.parentElement;
+    expect(winner?.textContent).toContain("Aiman");
+    expect(winner?.textContent).not.toContain("Cara");
+  });
+
 });

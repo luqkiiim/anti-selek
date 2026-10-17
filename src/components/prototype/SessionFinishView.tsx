@@ -37,6 +37,9 @@ export interface SessionFinishViewProps {
   sessionType: string;
   sessionSettings: Pick<
     SessionData,
+    | "ratingMode"
+    | "scoringFormat"
+    | "schedulingMode"
     | "type"
     | "mode"
     | "matchmakingStyle"
@@ -393,6 +396,9 @@ export function SessionFinishView({
       <section className={styles.settings} aria-label="Session settings used">
         <h2>Settings used</h2>
         <dl>
+          {sessionSettings.ratingMode && <div><dt>Club ratings</dt><dd>{sessionSettings.ratingMode === "UNRATED" ? "Unrated" : "Rated"}</dd></div>}
+          {sessionSettings.scoringFormat && <div><dt>Scoring</dt><dd>{sessionSettings.scoringFormat === "BEST_OF_THREE" ? "Best of three" : "Single game"}</dd></div>}
+          {sessionSettings.schedulingMode && <div><dt>Matches</dt><dd>{sessionSettings.schedulingMode === "LINEUP" ? "Lineup" : "Free play"}</dd></div>}
           <div>
             <dt>Matchmaking</dt>
             <dd>{getMatchmakingStyleLabel(resolvedSettings.matchmakingStyle)} · {getBalanceMetricLabel(resolvedSettings.balanceMetric)}</dd>

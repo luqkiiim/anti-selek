@@ -7,6 +7,11 @@ import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
 import {
+  claimClubPlayer,
+  ClubPlayerOwnershipError,
+  clubOwnershipTransaction,
+} from "@/lib/clubPlayerOwnership";
+import {
   ClubContractAliasConflictError,
   readAliasedValue,
   withLegacyClubAliases,
@@ -216,21 +221,46 @@ export async function POST(request: Request) {
       ? await bcrypt.hash(password, 10)
       : null;
 
-    const created = await prisma.club.create({
-      data: {
-        name: normalizedName,
-        isPasswordProtected: !!passwordHash,
-        passwordHash,
-        allowJoinRequests: allowJoinRequests === true,
-        createdById: session.user.id,
-        accountAccess: { create: { userId: session.user.id, role: "OWNER" } },
-      },
-      select: {
-        id: true,
-        name: true,
-        isPasswordProtected: true,
-        createdAt: true,
-      },
+    const creatorId = session.user.id;
+    const created = await clubOwnershipTransaction(prisma, async (tx) => {
+      const account = await tx.user.findUnique({
+        where: { id: creatorId },
+        select: { name: true, avatarKey: true, gender: true, isActive: true },
+      });
+      if (!account?.isActive) {
+        throw new ClubPlayerOwnershipError("An active account is required.", 403, "ACCOUNT_REQUIRED");
+      }
+      const club = await tx.club.create({
+        data: {
+          name: normalizedName,
+          isPasswordProtected: !!passwordHash,
+          passwordHash,
+          allowJoinRequests: allowJoinRequests === true,
+          createdById: creatorId,
+          accountAccess: { create: { userId: creatorId, role: "OWNER" } },
+        },
+        select: {
+          id: true,
+          name: true,
+          isPasswordProtected: true,
+          createdAt: true,
+        },
+      });
+      // Account access and a sporting profile are separate. Give the creator a
+      // fresh local profile and claim it through the audited ownership path.
+      const player = await tx.player.create({
+        data: { name: account.name, avatarKey: account.avatarKey, gender: account.gender },
+        select: { id: true },
+      });
+      await tx.clubMember.create({ data: { clubId: club.id, playerId: player.id } });
+      await claimClubPlayer(tx, {
+        clubId: club.id,
+        playerId: player.id,
+        userId: creatorId,
+        actorUserId: creatorId,
+        reason: "Club creator claimed their new local player profile.",
+      });
+      return club;
     });
 
     return NextResponse.json(
@@ -244,6 +274,9 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error: unknown) {
+    if (error instanceof ClubPlayerOwnershipError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     const code =
       typeof error === "object" && error !== null && "code" in error
         ? (error as { code?: unknown }).code

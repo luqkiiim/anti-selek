@@ -62,6 +62,11 @@ model User {
 }
 
 model Player {
+  lineupTeam1Player1 SessionLineupRow[] @relation("LineupTeam1Player1")
+  lineupTeam1Player2 SessionLineupRow[] @relation("LineupTeam1Player2")
+  lineupTeam2Player1 SessionLineupRow[] @relation("LineupTeam2Player1")
+  lineupTeam2Player2 SessionLineupRow[] @relation("LineupTeam2Player2")
+
   id                  String    @id @default(cuid())
   ownerUserId         String?
   // Retained for migration provenance only. Authentication reads Account.
@@ -218,6 +223,12 @@ model Session {
   type                       String    @default("POINTS") // POINTS or ELO
   mode                       String    @default("MEXICANO") // MEXICANO or MIXICANO
   collabFormat               String    @default("FREE_PLAY") // FREE_PLAY or INTERCLUB
+  collaborationVersion       Int       @default(1)
+  schedulingMode             String    @default("FREE_PLAY") // FREE_PLAY or LINEUP
+  scoringFormat              String    @default("SINGLE_GAME") // SINGLE_GAME or BEST_OF_THREE
+  ratingMode                 String    @default("RATED") // RATED or UNRATED
+  rulesRevision              Int       @default(0)
+  resultsRevision            Int       @default(0)
   scoringType                String    @default("POINTS")
   matchmakingStyle           String    @default("BALANCED")
   balanceMetric              String    @default("SESSION_POINTS")
@@ -249,6 +260,8 @@ model Session {
   queuedMatch   QueuedMatch?
   newsLikes     ClubNewsLike[]
   notifications ClubNotification[]
+  lineupRows SessionLineupRow[]
+  collaborationEvents SessionCollaborationEvent[]
 }
 
 model SessionClub {
@@ -259,6 +272,8 @@ model SessionClub {
   status               String    @default("PENDING") // PENDING, ACCEPTED, or REJECTED
   requestedById        String?
   reviewedById         String?
+  rulesConfirmedRevision Int?
+  resetConfirmedRevision Int?
   creditedHostPlayerId String?
   reviewedAt           DateTime?
   createdAt            DateTime  @default(now())
@@ -286,9 +301,11 @@ model Court {
   session      Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   currentMatch Match?  @relation("CourtCurrentMatch", fields: [currentMatchId], references: [id])
   matches      Match[]
+  lineupRows SessionLineupRow[]
 }
 
 model SessionPlayer {
+  hasStartedMatch Boolean @default(false)
   id                  String  @id @default(cuid())
   sessionId           String
   playerId            String  @map("userId")
@@ -331,6 +348,10 @@ model SessionPlayer {
 }
 
 model Match {
+  scoringFormat String @default("SINGLE_GAME")
+  gameScoresJson String?
+  scoreRevision Int @default(0)
+  lineupRow SessionLineupRow?
   id                       String  @id @default(cuid())
   sessionId                String
   courtId                  String
@@ -374,6 +395,43 @@ model Match {
 
   @@index([sessionId, team1ClubId])
   @@index([sessionId, team2ClubId])
+}
+
+model SessionLineupRow {
+  id String @id @default(cuid())
+  sessionId String
+  position Int
+  revision Int @default(0)
+  team1Player1Id String?
+  team1Player2Id String?
+  team2Player1Id String?
+  team2Player2Id String?
+  hostConfirmedRevision Int?
+  partnerConfirmedRevision Int?
+  courtPreferenceId String?
+  cancelled Boolean @default(false)
+  matchId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  match Match? @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  courtPreference Court? @relation(fields: [courtPreferenceId], references: [id], onDelete: SetNull)
+  team1Player1 Player? @relation("LineupTeam1Player1", fields: [team1Player1Id], references: [id], onDelete: Restrict)
+  team1Player2 Player? @relation("LineupTeam1Player2", fields: [team1Player2Id], references: [id], onDelete: Restrict)
+  team2Player1 Player? @relation("LineupTeam2Player1", fields: [team2Player1Id], references: [id], onDelete: Restrict)
+  team2Player2 Player? @relation("LineupTeam2Player2", fields: [team2Player2Id], references: [id], onDelete: Restrict)
+  @@index([sessionId, position])
+}
+
+model SessionCollaborationEvent {
+  id String @id @default(cuid())
+  sessionId String
+  actorUserId String
+  action String
+  detailsJson String
+  createdAt DateTime @default(now())
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@index([sessionId, createdAt])
 }
 
 model MatchEloAdjustment {

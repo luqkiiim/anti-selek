@@ -56,6 +56,7 @@ function mockTransaction(
   queuedMatch: Record<string, unknown> | null = null
 ) {
   const tx = {
+    session: { findUnique: vi.fn().mockResolvedValue({ id: "session-1", collaborationVersion: 1, status: "ACTIVE" }) },
     sessionPlayer: {
       update: updateSpy,
     },

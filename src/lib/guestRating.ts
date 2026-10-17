@@ -23,7 +23,7 @@ export async function getGuestRating(tx: Prisma.TransactionClient, userId: strin
   const matches = await tx.match.findMany({
     where: {
       status: "COMPLETED",
-      session: { isTest: false, players: { some: { playerId: userId, isGuest: true } } },
+      session: { isTest: false, ratingMode: "RATED", players: { some: { playerId: userId, isGuest: true } } },
       OR: [{ team1Player1Id: userId }, { team1Player2Id: userId }, { team2Player1Id: userId }, { team2Player2Id: userId }],
     },
     select: { team1Player1Id: true, team1Player2Id: true, team2Player1Id: true, team2Player2Id: true, team1EloChange: true, team2EloChange: true },
@@ -40,7 +40,7 @@ export async function getGuestRatingsByUserId(
   const matches = await tx.match.findMany({
     where: {
       status: "COMPLETED",
-      session: { isTest: false, players: { some: { playerId: { in: userIds }, isGuest: true } } },
+      session: { isTest: false, ratingMode: "RATED", players: { some: { playerId: { in: userIds }, isGuest: true } } },
       OR: [{ team1Player1Id: { in: userIds } }, { team1Player2Id: { in: userIds } }, { team2Player1Id: { in: userIds } }, { team2Player2Id: { in: userIds } }],
     },
     select: {

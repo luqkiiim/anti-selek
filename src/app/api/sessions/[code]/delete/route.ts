@@ -1,3 +1,4 @@
+import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { assertSessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { IdentityConflictError } from "@/lib/playerIdentity";
 import { admissionTransaction, ClubAdmissionError } from "@/lib/clubAdmissions";
@@ -46,6 +47,7 @@ export async function DELETE(
         code: true,
         clubId: true,
         isTest: true,
+        collaborationVersion: true,
         status: true,
       },
     });
@@ -79,6 +81,11 @@ export async function DELETE(
 
     await admissionTransaction(prisma, async (tx) => {
       await assertSessionMutationActor(tx, { session: targetSession, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, hostOnly: true });
+      // Recheck inside the writer: deleting an active shared session would bypass reset consent.
+      const current = await tx.session.findUnique({ where: { id: targetSession.id }, select: { status: true, collaborationVersion: true } });
+      if (current && isUpgradedCollaboration(current) && current.status !== SessionStatus.WAITING) {
+        throw new IdentityConflictError("Both clubs must approve a reset before this shared session can be deleted.");
+      }
       const sessionPlayers = await tx.sessionPlayer.findMany({
         where: { sessionId: targetSession.id },
         select: { playerId: true, isGuest: true },
@@ -134,7 +141,6 @@ export async function DELETE(
       clubId: targetSession.clubId,
     });
   } catch (error) {
-    if (error instanceof IdentityConflictError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("Delete session error", error);
     return safeErrorResponse();

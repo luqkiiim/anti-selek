@@ -281,7 +281,7 @@ test('interclub invitation review, representation, and profile scope remain avai
   await login(page);
   await page.goto(`/club/${hostClubId}?tab=setup`);
   await page.getByText('More options', { exact: true }).click();
-  await page.getByRole('button', { name: 'Advanced hosting', exact: true }).click();
+  await page.getByRole('button', { name: 'Club collaboration', exact: true }).click();
   await expect(page).toHaveURL(/tools=advanced/);
   await expect(page.getByText('New tournament', { exact: true })).toBeVisible();
   const ids = ['user-host-2-e2e', 'user-host-3-e2e', 'user-score-1-e2e', 'user-score-2-e2e'];

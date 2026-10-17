@@ -52,13 +52,13 @@ export async function getClubAchievementCollection(clubId: string,playerId: stri
       guests:session.players.filter(p=>p.isGuest).map(p=>resolve(p.playerId)),
       matches:session.matches.filter(m=>m.team1Score!==null&&m.team2Score!==null).map(m=>{
         const ratingDelta:Record<string,number>={};
-        for(const adjustment of m.eloAdjustments) ratingDelta[resolve(adjustment.playerId)]=(ratingDelta[resolve(adjustment.playerId)]??0)+adjustment.delta;
+        for(const adjustment of (session.ratingMode === "UNRATED" ? [] : m.eloAdjustments)) ratingDelta[resolve(adjustment.playerId)]=(ratingDelta[resolve(adjustment.playerId)]??0)+adjustment.delta;
         // Legacy owning-club matches predate the per-player adjustment ledger.
-        if(!m.eloAdjustments.length && session.clubId===clubId) {
+        if(session.ratingMode !== "UNRATED" && session.ratingPolicyVersion !== 2 && !m.eloAdjustments.length && session.clubId===clubId) {
           if(m.team1EloChange!==null) for(const id of [m.team1Player1Id,m.team1Player2Id]) ratingDelta[resolve(id)]=m.team1EloChange;
           if(m.team2EloChange!==null) for(const id of [m.team2Player1Id,m.team2Player2Id]) ratingDelta[resolve(id)]=m.team2EloChange;
         }
-        return {id:m.id,date:(m.completedAt??session.endedAt??session.createdAt).toISOString(),team1:[...new Set([m.team1Player1Id,m.team1Player2Id].map(resolve))],team2:[...new Set([m.team2Player1Id,m.team2Player2Id].map(resolve))],winner:m.winnerTeam!,score1:m.team1Score!,score2:m.team2Score!,ratingDelta};
+        return {id:m.id,scoringFormat:m.scoringFormat,gameScoresJson:m.gameScoresJson,date:(m.completedAt??session.endedAt??session.createdAt).toISOString(),team1:[...new Set([m.team1Player1Id,m.team1Player2Id].map(resolve))],team2:[...new Set([m.team2Player1Id,m.team2Player2Id].map(resolve))],winner:m.winnerTeam!,score1:m.team1Score!,score2:m.team2Score!,ratingDelta};
       })});
   }
   const achievements=buildClubAchievements(playerId,members.map(m=>m.playerId),sources);

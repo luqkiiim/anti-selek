@@ -50,7 +50,7 @@ export function getInterclubScore(session: SessionData): InterclubScore | null {
   const secondDiff = second.pointsFor - second.pointsAgainst;
   const leaderId = first.wins !== second.wins
     ? (first.wins > second.wins ? first.id : second.id)
-    : firstDiff !== secondDiff
+    : (session.collaborationVersion ?? 1) < 2 && firstDiff !== secondDiff
       ? (firstDiff > secondDiff ? first.id : second.id)
       : null;
 

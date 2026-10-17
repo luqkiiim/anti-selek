@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CaretRight, Check, Minus, Plus, MagnifyingGlass, Shuffle, Scales, ChartBar, UsersThree, Trash, X } from "@phosphor-icons/react";
 import type { ClubPageMember } from "@/components/club/clubTypes";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
@@ -22,7 +22,7 @@ function Toggle({ title, hint, checked, onChange }: { title: string; hint?: stri
   return <label className="setup-toggle"><span><strong>{title}</strong>{hint && <small>{hint}</small>}</span><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span className="setup-switch" aria-hidden="true" /></label>;
 }
 
-export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdvanced }: { clubId: string; members: ClubPageMember[]; onCreated: (code: string) => void; onAdvanced?: () => void }) {
+export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { clubId: string; members: ClubPageMember[]; onCreated: (code: string) => void; onAdvanced?: () => void }) {
   const identities = new Set<string>();
   const memberIds = new Set([...rosterMembers].sort((a, b) => Number(b.isClaimed) - Number(a.isClaimed)).filter(member => {
     const key = member.offlineIdentityId ? `identity:${member.offlineIdentityId}` : `user:${member.id}`;
@@ -31,6 +31,22 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdva
     return true;
   }).map(member => member.id));
   const members = rosterMembers.filter(member => memberIds.has(member.id));
+  const [partner, setPartner] = useState<{id:string;name:string} | null>(null);
+  const [partnerSearch, setPartnerSearch] = useState("");
+  const [candidates, setCandidates] = useState<Array<{id:string;name:string;membersCount:number}>>([]);
+  const [partnerError, setPartnerError] = useState("");
+  const [collabFormat, setCollabFormat] = useState("FREE_PLAY");
+  const [schedulingMode, setSchedulingMode] = useState("FREE_PLAY");
+  const [scoringFormat, setScoringFormat] = useState("SINGLE_GAME");
+  const [ratingMode, setRatingMode] = useState("UNRATED");
+  useEffect(() => {
+    let current = true;
+    if (partnerSearch.trim().length < 2 || partner) return;
+    const timer = setTimeout(() => {
+      void api<typeof candidates>(`/api/clubs/${clubId}/collab-candidates?search=${encodeURIComponent(partnerSearch.trim())}`).then(value => { if (current) { setCandidates(value); setPartnerError(""); } }).catch(error => { if (current) setPartnerError(error instanceof Error ? error.message : "Unable to find clubs."); });
+    }, 300);
+    return () => { current = false; clearTimeout(timer); };
+  }, [clubId, partnerSearch, partner]);
   const [name, setName] = useState("");
   const [courts, setCourts] = useState(2);
   const [selected, setSelected] = useState<string[]>([]);
@@ -93,16 +109,17 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdva
   function prepare() {
     void action.run(async () => {
       if (!name.trim()) throw new Error("Give this session a name.");
-      if (count < 2) throw new Error("Choose at least two players or guests.");
-      if (mixed && players.some(p => getGender(p) === "UNSPECIFIED")) throw new Error("Some players haven’t set their gender. Ask them to update their account before using mixed pairs.");
-      if (mixed && guests.some(g => g.gender === "UNSPECIFIED")) throw new Error("Set a gender for each guest in the player list before using mixed pairs.");
-      if (groups && (competitive < 2 || count - competitive < 2)) throw new Error("Open the player list and assign at least two players to each group.");
+      if (!partner && count < 2) throw new Error("Choose at least two players or guests.");
+      if ((!partner || collabFormat === "FREE_PLAY") && mixed && players.some(p => getGender(p) === "UNSPECIFIED")) throw new Error("Some players haven’t set their gender. Ask them to update their account before using mixed pairs.");
+      if ((!partner || collabFormat === "FREE_PLAY") && mixed && guests.some(g => g.gender === "UNSPECIFIED")) throw new Error("Set a gender for each guest in the player list before using mixed pairs.");
+      if ((!partner || collabFormat === "FREE_PLAY") && groups && (competitive < 2 || count - competitive < 2)) throw new Error("Open the player list and assign at least two players to each group.");
       const created = await api<{ code: string }>("/api/sessions", "POST", {
         name: name.trim(), clubId, courtCount: courts, scoringType: "POINTS", matchmakingStyle: style,
-        balanceMetric: metric, pairingMode: mixed ? "MIXED" : "OPEN", collabFormat: "FREE_PLAY",
+        balanceMetric: metric, pairingMode: partner && collabFormat === "INTERCLUB" ? "OPEN" : mixed ? "MIXED" : "OPEN", collabFormat: partner ? collabFormat : "FREE_PLAY",
+        ...(partner ? { partnerClubId: partner.id, collaborationVersion: 2, schedulingMode: collabFormat === "INTERCLUB" ? schedulingMode : "FREE_PLAY", scoringFormat: collabFormat === "INTERCLUB" ? scoringFormat : "SINGLE_GAME", ratingMode: collabFormat === "INTERCLUB" ? ratingMode : "RATED" } : {}),
         playerIds: players.map(p => p.id), playerConfigs: players.map(p => ({ userId: p.id, pool: getPool(p) })),
         guestConfigs: guests.map(({ name, initialElo, gender, mixedSideOverride, pool }) => ({ name, initialElo, gender, mixedSideOverride, pool })),
-        poolsEnabled: groups, crossoverFrequency: crossover, autoQueueEnabled: autoQueue, respectPlayerRest: true, isTest: false,
+        poolsEnabled: partner && collabFormat === "INTERCLUB" ? false : groups, crossoverFrequency: crossover, autoQueueEnabled: partner && collabFormat === "INTERCLUB" ? false : autoQueue, respectPlayerRest: true, isTest: false,
       });
       onCreated(created.code);
     });
@@ -117,6 +134,11 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdva
           <div className="setup-courts"><span><strong>Courts</strong></span><div className="setup-stepper"><button type="button" aria-label="Fewer courts" disabled={courts === 1} onClick={() => setCourts(n => n - 1)}><Minus size={18} /></button><output aria-label="Court count" aria-live="polite">{courts}</output><button type="button" aria-label="More courts" disabled={courts === 10} onClick={() => setCourts(n => n + 1)}><Plus size={18} /></button></div></div>
         </section>
 
+        <section className="setup-section" aria-label="Partner club"><h2>Invite a club</h2>
+          {partner ? <div className="setup-partner-selected"><strong>{partner.name}</strong><button type="button" className="text-button" onClick={() => { setPartner(null); setPartnerSearch(""); setCandidates([]); }}>Remove</button></div> : <><label className="field-label">Find a partner club<input type="search" value={partnerSearch} onChange={e => { setPartnerSearch(e.target.value); setCandidates([]); }} placeholder="Club name" /></label>{partnerSearch.trim().length >= 2 && <div className="setup-partner-results">{candidates.map(club => <button type="button" className="secondary full" key={club.id} onClick={() => { setPartner(club); setCandidates([]); }}><strong>{club.name}</strong><span>{club.membersCount} members</span></button>)}</div>}<ErrorText error={partnerError} /></>}
+          {partner && <><fieldset className="setup-metric"><legend>Play style</legend><div className="setup-segments">{[{id:"FREE_PLAY",name:"Play together"},{id:"INTERCLUB",name:"Club vs club"}].map(option => <label key={option.id}><input type="radio" name="collab-format" checked={collabFormat === option.id} onChange={() => setCollabFormat(option.id)} /><span>{option.name}</span></label>)}</div></fieldset>
+          {collabFormat === "INTERCLUB" && <div className="setup-collab-options">{[{label:"Matches",name:"scheduling",value:schedulingMode,set:setSchedulingMode,options:[["LINEUP","Lineup"],["FREE_PLAY","Free play"]]},{label:"Scoring",name:"scoring",value:scoringFormat,set:setScoringFormat,options:[["SINGLE_GAME","Single game"],["BEST_OF_THREE","Best of three"]]},{label:"Club ratings",name:"ratings",value:ratingMode,set:setRatingMode,options:[["UNRATED","Unrated"],["RATED","Rated"]]}].map(group => <fieldset key={group.name} className="setup-metric"><legend>{group.label}</legend><div className="setup-segments">{group.options.map(([id,label]) => <label key={id}><input type="radio" name={group.name} checked={group.value === id} onChange={() => group.set(id)} /><span>{label}</span></label>)}</div></fieldset>)}</div>}</>}
+        </section>
         <section className="setup-section" aria-labelledby="setup-players"><h2 id="setup-players">Who’s playing?</h2>
           <button type="button" className="setup-roster-summary" onClick={() => setRosterOpen(true)} aria-haspopup="dialog">
             <span className="setup-roster-faces" aria-hidden="true">{players.slice(0, 3).map(p => <Avatar key={p.id} name={p.name} url={p.avatarUrl} />)}{!players.length && <UsersThree size={28} />}</span>
@@ -126,7 +148,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdva
           {count < 4 && <p className="setup-hint">You’ll need four players to start a doubles game.</p>}
         </section>
 
-        <section className="setup-section" aria-labelledby="setup-matches"><h2 id="setup-matches">How should we match?</h2>
+        {(!partner || collabFormat === "FREE_PLAY") && <><section className="setup-section" aria-labelledby="setup-matches"><h2 id="setup-matches">How should we match?</h2>
           <div className="setup-format-list" role="radiogroup" aria-label="Matchmaking style">{formats.map(({ id, name, description, icon: Icon }) => <label key={id} className={`setup-format ${style === id ? "is-selected" : ""}`}><input type="radio" name="matchmaking" value={id} checked={style === id} onChange={() => setStyle(id)} /><Icon size={24} weight="duotone" aria-hidden="true" /><span><strong>{name}</strong><small>{description}</small></span><span className="setup-radio-mark" aria-hidden="true">{style === id && <Check size={13} weight="bold" />}</span></label>)}</div>
           <Toggle title="Mixed pairs" checked={mixed} onChange={setMixed} />
           {style !== "SOCIAL" && <fieldset className="setup-metric"><legend>Balance teams using</legend><div className="setup-segments">{[{ id: "RATING", name: "Club rating" }, { id: "SESSION_POINTS", name: "Session points" }].map(option => <label key={option.id}><input type="radio" name="balance" value={option.id} checked={metric === option.id} onChange={() => setMetric(option.id)} /><span>{option.name}</span></label>)}</div></fieldset>}
@@ -136,8 +158,8 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated, onAdva
           <Toggle title="Player groups" hint="Separate Competitive and Social groups." checked={groups} onChange={setGroups} />
           {groups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setRosterOpen(true)}>{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
           <Toggle title="Prepare the next game" hint="Automatically keep the next match queued." checked={autoQueue} onChange={setAutoQueue} />
-          {onAdvanced && <button type="button" className="text-button setup-advanced" onClick={onAdvanced}>Advanced hosting<CaretRight size={16} /></button>}
-        </div></details>
+
+        </div></details></>}
       </fieldset>
       <div className="setup-submit"><ErrorText error={rosterError ? "" : action.error} /><button className="primary full" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : "Prepare session"}<CaretRight size={18} /></button></div>
     </form>

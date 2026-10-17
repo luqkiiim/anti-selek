@@ -87,6 +87,8 @@ export interface SessionShareImageMatch {
   team1User2Id: string;
   team2User1Id: string;
   team2User2Id: string;
+  scoringFormat?: string;
+  gameScoresJson?: string | null;
   team1Score?: number | null;
   team2Score?: number | null;
   winnerTeam?: number | null;
@@ -202,6 +204,9 @@ function buildPlayerPerformanceMaps({
     const historyMatches = matches.map((match) => ({
       team1: [match.team1User1Id, match.team1User2Id] as [string, string],
       team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      winnerTeam: match.winnerTeam,
+      scoringFormat: match.scoringFormat,
+      gameScoresJson: match.gameScoresJson,
       team1Score: match.team1Score ?? undefined,
       team2Score: match.team2Score ?? undefined,
       status: match.status ?? undefined,

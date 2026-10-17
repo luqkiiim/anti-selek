@@ -175,6 +175,19 @@ export class ClubReadStore {
     entry.refreshing = Promise.resolve().then(() => this.read(url)).finally(() => { entry.refreshing = undefined; });
     return entry.refreshing;
   }
+  /** Recovery must perform a new read; a suppressed or superseded read is not confirmation. */
+  async refreshConfirmed(url: string): Promise<void> {
+    if (this.disposed) throw new Error("Club access changed. Reload to continue.");
+    const entry = this.entry(url);
+    if (entry.state.retryAt > Date.now()) throw new ApiError("Please wait before refreshing again.", 429);
+    this.cancel(entry);
+    const request = this.read(url);
+    const version = entry.version;
+    await request;
+    if (this.disposed || entry.version !== version || !entry.state.validated || !entry.state.data) {
+      throw new Error("Club details changed. Refresh again.");
+    }
+  }
   refreshClub(id: string) {
     const reads: Promise<void>[] = [];
     for (const [url, entry] of this.entries) {
