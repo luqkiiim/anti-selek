@@ -323,7 +323,10 @@ export default function Admin({
             <>
               {edit && <MemberPhotoEditor key={edit.id} member={edit} clubId={club.id} refresh={refresh} onBusyChange={setPhotoBusy} onSaved={avatarUrl => { const updated = { ...edit, avatarUrl }; setEdit(updated); onMemberSaved?.(updated); }} />}
               {edit && <PlayerInvitationPanel key={`invite:${edit.id}`} clubId={club.id} playerId={edit.id} playerName={edit.name} rating={edit.elo} matchesPlayed={edit.matchesPlayed} connected={edit.isClaimed} />}
-              {edit && <details className="manage-rating-history"><summary>Rating history</summary><AdjustClubRating clubId={club.id} userId={edit.id} name={edit.name} onChanged={updated => { setRating(String(updated)); setEdit(current => current ? { ...current, elo: updated } : null); onMemberSaved?.({ ...edit, elo: updated }); void refresh().catch(() => {}); }} /></details>}
+              {edit && <section className="manage-player-rating" aria-label="Club rating">
+                <h3>Rating · {currentPlayer?.elo ?? edit.elo}</h3>
+                <AdjustClubRating clubId={club.id} userId={edit.id} name={edit.name} onChanged={updated => { setRating(String(updated)); setEdit(current => current ? { ...current, elo: updated } : null); onMemberSaved?.({ ...edit, elo: updated }); void refresh().catch(() => {}); }} />
+              </section>}
               {currentPlayer && <section className="manage-player-role" aria-label="Club role">
                 <h3>Club role · {currentPlayer.isOwner ? "Owner" : getClubRoleLabel(currentPlayer.role)}</h3>
                 <p className="muted">Staff can host and run sessions. Admins can also manage club settings, players, and requests.</p>

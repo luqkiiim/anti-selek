@@ -15,8 +15,8 @@
 .manage-player-group .avatar { width: 46px; height: 46px; flex-shrink: 0; }
 .manage-player-group .person-info { min-width: 0; }
 .manage-player-group .person-info strong { overflow-wrap: anywhere; }
-.manage-player-role { margin: 0 0 20px; padding: 16px; border: 1px solid #e8ddef; border-radius: 14px; background: #fffdfb; }
-.manage-player-role h3 { margin: 0 0 8px; font-size: 15px; }
+.manage-player-rating, .manage-player-role { margin: 0 0 20px; padding: 16px; border: 1px solid #e8ddef; border-radius: 14px; background: #fffdfb; }
+.manage-player-rating h3, .manage-player-role h3 { margin: 0 0 8px; font-size: 15px; }
 .manage-player-role-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .manage-player-role-actions .secondary { flex: 1 1 140px; min-height: 44px; margin: 0; }
 .club-settings-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
