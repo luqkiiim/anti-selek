@@ -9,7 +9,7 @@ import {
 import { createMatchmakingSearchBudget } from "./searchBudget";
 import type { MatchmakerV3Player, V3SelectionConstraints } from "./types";
 
-type Shape = "unequal" | "high-lock" | "arrivals" | "fractional" | "equal-tuples" | "unreachable" | "forced-replay-mixed" | "rank-fallback";
+type Shape = "unequal" | "high-lock" | "arrivals" | "overdue-arrivals" | "fractional" | "equal-tuples" | "unreachable" | "forced-replay-mixed" | "rank-fallback";
 
 function makeFixture(courtCount: 2 | 3, shape: Shape) {
   const required = courtCount * 4;
@@ -42,6 +42,14 @@ function makeFixture(courtCount: 2 | 3, shape: Shape) {
   if (shape === "equal-tuples") {
     players.forEach((player) => { player.matchesPlayed = player === players[required] || player === players[required + 1] ? 9 : 0; player.pointDiff = 0; player.restTurns = 1; });
     players[0].strength = 1000.2;
+  }
+  if (shape === "overdue-arrivals") {
+    players.forEach((player, index) => { player.matchesPlayed = index === required + 1 ? 9 : 0; });
+    // One overdue player is unavoidably outside the fair class. The other is
+    // a legal alternative, so equal-count branches can improve starvation.
+    players[required].restTurns = 100;
+    players[required + 1].restTurns = 101;
+    players[1].arrivalPriorityAt = new Date("2025-12-31T23:59:00Z");
   }
   if (shape === "forced-replay-mixed") {
     players.forEach((player, index) => {
@@ -77,6 +85,10 @@ function makeFixture(courtCount: 2 | 3, shape: Shape) {
     families.forEach((family) => family.push(...family.filter((quartet) => quartet.includes(target[required - 1]))
       .map((quartet) => quartet.map((id) => id === target[required - 1] ? original : id))));
   }
+  if (shape === "overdue-arrivals") {
+    families.forEach((family) => family.push(...family.filter((quartet) => quartet.includes(target[0]))
+      .map((quartet) => quartet.map((id) => id === target[0] ? high : id))));
+  }
   const constraints = families.map((quartets): V3SelectionConstraints => {
     const keys = new Set(quartets.map((ids) => [...ids].sort().join("|")));
     return { isQuartetAllowed: (quartet) => keys.has(quartet.map((player) => player.userId).sort().join("|")) };
@@ -99,7 +111,7 @@ function randomStream(seed: number) {
 }
 
 describe("counted multi-court Balanced differential against frozen exhaustive search", () => {
-  for (const courtCount of [2, 3] as const) for (const shape of ["unequal", "high-lock", "arrivals", "fractional", "equal-tuples", "unreachable", "forced-replay-mixed", "rank-fallback"] as const) {
+  for (const courtCount of [2, 3] as const) for (const shape of ["unequal", "high-lock", "arrivals", "overdue-arrivals", "fractional", "equal-tuples", "unreachable", "forced-replay-mixed", "rank-fallback"] as const) {
     it(`${courtCount} courts / ${shape} preserves baseline, physical layout and subsequent RNG`, () => {
       const fixture = makeFixture(courtCount, shape);
       for (const seed of [1, 4729, 104729]) for (const engine of ["recurrence", "production"] as const) {
@@ -133,6 +145,10 @@ describe("counted multi-court Balanced differential against frozen exhaustive se
           // shortcut remains inactive until a global-class witness exists.
           expect(selected, label).toContain(fixture.high);
           expect(actual.selection!.fairnessVector!.slice(0, courtCount * 4).at(-1), label).toBeGreaterThan(0);
+        } else if (shape === "overdue-arrivals") {
+          expect(selected, label).toContain(fixture.high);
+          expect(actual.debug.leftOutOverduePlayerCount, label).toBeGreaterThan(0);
+          expect(actual.selection!.fairnessVector![courtCount * 4], label).toBe(-1);
         } else {
           expect(selected, label).not.toContain(fixture.high);
         }
