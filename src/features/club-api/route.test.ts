@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
   clubMemberFindMany: vi.fn(),
   sessionFindMany: vi.fn(),
   rateLimit: vi.fn(async () => null),
+  userFindUnique: vi.fn(),
+  playerCreate: vi.fn(),
+  clubMemberCreate: vi.fn(),
+  claimClubPlayer: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -27,8 +31,21 @@ vi.mock("@/lib/prisma", () => ({
     session: {
       findMany: mocks.sessionFindMany,
     },
+    user: { findUnique: mocks.userFindUnique },
+    player: { create: mocks.playerCreate },
+    clubMember: { create: mocks.clubMemberCreate },
   },
 }));
+
+vi.mock("@/lib/clubPlayerOwnership", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clubPlayerOwnership")>();
+  return {
+    ...actual,
+    claimClubPlayer: mocks.claimClubPlayer,
+    clubOwnershipTransaction: async (_db: unknown, operation: (tx: unknown) => Promise<unknown>) =>
+      operation((await import("@/lib/prisma")).prisma),
+  };
+});
 
 vi.mock("@/lib/globalAdmin", () => ({
   isGlobalAdminEmail: vi.fn(() => false),
@@ -66,6 +83,8 @@ describe("club collection API", () => {
     vi.clearAllMocks();
     mocks.rateLimit.mockResolvedValue(null);
     mocks.sessionFindMany.mockResolvedValue([]);
+    mocks.userFindUnique.mockResolvedValue({ name: "Current Account", avatarKey: "account-photo", gender: "FEMALE", isActive: true });
+    mocks.playerCreate.mockResolvedValue({ id: "creator-player" });
     mockSignedInUser();
   });
 
