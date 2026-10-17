@@ -20,13 +20,15 @@ const mocks = vi.hoisted(() => ({
   api: vi.fn(),
   useResource: vi.fn(),
   useAction: vi.fn(),
+  scheduleDeferredQueueRecovery: vi.fn(),
+  cancelDeferredQueueRecovery: vi.fn(async (): Promise<void> => undefined),
   session: null as SessionData | null,
   sessionResource: null as { data: SessionData | null; error: string; refresh: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> } | null,
   standingsResource: null as { data: { currentLeaderboard: Array<{ userId: string; name: string; sessionPoints: number }> }; error: string; refresh: ReturnType<typeof vi.fn> } | null,
 }));
 
 vi.mock("next/image", () => ({ default: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} /> }));
-vi.mock("./useSessionController", () => ({ useSessionController: (code: string, globalClubId?: string) => mocks.useResource(`/api/sessions/${code}${globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : ""}`) }));
+vi.mock("./useSessionController", () => ({ useSessionController: (code: string, globalClubId?: string) => ({ ...mocks.useResource(`/api/sessions/${code}${globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : ""}`), scheduleDeferredQueueRecovery: mocks.scheduleDeferredQueueRecovery, cancelDeferredQueueRecovery: mocks.cancelDeferredQueueRecovery }) }));
 vi.mock("./api", () => ({
   api: mocks.api,
   useResource: mocks.useResource,
@@ -176,6 +178,8 @@ describe("LiveSession score and player controls", () => {
     mocks.api.mockReset().mockResolvedValue({});
     mocks.useResource.mockReset();
     mocks.useAction.mockReset();
+    mocks.scheduleDeferredQueueRecovery.mockReset();
+    mocks.cancelDeferredQueueRecovery.mockReset().mockResolvedValue(undefined);
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -965,9 +969,62 @@ describe("LiveSession score and player controls", () => {
       ],
     );
     setup(session);
+    const queuedMatch = {
+      id: "queue-1",
+      team1User1: { id: "waiting-0", name: "Waiting 1" },
+      team1User2: { id: "waiting-1", name: "Waiting 2" },
+      team2User1: { id: "waiting-2", name: "Waiting 3" },
+      team2User2: { id: "waiting-3", name: "Waiting 4" },
+    };
+    mocks.api.mockResolvedValue({ queuedMatch });
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("Queue next match"))?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/queue-match", "POST");
+    expect(mocks.sessionResource!.data?.queuedMatch).toMatchObject(queuedMatch);
+  });
+
+  it("patches committed courts and schedules deferred recovery before a slow refresh finishes", async () => {
+    const session = sessionWithCourts([
+      { id: "court-1", courtNumber: 1, currentMatch: null },
+      { id: "court-2", courtNumber: 2, currentMatch: null },
+    ], Array.from({ length: 8 }, (_, index) => player(`p${index}`, `Player ${index + 1}`)));
+    setup(session);
+    const pendingRefresh = deferred<void>();
+    mocks.sessionResource!.refresh.mockImplementation(() => pendingRefresh.promise);
+    mocks.api.mockResolvedValue({ matches: [
+      { ...match("created-1", 1), courtId: "court-1" },
+      { ...match("created-2", 2), courtId: "court-2" },
+    ], queuedMatch: null, deferredQueueRecovery: true });
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.includes("Create matches"))?.click());
+
+    expect(mocks.sessionResource!.data?.courts.map(court => court.currentMatch?.id)).toEqual(["created-1", "created-2"]);
+    expect(mocks.sessionResource!.update).toHaveBeenLastCalledWith(expect.any(Function), { urgent: true });
+    expect(mocks.scheduleDeferredQueueRecovery).toHaveBeenCalledOnce();
+    expect(mocks.sessionResource!.refresh).toHaveBeenCalledOnce();
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    expect(container.textContent).toContain("Score Player 1A");
+    await act(async () => pendingRefresh.resolve());
+  });
+
+  it("waits for deferred recovery before clearing the visible next match", async () => {
+    const currentMatch = match("match-1", 1);
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]);
+    session.queuedMatch = { ...match("queued-1", 2), createdAt: "2026-10-17T00:00:00Z" };
+    setup(session);
+    const pendingRecovery = deferred<void>();
+    mocks.cancelDeferredQueueRecovery.mockImplementation(() => pendingRecovery.promise);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Next up options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Clear next match")?.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[role="dialog"] .primary')?.click());
+    expect(mocks.cancelDeferredQueueRecovery).toHaveBeenCalledOnce();
+    expect(mocks.api).not.toHaveBeenCalled();
+
+    await act(async () => pendingRecovery.resolve());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/queue-match", "DELETE");
+    expect(mocks.sessionResource!.data?.queuedMatch).toBeNull();
+    expect(container.querySelector('[aria-label="Next up options"]')).toBeNull();
   });
 
   it("shows the interclub lead using completed results only", async () => {

@@ -15,5 +15,7 @@ export function useSessionController(code: string, globalClubId?: string) {
     refresh,
     update: controller.patchSessionData,
     retry: controller.retryInitialLoad,
+    scheduleDeferredQueueRecovery: controller.scheduleDeferredQueueRecovery,
+    cancelDeferredQueueRecovery: controller.cancelDeferredQueueRecovery,
   };
 }
