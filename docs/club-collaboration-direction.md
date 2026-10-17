@@ -1,6 +1,6 @@
 # Club collaboration
 
-Implementation: October 2026. Local verification precedes release. Production release preparation is in progress under the separately reviewed release63 procedure.
+Implementation: October 2026. Local verification precedes release. Production release preparation is being revised for a staged online rollout; the new procedure needs implementation and independent review.
 
 ## Goal and setup
 
@@ -43,13 +43,13 @@ Approval, correction, undo, reset, profile/history readers, achievements, share 
 
 `GET/PATCH /api/sessions/:code/collaboration` exposes shared state/capabilities and versioned rules/reset/invitation actions. `POST /lineup`, `PATCH /lineup/:rowId`, and `POST /lineup/:rowId/start` manage fixtures. Score requests add `gameScores`, `scoreRevision`, and `finalize: false` for progress saves. The existing reset and end endpoints enforce the shared lifecycle rules.
 
-The additive migration `20261015123000_upgrade_club_collaboration` preserves existing rows, rating values, indexes, and identity triggers. Existing sessions default to behavior version 1, Free play scheduling, Single game, and their existing rated treatment. Every new partner session uses behavior version 2; callers cannot opt into legacy permissions. Historical results are not recalculated.
+The additive migration `20261015123000_upgrade_club_collaboration` preserves existing rows, rating values, indexes, and identity triggers. Existing sessions default to behavior version 1, Free play scheduling, Single game, and their existing rated treatment. After activation, every new partner session uses behavior version 2; callers cannot opt into legacy permissions. Historical results are not recalculated.
 
 Retired test sessions remain legacy records. Ordinary session creation still rejects the old test flag. Guided tutorial sessions remain isolated, classified by the server. Unrated play uses its own setting.
 
 ## Release boundary
 
-The normal build does not migrate a database. Local SQLite verification uses disposable databases; back up any populated local database before applying migrations. Production requires a separately reviewed, explicitly approved writer procedure, coordinated write freeze, matching deployment, and fresh runtime-log/public-flow verification. The subsequent user request authorizes proceeding through deployment; the exact production writer procedure and coordinated maintenance still require the explicit approval specified in AGENTS.md. See `production-release63.md`.
+The normal build does not migrate a database. Local SQLite verification uses disposable databases; back up any populated local database before applying migrations. Production requires a separately reviewed, explicitly approved writer procedure, matching deployment, and fresh runtime-log/public-flow verification. Prefer a zero-downtime staged migration when compatibility, concurrent writes, activation and recovery are proven; a coordinated write freeze is a conditional fallback. The user authorized release preparation through deployment and requested this online-first policy. See `database-release-policy.md` and the revised `production-release63.md` for the remaining readiness and approval gates.
 
 ## Local verification — 16 October 2026
 
@@ -61,4 +61,4 @@ The normal build does not migrate a database. Local SQLite verification uses dis
 
 Unrated rollback is verified without rating ledgers. Rated rollback refuses to erase earlier changes when later rated fixtures depend on those club profiles; the existing rollback route does not replay other sessions. Supplied score revisions are required for upgraded score mutations, and draft revisions are retained across polling.
 
-Verification used only disposable local databases. No production migration, deployment, runtime-log check, or public deployed-flow verification has occurred. Release preparation and the approval boundary are documented in `production-release63.md`.
+Application verification used disposable local databases. A later production read-only backup was rehearsed locally, preserving all 8,473 original rows with integrity and foreign-key checks passing. No production migration, deployment, runtime-log check, or public deployed-flow verification has occurred. Release preparation and the approval boundary are documented in `production-release63.md`.

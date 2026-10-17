@@ -1,7 +1,8 @@
 # Repository Instructions
 
 - This app uses Prisma migrations and Turso. Never assume a push or Vercel build has applied database migrations.
-- The normal build must not apply database migrations. Production cutover requires an explicit user-approved, separately reviewed writer procedure and a coordinated write freeze; the read-only production rehearsal is not a migration command.
+- The normal build must not apply database migrations. Production changes require an explicitly user-approved, separately reviewed writer procedure; the read-only production rehearsal is not a migration command.
+- Prefer a zero-downtime staged migration when old/new application compatibility, bounded database locking, concurrent-write preservation, safe feature activation, and recovery are demonstrated. A write freeze is conditional, not the default. If those checks fail or the change requires exclusive maintenance, document the reason and obtain approval for the coordinated maintenance window. Follow `docs/database-release-policy.md`.
 - `npm run db:migrate:turso` is for local SQLite files or the locally registered development Turso endpoint only. It requires `--force`, rejects Vercel production, and must never be repurposed by changing `.env.local` or replacing `private/development-target.json` with a production fingerprint.
 - For a production preservation rehearsal, use the dedicated `private/production-rehearsal.env` file and `npm run db:rehearse:production`. This path accepts a read-only token, stores source snapshots/manifests only under protected ignored `private/`, and never exports those credentials as `TURSO_*` or `DATABASE_URL`. Do not use this credential for writes.
 - Apply local SQLite migrations when needed with `npx prisma migrate deploy`; back up the local database first when it contains data. Do not initialize or rebaseline a remote development database unless the task explicitly requires it and its migration chain is understood.
