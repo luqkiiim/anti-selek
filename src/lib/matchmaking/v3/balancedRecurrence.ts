@@ -2712,7 +2712,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         const compatibleByCourt = new Map<number, Candidate<ActiveMatchmakerV3Player<T>>[]>();
         for (const other of remaining) {
           const eligible = candidatesInGlobalCountClass(lists[other]);
-          const options = socialCourtmateBeneficialRescue || candidateOrdinal || (balancePolicy && (replayBaselinePhase || coverageBaselinePhase))
+          const options = baselinePhase || socialCourtmateBeneficialRescue || candidateOrdinal || (balancePolicy && (replayBaselinePhase || coverageBaselinePhase))
             ? getCompatibleCandidates(eligible, used, previousOrdinal, candidateOrdinal)
             : filterCandidates(eligible, (candidate) => (candidate.mask & used) === BigInt(0));
           compatibleByCourt.set(other, options);
@@ -2773,12 +2773,13 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
                 Math.min(minimum, candidate.selection.balanceGap), Infinity);
               const balanceBound = Math.max(0, ...chosen.map((candidate) => candidate.selection.balanceGap),
                 ...remaining.map(minimumFor));
-              const totalBound = canonicalSum(chosen.map((candidate) => candidate.selection.balanceGap)) +
-                remaining.reduce((total, other) => total + minimumFor(other), 0);
-              const totalRoundoff = Number.EPSILON * (chosen.length + remaining.length + 1) *
-                Math.max(Math.abs(totalBound), Math.abs(baseline.totalBalanceGap));
+              // Use the exact same sorted addition as the complete baseline.
+              // Increasing any nonnegative court gap cannot decrease its
+              // sorted order statistics or their floating-point sum.
+              const totalBound = canonicalSum([...chosen.map((candidate) => candidate.selection.balanceGap),
+                ...remaining.map(minimumFor)]);
               if (balanceBound > baseline.maxBalanceGap ||
-                (balanceBound === baseline.maxBalanceGap && totalBound - totalRoundoff > baseline.totalBalanceGap)) { pruned++; return; }
+                (balanceBound === baseline.maxBalanceGap && totalBound >= baseline.totalBalanceGap)) { pruned++; return; }
             } else if (replayBaselinePhase && replayBaseline) {
               // This phase retains only strict improvements of its complete
               // fairness/rank/starvation/replay tuple. A tied replay lower
