@@ -53,6 +53,7 @@ import { shareSessionStandingsImageBlob } from "@/lib/sessionShareImageClient";
 import { useSessionStandingsImage } from "@/lib/useSessionStandingsImage";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { classifyCourtGroupSnapshot, getCourtGroupTypeLabel } from "@/lib/playerGroups";
 import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
 import {
   applyGeneratedMatches,
@@ -434,6 +435,17 @@ export default function LiveSession({
     }
   }
   const queued = s?.queuedMatch;
+  const playerPoolById = new Map(s?.players.map((player) => [player.userId, player.pool]));
+  function matchGroupLabel(match: Match | NonNullable<SessionData["queuedMatch"]> | null | undefined) {
+    if (!s?.poolsEnabled || !match) return null;
+    return getCourtGroupTypeLabel(match.courtGroupType ?? null) ??
+      getCourtGroupTypeLabel(classifyCourtGroupSnapshot(
+        [match.team1User1.id, match.team1User2.id],
+        [match.team2User1.id, match.team2User2.id],
+        playerPoolById,
+      ).courtGroupType);
+  }
+  const queuedGroupLabel = matchGroupLabel(queued);
   function playersInMatch(match: Pick<Match, "team1User1" | "team1User2" | "team2User1" | "team2User2">) {
     return [
       match.team1User1,
@@ -1028,10 +1040,14 @@ export default function LiveSession({
               )}
               {s.courts.map((court) => {
                 const match = court.currentMatch;
+                const groupLabel = matchGroupLabel(match);
                 return (
                   <section className="court-card" key={court.id}>
                     <div className="section-heading">
-                      <h3>{court.label || "Court " + court.courtNumber}</h3>
+                      <div className="court-heading-title">
+                        <h3>{court.label || "Court " + court.courtNumber}</h3>
+                        {groupLabel && <span className="court-group-label">{groupLabel}</span>}
+                      </div>
                       <div className="court-heading-actions">
                         {(canManage || !!match) && (
                           <button
@@ -1136,7 +1152,10 @@ export default function LiveSession({
                 <button className="next-up" aria-label="Next up options" onClick={openNextControls}>
                   <Clock size={21} />
                   <span>
-                    <strong>Next up</strong>
+                    <span className="next-up-heading">
+                      <strong>Next up</strong>
+                      {queuedGroupLabel && <span className="court-group-label">{queuedGroupLabel}</span>}
+                    </span>
                     <span className="next-up-teams">
                       <span className="next-up-team">
                         {[queued.team1User1, queued.team1User2].map((player) => (
