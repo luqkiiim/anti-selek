@@ -64,6 +64,11 @@ import type {
 import type { BalancedCandidateDecision } from "@/lib/matchmaking/v3/balancedCandidateAcceptance";
 import type { BalancedRecurrenceOptions } from "@/lib/matchmaking/v3/balancedRecurrence";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
+import {
+  checkMatchmakingSearchBudget,
+  MatchmakingSearchBudgetExceededError,
+  type MatchmakingSearchBudget,
+} from "@/lib/matchmaking/v3/searchBudget";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import {
   buildSocialVarietyContext,
@@ -478,16 +483,20 @@ function getBalancedRotationPlayerGroupOpportunityConstraints(
 
 function getRotationSelectionOptions(
   sessionData: GenerateMatchSession,
-  players: MatchmakerV3Player[]
+  players: MatchmakerV3Player[],
+  searchBudget?: MatchmakingSearchBudget,
 ) {
+  checkMatchmakingSearchBudget(searchBudget);
   if (!usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) return {};
   const socialHistoryMatches = buildSocialSessionHistory(sessionData);
   const structuralOpportunityConstraints = sessionData.poolsEnabled
     ? getRotationPlayerGroupOpportunityConstraints(sessionData)
     : undefined;
+  checkMatchmakingSearchBudget(searchBudget);
   const socialVarietyContext = buildSocialVarietyContext(players, socialHistoryMatches, {
     sessionMode: getMatchmakerSessionMode(sessionData),
     opportunityConstraints: structuralOpportunityConstraints,
+    searchBudget,
   });
   return {
     socialHistoryMatches,
@@ -1729,6 +1738,7 @@ function selectRotationPlayerGroupBatch({
   lockedPlayerIds,
   randomFn,
   socialPriorityPolicy,
+  searchBudget,
 }: {
   sessionData: GenerateMatchSession;
   rankedCandidates: RankedCandidates;
@@ -1741,7 +1751,9 @@ function selectRotationPlayerGroupBatch({
   lockedPlayerIds?: ReadonlySet<string>;
   randomFn?: () => number;
   socialPriorityPolicy?: SocialCandidatePolicy;
+  searchBudget?: MatchmakingSearchBudget;
 }) {
+  checkMatchmakingSearchBudget(searchBudget);
   const activeCounts = getPoolActiveCounts(sessionData);
   const waitingCounts = getPoolWaitingCounts(sessionData, rankedCandidates);
   const normalizedRequiredType = getNormalizedCourtGroupType(requiredCourtGroupType);
@@ -1758,8 +1770,20 @@ function selectRotationPlayerGroupBatch({
     plan.compositions.every((composition) => composition.courtGroupType === normalizedRequiredType)
   );
   const players = buildV3Players(sessionData, playersById, rankedCandidates);
-  const socialOptions = getRotationSelectionOptions(sessionData, players);
+  const socialOptions = getRotationSelectionOptions(sessionData, players, searchBudget);
+  checkMatchmakingSearchBudget(searchBudget);
+  const constraintsByComposition = new Map<string, ReturnType<typeof getPlayerGroupSelectionConstraints<typeof players[number]>>>();
+  const constraintsFor = (composition: PlayerGroupCourtComposition) => {
+    const key = `${composition.courtGroupType}:${composition.poolASeatCount}:${composition.poolBSeatCount}`;
+    let constraints = constraintsByComposition.get(key);
+    if (!constraints) {
+      constraints = getPlayerGroupSelectionConstraints<typeof players[number]>(composition);
+      constraintsByComposition.set(key, constraints);
+    }
+    return constraints;
+  };
   for (const courtCount of [...new Set(plans.map((plan) => plan.filledCourtCount))]) {
+    checkMatchmakingSearchBudget(searchBudget);
     const levelPlans = plans.filter((plan) => plan.filledCourtCount === courtCount);
     let rank = 0;
     const profiles = levelPlans.map((plan, index) => {
@@ -1776,7 +1800,7 @@ function selectRotationPlayerGroupBatch({
       return {
         rank,
         compositions,
-        courts: compositions.map((composition) => getPlayerGroupSelectionConstraints(composition)),
+        courts: compositions.map(constraintsFor),
       };
     });
     const selectionOptions: RotationBatchOptions<typeof players[number]> = {
@@ -1791,6 +1815,8 @@ function selectRotationPlayerGroupBatch({
       excludedPartitionKey,
       lockedPlayerIds,
       randomFn,
+      searchBudget,
+      ...(searchBudget ? { searchLimits: { maxBranches: 200_000, maxMs: 2_000 } } : {}),
     };
     const candidateOptions = socialPriorityPolicy
       ? {
@@ -1839,6 +1865,7 @@ function selectRotationPlayerGroupBatch({
           };
         })();
     const result = safeRun.result;
+    checkMatchmakingSearchBudget(searchBudget);
     if (result.selection && result.scheduleIndex !== null) {
       const profile = profiles[result.scheduleIndex];
       const plan = levelPlans[result.scheduleIndex];
@@ -1885,6 +1912,7 @@ function selectPoolEnabledSingleCourtMatch({
   reshuffleSource,
   requiredCourtGroupType,
   socialPriorityPolicy,
+  searchBudget,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -1892,6 +1920,7 @@ function selectPoolEnabledSingleCourtMatch({
   reshuffleSource: ReshuffleSource | null;
   requiredCourtGroupType?: CourtGroupType | string | null;
   socialPriorityPolicy?: SocialCandidatePolicy;
+  searchBudget?: MatchmakingSearchBudget;
 }): PoolAwareSelection {
   if (usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) {
     const select = (excludedQuartetKeys?: ReadonlySet<string>, excludedPartitionKey?: string) => {
@@ -1900,6 +1929,7 @@ function selectPoolEnabledSingleCourtMatch({
           sessionData, rankedCandidates, playersById, requestedMatchCount: 1,
           requiredCourtGroupType, excludedQuartetKeys, excludedPartitionKey,
           socialPriorityPolicy,
+          searchBudget,
         }).selections[0] ?? null;
       } catch (error) {
         if (error instanceof GenerateMatchError && error.status === 400 &&
@@ -2019,6 +2049,7 @@ export function selectSingleCourtMatch({
   reshuffleSource,
   requiredCourtGroupType,
   socialPriorityPolicy,
+  searchBudget,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2028,7 +2059,9 @@ export function selectSingleCourtMatch({
   requiredCourtGroupType?: CourtGroupType | string | null;
   /** Session type is authoritative; this only permits internal policy overrides. */
   socialPriorityPolicy?: SocialCandidatePolicy;
+  searchBudget?: MatchmakingSearchBudget;
 }) {
+  checkMatchmakingSearchBudget(searchBudget);
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
@@ -2056,6 +2089,7 @@ export function selectSingleCourtMatch({
       reshuffleSource,
       requiredCourtGroupType,
       socialPriorityPolicy: resolvedSocialPriorityPolicy,
+      searchBudget,
     });
   }
 
@@ -2069,7 +2103,7 @@ export function selectSingleCourtMatch({
     sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
-    ...getRotationSelectionOptions(sessionData, v3Players),
+    ...getRotationSelectionOptions(sessionData, v3Players, searchBudget),
   };
   const candidateV3Options = resolvedSocialPriorityPolicy
     ? {
@@ -2574,6 +2608,7 @@ export function selectSingleCourtMatchRespectingSkips({
   reshuffleSource,
   requiredCourtGroupType,
   socialPriorityPolicy,
+  searchBudget,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2582,6 +2617,7 @@ export function selectSingleCourtMatchRespectingSkips({
   reshuffleSource: ReshuffleSource | null;
   requiredCourtGroupType?: CourtGroupType | string | null;
   socialPriorityPolicy?: SocialCandidatePolicy;
+  searchBudget?: MatchmakingSearchBudget;
 }) {
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
@@ -2592,6 +2628,7 @@ export function selectSingleCourtMatchRespectingSkips({
   const consumedSkipUserIds: string[] = [];
 
   for (let attempt = 0; attempt <= pendingSkipUserIds.size; attempt += 1) {
+    checkMatchmakingSearchBudget(searchBudget);
     const eligibleRankedCandidates = filterRankedCandidatesByExcludedUserIds(
       rankedCandidates,
       excludedSkipUserIds
@@ -2611,8 +2648,10 @@ export function selectSingleCourtMatchRespectingSkips({
         reshuffleSource,
         requiredCourtGroupType,
         socialPriorityPolicy: resolvedSocialPriorityPolicy,
+        searchBudget,
       });
     } catch (error) {
+      if (error instanceof MatchmakingSearchBudgetExceededError) throw error;
       if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
         throw getSkipNextAlternativeError();
       }
@@ -2875,6 +2914,7 @@ export function selectBatchMatches({
   requestedCourtIds,
   randomFn,
   socialPriorityPolicy,
+  searchBudget,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2885,7 +2925,9 @@ export function selectBatchMatches({
   randomFn?: () => number;
   /** Session type is authoritative; this only permits internal policy overrides. */
   socialPriorityPolicy?: SocialCandidatePolicy;
+  searchBudget?: MatchmakingSearchBudget;
 }) {
+  checkMatchmakingSearchBudget(searchBudget);
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
@@ -2914,6 +2956,7 @@ export function selectBatchMatches({
       return selectRotationPlayerGroupBatch({
         sessionData, rankedCandidates, playersById, requestedMatchCount,
         requestedCourtIds, randomFn, socialPriorityPolicy: resolvedSocialPriorityPolicy,
+        searchBudget,
       });
     }
     const activeCounts = getPoolActiveCounts(sessionData);
@@ -3164,6 +3207,7 @@ export function selectBatchMatchesRespectingSkips({
   requestedCourtIds,
   randomFn,
   socialPriorityPolicy,
+  searchBudget,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -3173,6 +3217,7 @@ export function selectBatchMatchesRespectingSkips({
   requestedCourtIds?: string[];
   randomFn?: () => number;
   socialPriorityPolicy?: SocialCandidatePolicy;
+  searchBudget?: MatchmakingSearchBudget;
 }) {
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
@@ -3183,6 +3228,7 @@ export function selectBatchMatchesRespectingSkips({
   const consumedSkipUserIds: string[] = [];
 
   for (let attempt = 0; attempt <= pendingSkipUserIds.size; attempt += 1) {
+    checkMatchmakingSearchBudget(searchBudget);
     const eligibleRankedCandidates = filterRankedCandidatesByExcludedUserIds(
       rankedCandidates,
       excludedSkipUserIds
@@ -3206,8 +3252,10 @@ export function selectBatchMatchesRespectingSkips({
         requestedCourtIds,
         randomFn,
         socialPriorityPolicy: resolvedSocialPriorityPolicy,
+        searchBudget,
       });
     } catch (error) {
+      if (error instanceof MatchmakingSearchBudgetExceededError) throw error;
       if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
         throw getSkipNextAlternativeError();
       }

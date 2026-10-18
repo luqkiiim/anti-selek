@@ -116,6 +116,11 @@ type ScoreSaveResponse = MatchPayload & {
   queuedMatch?: SessionData["queuedMatch"];
   autoAssignedMatch?: MatchPayload;
 };
+type MatchGenerationResponse = Partial<MatchPayload> & {
+  matches?: MatchPayload[];
+  queuedMatch?: SessionData["queuedMatch"];
+  deferredQueueRecovery?: boolean;
+};
 type QueuedMatchOverlay = {
   queuedMatch: SessionData["queuedMatch"] | null;
   expectedId: string | null;
@@ -222,6 +227,30 @@ export default function LiveSession({
     await Promise.all([resource.refresh(), standings.refresh(), collaboration.refresh()]);
   }
   const action = useAction(refresh);
+  async function generateMatch(body: Record<string, unknown>) {
+    await resource.cancelDeferredQueueRecovery();
+    const result = await api<MatchGenerationResponse>(endpoint + "/generate-match", "POST", body);
+    const matches = result.matches ?? (result.id && result.status ? [result as MatchPayload] : []);
+    if (result.queuedMatch !== undefined) setQueuedMatchOverlay(null);
+    resource.update(current => {
+      let next = matches.length ? applyGeneratedMatches(current, matches) : current;
+      if (result.queuedMatch !== undefined) next = applyQueuedMatch(next, result.queuedMatch ?? null);
+      return next;
+    }, { urgent: true });
+    if (result.deferredQueueRecovery) resource.scheduleDeferredQueueRecovery();
+    return result;
+  }
+  async function changeQueuedMatch(method: "POST" | "DELETE", body?: Record<string, unknown>) {
+    await resource.cancelDeferredQueueRecovery();
+    const result = await (body === undefined
+      ? api<{ queuedMatch?: SessionData["queuedMatch"] }>(endpoint + "/queue-match", method)
+      : api<{ queuedMatch?: SessionData["queuedMatch"] }>(endpoint + "/queue-match", method, body));
+    if (method === "DELETE" || result.queuedMatch !== undefined) {
+      setQueuedMatchOverlay(null);
+      resource.update(current => applyQueuedMatch(current, method === "DELETE" ? null : result.queuedMatch ?? null), { urgent: true });
+    }
+    return result;
+  }
   const refreshSession=resource.refresh,refreshStandings=standings.refresh;
   useEffect(() => {
     if (!rawSession) return;
@@ -737,7 +766,10 @@ export default function LiveSession({
       } : {}),
     };
     void action.run(
-      () => api(endpoint, "PATCH", payload),
+      async () => {
+        if (!payload.autoQueueEnabled) await resource.cancelDeferredQueueRecovery();
+        return api(endpoint, "PATCH", payload);
+      },
       () => {
         setSheet("");
         setConfirmAutoQueueOff(false);
@@ -747,7 +779,10 @@ export default function LiveSession({
   }
   function resetSession() {
     void action.run(
-      () => api(endpoint + "/reset", "POST"),
+      async () => {
+        await resource.cancelDeferredQueueRecovery();
+        return api(endpoint + "/reset", "POST");
+      },
       () => {
         setScores({});
         confirmingMatchIdsRef.current = new Set();
@@ -763,6 +798,7 @@ export default function LiveSession({
     setDeleting(true);
     action.setError("");
     try {
+      await resource.cancelDeferredQueueRecovery();
       await api(endpoint + "/delete", "DELETE");
       await onDeleted?.();
     } catch (error) {
@@ -816,7 +852,7 @@ export default function LiveSession({
       team2: [manualSelection[2], manualSelection[3]],
     };
     if (manualTarget.kind === "court") {
-      await api(endpoint + "/generate-match", "POST", {
+      await generateMatch({
         courtId: manualTarget.courtId,
         manualTeams,
       });
@@ -824,11 +860,11 @@ export default function LiveSession({
     }
     let replacedQueuedMatch = false;
     if (manualTarget.replaceQueuedMatch) {
-      await api(endpoint + "/queue-match", "DELETE");
+      await changeQueuedMatch("DELETE");
       replacedQueuedMatch = true;
     }
     try {
-      await api(endpoint + "/queue-match", "POST", { manualTeams });
+      await changeQueuedMatch("POST", { manualTeams });
     } catch (error) {
       if (replacedQueuedMatch) {
         await refresh().catch(() => {});
@@ -841,7 +877,7 @@ export default function LiveSession({
   async function confirmControlAction() {
     if (!confirmation) return;
     if (confirmation.kind === "court-player-rest") {
-      await api(endpoint + "/generate-match", "POST", {
+      await generateMatch({
         courtId: confirmation.courtId,
         forceReshuffle: true,
         excludedUserId: confirmation.playerId,
@@ -851,27 +887,27 @@ export default function LiveSession({
       return;
     }
     if (confirmation.kind === "court-reshuffle") {
-      await api(endpoint + "/generate-match", "POST", {
+      await generateMatch({
         courtId: confirmation.courtId,
         forceReshuffle: true,
       });
       return;
     }
     if (confirmation.kind === "court-undo") {
-      await api(endpoint + "/generate-match", "POST", {
+      await generateMatch({
         courtId: confirmation.courtId,
         undoCurrentMatch: true,
       });
       return;
     }
-    await api(endpoint + "/queue-match", "DELETE");
+    await changeQueuedMatch("DELETE");
   }
   function runCourtPlayerAction(kind: "exclude" | "pause") {
     if (!courtPlayerAction) return;
     const target = courtPlayerAction;
     if (kind === "exclude") {
       void action.run(
-        () => api(endpoint + "/generate-match", "POST", {
+        () => generateMatch({
           courtId: target.courtId,
           forceReshuffle: true,
           excludedUserId: target.player.id,
@@ -911,7 +947,7 @@ export default function LiveSession({
       }
 
       try {
-        await api(endpoint + "/generate-match", "POST", { courtId: target.courtId });
+        await generateMatch({ courtId: target.courtId });
       } catch (error) {
         await refresh().catch(() => {});
         finishControlAction();
@@ -926,7 +962,7 @@ export default function LiveSession({
   function runQueuePlayerAction(kind: "exclude" | "replace", userId: string) {
     if (!controlQueue) return;
     void action.run(
-      () => api(endpoint + "/queue-match", "POST", {
+      () => changeQueuedMatch("POST", {
         ...(kind === "exclude"
           ? { reshuffle: true, excludeUserId: userId }
           : { replaceUserId: userId }),
@@ -1034,8 +1070,8 @@ export default function LiveSession({
                   canQueueNextMatch={canQueueNextMatch}
                   creatingMatches={action.busy}
                   creatingQueuedMatch={action.busy}
-                  onGenerateMatch={(body) => void action.run(() => api(endpoint + "/generate-match", "POST", body))}
-                  onQueueNextMatch={() => void action.run(() => api(endpoint + "/queue-match", "POST"))}
+                  onGenerateMatch={(body) => void action.run(() => generateMatch(body))}
+                  onQueueNextMatch={() => void action.run(() => changeQueuedMatch("POST"))}
                 />
               )}
               {s.courts.map((court) => {
@@ -1140,7 +1176,7 @@ export default function LiveSession({
                           courts={s.courts}
                           queuedMatch={s.queuedMatch ?? null}
                           isCreating={action.busy}
-                          onGenerateMatch={(courtId, matchType) => void action.run(() => api(endpoint + "/generate-match", "POST", { courtId, ...(matchType ? { matchType } : {}) }))}
+                          onGenerateMatch={(courtId, matchType) => void action.run(() => generateMatch({ courtId, ...(matchType ? { matchType } : {}) }))}
                           onOpenManualMatch={(courtId) => startManual({ kind: "court", courtId })}
                         />
                       </>
@@ -1721,6 +1757,7 @@ export default function LiveSession({
                 onClick={() =>
                   void action.run(
                     async () => {
+                      await resource.cancelDeferredQueueRecovery();
                       if (lineupMode) await api(endpoint + "/end", "POST", {acknowledgeRemainingLineup});
                       else await api(endpoint + "/end", "POST");
                       setCelebrateFinish(true);
@@ -1951,7 +1988,7 @@ export default function LiveSession({
                     className="secondary full control-action"
                     disabled={action.busy}
                     onClick={() => void action.run(
-                      () => api(endpoint + "/queue-match", "POST", { reshuffle: true }),
+                      () => changeQueuedMatch("POST", { reshuffle: true }),
                       finishControlAction,
                     )}
                   >

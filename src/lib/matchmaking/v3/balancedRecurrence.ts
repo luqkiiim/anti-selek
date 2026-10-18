@@ -1,3 +1,4 @@
+import { checkMatchmakingSearchBudget, recordMatchmakingSearchPhase, type MatchmakingSearchBudget } from "./searchBudget";
 /** Exact Balanced recurrence selector. Search shortcuts use admissible bounds and dominance proofs. */
 import { SessionMode, SessionType } from "../../../types/enums";
 import {
@@ -112,6 +113,7 @@ function getSocialVarietyTotals<T extends ActiveMatchmakerV3Player>(
 interface MatureRecurrenceScorer {
   readonly denominator: bigint;
   readonly typeEligiblePlayerCount: number;
+  getPartitionGainUnits(partition: V3SingleCourtSelection<ActiveMatchmakerV3Player>["partition"]): bigint;
   score(partitions: readonly V3SingleCourtSelection<ActiveMatchmakerV3Player>[]): {
     readonly gainUnits: bigint;
     readonly players: MatureRecurrencePlayerWindowEvidence[];
@@ -203,10 +205,27 @@ function createMatureRecurrenceScorer(
     BigInt(1)
   );
   const playersByUserId = new Map(maturePlayers.map((player) => [player.userId, player]));
+  const singleMatchGains = new Map(maturePlayers.map((player) => {
+    const before = coveredFeasibleTypeCount(player.baselineWindow, player.feasibleTypeSet);
+    return [player.userId, new Map(([null, "MIXED", "OWN_SIDE"] as const).map((type) => [
+      type,
+      BigInt(coveredFeasibleTypeCount([...player.baselineWindow, type].slice(-6), player.feasibleTypeSet) - before) *
+        (denominator / BigInt(player.feasibleMatchTypes.length)),
+    ]))] as const;
+  }));
+
 
   return {
     denominator,
     typeEligiblePlayerCount: maturePlayers.length,
+    getPartitionGainUnits: (partition) => {
+      const courtType = context.sessionMode === SessionMode.MIXICANO
+        ? getSocialVarietySnapshot(partition, context).courtType : null;
+      const type = courtType === "MIXED" ? "MIXED"
+        : courtType === "UPPER" || courtType === "LOWER" ? "OWN_SIDE" : null;
+      return [...partition.team1, ...partition.team2].reduce((sum, id) =>
+        sum + (singleMatchGains.get(id)?.get(type) ?? BigInt(0)), BigInt(0));
+    },
     score: (partitions) => {
       const currentWindows = new Map(maturePlayers.map((player) => [player.userId, [...player.baselineWindow]]));
       const initialWindows = new Map(maturePlayers.map((player) => [player.userId, [...player.baselineWindow]]));
@@ -295,6 +314,8 @@ interface SocialBatchOptions<T extends MatchmakerV3Player> {
   socialPriorityPolicy?: SocialPriorityPolicy;
   pairingRandomMode?: V3BatchPairingRandomMode;
   searchLimits?: { maxBranches?: number; maxMs?: number };
+  /** Internal request deadline, shared across phases, fallback and verification. */
+  searchBudget?: MatchmakingSearchBudget;
   excludedQuartetKeys?: ReadonlySet<string>;
   excludedPartitionKey?: string;
 }
@@ -648,6 +669,9 @@ export function findBestBalancedRecurrenceSelection<T extends MatchmakerV3Player
 function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   players: T[], options: RotationBatchOptions<T>
 ): IsolatedBatchResult<ActiveMatchmakerV3Player<T>> {
+  checkMatchmakingSearchBudget(options.searchBudget);
+  const now = options.searchBudget?.now ?? Date.now;
+  const sharedDeadline = options.searchBudget?.deadline ?? Infinity;
   const socialPriorityPolicy = options.socialPriorityPolicy;
   const recurrencePolicy = options.recurrencePolicy;
   if (recurrencePolicy && (options.sessionType !== SessionType.POINTS && options.sessionType !== SessionType.ELO)) {
@@ -710,11 +734,13 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     : buildSocialVarietyContext(players, options.socialHistoryMatches ?? history, {
         sessionMode: options.sessionMode,
         opportunityConstraints: profiles.flatMap((profile) => profile.courts.filter((court): court is V3SelectionConstraints<ActiveMatchmakerV3Player<T>> => Boolean(court))),
+        searchBudget: options.searchBudget,
       });
   const matureRecurrenceContext = recurrencePolicy
     ? buildSocialStructuralVarietyContext(players, completedRecurrenceHistory, {
         sessionMode: options.sessionMode,
         opportunityConstraints: options.socialStructuralOpportunityConstraints,
+        searchBudget: options.searchBudget,
       })
     : null;
   const structuralOpportunityVocabulary: BalancedRecurrenceStructuralOpportunityEntry[] = matureRecurrenceContext
@@ -737,6 +763,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     ? buildSocialStructuralVarietyContext(players, history, {
         sessionMode: options.sessionMode,
         opportunityConstraints: options.socialStructuralOpportunityConstraints,
+        searchBudget: options.searchBudget,
       })
     : context;
   const candidateScoringContext = socialPriorityPolicy ? priorityContext : context;
@@ -754,15 +781,37 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   const opponents = balancePolicy ? null : buildOpponentRepeatHistory(history);
   const social = balancePolicy ? null : buildSocialMixHistory(history);
   const consecutive = buildConsecutivePlayHistory(history);
+  checkMatchmakingSearchBudget(options.searchBudget);
   const exact = options.courtCount <= 2 && active.length <= 14;
   // Exact small batches ignore default budgets, but explicit budgets still permit testing/cancellation.
   const maxBranches = options.searchLimits?.maxBranches ?? (exact ? Infinity : 50_000);
   const phaseBudgetMs = options.searchLimits?.maxMs ?? (exact ? Infinity : 2_000);
-  let deadline = Date.now() + phaseBudgetMs;
+  let deadline = Math.min(sharedDeadline, now() + phaseBudgetMs);
   let phaseExplored = 0;
   let explored = 0;
   let pruned = 0;
   let interrupted = false;
+  // Unwind the whole phase: a partial frontier or maximum is not a valid proof.
+  const candidateScanInterrupted = Symbol("candidate scan interrupted");
+  let candidateScanOperations = 0;
+  const checkCandidateScanBudget = (force = false) => {
+    if ((force || (candidateScanOperations++ & 63) === 0) &&
+      (interrupted || (deadline !== Infinity && now() >= deadline))) {
+      throw candidateScanInterrupted;
+    }
+  };
+  const filterCandidates = (
+    candidates: Candidate<ActiveMatchmakerV3Player<T>>[],
+    predicate: (candidate: Candidate<ActiveMatchmakerV3Player<T>>) => boolean
+  ) => {
+    checkCandidateScanBudget(true);
+    const result = candidates.filter((candidate) => {
+      checkCandidateScanBudget();
+      return predicate(candidate);
+    });
+    checkCandidateScanBudget(true);
+    return result;
+  };
   let quartetCount = 0;
   let validPartitions = 0;
   let best: V3BatchSelection<ActiveMatchmakerV3Player<T>> | null = null;
@@ -873,8 +922,10 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     // one gap makes the sorted order statistics componentwise no larger.
     // IEEE-754 addition is monotone for finite operands, so this substitution
     // cannot increase the batch total even when gaps are fractional.
+    checkCandidateScanBudget(true);
     const groups = new Map<bigint, Candidate<ActiveMatchmakerV3Player<T>>[]>();
     for (const candidate of candidates) {
+      checkCandidateScanBudget();
       const group = groups.get(candidate.mask) ?? [];
       group.push(candidate);
       groups.set(candidate.mask, group);
@@ -885,10 +936,14 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       if (!totalBalanceBoundActive) {
         let maximum = getMetric(group[0]!);
         for (const candidate of group.slice(1)) {
+          checkCandidateScanBudget();
           const metric = getMetric(candidate);
           if (metric > maximum) maximum = metric;
         }
-        const winner = group.find((candidate) => getMetric(candidate) === maximum);
+        const winner = group.find((candidate) => {
+          checkCandidateScanBudget();
+          return getMetric(candidate) === maximum;
+        });
         if (winner) retained.add(winner);
         continue;
       }
@@ -898,6 +953,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         const metric = getMetric(candidate);
         const gap = candidate.selection.balanceGap;
         const dominated = group.some((other, otherIndex) => {
+          checkCandidateScanBudget();
           if (other === candidate) return false;
           const otherMetric = getMetric(other);
           const otherGap = other.selection.balanceGap;
@@ -911,7 +967,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       }
     }
 
-    const result = candidates.filter((candidate) => retained.has(candidate));
+    const result = filterCandidates(candidates, (candidate) => retained.has(candidate));
     pruned += candidates.length - result.length;
     return result;
   };
@@ -920,7 +976,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   const getCandidateMatureRecurrenceGainUnits = (candidate: Candidate<ActiveMatchmakerV3Player<T>>) => {
     if (candidate.matureRecurrenceGainUnits === undefined) {
       candidate.matureRecurrenceGainUnits = matureRecurrenceScorer
-        ?.score([candidate.selection]).gainUnits ?? BigInt(0);
+        ?.getPartitionGainUnits(candidate.selection.partition) ?? BigInt(0);
     }
     return candidate.matureRecurrenceGainUnits;
   };
@@ -1135,18 +1191,26 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     chosen: readonly Candidate<ActiveMatchmakerV3Player<T>>[],
     remaining: readonly number[],
     used: bigint,
-    lists: readonly Candidate<ActiveMatchmakerV3Player<T>>[][]
-  ) => chosen.reduce((gain, candidate) => gain + getCandidateCoverageGainUnits(candidate), BigInt(0)) +
+    lists: readonly Candidate<ActiveMatchmakerV3Player<T>>[][],
+    compatibleByCourt?: ReadonlyMap<number, Candidate<ActiveMatchmakerV3Player<T>>[]>
+  ) => {
+    checkCandidateScanBudget(true);
+    const upper = chosen.reduce((gain, candidate) => gain + getCandidateCoverageGainUnits(candidate), BigInt(0)) +
     remaining.reduce((gain, court) => {
       let maximum = BigInt(0);
-      for (const candidate of lists[court]) {
-        if ((candidate.mask & used) === BigInt(0)) {
+      const compatible = compatibleByCourt?.get(court);
+      for (const candidate of compatible ?? lists[court]) {
+        checkCandidateScanBudget();
+        if (compatible || (candidate.mask & used) === BigInt(0)) {
           const candidateGain = getCandidateCoverageGainUnits(candidate);
           if (candidateGain > maximum) maximum = candidateGain;
         }
       }
       return gain + maximum;
     }, BigInt(0));
+    checkCandidateScanBudget(true);
+    return upper;
+  };
   const beneficialCourtBoundsCache = new WeakMap<
     Candidate<ActiveMatchmakerV3Player<T>>[],
     BeneficialCourtBounds
@@ -1161,6 +1225,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     minimumOrdinal: number | null,
     candidateOrdinal: ReadonlyMap<Candidate<ActiveMatchmakerV3Player<T>>, number> | null
   ) => {
+    checkCandidateScanBudget(true);
     const key = `${used.toString()}:${minimumOrdinal ?? "none"}`;
     let byState = compatibleCandidatesCache.get(candidates);
     if (!byState) {
@@ -1169,11 +1234,12 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     }
     const cached = byState.get(key);
     if (cached) return cached;
-    const compatible = candidates.filter((candidate) =>
+    const compatible = filterCandidates(candidates, (candidate) =>
       (candidate.mask & used) === BigInt(0) &&
       (minimumOrdinal === null || !candidateOrdinal ||
         (candidateOrdinal.get(candidate) ?? -1) > minimumOrdinal)
     );
+    checkCandidateScanBudget(true);
     byState.set(key, compatible);
     return compatible;
   };
@@ -1203,6 +1269,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     };
     let first = true;
     for (const candidate of candidates) {
+      checkCandidateScanBudget();
       const priority = getCandidateSocialPriorityMetrics(candidate);
       if (first || priority.rollingMatchTypeGainUnits > result.maximumRollingTypeGainUnits) {
         result.maximumRollingTypeGainUnits = priority.rollingMatchTypeGainUnits;
@@ -1238,6 +1305,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       result.minimumPointDiffGap = Math.min(result.minimumPointDiffGap, candidate.selection.pointDiffGap);
       first = false;
     }
+    checkCandidateScanBudget(true);
     beneficialCourtBoundsCache.set(candidates, result);
     return result;
   };
@@ -1588,20 +1656,79 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     ...active.filter((player) => locked.has(player.userId)),
     ...optimisticPlayers.filter((player) => !locked.has(player.userId)).slice(0, Math.max(0, required - locked.size)),
   ];
+  const completionFairnessBounds = new Map<bigint, number[] | null>();
+  const getCompletionFairnessBound = (mask: bigint) => {
+    checkCandidateScanBudget();
+    if (completionFairnessBounds.has(mask)) return completionFairnessBounds.get(mask)!;
+    const selected = active.filter((player) => (mask & bits.get(player.userId)!) !== BigInt(0));
+    const available = optimisticPlayers.filter((player) => (mask & bits.get(player.userId)!) === BigInt(0));
+    const mandatory = available.filter((player) => locked.has(player.userId));
+    const slots = required - selected.length;
+    const bound = mandatory.length > slots ? null : getSocialFairnessVector([
+      ...selected, ...mandatory,
+      ...available.filter((player) => !locked.has(player.userId)).slice(0, slots - mandatory.length),
+    ]);
+    // Publish only the complete mask-scoped relaxation; an interrupted scan
+    // cannot become a future proof. No incumbent fields enter this cache.
+    checkCandidateScanBudget(true);
+    completionFairnessBounds.set(mask, bound);
+    return bound;
+  };
   const globalFairnessBound = getSocialFairnessVector(optimisticSelection);
   const globalStarvationBound = getSocialStarvationVector(optimisticSelection, starvationContext);
   const lowestScheduleRank = Math.min(...profiles.map((profile) => profile.rank));
+  // Once a witness attains global fairness, every contender has
+  // that exact count multiset. A player above its maximum count cannot belong
+  // to any winning completion. This is a proven eligibility bound, not a pool cap.
+  const globalCountCutoff = globalFairnessBound[required - 1];
+  const globalCountAllowedMask = active.reduce((mask, player) => player.effectiveMatchCount <= globalCountCutoff
+    ? mask | bits.get(player.userId)! : mask, BigInt(0));
+  const globalCountMultiplicity = new Map<number, number>();
+  for (const count of globalFairnessBound.slice(0, required)) {
+    globalCountMultiplicity.set(count, (globalCountMultiplicity.get(count) ?? 0) + 1);
+  }
+  const availableCountMultiplicity = new Map<number, number>();
+  for (const player of active) {
+    availableCountMultiplicity.set(player.effectiveMatchCount, (availableCountMultiplicity.get(player.effectiveMatchCount) ?? 0) + 1);
+  }
+  // If an attained optimal count band needs every available member, omitting
+  // any of them makes that fairness vector impossible. Locks may cause only
+  // part of a lower band to be selected, so require exact multiplicity equality.
+  const globalCountRequiredMask = active.reduce((mask, player) =>
+    availableCountMultiplicity.get(player.effectiveMatchCount) === globalCountMultiplicity.get(player.effectiveMatchCount)
+      ? mask | bits.get(player.userId)! : mask, BigInt(0));
+  const missingRequiredCounts = new Map<bigint, number>();
+  const countRequiredBits = (mask: bigint) => {
+    const cached = missingRequiredCounts.get(mask);
+    if (cached !== undefined) return cached;
+    let count = 0;
+    for (let remaining = mask; remaining !== BigInt(0); remaining &= remaining - BigInt(1)) count++;
+    missingRequiredCounts.set(mask, count);
+    return count;
+  };
+  let baselineGlobalFairnessClass = false;
   let baselineGlobalRotationClass = false;
   const candidateCache = new Map<V3SelectionConstraints<ActiveMatchmakerV3Player<T>> | undefined, Candidate<ActiveMatchmakerV3Player<T>>[]>();
 
   const outOfBudget = () => {
     if (baselinePhase && baselineProven) return true;
     if (replayBaselinePhase && replayBaselineProven) return true;
-    if ((maxBranches !== Infinity && phaseExplored >= maxBranches) || (deadline !== Infinity && Date.now() >= deadline)) {
+    if ((maxBranches !== Infinity && phaseExplored >= maxBranches) || (deadline !== Infinity && now() >= deadline)) {
       interrupted = true;
       return true;
     }
     return false;
+  };
+  const sortCandidates = (
+    candidates: Candidate<ActiveMatchmakerV3Player<T>>[],
+    compare: (left: Candidate<ActiveMatchmakerV3Player<T>>, right: Candidate<ActiveMatchmakerV3Player<T>>) => number
+  ) => {
+    if (!options.searchBudget) return candidates.sort(compare);
+    let comparisons = 0;
+    return candidates.sort((left, right) => {
+      if ((comparisons++ & 127) === 0 && now() >= deadline) interrupted = true;
+      return interrupted ? 0 : compare(left, right);
+    });
   };
   const candidatesFor = (constraints: V3SelectionConstraints<ActiveMatchmakerV3Player<T>> | undefined) => {
     const deferCandidateSorting = socialCourtmateBeneficialRescue &&
@@ -1622,7 +1749,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       if (baselinePhase || deferCandidateSorting) return cached;
       // The additional certification pass must not perturb production's stable
       // ordering of equivalent court slots before the final ranking pass.
-      return (recurrenceFrontierPhase ? [...cached] : cached).sort(compareCandidateOrder);
+      return sortCandidates(recurrenceFrontierPhase ? [...cached] : cached, compareCandidateOrder);
     }
     const candidates: Candidate<ActiveMatchmakerV3Player<T>>[] = [];
     const keys = new Set<string>();
@@ -1630,7 +1757,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       for (let b = a + 1; b < active.length - 2; b++) {
         for (let c = b + 1; c < active.length - 1; c++) {
           for (let d = c + 1; d < active.length; d++) {
-            if (deadline !== Infinity && Date.now() >= deadline) { interrupted = true; break; }
+            if (deadline !== Infinity && now() >= deadline) { interrupted = true; break; }
             const quartet: [ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>] = [active[a], active[b], active[c], active[d]];
             quartetCount++;
             if (constraints?.isQuartetAllowed && !constraints.isQuartetAllowed(quartet)) continue;
@@ -1686,8 +1813,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     // Baseline certification only needs to find a witness on the certified
     // lower bound; sorting tens of thousands of equivalent layouts cannot
     // strengthen that proof. Later phases sort by their own objective.
-    if (!baselinePhase && !deferCandidateSorting) candidates.sort(compareCandidateOrder);
-    candidateCache.set(constraints, candidates);
+    if (!baselinePhase && !deferCandidateSorting) sortCandidates(candidates, compareCandidateOrder);
+    if (!interrupted) candidateCache.set(constraints, candidates);
     return candidates;
   };
   const scoreVariety = (candidate: Candidate<ActiveMatchmakerV3Player<T>>) => {
@@ -1736,7 +1863,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       for (const candidates of lists) {
         let maximum = 0;
         for (const candidate of candidates) {
-          if (deadline !== Infinity && Date.now() >= deadline) {
+          checkCandidateScanBudget();
+          if (deadline !== Infinity && now() >= deadline) {
             interrupted = true;
             return Infinity;
           }
@@ -1756,7 +1884,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       if (interrupted) return candidates;
       const groups = new Map<string, Candidate<ActiveMatchmakerV3Player<T>>[]>();
       for (const candidate of candidates) {
-        if (deadline !== Infinity && Date.now() >= deadline) {
+        checkCandidateScanBudget();
+        if (deadline !== Infinity && now() >= deadline) {
           interrupted = true;
           return candidates;
         }
@@ -1771,14 +1900,15 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       for (const group of groups.values()) {
         if (group.length < 2) continue;
         for (const candidate of group) {
-          if (deadline !== Infinity && Date.now() >= deadline) {
+          checkCandidateScanBudget();
+          if (deadline !== Infinity && now() >= deadline) {
             interrupted = true;
             return candidates;
           }
           getCandidateDominanceMetrics(candidate);
         }
         for (let leftIndex = 0; leftIndex < group.length; leftIndex += 1) {
-          if (deadline !== Infinity && Date.now() >= deadline) {
+          if (deadline !== Infinity && now() >= deadline) {
             interrupted = true;
             return candidates;
           }
@@ -1800,7 +1930,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         }
       }
       pruned += dominated.size;
-      return candidates.filter((candidate) => !dominated.has(candidate));
+      return filterCandidates(candidates, (candidate) => !dominated.has(candidate));
     });
   };
   const metricsFor = (
@@ -2045,12 +2175,46 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       compareSocialNumberVectors(starvation, baseline.starvation) || maxBalanceGap - baseline.maxBalanceGap ||
       totalBalanceGap - baseline.totalBalanceGap) >= 0) return;
     baseline = { fairness, starvation, rank, maxBalanceGap, totalBalanceGap, chosen: [...chosen], mask, index };
-    baselineGlobalRotationClass = compareSocialNumberVectors(fairness, globalFairnessBound) === 0 &&
+    baselineGlobalFairnessClass = compareSocialNumberVectors(fairness, globalFairnessBound) === 0;
+    baselineGlobalRotationClass = baselineGlobalFairnessClass &&
       compareSocialNumberVectors(starvation, globalStarvationBound) === 0 && rank === lowestScheduleRank;
     // All objectives have reached independently valid global lower bounds.
     // This permits an early certificate without enumerating irrelevant layouts.
     baselineProven = baselineGlobalRotationClass &&
       maxBalanceGap === 0 && totalBalanceGap === 0;
+  };
+  const shouldPruneBaselineLeaf = (
+    chosen: readonly Candidate<ActiveMatchmakerV3Player<T>>[], mask: bigint, index: number
+  ) => {
+    if (!baselinePhase) return false;
+    checkCandidateScanBudget();
+    if ((mask & lockedMask) !== lockedMask) return true;
+    if (!baseline) return false;
+    const prefix = compareSocialNumberVectors(getFairness(mask), baseline.fairness) ||
+      profiles[index].rank - baseline.rank || compareSocialNumberVectors(getStarvation(mask), baseline.starvation);
+    if (prefix !== 0) return prefix > 0;
+    const gaps = chosen.map((candidate) => candidate.selection.balanceGap);
+    return (Math.max(...gaps) - baseline.maxBalanceGap ||
+      canonicalSum(gaps) - baseline.totalBalanceGap) >= 0;
+  };
+  const shouldPruneReplayBaselineLeaf = (
+    chosen: readonly Candidate<ActiveMatchmakerV3Player<T>>[], mask: bigint, index: number
+  ) => {
+    if (!replayBaselinePhase) return false;
+    checkCandidateScanBudget();
+    if ((mask & lockedMask) !== lockedMask) return true;
+    const fairness = getFairness(mask);
+    const starvation = getStarvation(mask);
+    const rank = profiles[index].rank;
+    if (balancePolicy && (!baseline || compareSocialNumberVectors(fairness, baseline.fairness) !== 0 ||
+      rank !== baseline.rank || compareSocialNumberVectors(starvation, baseline.starvation) !== 0 ||
+      !balanceGuardrail || !isBalanceGuardrailAdmissible({
+        maxBalanceGap: Math.max(...chosen.map((candidate) => candidate.selection.balanceGap)),
+        totalBalanceGap: canonicalSum(chosen.map((candidate) => candidate.selection.balanceGap)),
+      }, balanceGuardrail))) return true;
+    return Boolean(replayBaseline && (compareSocialNumberVectors(fairness, replayBaseline.fairness) ||
+      rank - replayBaseline.rank || compareSocialNumberVectors(starvation, replayBaseline.starvation) ||
+      getImmediateReplayCountForMask(mask) - replayBaseline.replayCount) >= 0);
   };
   const considerReplayBaseline = (chosen: Candidate<ActiveMatchmakerV3Player<T>>[], mask: bigint, index: number) => {
     if ((mask & lockedMask) !== lockedMask) return;
@@ -2246,11 +2410,57 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       best = summary; scheduleIndex = index;
     }
   };
-  const runSearch = () => {
+  const globalCountCandidateLists = new WeakMap<Candidate<ActiveMatchmakerV3Player<T>>[], Candidate<ActiveMatchmakerV3Player<T>>[]>();
+  const candidatesInGlobalCountClass = (candidates: Candidate<ActiveMatchmakerV3Player<T>>[]) => {
+    if (!balancePolicy || !baselineGlobalFairnessClass) return candidates;
+    const cached = globalCountCandidateLists.get(candidates);
+    if (cached) return cached;
+    const eligible = filterCandidates(candidates, (candidate) => (candidate.mask & globalCountAllowedMask) === candidate.mask);
+    checkCandidateScanBudget(true);
+    globalCountCandidateLists.set(candidates, eligible);
+    return eligible;
+  };
+  const baselineContenderLists = new WeakMap<BalanceBaseline, {
+    strict: WeakMap<Candidate<ActiveMatchmakerV3Player<T>>[], Candidate<ActiveMatchmakerV3Player<T>>[]>;
+    tied: WeakMap<Candidate<ActiveMatchmakerV3Player<T>>[], Candidate<ActiveMatchmakerV3Player<T>>[]>;
+  }>();
+  const candidatesForBaselineImprovement = (candidates: Candidate<ActiveMatchmakerV3Player<T>>[], rank: number) => {
+    if (!baselinePhase || !baseline) return candidates;
+    const incumbent = baseline;
+    const strict = rank > incumbent.rank || (rank === incumbent.rank &&
+      incumbent.maxBalanceGap === 0 && incumbent.totalBalanceGap === 0 &&
+      incumbent.starvation.every((value) => value === 0));
+    let caches = baselineContenderLists.get(incumbent);
+    if (!caches) {
+      caches = { strict: new WeakMap(), tied: new WeakMap() };
+      baselineContenderLists.set(incumbent, caches);
+    }
+    const cache = strict ? caches.strict : caches.tied;
+    const cached = cache.get(candidates);
+    if (cached) return cached;
+    // Every improving batch must contain individually completable quartets.
+    // Relax other courts before repeated child expansion. A new incumbent
+    // gets its own complete arrays; retained candidates keep their order.
+    const eligible = filterCandidates(candidates, (candidate) => {
+      const bound = getCompletionFairnessBound(candidate.mask);
+      if (!bound) return false;
+      const diff = compareSocialNumberVectors(bound, incumbent.fairness);
+      return strict ? diff < 0 : diff <= 0;
+    });
+    checkCandidateScanBudget(true);
+    cache.set(candidates, eligible);
+    return eligible;
+  };
+  const runSearchPhase = () => {
+   if (options.searchBudget?.isExpired()) { interrupted = true; return; }
    searchAttemptCount++;
    if (required > 0 && active.length >= required && locksFeasible) {
     for (const index of scheduleIndexes) {
       if (profiles[index].courts.length !== options.courtCount) continue;
+      if (baselinePhase && baselineGlobalFairnessClass && baseline && profiles[index].rank > baseline.rank) continue;
+      // Balanced replay admission already fixes the certified baseline rank;
+      // profiles at any other rank cannot supply a replay witness.
+      if (balancePolicy && replayBaselinePhase && baseline && profiles[index].rank !== baseline.rank) continue;
       if (recurrenceFrontierPhase && replayBaseline && profiles[index].rank !== replayBaseline.rank) continue;
       const finalScheduleRank = !baselinePhase && !replayBaselinePhase
         ? (balancePolicy ? baseline?.rank
@@ -2261,15 +2471,17 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       const lists = profiles[index].courts.map((constraints) => {
         if (interrupted) return [];
         const candidates = candidatesFor(constraints);
+        if (interrupted) return [];
         if (baselinePhase) {
           // For the baseline only, a worse partition of the same quartet can
           // never improve minimax/total balance or its rotation state.
           const bestByMask = new Map<bigint, Candidate<ActiveMatchmakerV3Player<T>>>();
           for (const candidate of candidates) {
+            checkCandidateScanBudget();
             const incumbent = bestByMask.get(candidate.mask);
             if (!incumbent || candidate.selection.balanceGap < incumbent.selection.balanceGap) bestByMask.set(candidate.mask, candidate);
           }
-          return [...bestByMask.values()].sort((left, right) =>
+          return sortCandidates([...bestByMask.values()], (left, right) =>
             compareSocialNumberVectors(getFairness(left.mask), getFairness(right.mask)) ||
             compareSocialNumberVectors(getStarvation(left.mask), getStarvation(right.mask)) ||
             left.selection.balanceGap - right.selection.balanceGap);
@@ -2280,12 +2492,13 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           // quartet mask and avoid scoring entropy in this certification pass.
           const byMask = new Map<bigint, Candidate<ActiveMatchmakerV3Player<T>>>();
           for (const candidate of candidates) {
+            checkCandidateScanBudget();
             if (balancePolicy && (!balanceGuardrail ||
               candidate.selection.balanceGap > balanceGuardrail.allowedMaxBalanceGap)) continue;
             const incumbent = byMask.get(candidate.mask);
             if (!incumbent || candidate.selection.balanceGap < incumbent.selection.balanceGap) byMask.set(candidate.mask, candidate);
           }
-          return [...byMask.values()].sort(compareCandidatesForReplay);
+          return sortCandidates([...byMask.values()], compareCandidatesForReplay);
         }
         if (coverageBaselinePhase) {
           // Coverage varies by layout, but for a fixed quartet it is a scalar
@@ -2293,10 +2506,11 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           // total-balance fallback is active; otherwise only maximum-C layouts
           // can affect this proof.
           const eligible = balanceGuardrail
-            ? candidates.filter((candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
+            ? filterCandidates(candidates, (candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
             : candidates;
           for (const candidate of eligible) {
-            if (deadline !== Infinity && Date.now() >= deadline) { interrupted = true; break; }
+            checkCandidateScanBudget();
+            if (deadline !== Infinity && now() >= deadline) { interrupted = true; break; }
             getCandidateCoverageGainUnits(candidate);
           }
           const frontier = retainPerMaskMetricFrontier(
@@ -2305,7 +2519,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
             balanceGuardrail?.allowedTotalBalanceGap !== null &&
               balanceGuardrail?.allowedTotalBalanceGap !== undefined
           );
-          return frontier.sort(compareCandidatesForCoverage);
+          return sortCandidates(frontier, compareCandidatesForCoverage);
         }
         if (recurrenceFrontierPhase) {
           // This proof needs only the strongest class, frozen envelope,
@@ -2313,7 +2527,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           // never improve a batch; with a total-balance fallback, retain the
           // exact T/balance Pareto frontier. Keep entropy lazy so this proof
           // pass cannot alter stable final ordering through shared objects.
-          const eligible = candidates.filter((candidate) => !balanceGuardrail ||
+          const eligible = filterCandidates(candidates, (candidate) => !balanceGuardrail ||
             candidate.selection.balanceGap <= balanceGuardrail.allowedMaxBalanceGap
           );
           const frontier = retainPerMaskMetricFrontier(
@@ -2322,17 +2536,18 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
             balanceGuardrail?.allowedTotalBalanceGap !== null &&
               balanceGuardrail?.allowedTotalBalanceGap !== undefined
           );
-          return frontier.sort(compareCandidatesForRecurrenceFrontier);
+          return sortCandidates(frontier, compareCandidatesForRecurrenceFrontier);
         }
         if (nearBestFrontierPhase && socialCourtmateBeneficialRescue) {
           // The G/T frontier depends on the quartet mask and court type, not
           // the team partition. Keep the best T representative per mask and
           // defer all entropy/layout scoring until the exact selection pass.
           const frontierCandidates = balanceGuardrail
-            ? candidates.filter((candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
+            ? filterCandidates(candidates, (candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
             : candidates;
           const bestByMask = new Map<bigint, Candidate<ActiveMatchmakerV3Player<T>>>();
           for (const candidate of frontierCandidates) {
+            checkCandidateScanBudget();
             const candidateMetrics = getCandidateSocialPriorityMetrics(candidate);
             const incumbent = bestByMask.get(candidate.mask);
             if (!incumbent || candidateMetrics.rollingMatchTypeGainUnits >
@@ -2340,7 +2555,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
               bestByMask.set(candidate.mask, candidate);
             }
           }
-          return [...bestByMask.values()].sort((left, right) => {
+          return sortCandidates([...bestByMask.values()], (left, right) => {
             const classDiff = compareCandidateStrongerClass(left, right);
             if (classDiff !== 0) return classDiff;
             const leftMetrics = getCandidateSocialPriorityMetrics(left);
@@ -2355,19 +2570,20 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           // same-quartet, same-T Pareto losers are removed. Exact ties remain
           // available for the existing batch-hash tie rules.
           return balanceGuardrail
-            ? candidates.filter((candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
+            ? filterCandidates(candidates, (candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
             : candidates;
         }
         // Every candidate inside the fixed balance envelope and certified
         // replay/coverage gate remains visible to the entropy/soft search.
         const eligible = balanceGuardrail
-          ? candidates.filter((candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
+          ? filterCandidates(candidates, (candidate) => candidate.selection.balanceGap <= balanceGuardrail!.allowedMaxBalanceGap)
           : candidates;
         for (const candidate of eligible) {
-          if (deadline !== Infinity && Date.now() >= deadline) { interrupted = true; break; }
+          checkCandidateScanBudget();
+          if (deadline !== Infinity && now() >= deadline) { interrupted = true; break; }
           scoreVariety(candidate);
         }
-        return eligible.sort(socialCourtmateNearBest ? compareCandidatesForSocialNearBest : compareCandidatesForVariety);
+        return sortCandidates(eligible, socialCourtmateNearBest ? compareCandidatesForSocialNearBest : compareCandidatesForVariety);
       });
       if (interrupted) break;
       if (beneficialRescueSelectionPhase) {
@@ -2375,7 +2591,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         if (interrupted) break;
         for (const candidates of retainedLists) {
           for (const candidate of candidates) {
-            if (deadline !== Infinity && Date.now() >= deadline) {
+            checkCandidateScanBudget();
+            if (deadline !== Infinity && now() >= deadline) {
               interrupted = true;
               break;
             }
@@ -2385,7 +2602,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
             candidate.priorityRankingMetrics = undefined;
           }
           if (interrupted) break;
-          candidates.sort(compareCandidatesForSocialBeneficialRescue);
+          sortCandidates(candidates, compareCandidatesForSocialBeneficialRescue);
         }
         if (interrupted) break;
         lists.splice(0, lists.length, ...retainedLists);
@@ -2401,7 +2618,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         exactBalanceAggregation = true;
         for (const candidates of lists) {
           for (const candidate of candidates) {
-            if (deadline !== Infinity && Date.now() >= deadline) { interrupted = true; break; }
+            checkCandidateScanBudget();
+            if (deadline !== Infinity && now() >= deadline) { interrupted = true; break; }
             const doubledGap = candidate.selection.balanceGap * 2;
             if (!Number.isSafeInteger(doubledGap)) {
               exactBalanceAggregation = false;
@@ -2433,7 +2651,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         for (const candidates of lists) {
           let maximum = BigInt(0);
           for (const candidate of candidates) {
-            if (deadline !== Infinity && Date.now() >= deadline) { interrupted = true; break; }
+            checkCandidateScanBudget();
+            if (deadline !== Infinity && now() >= deadline) { interrupted = true; break; }
             const candidateGain = getCandidateCoverageGainUnits(candidate);
             if (candidateGain > maximum) maximum = candidateGain;
           }
@@ -2468,6 +2687,34 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         if (upperBound === null || (bestMatureDeltaTAtRminUnits !== null &&
           bestMatureDeltaTAtRminUnits >= upperBound)) continue;
       }
+      // This cache lives after complete list scoring and only for this
+      // phase/profile. Neither membership nor entropy gains change during DFS.
+      const entropyFacetMaximums = new WeakMap<Candidate<ActiveMatchmakerV3Player<T>>[], Map<string, number[]>>();
+      const getEntropyFacetMaximums = (
+        candidates: Candidate<ActiveMatchmakerV3Player<T>>[],
+        used: bigint,
+        minimumOrdinal: number | null,
+        completeCompatible?: readonly Candidate<ActiveMatchmakerV3Player<T>>[]
+      ) => {
+        checkCandidateScanBudget(true);
+        const key = `${used.toString()}:${minimumOrdinal ?? "none"}`;
+        let byState = entropyFacetMaximums.get(candidates);
+        const cached = byState?.get(key);
+        if (cached) return cached;
+        const maximums = entropyFacets.map(() => Number.NEGATIVE_INFINITY);
+        for (const candidate of completeCompatible ?? candidates) {
+          checkCandidateScanBudget();
+          if (!completeCompatible && (candidate.mask & used) !== BigInt(0)) continue;
+          for (let facet = 0; facet < entropyFacets.length; facet++) {
+            maximums[facet] = Math.max(maximums[facet], candidate.selection.socialVarietyGains?.[entropyFacets[facet]!] ?? 0);
+          }
+        }
+        // Interrupted scans never publish a partial (too small) upper bound.
+        checkCandidateScanBudget(true);
+        if (!byState) { byState = new Map(); entropyFacetMaximums.set(candidates, byState); }
+        byState.set(key, maximums);
+        return maximums;
+      };
       const visit = (chosen: Candidate<ActiveMatchmakerV3Player<T>>[], used: bigint, remaining: number[]) => {
         if (coverageProfileOptimal()) return;
         if (outOfBudget()) return;
@@ -2481,7 +2728,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         const optimistic = [...chosen.flatMap((candidate) => candidate.selection.players), ...mandatory,
           ...available.filter((player) => !locked.has(player.userId)).sort(compareOptimisticPlayers)
             .slice(0, slots - mandatory.length)];
-        const fairnessBound = getSocialFairnessVector(optimistic);
+        let fairnessBound = getSocialFairnessVector(optimistic);
         const incumbentFairness = nearBestFrontierPhase ? nearBestRotationClass?.fairness
           : baselinePhase ? baseline?.fairness
           : replayBaselinePhase ? replayBaseline?.fairness
@@ -2492,9 +2739,10 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           : null;
         const compatibleByCourt = new Map<number, Candidate<ActiveMatchmakerV3Player<T>>[]>();
         for (const other of remaining) {
-          const options = socialCourtmateBeneficialRescue || candidateOrdinal
-            ? getCompatibleCandidates(lists[other], used, previousOrdinal, candidateOrdinal)
-            : lists[other].filter((candidate) => (candidate.mask & used) === BigInt(0));
+          const eligible = candidatesInGlobalCountClass(lists[other]);
+          const options = baselinePhase || socialCourtmateBeneficialRescue || candidateOrdinal || (balancePolicy && (replayBaselinePhase || coverageBaselinePhase))
+            ? getCompatibleCandidates(eligible, used, previousOrdinal, candidateOrdinal)
+            : filterCandidates(eligible, (candidate) => (candidate.mask & used) === BigInt(0));
           compatibleByCourt.set(other, options);
         }
         let court = remaining[0];
@@ -2504,6 +2752,28 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           if (options.length < compatible.length) { court = other; compatible = options; }
         }
         if (!compatible.length) { pruned++; return; }
+        if (baselinePhase && baseline) {
+          // Keep the physical-court heuristic based on the original lists.
+          // Only then remove quartets unable to improve this live baseline.
+          for (const other of remaining) {
+            const eligible = candidatesForBaselineImprovement(candidatesInGlobalCountClass(lists[other]), profiles[index].rank);
+            const improving = getCompatibleCandidates(eligible, used, previousOrdinal, candidateOrdinal);
+            if (!improving.length) { pruned++; return; }
+            compatibleByCourt.set(other, improving);
+          }
+          compatible = compatibleByCourt.get(court)!;
+          // Baseline lists are ordered by complete quartet fairness. Taking
+          // each compatible court's first quartet relaxes overlap, so merging
+          // those fixed-size count/arrival multisets is another lower bound.
+          // Unlike the player-only bound, it retains group/Mixed feasibility.
+          const courtFairnessBound = getSocialFairnessVector([
+            ...chosen.flatMap((candidate) => candidate.selection.players),
+            ...remaining.flatMap((other) => compatibleByCourt.get(other)![0]!.selection.players),
+          ]);
+          if (compareSocialNumberVectors(courtFairnessBound, fairnessBound) > 0) fairnessBound = courtFairnessBound;
+          const fairnessDiff = compareSocialNumberVectors(fairnessBound, baseline.fairness);
+          if (fairnessDiff > 0 || (fairnessDiff === 0 && profiles[index].rank > baseline.rank)) { pruned++; return; }
+        }
         // Relax overlaps for an upper bound on achievable variety gain.
         const incumbentRank = nearBestFrontierPhase ? nearBestRotationClass?.rank
           : baselinePhase ? baseline?.rank
@@ -2523,21 +2793,42 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           if (starvationDiff > 0) { pruned++; return; }
           if (starvationDiff === 0) {
             if (baselinePhase && baseline) {
-              const minimumFor = (other: number) => lists[other].reduce((minimum, candidate) =>
-                (candidate.mask & used) === BigInt(0) ? Math.min(minimum, candidate.selection.balanceGap) : minimum, Infinity);
+              // The complete rotation prefix can only tie here. Zero balance
+              // is already minimal, so this branch cannot replace its first
+              // witness. Other phases still enumerate their admissible ties.
+              if (baseline.maxBalanceGap === 0 && baseline.totalBalanceGap === 0) { pruned++; return; }
+              const minimumFor = (other: number) => compatibleByCourt.get(other)!.reduce((minimum, candidate) =>
+                Math.min(minimum, candidate.selection.balanceGap), Infinity);
               const balanceBound = Math.max(0, ...chosen.map((candidate) => candidate.selection.balanceGap),
                 ...remaining.map(minimumFor));
-              const totalBound = canonicalSum(chosen.map((candidate) => candidate.selection.balanceGap)) +
-                remaining.reduce((total, other) => total + minimumFor(other), 0);
-              const totalRoundoff = Number.EPSILON * (chosen.length + remaining.length + 1) *
-                Math.max(Math.abs(totalBound), Math.abs(baseline.totalBalanceGap));
+              // Use the exact same sorted addition as the complete baseline.
+              // Increasing any nonnegative court gap cannot decrease its
+              // sorted order statistics or their floating-point sum.
+              const totalBound = canonicalSum([...chosen.map((candidate) => candidate.selection.balanceGap),
+                ...remaining.map(minimumFor)]);
               if (balanceBound > baseline.maxBalanceGap ||
-                (balanceBound === baseline.maxBalanceGap && totalBound - totalRoundoff > baseline.totalBalanceGap)) { pruned++; return; }
+                (balanceBound === baseline.maxBalanceGap && totalBound >= baseline.totalBalanceGap)) { pruned++; return; }
             } else if (replayBaselinePhase && replayBaseline) {
-              if (getOptimisticImmediateReplayCount(used, slots) > replayBaseline.replayCount) { pruned++; return; }
+              // This phase retains only strict improvements of its complete
+              // fairness/rank/starvation/replay tuple. A tied replay lower
+              // bound cannot update the incumbent or its first witness.
+              if (getOptimisticImmediateReplayCount(used, slots) >= replayBaseline.replayCount) { pruned++; return; }
+              // A disjoint completion adds nonnegative replay counts. Once its
+              // stronger tuple can only tie, each remaining quartet must leave
+              // a strict replay improvement possible. Keep the physical-court
+              // choice made from the original lists and preserve retained order.
+              const replayMinimum = replayBaseline.replayCount;
+              for (const other of remaining) {
+                const improving = filterCandidates(compatibleByCourt.get(other)!, (candidate) =>
+                  getImmediateReplayCountForMask(used) + getImmediateReplayCountForMask(candidate.mask) < replayMinimum
+                );
+                compatibleByCourt.set(other, improving);
+                if (!improving.length) { pruned++; return; }
+              }
+              compatible = compatibleByCourt.get(court)!;
             } else if (coverageBaselinePhase && coverageBaseline && replayBaseline) {
               if (getOptimisticImmediateReplayCount(used, slots) > replayBaseline.replayCount) { pruned++; return; }
-              if (getOptimisticCoverageGainUnits(chosen, remaining, used, lists) <= coverageBaseline.coverageGainUnits) {
+              if (getOptimisticCoverageGainUnits(chosen, remaining, used, lists, compatibleByCourt) <= coverageBaseline.coverageGainUnits) {
                 pruned++; return;
               }
             } else if (bestMetrics && !socialPriorityPolicy && !recurrenceFrontierPhase) {
@@ -2550,10 +2841,9 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
                   }
                 }
                 for (const other of remaining) {
-                  const availableForCourt = lists[other].filter((candidate) => (candidate.mask & used) === BigInt(0));
-                  for (const facet of facets) {
-                    const maximum = Math.max(...availableForCourt.map((candidate) => candidate.selection.socialVarietyGains?.[facet] ?? 0));
-                    addendsByFacet.get(facet)!.push(maximum);
+                  const maximums = getEntropyFacetMaximums(lists[other], used, previousOrdinal, compatibleByCourt.get(other));
+                  for (let facet = 0; facet < facets.length; facet++) {
+                    addendsByFacet.get(facets[facet]!)!.push(maximums[facet]!);
                   }
                 }
                 const facetUpperBounds = new Map(facets.map((facet) => [facet, canonicalSum(addendsByFacet.get(facet)!)]));
@@ -2637,7 +2927,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
                 if (optimisticReplayCount > allowedImmediateReplayCount) { pruned++; return; }
                 if (recurrencePolicy !== "strict-replay-rescue" && coverageGateCertified && coverageBaseline &&
                   optimisticReplayCount === replayBaseline.replayCount + 1 &&
-                  getOptimisticCoverageGainUnits(chosen, remaining, used, lists) <= coverageBaseline.coverageGainUnits) {
+                  getOptimisticCoverageGainUnits(chosen, remaining, used, lists, compatibleByCourt) <= coverageBaseline.coverageGainUnits) {
                   pruned++; return;
                 }
               }
@@ -2807,7 +3097,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           }
           if (prefixCertified && bestSocialPriorityMetrics) {
             for (const other of remaining) {
-              compatibleByCourt.set(other, compatibleByCourt.get(other)!.filter((candidate) =>
+              compatibleByCourt.set(other, filterCandidates(compatibleByCourt.get(other)!, (candidate) =>
                 candidate.selection.balanceGap <= bestSocialPriorityMetrics!.maxBalanceGap
               ));
             }
@@ -2816,6 +3106,52 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           }
         }
         for (const candidate of compatible) {
+          if (baselinePhase && baseline) {
+            // Bound the child before constructing its compatibility lists.
+            // A full fairness/rank tie cannot improve zero starvation/balance;
+            // only the already retained first baseline witness is needed.
+            const completionBound = getCompletionFairnessBound(used | candidate.mask);
+            if (!completionBound) { pruned++; continue; }
+            const fairnessDiff = compareSocialNumberVectors(completionBound, baseline.fairness);
+            const rankDiff = profiles[index].rank - baseline.rank;
+            const suffixMinimal = baseline.maxBalanceGap === 0 && baseline.totalBalanceGap === 0 &&
+              baseline.starvation.every((value) => value === 0);
+            if (fairnessDiff > 0 || (fairnessDiff === 0 &&
+              (rankDiff > 0 || (rankDiff === 0 && suffixMinimal)))) {
+              pruned++;
+              continue;
+            }
+          }
+          if (balancePolicy && baselineGlobalFairnessClass && globalCountRequiredMask !== BigInt(0) &&
+            countRequiredBits(globalCountRequiredMask & ~(used | candidate.mask)) > (remaining.length - 1) * 4) {
+            checkCandidateScanBudget();
+            pruned++;
+            continue;
+          }
+          // Nonnegative, additive replay counts cannot be repaired by later
+          // courts. Discard only branches outside this phase's hard admission
+          // envelope, retaining court choice and order for every admissible tie.
+          if (balancePolicy && gateRespectRest && replayBaseline && !baselinePhase && !replayBaselinePhase) {
+            const replayCount = getImmediateReplayCountForMask(used) + getImmediateReplayCountForMask(candidate.mask);
+            const replayCeiling = coverageBaselinePhase || recurrenceFrontierPhase
+              ? replayBaseline.replayCount : allowedImmediateReplayCount;
+            if (replayCeiling !== null && replayCount > replayCeiling) {
+              checkCandidateScanBudget();
+              pruned++;
+              continue;
+            }
+          }
+          // Read the live incumbent: a child can improve replay after this
+          // node captured its prefix and compatible lists. Balanced replay
+          // admission freezes fairness/rank/starvation to the certified
+          // baseline, so a nonnegative selected replay sum already tying the
+          // incumbent cannot produce any strict improvement in this phase.
+          if (balancePolicy && replayBaselinePhase && replayBaseline &&
+            getImmediateReplayCountForMask(used) + getImmediateReplayCountForMask(candidate.mask) >= replayBaseline.replayCount) {
+            checkCandidateScanBudget();
+            pruned++;
+            continue;
+          }
           if (candidateOrdinal && chosen.length > 0) {
             const previousOrdinal = candidateOrdinal.get(chosen[chosen.length - 1]);
             const nextOrdinal = candidateOrdinal.get(candidate);
@@ -2827,9 +3163,22 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           // Return selections in physical profile order, even when search chooses a different court.
           assignments[court] = candidate;
           if (remaining.length === 1) {
+            checkCandidateScanBudget();
+            const completedMask = used | candidate.mask;
+            // Baseline ties cannot improve any baseline objective. Prune using
+            // exactly considerBaseline's full physical-court tuple before
+            // charging a leaf expansion; late policy/hash phases stay exhaustive.
+            if (shouldPruneBaselineLeaf(assignments, completedMask, index) ||
+              shouldPruneReplayBaselineLeaf(assignments, completedMask, index)) { pruned++; continue; }
+            if (coverageBaselinePhase && coverageBaseline &&
+              getBatchCoverageGainUnits(assignments) <= coverageBaseline.coverageGainUnits) {
+              checkCandidateScanBudget();
+              pruned++;
+              continue;
+            }
             if (outOfBudget()) break;
             explored++; phaseExplored++;
-            consider(assignments as Candidate<ActiveMatchmakerV3Player<T>>[], used | candidate.mask, index);
+            consider(assignments as Candidate<ActiveMatchmakerV3Player<T>>[], completedMask, index);
           } else visit(ordered, used | candidate.mask, remaining.filter((other) => other !== court));
           if (interrupted || (baselinePhase && baselineProven) || (replayBaselinePhase && replayBaselineProven) || coverageProfileOptimal()) break;
         }
@@ -2902,13 +3251,37 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     }
    }
   };
+  const runSearch = () => {
+    const started = options.searchBudget ? now() : 0;
+    const exploredBefore = explored;
+    const prunedBefore = pruned;
+    try {
+      runSearchPhase();
+    } catch (error) {
+      if (error !== candidateScanInterrupted) throw error;
+      interrupted = true;
+    } finally {
+      if (options.searchBudget) {
+        const ended = now();
+        recordMatchmakingSearchPhase(options.searchBudget, {
+          engine: "recurrence", phase: baselinePhase ? "balance" : replayBaselinePhase ? "replay"
+            : coverageBaselinePhase ? "coverage" : recurrenceFrontierPhase ? "recurrence-frontier" : "variety",
+          elapsedMs: ended - started, requestElapsedMs: ended - options.searchBudget.startedAt,
+          exploredBranches: explored - exploredBefore, prunedBranches: pruned - prunedBefore, interrupted,
+          ...(replayBaselinePhase ? { replayWitnessCount: replayBaseline?.replayCount ?? null } : {}),
+          ...(baselinePhase && baseline ? { balanceWitness: { rank: baseline.rank, fairness: baseline.fairness, maxBalanceGap: baseline.maxBalanceGap, totalBalanceGap: baseline.totalBalanceGap } } : {}),
+          limit: !interrupted ? null : ended >= deadline ? "time" : "branches",
+        });
+      }
+    }
+  };
   let baselineLimitReached = false;
   let varietyLimitReached = false;
   let varietyStarted = false;
   const startNextPhase = () => {
     interrupted = false;
     phaseExplored = 0;
-    deadline = Date.now() + phaseBudgetMs;
+    deadline = Math.min(sharedDeadline, now() + phaseBudgetMs);
   };
   const runReplayBaselinePhase = () => {
     replayBaselinePhase = true;

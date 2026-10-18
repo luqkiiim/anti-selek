@@ -10,6 +10,11 @@ import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
 import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
 import { getEffectiveSessionType } from "@/lib/sessionSettings";
+import {
+  checkMatchmakingSearchBudget,
+  MatchmakingSearchBudgetExceededError,
+  type MatchmakingSearchBudget,
+} from "@/lib/matchmaking/v3/searchBudget";
 import type { CourtGroupType } from "@/types/enums";
 import {
   buildMatchmakingState,
@@ -128,6 +133,7 @@ interface QueuedMatchRecordInput {
   poolASeatCount?: number | null;
   poolBSeatCount?: number | null;
   isAutomatic: boolean;
+  requireAutomaticEligibility?: boolean;
   matchmakingReasonJson?: string | null;
   teamClubIds?: { team1ClubId?: string | null; team2ClubId?: string | null };
   consumeSkipNextUserIds?: string[];
@@ -221,12 +227,29 @@ async function createQueuedMatchRecord({
   poolASeatCount,
   poolBSeatCount,
   isAutomatic,
+  requireAutomaticEligibility = false,
   matchmakingReasonJson,
   teamClubIds,
   consumeSkipNextUserIds = [],
 }: QueuedMatchRecordInput) {
   try {
     return await sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
+      if (requireAutomaticEligibility) {
+        // The decision to rebuild was made before searching. Check it again
+        // after acquiring the writer so a settings/court change cannot leave
+        // a stale automatic queue behind.
+        const currentSession = await tx.session.findUnique({
+          where: { id: sessionId },
+          select: { autoQueueEnabled: true },
+        });
+        const openCourt = await tx.court.findFirst({
+          where: { sessionId, currentMatchId: null },
+          select: { id: true },
+        });
+        if (!currentSession?.autoQueueEnabled || openCourt) {
+          throw new GenerateMatchError(409, "Automatic queue conditions changed. Refresh and try again.");
+        }
+      }
       const groupSnapshot = await resolveQueuedGroupSnapshot(tx, {
         sessionId,
         partition,
@@ -279,8 +302,10 @@ async function createQueuedMatchRecord({
 }
 
 export async function selectAutomaticMatchForSession(
-  sessionData: QueueSessionRecord
+  sessionData: QueueSessionRecord,
+  searchBudget?: MatchmakingSearchBudget,
 ) {
+  checkMatchmakingSearchBudget(searchBudget);
   const { busyPlayerIds, playersById, rotationHistory } =
     await buildMatchmakingState(sessionData);
   const { availableCandidates, rankedCandidates } = getRankedCandidates(
@@ -299,6 +324,7 @@ export async function selectAutomaticMatchForSession(
     socialPriorityPolicy: resolveSocialCandidatePolicy(
       getEffectiveSessionType(sessionData),
     ),
+    searchBudget,
   });
 
   return {
@@ -429,10 +455,16 @@ function getQueuedReshuffleSource(sessionData: QueueSessionRecord): ReshuffleSou
   };
 }
 
-export async function createQueuedMatchForSession(sessionData: QueueSessionRecord) {
+export async function createQueuedMatchForSession(
+  sessionData: QueueSessionRecord,
+  searchBudget?: MatchmakingSearchBudget,
+  requireAutomaticEligibility = false,
+) {
+  checkMatchmakingSearchBudget(searchBudget);
   await ensureQueueSlotAvailable(sessionData);
 
-  const selection = await selectAutomaticMatchForSession(sessionData);
+  const selection = await selectAutomaticMatchForSession(sessionData, searchBudget);
+  checkMatchmakingSearchBudget(searchBudget);
   const queuedMatch = await createQueuedMatchRecord({
     sessionId: sessionData.id,
     actor: sessionData.mutationActor,
@@ -442,6 +474,7 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
     poolASeatCount: selection.poolASeatCount,
     poolBSeatCount: selection.poolBSeatCount,
     isAutomatic: true,
+    requireAutomaticEligibility,
     matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
     teamClubIds: {
       team1ClubId: selection.team1ClubId,
@@ -736,7 +769,8 @@ async function tryRebuildAutomaticQueuedMatch(
 }
 
 async function tryRebuildQueuedMatch(
-  loadSessionData: () => Promise<QueueSessionRecord | null>
+  loadSessionData: () => Promise<QueueSessionRecord | null>,
+  searchBudget?: MatchmakingSearchBudget,
 ) {
   const sessionData = await loadSessionData();
   if (!sessionData || (isUpgradedCollaboration(sessionData) && sessionData.schedulingMode === "LINEUP")) {
@@ -752,9 +786,15 @@ async function tryRebuildQueuedMatch(
   }
 
   try {
-    return await createQueuedMatchForSession(sessionData);
+    return await createQueuedMatchForSession(sessionData, searchBudget, true);
   } catch (error) {
     if (error instanceof GenerateMatchError) {
+      if (searchBudget && error.message.startsWith("Match search reached its time limit")) {
+        // A budgeted optional queue attempt may time out inside the matcher
+        // before the outer request clock expires. Keep that outcome distinct
+        // from a proven infeasible queue so the caller can offer recovery.
+        throw new MatchmakingSearchBudgetExceededError();
+      }
       if (error.status === 409) {
         const reloadedSessionData = await loadSessionData();
         if (reloadedSessionData?.queuedMatch) {
@@ -776,8 +816,22 @@ export async function tryRebuildQueuedMatchForCode(code: string) {
   return tryRebuildQueuedMatch(() => loadSessionRecord(code));
 }
 
-export async function tryRebuildQueuedMatchForSessionId(sessionId: string) {
-  return tryRebuildQueuedMatch(() => loadSessionRecordById(sessionId));
+export async function tryRebuildQueuedMatchForSessionId(
+  sessionId: string,
+  searchBudget?: MatchmakingSearchBudget,
+  mutationActor?: SessionMutationActor,
+) {
+  return tryRebuildQueuedMatch(async () => {
+    const sessionData = await loadSessionRecordById(sessionId);
+    return sessionData ? { ...sessionData, mutationActor } : null;
+  }, searchBudget);
+}
+
+export async function getQueuedMatchForSessionId(sessionId: string) {
+  const sessionData = await loadSessionRecordById(sessionId);
+  return sessionData?.queuedMatch
+    ? buildQueuedMatchResponse(sessionData, sessionData.queuedMatch)
+    : null;
 }
 
 export async function tryRebuildAutomaticQueuedMatchForCode(code: string) {

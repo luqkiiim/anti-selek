@@ -10,6 +10,8 @@ export function useSessionCourtActions({
   safeJson,
   patchSessionData,
   scheduleSessionRefresh,
+  scheduleDeferredQueueRecovery,
+  cancelDeferredQueueRecovery,
   setError,
 }: UseSessionMatchActionsDependencies) {
   const courtMatchCreation = useSessionCourtMatchCreation({
@@ -18,6 +20,8 @@ export function useSessionCourtActions({
     safeJson,
     patchSessionData,
     scheduleSessionRefresh,
+    scheduleDeferredQueueRecovery,
+    cancelDeferredQueueRecovery,
     setError,
   });
   const courtConfirmActions = useSessionCourtConfirmActions({
@@ -26,6 +30,8 @@ export function useSessionCourtActions({
     safeJson,
     patchSessionData,
     scheduleSessionRefresh,
+    scheduleDeferredQueueRecovery,
+    cancelDeferredQueueRecovery,
     setError,
   });
 

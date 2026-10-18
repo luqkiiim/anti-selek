@@ -14,6 +14,7 @@ import {
 } from "@/types/enums";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import { getSocialIdealRestGap } from "@/lib/matchmaking/v3/scoring";
+import { createMatchmakingSearchBudget, MatchmakingSearchBudgetExceededError } from "@/lib/matchmaking/v3/searchBudget";
 import * as socialHistory from "@/lib/matchmaking/socialSessionHistory";
 import * as socialBatch from "@/lib/matchmaking/v3/socialBatch";
 import {
@@ -203,6 +204,30 @@ function completedOnlyHistory(data: GenerateMatchSession) {
 describe("Social generation route adapters", () => {
   beforeEach(() => vi.spyOn(Math, "random").mockReturnValue(0.25));
   afterEach(() => vi.restoreAllMocks());
+
+  it("expires the shared request clock during grouped social preparation", async () => {
+    const players = [
+      ...Array.from({ length: 6 }, (_, index) => player(`M${index + 1}`, PlayerGender.MALE,
+        { pool: index < 3 ? SessionPool.A : SessionPool.B })),
+      ...Array.from({ length: 6 }, (_, index) => player(`F${index + 1}`, PlayerGender.FEMALE,
+        { pool: index < 3 ? SessionPool.A : SessionPool.B })),
+    ];
+    const data = session({ type: SessionType.POINTS, poolsEnabled: true, players });
+    const state = await inputs(data);
+    let time = 0;
+    let expiredInContext = false;
+    const searchBudget = createMatchmakingSearchBudget({ now: () => {
+      if (new Error().stack?.includes("buildSocialVarietyContext")) {
+        expiredInContext = true;
+        time = 3_000;
+      }
+      return time;
+    } }).capAtElapsedMs(3_000);
+
+    expect(() => selectBatchMatches({ ...state, requestedMatchCount: 2, searchBudget }))
+      .toThrow(MatchmakingSearchBudgetExceededError);
+    expect(expiredInContext).toBe(true);
+  });
 
   it("uses immutable manual history and active/queue commitments in standard single-court scoring", async () => {
     const data = standardFixture();

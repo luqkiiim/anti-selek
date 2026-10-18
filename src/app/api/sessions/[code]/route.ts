@@ -322,6 +322,28 @@ async function getSessionRoute(
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
+  // A generation response can request one explicit recovery refresh. Ordinary
+  // polling, including refreshes after Clear, must never create a queue.
+  if (
+    new URL(request.url).searchParams.get("recoverDeferredQueue") === "1" &&
+    !globalView && !isQuickAccess &&
+    (session.user.isAdmin || !!operatorMembership) &&
+    sessionData.status === SessionStatus.ACTIVE &&
+    sessionData.autoQueueEnabled && !sessionData.queuedMatch
+  ) {
+    try {
+      await tryRebuildQueuedMatchForSessionId(sessionData.id, undefined, {
+        userId: session.user.id,
+        isGlobalAdmin: !!session.user.isAdmin,
+      });
+      sessionData.queuedMatch = await prisma.queuedMatch.findUnique({
+        where: { sessionId: sessionData.id },
+      });
+    } catch (error) {
+      logError("Failed to recover automatic queue during session refresh", error);
+    }
+  }
+
   const canRequestRollback =
     !globalView && !isQuickAccess &&
     sessionData.status === SessionStatus.COMPLETED &&
@@ -806,7 +828,10 @@ export async function PATCH(
           }
         : {}),
       queuedMatch: autoQueueEnabled
-        ? await tryRebuildQueuedMatchForSessionId(sessionData.id)
+        ? await tryRebuildQueuedMatchForSessionId(sessionData.id, undefined, {
+            userId: session.user.id,
+            isGlobalAdmin: !!session.user.isAdmin,
+          })
         : null,
     });
   } catch (error) {

@@ -1,3 +1,4 @@
+import { checkMatchmakingSearchBudget, MatchmakingSearchBudgetExceededError } from "./searchBudget";
 import { SessionMode, SessionType } from "../../../types/enums";
 import { findBestRotationBatchSelection } from "./socialBatch";
 import type { RotationBatchOptions, SocialBatchResult } from "./socialBatch";
@@ -273,6 +274,7 @@ function buildTProof<T extends MatchmakerV3Player>(
   const context = buildSocialStructuralVarietyContext(players, completedHistory, {
     sessionMode: options.sessionMode,
     opportunityConstraints: options.socialStructuralOpportunityConstraints,
+    searchBudget: options.searchBudget,
   });
   const historyIds = new Set<string>();
   const appearances = new Map(players.map((player) => [player.userId, 0]));
@@ -694,6 +696,7 @@ function makeCoverageProof<T extends MatchmakerV3Player>(
     : buildSocialVarietyContext(players, legacyHistory, {
         sessionMode: recurrenceOptions.sessionMode,
         opportunityConstraints: legacyOpportunityConstraints,
+        searchBudget: recurrenceOptions.searchBudget ?? legacyOptions.searchBudget,
       });
   const scorer = createSocialVarietyCoverageScorer(legacyContext, recurrenceOptions.sessionMode);
   const chosenGainUnits = scorer.getBatchGainUnits(partitions);
@@ -954,9 +957,12 @@ export function verifyBalancedCandidateAcceptance<T extends MatchmakerV3Player>(
   result: BalancedCandidateSelectionResult<T> | null,
 ): string[] {
   try {
-    return validateCandidateProofInternal(players, options, legacyOptions, result);
-  } catch {
-    return ["CANDIDATE_ACCEPTANCE_CHECK_FAILED"];
+    checkMatchmakingSearchBudget(options.searchBudget);
+    const reasons = validateCandidateProofInternal(players, options, legacyOptions, result);
+    checkMatchmakingSearchBudget(options.searchBudget);
+    return reasons;
+  } catch (error) {
+    return [error instanceof MatchmakingSearchBudgetExceededError ? "CANDIDATE_ACCEPTANCE_BUDGET_EXHAUSTED" : "CANDIDATE_ACCEPTANCE_CHECK_FAILED"];
   }
 }
 
@@ -1148,10 +1154,13 @@ export function verifyBalancedProductionFallback<T extends MatchmakerV3Player>(
   result: SocialBatchResult<ActiveMatchmakerV3Player<T>> | null,
 ): BalancedFallbackValidation {
   try {
-    return validateFallback(players, options, result);
-  } catch {
+    checkMatchmakingSearchBudget(options.searchBudget);
+    const validation = validateFallback(players, options, result);
+    checkMatchmakingSearchBudget(options.searchBudget);
+    return validation;
+  } catch (error) {
     return {
-      reasons: ["PRODUCTION_FALLBACK_ACCEPTANCE_CHECK_FAILED"],
+      reasons: [error instanceof MatchmakingSearchBudgetExceededError ? "PRODUCTION_FALLBACK_ACCEPTANCE_BUDGET_EXHAUSTED" : "PRODUCTION_FALLBACK_ACCEPTANCE_CHECK_FAILED"],
       proof: {
         selectionPresent: false, certified: false, fairnessCertified: false, scheduleCertified: false,
         starvationCertified: false, balanceCertified: false, replayCertified: false, coverageGateCertified: false,
@@ -1341,7 +1350,11 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
   candidateOptions?: BalancedRecurrenceOptions<T>;
   requestedPolicy?: BalancedRecurrencePolicy;
 }): BalancedCandidateRun<T> {
-  const wrapperStartedAt = Date.now();
+  const now = options.searchBudget?.now ?? Date.now;
+  const wrapperStartedAt = now();
+  const primaryBudget = options.searchBudget?.capAtElapsedMs(3_000);
+  const fallbackBudget = options.searchBudget?.capAtElapsedMs(4_500);
+  const productionOptions = { ...options, searchBudget: fallbackBudget };
   const requested = resolveBalancedCandidatePolicy(options.sessionType, requestedPolicy);
   if (!requested) {
     let productionResult: SocialBatchResult<ActiveMatchmakerV3Player<T>> | null = null;
@@ -1351,13 +1364,13 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
       directDrawCount += 1;
       return sourceRandom();
     };
-    const fallbackStartedAt = Date.now();
+    const fallbackStartedAt = now();
     try {
-      productionResult = findBestRotationBatchSelection(productionPlayers, { ...options, randomFn: directRandom });
+      productionResult = findBestRotationBatchSelection(productionPlayers, { ...productionOptions, randomFn: directRandom });
     } catch {
       productionResult = null;
     }
-    const fallbackElapsed = Date.now() - fallbackStartedAt;
+    const fallbackElapsed = now() - fallbackStartedAt;
     const hasProductionSelection = Boolean(productionResult?.selection);
     const decision: BalancedCandidateDecision = {
       version: 1,
@@ -1368,7 +1381,7 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
       candidateProof: getCandidateProof<T>(null),
       candidateSearch: { exploredBranches: null, prunedBranches: null, searchLimitReached: null, elapsedMs: 0, randomDrawCount: 0 },
       fallbackSearch: createDiagnostics(productionResult, fallbackElapsed, directDrawCount),
-      wrapperElapsedMs: Date.now() - wrapperStartedAt,
+      wrapperElapsedMs: now() - wrapperStartedAt,
     };
     const result = productionResult ?? buildNoSelectionFallback(productionPlayers, options);
     return { result, decision, elapsedMs: decision.wrapperElapsedMs };
@@ -1384,6 +1397,7 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
     sessionMode: options.sessionMode,
     courtCount: options.courtCount,
     recurrencePolicy: RECURRENCE_POLICY,
+    searchBudget: primaryBudget,
   };
   const sourceRandom = options.randomFn ?? Math.random;
   const recordedDraws: number[] = [];
@@ -1394,26 +1408,30 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
   };
   let candidateResult: BalancedCandidateResult<T> | null = null;
   let candidateThrew = false;
-  const candidateStartedAt = Date.now();
+  let candidateBudgetExhausted = false;
+  const candidateStartedAt = now();
   try {
     candidateResult = findBestBalancedRecurrenceSelection(candidatePlayers, {
       ...effectiveCandidateOptions,
+      // Reserve a bounded slice for independent acceptance within the 3s cutoff.
+      searchBudget: primaryBudget?.capAtElapsedMs(2_900),
       socialPriorityPolicy: undefined,
       coverageGainMetric: undefined,
       balanceGuardrailPolicy: undefined,
       recurrencePolicy: RECURRENCE_POLICY,
       randomFn: candidateRandom,
     } as BalancedRecurrenceOptions<T>) as BalancedCandidateResult<T>;
-  } catch {
+  } catch (error) {
     candidateThrew = true;
+    candidateBudgetExhausted = error instanceof MatchmakingSearchBudgetExceededError;
   }
-  const candidateElapsed = Date.now() - candidateStartedAt;
+  const candidateElapsed = now() - candidateStartedAt;
   const candidateReasons = candidateThrew
     ? [
-        "CANDIDATE_MATCHER_ERROR",
+        candidateBudgetExhausted ? "CANDIDATE_BUDGET_EXHAUSTED" : "CANDIDATE_MATCHER_ERROR",
         ...(effectiveCandidateOptions.respectPlayerRest === false ? ["REPLAY_GATES_DISABLED"] : []),
       ]
-    : verifyBalancedCandidateAcceptance(candidatePlayers, effectiveCandidateOptions, options, candidateResult);
+    : verifyBalancedCandidateAcceptance(candidatePlayers, effectiveCandidateOptions, { ...options, searchBudget: primaryBudget }, candidateResult);
   const candidateDiagnostics = createDiagnostics(candidateResult, candidateElapsed, recordedDraws.length);
   if (!candidateThrew && candidateReasons.length === 0 && candidateResult) {
     const decision: BalancedCandidateDecision = {
@@ -1424,7 +1442,7 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
       reasonCodes: [],
       candidateProof: getCandidateProof(candidateResult, true),
       candidateSearch: candidateDiagnostics,
-      wrapperElapsedMs: Date.now() - wrapperStartedAt,
+      wrapperElapsedMs: now() - wrapperStartedAt,
     };
     return { result: candidateResult, decision, elapsedMs: decision.wrapperElapsedMs };
   }
@@ -1438,18 +1456,19 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
     return value;
   };
   let productionResult: SocialBatchResult<ActiveMatchmakerV3Player<T>> | null = null;
-  const fallbackStartedAt = Date.now();
+  const fallbackStartedAt = now();
   try {
     productionResult = findBestRotationBatchSelection(productionPlayers, {
-      ...options,
+      ...productionOptions,
+      searchBudget: fallbackBudget?.capAtElapsedMs(4_400),
       socialPriorityPolicy: undefined,
       randomFn: fallbackRandom,
     });
   } catch {
     productionResult = null;
   }
-  const fallbackElapsed = Date.now() - fallbackStartedAt;
-  const fallback = verifyBalancedProductionFallback(productionPlayers, options, productionResult);
+  const fallbackElapsed = now() - fallbackStartedAt;
+  const fallback = verifyBalancedProductionFallback(productionPlayers, productionOptions, productionResult);
   const fallbackDiagnostics = createDiagnostics(productionResult, fallbackElapsed, fallbackDrawCount);
   const decision: BalancedCandidateDecision = {
     version: 1,
@@ -1461,10 +1480,12 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
     fallbackProof: fallback.proof,
     candidateSearch: candidateDiagnostics,
     fallbackSearch: fallbackDiagnostics,
-    wrapperElapsedMs: Date.now() - wrapperStartedAt,
+    wrapperElapsedMs: now() - wrapperStartedAt,
   };
   const result = productionResult
-    ? fallback.proof.certified ? productionResult : buildSafeNoSelection(productionResult)
+    ? fallback.proof.certified ? productionResult : buildSafeNoSelection(
+        fallbackBudget?.isExpired() ? { ...productionResult, debug: { ...productionResult.debug, searchLimitReached: true } } : productionResult
+      )
     : buildNoSelectionFallback(productionPlayers, options);
   return { result, decision, elapsedMs: decision.wrapperElapsedMs };
 }

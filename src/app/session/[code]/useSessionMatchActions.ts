@@ -10,6 +10,8 @@ export function useSessionMatchActions({
   safeJson,
   patchSessionData,
   scheduleSessionRefresh,
+  scheduleDeferredQueueRecovery,
+  cancelDeferredQueueRecovery,
   setError,
 }: UseSessionMatchActionsDependencies) {
   const courtActions = useSessionCourtActions({
@@ -18,6 +20,8 @@ export function useSessionMatchActions({
     safeJson,
     patchSessionData,
     scheduleSessionRefresh,
+    scheduleDeferredQueueRecovery,
+    cancelDeferredQueueRecovery,
     setError,
   });
   const scoreActions = useSessionScoreActions({
@@ -26,6 +30,8 @@ export function useSessionMatchActions({
     safeJson,
     patchSessionData,
     scheduleSessionRefresh,
+    scheduleDeferredQueueRecovery,
+    cancelDeferredQueueRecovery,
     setError,
   });
 

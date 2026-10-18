@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { SessionMode, SessionType } from "../../../types/enums";
-import { findBestBalancedMatureRecurrenceSelection as findFrozenRecurrence } from "./__tests__/fixtures/balancedRecurrenceExhaustive";
+import {
+  findBestBalancedMatureRecurrenceSelection as findFrozenRecurrence,
+  findBestRotationBatchSelection as findFrozenProduction,
+} from "./__tests__/fixtures/balancedRecurrenceExhaustive";
 import { findBestBalancedRecurrenceSelection } from "./balancedRecurrence";
+import { findBestRotationBatchSelection } from "./socialBatch";
 import { runBalancedCandidateWithProductionFallback } from "./balancedCandidateAcceptance";
 import type { MatchmakerV3Player, SocialHistoryMatch, V3SelectionConstraints } from "./types";
 
@@ -334,7 +338,7 @@ describe("optimized Balanced recurrence exactness", () => {
     expect(optimized.debug.searchLimitReached).toBe(false);
   });
 
-  it("preserves the frozen result for constrained fractional-strength three-court profiles", () => {
+  it.each(["recurrence", "production"] as const)("preserves the frozen %s result for constrained fractional-strength identical three-court profiles", (engine) => {
     const players = createPlayers(12).map((player, index) => ({
       ...player,
       strength: 1000 + index * 0.1,
@@ -355,20 +359,40 @@ describe("optimized Balanced recurrence exactness", () => {
       ...baseOptions,
       schedules: [{ rank: 0, courts: [constraints, constraints, constraints] }],
     };
-    const frozen = findFrozenRecurrence(players, { ...options, randomFn: seededRandom(57_241) });
-    const optimized = findBestBalancedRecurrenceSelection(players, {
-      ...options,
-      randomFn: seededRandom(57_241),
-    });
+    const productionOptions = { ...options, recurrencePolicy: undefined };
+    const randomFn = seededRandom(57_241);
+    const frozenRandomFn = seededRandom(57_241);
+    const frozen = engine === "recurrence"
+      ? findFrozenRecurrence(players, { ...options, randomFn: frozenRandomFn })
+      : findFrozenProduction(players, { ...productionOptions, randomFn: frozenRandomFn });
+    const optimized = engine === "recurrence"
+      ? findBestBalancedRecurrenceSelection(players, { ...options, randomFn })
+      : findBestRotationBatchSelection(players, { ...productionOptions, randomFn });
 
+    expect(frozen.selection).not.toBeNull();
+    expect(optimized.selection).not.toBeNull();
+    expect(frozen.debug.searchLimitReached).toBe(false);
+    expect(optimized.debug.searchLimitReached).toBe(false);
+    expect(optimized.balanceCertified).toBe(true);
     expect(optimized.selection).toEqual(frozen.selection);
-    expect(optimized.recurrenceCertified).toBe(frozen.recurrenceCertified);
-    expect(optimized.recurrenceFrontierCertified).toBe(frozen.recurrenceFrontierCertified);
-    expect(optimized.bestMatureDeltaTAtRminUnits).toBe(frozen.bestMatureDeltaTAtRminUnits);
-    expect(optimized.chosenMatureDeltaTUnits).toBe(frozen.chosenMatureDeltaTUnits);
-    expect(optimized.admissionReasons).toEqual(frozen.admissionReasons);
+    for (const key of ["fairnessVector", "schedulingRank", "balanceGuardrail", "leftOutOverduePlayerCount", "highestLeftOutRestTurns", "totalLeftOutRestTurns"] as const) {
+      expect(optimized.debug[key], key).toEqual(frozen.debug[key]);
+    }
+    expect(optimized.scheduleCertified).toBe(frozen.scheduleCertified);
+    expect(optimized.fairnessCertified).toBe(frozen.fairnessCertified);
+    expect(optimized.starvationCertified).toBe(frozen.starvationCertified);
+    if (engine === "recurrence") {
+      const actualRecurrence = optimized as ReturnType<typeof findBestBalancedRecurrenceSelection>;
+      const expectedRecurrence = frozen as ReturnType<typeof findFrozenRecurrence>;
+      expect(actualRecurrence.recurrenceCertified).toBe(expectedRecurrence.recurrenceCertified);
+      expect(actualRecurrence.recurrenceFrontierCertified).toBe(expectedRecurrence.recurrenceFrontierCertified);
+      expect(actualRecurrence.bestMatureDeltaTAtRminUnits).toBe(expectedRecurrence.bestMatureDeltaTAtRminUnits);
+      expect(actualRecurrence.chosenMatureDeltaTUnits).toBe(expectedRecurrence.chosenMatureDeltaTUnits);
+      expect(actualRecurrence.admissionReasons).toEqual(expectedRecurrence.admissionReasons);
+    }
     expect(optimized.chosenImmediateCoverageGain).toBe(frozen.chosenImmediateCoverageGain);
     expect(optimized.bestMinimumReplayCoverageGain).toBe(frozen.bestMinimumReplayCoverageGain);
+    expect(randomFn()).toBe(frozenRandomFn());
   });
 
   it("fails closed when an explicit branch limit interrupts certification", () => {

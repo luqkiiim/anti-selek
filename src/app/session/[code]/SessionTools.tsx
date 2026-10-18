@@ -187,6 +187,8 @@ export default function SessionTools() {
     patchSessionData,
     retryInitialLoad,
     scheduleSessionRefresh,
+    scheduleDeferredQueueRecovery,
+    cancelDeferredQueueRecovery,
   } = useSessionData({
     code,
     enabled: !!session?.user?.id,
@@ -200,6 +202,8 @@ export default function SessionTools() {
     safeJson,
     patchSessionData,
     scheduleSessionRefresh,
+    scheduleDeferredQueueRecovery,
+    cancelDeferredQueueRecovery,
     setError,
   });
 

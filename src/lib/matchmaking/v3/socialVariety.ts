@@ -1,3 +1,4 @@
+import { checkMatchmakingSearchBudget, getMatchmakingSearchBudgetScope, type MatchmakingSearchBudget } from "./searchBudget";
 import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import { SessionMode } from "../../../types/enums";
 
@@ -93,6 +94,48 @@ export type SocialCoverageGainMetric = "legacy-four-facet" | "social-horizon-321
 
 type FacetMaps = Record<SocialFacet, Map<string, number>>;
 type FacetOpportunities = Record<SocialFacet, Set<string>>;
+
+type CachedOpportunities = readonly (readonly [string, Readonly<Record<SocialFacet, readonly string[]>>])[];
+interface OpportunityCacheEntry {
+  readonly input: string;
+  readonly constraints: readonly (readonly [object, unknown, unknown])[];
+  readonly opportunities: CachedOpportunities;
+}
+const opportunityCaches = new WeakMap<object, OpportunityCacheEntry[]>();
+
+function opportunityRosterKey(players: readonly MatchmakerV3Player[]): string | null {
+  const rows: unknown[] = [];
+  for (const player of players) {
+    const row: unknown[] = [];
+    for (const key of Object.getOwnPropertyNames(player).sort()) {
+      const value = (player as unknown as Record<string, unknown>)[key];
+      const type = typeof value;
+      // Matchmaker inputs are scalar fields and Dates. Generic callers with
+      // nested mutable metadata or function properties simply do not cache.
+      if (value !== null && type === "object" && !(value instanceof Date) || type === "function" || type === "symbol") return null;
+      row.push([key, type, value instanceof Date ? value.getTime() : type === "number"
+        ? Object.is(value, -0) ? "-0" : String(value) : type === "bigint" ? String(value) : value]);
+    }
+    rows.push(row);
+  }
+  return JSON.stringify(rows);
+}
+
+function freezeOpportunities(opportunities: Map<string, FacetOpportunities>): CachedOpportunities {
+  return Object.freeze([...opportunities].map(([id, facets]) => Object.freeze([
+    id,
+    Object.freeze(Object.fromEntries(Object.entries(facets).map(([facet, values]) =>
+      [facet, Object.freeze([...values])]
+    )) as unknown as Record<SocialFacet, readonly string[]>),
+  ] as const)));
+}
+
+function copyOpportunities(cached: CachedOpportunities): Map<string, FacetOpportunities> {
+  return new Map(cached.map(([id, facets]) => [id, {
+    courtmates: new Set(facets.courtmates), partners: new Set(facets.partners),
+    opponents: new Set(facets.opponents), matchType: new Set(facets.matchType),
+  }]));
+}
 
 function emptyFacetMaps(): FacetMaps {
   return {
@@ -323,7 +366,8 @@ function buildConstrainedOpportunities<T extends MatchmakerV3Player>(
   sides: ReadonlyMap<string, "UPPER" | "LOWER" | null>,
   constraints: Array<V3SelectionConstraints<ActiveMatchmakerV3Player<T>>>,
   opportunities: Map<string, FacetOpportunities>,
-  ignorePausedAvailability = false
+  ignorePausedAvailability = false,
+  searchBudget?: MatchmakingSearchBudget
 ) {
   // Structural rules see the whole roster without temporary busy/rest exclusions.
   const roster: ActiveMatchmakerV3Player<T>[] = players.map((player, rank) => ({
@@ -340,6 +384,7 @@ function buildConstrainedOpportunities<T extends MatchmakerV3Player>(
     for (let b = a + 1; b < roster.length - 2; b += 1) {
       for (let c = b + 1; c < roster.length - 1; c += 1) {
         for (let d = c + 1; d < roster.length; d += 1) {
+          checkMatchmakingSearchBudget(searchBudget);
           const quartet: [ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>, ActiveMatchmakerV3Player<T>] =
             [roster[a], roster[b], roster[c], roster[d]];
           const quartetIds = quartet.map((player) => player.userId) as [string, string, string, string];
@@ -687,24 +732,55 @@ export function buildSocialVarietyContext<T extends MatchmakerV3Player>(
     sessionMode,
     opportunityConstraints,
     includePausedPlayers = false,
+    searchBudget,
   }: {
     sessionMode: SessionMode;
     opportunityConstraints?: Array<V3SelectionConstraints<ActiveMatchmakerV3Player<T>>>;
     /** Keep structurally feasible paused roster members in the vocabulary. */
     includePausedPlayers?: boolean;
+    searchBudget?: MatchmakingSearchBudget;
   }
 ): SocialVarietyContext {
+  checkMatchmakingSearchBudget(searchBudget);
   const sides = buildSideMap(players);
   const roster = includePausedPlayers ? [...players] : players.filter((player) => !player.isPaused);
-  const opportunities = new Map(roster.map((player) => [player.userId, emptyOpportunities()]));
-  if (opportunityConstraints?.length) {
-    buildConstrainedOpportunities(roster, sessionMode, sides, opportunityConstraints, opportunities, includePausedPlayers);
+  // The union is unchanged when the same rule object occurs in several court slots.
+  const rules = [...new Set(opportunityConstraints ?? [])];
+  const cache = searchBudget ? opportunityCaches.get(getMatchmakingSearchBudgetScope(searchBudget)) ?? [] : null;
+  // Constraints may inspect any player attribute. Keep an exact value snapshot and
+  // callback object identities; never equate callback functions by serialization.
+  const rosterKey = cache ? opportunityRosterKey(players) : null;
+  const input = rosterKey === null ? null : JSON.stringify([sessionMode, includePausedPlayers, rosterKey]);
+  const hit = input === null ? undefined : cache?.find((entry) => entry.input === input && entry.constraints.length === rules.length &&
+    rules.every((rule, index) => {
+      const saved = entry.constraints[index];
+      return rule === saved[0] && rule.isQuartetAllowed === saved[1] && rule.normalizePartition === saved[2];
+    }));
+  let opportunities: Map<string, FacetOpportunities>;
+  if (hit) {
+    opportunities = copyOpportunities(hit.opportunities);
   } else {
-    buildUnrestrictedOpportunities(roster, sessionMode, sides, opportunities);
+    opportunities = new Map(roster.map((player) => [player.userId, emptyOpportunities()]));
+    if (rules.length) {
+      buildConstrainedOpportunities(roster, sessionMode, sides, rules, opportunities, includePausedPlayers, searchBudget);
+    } else {
+      buildUnrestrictedOpportunities(roster, sessionMode, sides, opportunities);
+    }
+    // Publication happens only after the entire union completed. Histograms and
+    // all history-derived scores are rebuilt independently even on a cache hit.
+    checkMatchmakingSearchBudget(searchBudget);
+    if (cache && input !== null && searchBudget) {
+      const entry = Object.freeze({ input, constraints: Object.freeze(rules.map((rule) => Object.freeze([rule, rule.isQuartetAllowed, rule.normalizePartition] as const))), opportunities: freezeOpportunities(opportunities) });
+      checkMatchmakingSearchBudget(searchBudget);
+      cache.push(entry);
+      opportunityCaches.set(getMatchmakingSearchBudgetScope(searchBudget), cache);
+    }
   }
+  checkMatchmakingSearchBudget(searchBudget);
   const counts = new Map(roster.map((player) => [player.userId, emptyFacetMaps()]));
   const includedIds = new Set<string>();
   for (const match of matches) {
+    checkMatchmakingSearchBudget(searchBudget);
     if (!getUniquePartitionIds(match)) continue;
     if (match.id) {
       if (includedIds.has(match.id)) continue;
@@ -723,6 +799,7 @@ export function buildSocialVarietyContext<T extends MatchmakerV3Player>(
   }
   const playersByUserId = new Map<string, SocialVarietyPlayerContext>();
   for (const player of roster) {
+    checkMatchmakingSearchBudget(searchBudget);
     const vocabulary = opportunities.get(player.userId)!;
     const playerCounts = counts.get(player.userId)!;
     playersByUserId.set(player.userId, {
@@ -732,6 +809,7 @@ export function buildSocialVarietyContext<T extends MatchmakerV3Player>(
       matchType: buildHistogram(vocabulary.matchType, playerCounts.matchType),
     });
   }
+  checkMatchmakingSearchBudget(searchBudget);
   return { sessionMode, effectiveSideByUserId: sides, playersByUserId };
 }
 
@@ -747,15 +825,18 @@ export function buildSocialStructuralVarietyContext<T extends MatchmakerV3Player
   {
     sessionMode,
     opportunityConstraints,
+    searchBudget,
   }: {
     sessionMode: SessionMode;
     opportunityConstraints?: Array<V3SelectionConstraints<ActiveMatchmakerV3Player<T>>>;
+    searchBudget?: MatchmakingSearchBudget;
   }
 ): SocialVarietyContext {
   return buildSocialVarietyContext(players, matches, {
     sessionMode,
     opportunityConstraints,
     includePausedPlayers: true,
+    searchBudget,
   });
 }
 
