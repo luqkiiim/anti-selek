@@ -2243,6 +2243,34 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       const coverageProfileOptimal = () => coverageProfileUpperBound !== null && coverageBaseline !== null &&
         coverageBaseline.coverageGainUnits >= coverageProfileUpperBound;
       if (coverageProfileOptimal()) continue;
+      // This cache lives after complete list scoring and only for this
+      // phase/profile. Neither membership nor entropy gains change during DFS.
+      const entropyFacetMaximums = new WeakMap<Candidate<ActiveMatchmakerV3Player<T>>[], Map<string, number[]>>();
+      const getEntropyFacetMaximums = (
+        candidates: Candidate<ActiveMatchmakerV3Player<T>>[],
+        used: bigint,
+        minimumOrdinal: number | null,
+        completeCompatible?: readonly Candidate<ActiveMatchmakerV3Player<T>>[]
+      ) => {
+        checkCandidateScanBudget(true);
+        const key = `${used.toString()}:${minimumOrdinal ?? "none"}`;
+        let byState = entropyFacetMaximums.get(candidates);
+        const cached = byState?.get(key);
+        if (cached) return cached;
+        const maximums = entropyFacets.map(() => Number.NEGATIVE_INFINITY);
+        for (const candidate of completeCompatible ?? candidates) {
+          checkCandidateScanBudget();
+          if (!completeCompatible && (candidate.mask & used) !== BigInt(0)) continue;
+          for (let facet = 0; facet < entropyFacets.length; facet++) {
+            maximums[facet] = Math.max(maximums[facet], candidate.selection.socialVarietyGains?.[entropyFacets[facet]!] ?? 0);
+          }
+        }
+        // Interrupted scans never publish a partial (too small) upper bound.
+        checkCandidateScanBudget(true);
+        if (!byState) { byState = new Map(); entropyFacetMaximums.set(candidates, byState); }
+        byState.set(key, maximums);
+        return maximums;
+      };
       const visit = (chosen: Candidate<ActiveMatchmakerV3Player<T>>[], used: bigint, remaining: number[]) => {
         if (coverageProfileOptimal()) return;
         if (outOfBudget()) return;
@@ -2369,10 +2397,9 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
                   }
                 }
                 for (const other of remaining) {
-                  const availableForCourt = filterCandidates(lists[other], (candidate) => (candidate.mask & used) === BigInt(0));
-                  for (const facet of facets) {
-                    const maximum = Math.max(...availableForCourt.map((candidate) => candidate.selection.socialVarietyGains?.[facet] ?? 0));
-                    addendsByFacet.get(facet)!.push(maximum);
+                  const maximums = getEntropyFacetMaximums(lists[other], used, previousOrdinal, compatibleByCourt.get(other));
+                  for (let facet = 0; facet < facets.length; facet++) {
+                    addendsByFacet.get(facets[facet]!)!.push(maximums[facet]!);
                   }
                 }
                 const facetUpperBounds = new Map(facets.map((facet) => [facet, canonicalSum(addendsByFacet.get(facet)!)]));
