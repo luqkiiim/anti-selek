@@ -39,7 +39,7 @@ export default function SessionRoute({ historyView = false }: { historyView?: bo
     onOpenProfile={openMember}
     onHistory={() => navigateApp(router, `/session/${encodeURIComponent(code)}/history${globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : ""}`)}
     onPracticeTools={() => navigateApp(router, changeAppQuery(href, { tools: "practice" }))}
-    onBack={() => backInApp(router, fallback)}
+    onBack={() => navigateApp(router, "/", true)}
     onEnded={async () => {}}
     onDeleted={async () => navigateApp(router, fallback, true)}
   />}{member && <ProfileOverlay playerId={member} clubId={params.get("profileClubId") ?? ""} globalView={!!globalClubId} onBack={() => backInApp(router, changeAppQuery(href, { member: null, profileClubId: null }))} onOpenMember={openMember} />}</AppShell>;

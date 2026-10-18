@@ -559,8 +559,35 @@
 .court-status.green:before {
   background: #30a46c;
 }
+.court-heading-title,
+.next-up-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+.court-heading-title h3 {
+  overflow-wrap: anywhere;
+}
+.court-group-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: #f0e8f8;
+  color: #7040bf;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.next-up .court-group-label {
+  flex: 0 0 auto;
+}
 .court-heading-actions {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 3px;
 }
