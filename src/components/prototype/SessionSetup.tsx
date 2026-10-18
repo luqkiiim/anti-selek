@@ -117,7 +117,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
         name: name.trim(), clubId, courtCount: courts, scoringType: "POINTS", matchmakingStyle: style,
         balanceMetric: metric, pairingMode: partner && collabFormat === "INTERCLUB" ? "OPEN" : mixed ? "MIXED" : "OPEN", collabFormat: partner ? collabFormat : "FREE_PLAY",
         ...(partner ? { partnerClubId: partner.id, collaborationVersion: 2, schedulingMode: collabFormat === "INTERCLUB" ? schedulingMode : "FREE_PLAY", scoringFormat: collabFormat === "INTERCLUB" ? scoringFormat : "SINGLE_GAME", ratingMode: collabFormat === "INTERCLUB" ? ratingMode : "RATED" } : {}),
-        playerIds: players.map(p => p.id), playerConfigs: players.map(p => ({ userId: p.id, pool: getPool(p) })),
+        playerIds: players.map(p => p.id), playerConfigs: players.map(p => ({ playerId: p.id, pool: getPool(p) })),
         guestConfigs: guests.map(({ name, initialElo, gender, mixedSideOverride, pool }) => ({ name, initialElo, gender, mixedSideOverride, pool })),
         poolsEnabled: partner && collabFormat === "INTERCLUB" ? false : groups, crossoverFrequency: crossover, autoQueueEnabled: partner && collabFormat === "INTERCLUB" ? false : autoQueue, respectPlayerRest: true, isTest: false,
       });
