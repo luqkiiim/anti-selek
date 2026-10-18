@@ -1,4 +1,6 @@
-# Prompt for the next account
+# Archived prompt for the next account
+
+> Historical prompt. Read [RESULT.md](RESULT.md) first; the pending work, routing and automation instructions below are superseded.
 
 Copy the text below into a new Codex task with repository access:
 

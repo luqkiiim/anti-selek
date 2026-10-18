@@ -1,4 +1,6 @@
-# Grouped Balanced Points matcher: work-in-progress handoff
+# Grouped Balanced Points matcher: historical handoff
+
+> Historical October17 handoff. See [RESULT.md](RESULT.md) for the completed implementation and current validation scope.
 
 Prepared 17 October 2026 at the user's request to stop this account's work and transfer it to another account. This branch is **not release-ready**. No feature deployment or database migration has occurred. The original controller automation has been paused; do not restart it from another account without the user's instruction.
 
@@ -98,6 +100,6 @@ node scripts/run-grouped-capacity-matrix.mjs --run --max-cases=62
 
 ## Portable review/checkpoint archive
 
-`evidence/` contains selected textual implementation checkpoints and Astra reviews. They are historical, sometimes describe already-resolved findings, and contain old local paths. This report takes precedence for current status. The actual synthetic failure fixtures and runnable tests are in `src/`; private credentials, controller/account configuration and raw private directories were deliberately not committed.
+`evidence/` contains selected textual implementation checkpoints and Astra reviews. They are historical, sometimes describe already-resolved findings, and contain old local paths. This report records the historical handoff; RESULT.md takes precedence for current status. The actual synthetic failure fixtures and runnable tests are in `src/`; private credentials, controller/account configuration and raw private directories were deliberately not committed.
 
 Most relevant reviews: `astra-patch-review-5.md`, `astra-fairness-only-pruning-advice.md`, `astra-mandatory-count-band-pruning-advice.md`, and `astra-coverage-cache-fallback-advice.md`. None is full release approval.
