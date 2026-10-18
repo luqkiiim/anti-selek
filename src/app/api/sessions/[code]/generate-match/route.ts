@@ -42,6 +42,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
+  const requestStartedAt = performance.now();
   try {
     const rateLimitResponse = await rateLimit(request, "api:sessions:code:generate-match:post", { limit: 15, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
@@ -335,6 +336,7 @@ export async function POST(
       requestedMatchCount,
       eligiblePlayerCount,
     }) ? createMatchmakingSearchBudget() : undefined;
+    const preparationStartedAt = performance.now();
     const { busyPlayerIds, playersById, rotationHistory } =
       await buildMatchmakingState(sessionData);
     const { availableCandidates, rankedCandidates } = getRankedCandidates(
@@ -398,6 +400,7 @@ export async function POST(
       });
     }
 
+    const selectionStartedAt = performance.now();
     const { selection: batchSelection, consumedSkipUserIds } =
       selectBatchMatchesRespectingSkips({
         rankedCandidates: eligibleRankedCandidates,
@@ -430,6 +433,7 @@ export async function POST(
               return { court, selection };
             });
           })();
+    const commitStartedAt = performance.now();
     const createdMatches = await createMatchesForAssignments(
       sessionData.id,
       selectedCourtAssignments.map(({ court, selection }) => {
@@ -463,16 +467,26 @@ export async function POST(
         (requestedCourtOrder.get(right.courtId) ?? Number.MAX_SAFE_INTEGER)
     );
 
+    const queueStartedAt = performance.now();
     const queueResult = await rebuildQueueAfterCommitDetailed(
       sessionData.id, searchBudget, sessionData.mutationActor,
     );
+    const finishedAt = performance.now();
+    // Separate computation from database/queue latency without exposing session data.
+    const timing = searchBudget ? [
+      ["load", preparationStartedAt - requestStartedAt],
+      ["prepare", selectionStartedAt - preparationStartedAt],
+      ["select", commitStartedAt - selectionStartedAt],
+      ["commit", queueStartedAt - commitStartedAt],
+      ["queue", finishedAt - queueStartedAt],
+    ].map(([name, duration]) => `${name};dur=${Number(duration).toFixed(1)}`).join(", ") : undefined;
     return sportingJson({
       matches: newMatches,
       queuedMatch: queueResult.queuedMatch,
       ...(queueResult.deferred && sessionData.autoQueueEnabled && !queueResult.queuedMatch
         ? { deferredQueueRecovery: true }
         : {}),
-    });
+    }, timing ? { headers: { "Server-Timing": timing } } : undefined);
   } catch (error: unknown) {
     if (error instanceof MatchmakingSearchBudgetExceededError) {
       return sportingJson(

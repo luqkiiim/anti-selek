@@ -357,17 +357,17 @@ describe("optimized Balanced recurrence exactness", () => {
     const baseOptions = recurrenceOptions([], { courtCount: 3, rotationPlayerCount: 12 });
     const options = {
       ...baseOptions,
-      recurrencePolicy: engine === "recurrence" ? baseOptions.recurrencePolicy : undefined,
       schedules: [{ rank: 0, courts: [constraints, constraints, constraints] }],
     };
+    const productionOptions = { ...options, recurrencePolicy: undefined };
     const randomFn = seededRandom(57_241);
     const frozenRandomFn = seededRandom(57_241);
     const frozen = engine === "recurrence"
       ? findFrozenRecurrence(players, { ...options, randomFn: frozenRandomFn })
-      : findFrozenProduction(players, { ...options, randomFn: frozenRandomFn });
+      : findFrozenProduction(players, { ...productionOptions, randomFn: frozenRandomFn });
     const optimized = engine === "recurrence"
       ? findBestBalancedRecurrenceSelection(players, { ...options, randomFn })
-      : findBestRotationBatchSelection(players, { ...options, randomFn });
+      : findBestRotationBatchSelection(players, { ...productionOptions, randomFn });
 
     expect(frozen.selection).not.toBeNull();
     expect(optimized.selection).not.toBeNull();
