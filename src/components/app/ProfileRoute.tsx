@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft } from "@phosphor-icons/react";
-import { PlayerProfilePage, MemberProfileOverlay } from "@/components/prototype/PlayerProfilePage";
+import { PlayerProfilePage, MemberProfileOverlay, type MemberProfileResponse } from "@/components/prototype/PlayerProfilePage";
 import { PlayerProfileView } from "@/components/profile/PlayerProfileView";
 import { ErrorText } from "@/components/prototype/Primitives";
 import { useClubResource } from "./ClubDataProvider";
@@ -12,6 +12,7 @@ import { AppShell, useAppLocation } from "./AppShell";
 import { backInApp, clubHref, navigateApp, sessionHref } from "@/lib/appNavigation";
 import { withCallbackUrl } from "@/lib/authCallback";
 import { useScrollRestoration } from "./useScrollRestoration";
+import { useAppReady } from "./AppStartup";
 
 function ScopedProfile({ playerId, clubId, globalView = false, onBack, onOpenMember, overlay = false }: {
   playerId: string; clubId: string; globalView?: boolean; onBack: () => void;
@@ -23,6 +24,8 @@ function ScopedProfile({ playerId, clubId, globalView = false, onBack, onOpenMem
   const snapshot = useClubResource<Snapshot>(clubId ? `/api/clubs/${encodeURIComponent(clubId)}${globalView ? "?view=global" : ""}` : null);
   const data = snapshot.data;
   const member = data?.clubMembers.find(p => p.id === playerId);
+  const profile = useClubResource<MemberProfileResponse>(member ? `/api/users/${encodeURIComponent(playerId)}/stats?clubId=${encodeURIComponent(clubId)}${globalView ? "&view=global" : ""}` : null);
+  useAppReady(!overlay && (!clubId || !!snapshot.error || (!!data && (!member || !!profile.data || !!profile.error))));
   const ranked = data?.clubMembers.filter(p => p.status === "CORE" && (p.matchesPlayed ?? 0) > 0).sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) ?? [];
   const rank = ranked.findIndex(p => p.id === playerId);
   const rankedMember = member ? { ...member, currentRank: rank < 0 ? null : rank + 1 } : null;
@@ -42,13 +45,13 @@ export function ProfileOverlay(props: Parameters<typeof ScopedProfile>[0]) { ret
 export default function ProfileRoute() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { status } = useSession();
+  const { data: auth, status } = useSession();
   const href = useAppLocation();
   const query = new URL(href, "https://anti-selek.local").searchParams;
   const clubId = query.get("clubId") ?? "";
   const globalView = query.getAll("view").includes("global");
   useEffect(() => { if (status === "unauthenticated") router.replace(withCallbackUrl("/signin", href)); }, [status, router, href]);
-  return <AppShell>{status === "authenticated" ? <ScopedProfile playerId={id} clubId={clubId} globalView={globalView}
+  return <AppShell>{status !== "unauthenticated" && auth?.user?.id ? <ScopedProfile playerId={id} clubId={clubId} globalView={globalView}
     onBack={() => backInApp(router, clubId ? clubHref(clubId, "rankings", globalView) : "/")}
     onOpenMember={(playerId, profileClubId) => navigateApp(router, `/profile/${encodeURIComponent(playerId)}${profileClubId ? `?clubId=${encodeURIComponent(profileClubId)}${globalView ? "&view=global" : ""}` : ""}`)}
   /> : <p className="route-loading" role="status">Loading profile…</p>}</AppShell>;

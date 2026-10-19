@@ -6,6 +6,7 @@ import { adminApi } from "@/lib/adminClient";
 import { clubSnapshotUrl } from "@/components/app/clubReadStore";
 import { ClubHeader } from "@/components/app/ClubHeader";
 import { useAppLocation } from "@/components/app/AppShell";
+import { useAppReady } from "@/components/app/AppStartup";
 import { changeAppQuery, clubHref, getClubTab, sessionHref } from "@/lib/appNavigation";
 import {
   CalendarBlank,
@@ -111,6 +112,12 @@ export default function Club({
       : null,
   );
   const achievements = useResource<AchievementCollection>(viewerPlayerId && page !== "admin" ? `/api/clubs/${club.id}/achievements` : null);
+  // Only the cold launch waits for visible statistics; warm reads keep their content.
+  useAppReady(!!resource.error || (!!data && (
+    !viewerPlayerId || !["club", "profile", "recap"].includes(page) || !!profile.error || (
+      !!profile.data && (page !== "profile" || !!achievements.data || !!achievements.error)
+    )
+  )));
   const [achievementRequest, setAchievementRequest] = useState<{id:AchievementId;nonce:number}>();
   async function saveAchievementPreferences(body: unknown) {
     if (!resource.validated) return;

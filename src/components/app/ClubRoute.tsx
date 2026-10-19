@@ -14,14 +14,14 @@ const LegacyClubAdminPage = dynamic(() => import("@/features/club-admin-page/Clu
 export default function ClubRoute({ admin = false }: { admin?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { status } = useSession();
+  const { data: auth, status } = useSession();
   const identity = useClubIdentity(id);
   const href = useAppLocation();
   const params = new URL(href, "https://anti-selek.local").searchParams;
   useEffect(() => {
     if (status === "unauthenticated") router.replace(withCallbackUrl("/signin", href));
   }, [status, router, href]);
-  if (status !== "authenticated") return <AppShell><div className="pc-app"><p role="status" className="route-loading">Loading club…</p></div></AppShell>;
+  if (status === "unauthenticated" || !auth?.user?.id) return <AppShell><div className="pc-app"><p role="status" className="route-loading">Loading club…</p></div></AppShell>;
   if (!params.getAll("view").includes("global") && (params.get("tools") === "advanced" || params.get("tools") === "practice")) {
     return <AppShell specialist><a className="specialist-back" href={clubHref(id)}>Back to club</a>{admin ? <LegacyClubAdminPage /> : <LegacyClubPage />}</AppShell>;
   }

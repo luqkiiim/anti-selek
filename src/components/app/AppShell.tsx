@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { APP_NAVIGATION_EVENT, currentAppHref, registerAppDestination } from "@/lib/appNavigation";
+import { AppLoading, useAppReady, useAppStarting } from "./AppStartup";
 import "@fontsource/nunito-sans/400.css";
 import "@fontsource/nunito-sans/600.css";
 import "@fontsource/nunito-sans/700.css";
@@ -19,8 +20,13 @@ function subscribe(listener: () => void) {
 export function useAppLocation() {
   return useSyncExternalStore(subscribe, currentAppHref, () => "/");
 }
-export function AppShell({ children, specialist = false }: { children: ReactNode; specialist?: boolean }) {
+export function AppShell({ children, specialist = false, ready = false }: { children: ReactNode; specialist?: boolean; ready?: boolean }) {
   const href = useAppLocation();
+  const starting = useAppStarting();
+  useAppReady(ready || specialist);
   useEffect(() => { registerAppDestination(); }, [href]);
-  return <div className={specialist ? "specialist-app" : "prototype-root"}>{children}</div>;
+  return <div className={specialist ? "specialist-app" : "prototype-root"}>
+    <div className="app-launch-content" inert={starting} aria-hidden={starting || undefined}>{children}</div>
+    {starting && <AppLoading />}
+  </div>;
 }

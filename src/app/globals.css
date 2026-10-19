@@ -58,6 +58,28 @@ body {
   overflow-x: hidden;
 }
 
+.app-launch-content { display: contents; }
+.app-launch-content[inert] { visibility: hidden; }
+.app-launch-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: var(--background);
+  color: var(--foreground);
+}
+.app-launch-brand { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+.app-launch-brand > span { color: var(--accent); }
+.app-launch-indicator { width: 36px; height: 3px; border-radius: 3px; background: var(--accent); animation: app-launch-pulse 1.4s ease-in-out infinite; }
+@keyframes app-launch-pulse { 50% { opacity: .25; transform: scaleX(.6); } }
+@media (prefers-reduced-motion: reduce) {
+  .app-launch-indicator { animation: none; }
+}
+
 ::selection {
   background: rgba(112, 64, 207, 0.18);
 }

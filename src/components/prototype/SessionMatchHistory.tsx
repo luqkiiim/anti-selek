@@ -1,4 +1,5 @@
 "use client";
+import { useAppReady } from "@/components/app/AppStartup";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -131,6 +132,7 @@ export default function SessionMatchHistory({
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
   const data = response?.code === code ? response.data : null;
+  useAppReady(!!data || !!loadError);
 
   const loadHistory = useCallback(
     async (showLoading = true) => {

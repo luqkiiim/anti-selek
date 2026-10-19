@@ -48,6 +48,7 @@ export default function PrototypeApp() {
     [form, setForm] = useState(""),
     [value, setValue] = useState("");
   const [browseOpen, setBrowseOpen] = useState(false);
+  const [selectionResolved, setSelectionResolved] = useState(false);
   const [joinAccountOpen, setJoinAccountOpen] = useState(false);
   const action = useAction(clubs.refresh);
   useEffect(() => {
@@ -59,6 +60,7 @@ export default function PrototypeApp() {
     const availableClubs=clubs.data;
     let cancelled=false;
     void Promise.resolve().then(()=>{if(cancelled)return;
+    setSelectionResolved(true);
     const params = new URLSearchParams(location.search);
     const invite = params.get("join");
     if (invite) {
@@ -121,7 +123,7 @@ export default function PrototypeApp() {
     router.replace("/?chooser=1", { scroll: false });
   }
   return (
-    <AppShell>
+    <AppShell ready={status === "authenticated" && !selected && (!!clubs.error || selectionResolved) && (!!account.data || !!account.error)}>
       {selected && status !== "unauthenticated" ? (
         <div className="pc-app"><ClubHeader identity={selected} globalView={selected.globalView} onSwitch={cancelSelection} /><div className="pc-scroll"><main className="pc-content"><p role="status">Loading club…</p></main></div></div>
       ) : (

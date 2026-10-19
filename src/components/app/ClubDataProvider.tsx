@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useSession } from "next-auth/react";
 import { useResource } from "@/components/prototype/api";
 import { ClubReadStore, type ReadState } from "./clubReadStore";
+import { AppStartupProvider } from "./AppStartup";
 
 const Context = createContext<ClubReadStore | null>(null);
 const idle: ReadState<never> = { data: null, error: "", errorStatus: null, validated: false, loading: false, retryAt: 0 };
@@ -18,7 +19,7 @@ export function ClubDataProvider({ children }: { children: ReactNode }) {
     if (previous.current !== store) previous.current?.clear();
     previous.current = store;
   }, [store]);
-  return <Context.Provider key={scope ?? "anonymous"} value={store}>{children}</Context.Provider>;
+  return <Context.Provider key={scope ?? "anonymous"} value={store}><AppStartupProvider>{children}</AppStartupProvider></Context.Provider>;
 }
 export function useClubDataStore() { return useContext(Context); }
 export function useClubIdentity(id: string) {

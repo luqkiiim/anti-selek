@@ -1,4 +1,5 @@
 "use client";
+import { useAppReady } from "@/components/app/AppStartup";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -179,6 +180,9 @@ export default function LiveSession({
       score?: number;
     }[];
   }>(endpoint + "/leaderboard" + readQuery);
+  useAppReady(!!resource.error || (!!rawSession && (
+    !isCollaboration || !!globalClubId || !!collaboration.data || !!collaboration.error
+  ) && (rawSession.status !== "COMPLETED" || !!standings.data || !!standings.error)));
   const [localTab, setLocalTab] = useState("Courts"),
     [sheet, setSheet] = useState(""),
     [confirmingMatchIds, setConfirmingMatchIds] = useState<Set<string>>(() => new Set()),

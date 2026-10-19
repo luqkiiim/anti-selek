@@ -27,3 +27,14 @@ async function click(label:string){const button=Array.from(container.querySelect
 it('selects the real club route and loads a native browser shell without a device simulator',async()=>{await render();expect(container.textContent).toContain('Real Club');await openSelectedClub();expect(container.querySelector('.prototype-root')).toBeTruthy();expect(container.textContent).not.toContain('iPhone');expect(container.querySelectorAll('nav button')).toHaveLength(4)});
 it('uses Player profile results and club achievements without rendering legacy account stats',async()=>{await render();await openSelectedClub();await click('Profile');expect(location.pathname+location.search).toBe('/club/club?tab=profile');expect(container.textContent).toContain('1234');expect(container.textContent).toContain('1 session · 1 match');expect(container.textContent).toContain('Admission History Session');expect(container.textContent).toContain('0 badges unlocked');expect(container.textContent).not.toContain('Backend achievement must not render')});
 it('redirects unauthenticated visitors to sign-in',async()=>{mocks.status='unauthenticated';await render();expect(mocks.replace).toHaveBeenCalledWith('/signin?callbackUrl=%2F')});
+it('keeps the loaded club mounted while its authenticated session refreshes',async()=>{
+  await render();await openSelectedClub();
+  const dashboard=container.querySelector('.club-dashboard-grid');
+  expect(dashboard).not.toBeNull();
+  const reads=fetcher.mock.calls.filter(([url])=>url==='/api/clubs/club').length;
+  mocks.status='loading';
+  await act(async()=>root.render(<ClubRoute/>));
+  expect(container.querySelector('.club-dashboard-grid')).toBe(dashboard);
+  expect(container.textContent).not.toContain('Loading club…');
+  expect(fetcher.mock.calls.filter(([url])=>url==='/api/clubs/club')).toHaveLength(reads);
+});

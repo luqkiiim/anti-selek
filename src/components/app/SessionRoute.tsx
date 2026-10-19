@@ -15,7 +15,7 @@ const SessionTools = dynamic(() => import("@/app/session/[code]/SessionTools"));
 export default function SessionRoute({ historyView = false }: { historyView?: boolean }) {
   const { code } = useParams<{ code: string }>();
   const router = useRouter();
-  const { status } = useSession();
+  const { data: auth, status } = useSession();
   const href = useAppLocation();
   const params = new URL(href, "https://anti-selek.local").searchParams;
   const isGlobal = params.getAll("view").includes("global");
@@ -26,8 +26,8 @@ export default function SessionRoute({ historyView = false }: { historyView?: bo
   useEffect(() => {
     if (status === "unauthenticated") router.replace(withCallbackUrl("/signin", href));
   }, [status, router, href]);
-  if (status !== "authenticated") return <AppShell><div className="pc-app"><p role="status" className="route-loading">Loading session…</p></div></AppShell>;
-  if (isGlobal && (params.getAll("view").length !== 1 || globalIds.length !== 1 || !globalClubId || globalClubId.trim() !== globalClubId || globalClubId.length > 100)) return <AppShell><div className="pc-app"><main className="pc-content"><p role="alert">This read-only session link needs a valid club.</p><button className="secondary" onClick={() => navigateApp(router, "/?chooser=1")}>Back to clubs</button></main></div></AppShell>;
+  if (status === "unauthenticated" || !auth?.user?.id) return <AppShell><div className="pc-app"><p role="status" className="route-loading">Loading session…</p></div></AppShell>;
+  if (isGlobal && (params.getAll("view").length !== 1 || globalIds.length !== 1 || !globalClubId || globalClubId.trim() !== globalClubId || globalClubId.length > 100)) return <AppShell ready><div className="pc-app"><main className="pc-content"><p role="alert">This read-only session link needs a valid club.</p><button className="secondary" onClick={() => navigateApp(router, "/?chooser=1")}>Back to clubs</button></main></div></AppShell>;
   if (!isGlobal && params.get("tools") === "practice") return <AppShell specialist><a className="specialist-back" href={sessionHref(code)}>Back to session</a><SessionTools /></AppShell>;
   const member = params.get("member");
   const openMember = (id: string, profileClubId: string | null) => navigateApp(router, changeAppQuery(href, { member: id, profileClubId }));
