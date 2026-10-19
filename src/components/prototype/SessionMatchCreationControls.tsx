@@ -142,10 +142,10 @@ export function CourtMatchCreateMenu({
         title={`Create on ${courtName}`}
         onClose={() => setMenuOpen(false)}
       >
-        <div className={styles.options}>
+        <div className="court-action-list">
           {options.map((option) => (
             <button
-              className={`${styles.option} ${styles[`option${option.key}`]}`}
+              className={`court-action-row ${styles.option}`}
               key={option.key}
               type="button"
               disabled={option.disabled || isCreating}

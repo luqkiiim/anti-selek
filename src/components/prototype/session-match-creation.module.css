@@ -1,10 +1,8 @@
 .toolbar,
-.options,
 .courtMenu {
   --match-create-ink: #291440;
   --match-create-muted: #80718b;
   --match-create-purple: #7040cf;
-  --match-create-line: #eee7e5;
   color: var(--match-create-ink);
   font-family: "Nunito Sans", sans-serif;
 }
@@ -56,8 +54,7 @@
 }
 
 .primary:disabled,
-.courtTrigger:disabled,
-.option:disabled {
+.courtTrigger:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -87,62 +84,23 @@
   background: #e9def4;
 }
 
-.options {
-  display: grid;
-  gap: 8px;
-}
-
-.option {
-  display: flex;
-  min-height: 48px;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 1px;
-  padding: 10px 14px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: var(--match-create-ink);
-  font: 800 12px/1.25 "Nunito Sans", sans-serif;
-  text-align: left;
-  cursor: pointer;
-}
-
-.optionBEST {
-  border-color: #e1d4f1;
-  background: #f5effb;
-  color: #54278b;
-}
-
-.optionMENS {
-  border-color: #d7e5f0;
-  background: #f1f7fb;
-  color: #375d78;
-}
-
-.optionWOMENS {
-  border-color: #f0dce8;
-  background: #fcf2f7;
-  color: #87516c;
-}
-
-.optionMANUAL {
-  border-color: #e8e1d8;
-  background: #faf7f1;
-  color: #55473d;
-}
-
 .option small {
-  color: var(--match-create-muted);
+  display: block;
+  margin-top: 2px;
+  color: #80718b;
   font-size: 10px;
   font-weight: 700;
 }
 
-.option:focus-visible,
 .primary:focus-visible,
 .courtTrigger:focus-visible {
   outline: 3px solid #aa83ed;
   outline-offset: 2px;
+}
+
+.option:focus-visible {
+  outline: 3px solid #aa83ed;
+  outline-offset: -3px;
 }
 
 @media (max-width: 360px) {
@@ -158,7 +116,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .toolbar *,
-  .options * {
+  .option {
     transition: none !important;
   }
 }
