@@ -67,6 +67,15 @@ function defaultMixedSideLabel(gender: PlayerGender) {
       : "Default";
 }
 
+function mixedSideSummary(player: Player) {
+  const side = normalizeMixedSideOverrideForGender(
+    player.gender,
+    player.mixedSideOverride,
+    player.partnerPreference,
+  );
+  return side ? ` · ${side === MixedSide.UPPER ? "Upper side" : "Lower side"}` : "";
+}
+
 export function LivePlayerManagement({
   code,
   session,
@@ -385,6 +394,7 @@ export function LivePlayerManagement({
                           {player.isPaused ? "Paused · " : ""}Rating {player.user.elo}
                           {player.isGuest ? " · Guest" : ""}
                           {session.poolsEnabled ? ` · ${player.pool === SessionPool.A ? session.poolAName || "Competitive" : session.poolBName || "Social"}` : ""}
+                          {mixedSideSummary(player)}
                         </small>
                         {player.skipNextMatchAt ? <small className="pm-skip-state">Skipping next</small> : null}
                       </div>
