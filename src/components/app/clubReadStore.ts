@@ -82,22 +82,46 @@ export class ClubReadStore {
       }, 0);
     };
   }
-  prepareClub(identity: ClubIdentity, globalView = false) {
+  prepareClub(identity: ClubIdentity, globalView = false, { preloadProfile = false } = {}) {
     if (this.disposed) return;
     if (identity.name) this.remember(identity);
     const url = clubSnapshotUrl(identity.id, globalView);
+    // Startup can prepare a saved club before its authoritative list arrives.
+    // Selecting that club must consume the same read, even if it already finished.
+    const prepared = this.entry(url);
+    if (prepared.handoff && (prepared.pending || prepared.state.validated)) return;
     for (const [key, entry] of this.entries) {
       if (key !== url && !entry.users) { entry.handoff = false; this.cancel(entry); }
     }
     clearTimeout(this.entry(url).releaseTimer);
     this.entry(url).releaseTimer = undefined;
     this.entry(url).handoff = true;
-    void this.read(url).catch(() => {});
+    const read = this.read(url);
+    const version = prepared.version;
+    void read.then(() => {
+      if (!preloadProfile || globalView || this.disposed || prepared.version !== version || !prepared.state.validated || (!prepared.handoff && !prepared.users)) return;
+      const snapshot = prepared.state.data as { viewer?: { playerId?: string | null } } | null;
+      const playerId = snapshot?.viewer?.playerId;
+      if (!playerId) return;
+      const profileUrl = `/api/users/${encodeURIComponent(playerId)}/stats?clubId=${encodeURIComponent(identity.id)}`;
+      const profile = this.entry(profileUrl);
+      if (profile.users || profile.handoff) return;
+      clearTimeout(profile.releaseTimer);
+      profile.releaseTimer = undefined;
+      profile.handoff = true;
+      void this.read(profileUrl).catch(() => {});
+    }).catch(() => {});
   }
   cancelPreparedClub(id: string, globalView = false) {
     const entry = this.entry(clubSnapshotUrl(id, globalView));
     entry.handoff = false;
     if (!entry.users) this.cancel(entry);
+    for (const [url, profile] of this.entries) {
+      if (profile.handoff && !profile.users && clubIdFor(url) === id) {
+        profile.handoff = false;
+        this.cancel(profile);
+      }
+    }
   }
   private cancel(entry: Entry) {
     entry.pausedValidation = false;

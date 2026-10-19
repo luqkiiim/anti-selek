@@ -6,9 +6,10 @@ const club = { id: "loading-club", name: "Riverside club", avatarUrl: "/spark.pn
 const member = { id: "loading-player", name: "Riverside player", gender: "FEMALE", partnerPreference: "ANY", status: "CORE", preferredPool: "B", elo: 1000, matchesPlayed: 0, wins: 0, losses: 0, isClaimed: true, role: "ADMIN" };
 const snapshot = { club, viewer: { id: "loading-account", name: "Ari", playerId: member.id, isAdmin: false, isQuickAccess: false }, clubMembers: [member], sessions: [], claimRequests: [] };
 async function mockedApp(page: Page) {
-  const state = { delay: 0, authDelay: 0, clubsDelay: 0, statsGate: null as Promise<void> | null, statsStatus: 200, clubsStatus: 200, status: 200, name: club.name, requests: [] as string[], snapshots: 0, stats: 0 };
+  const state = { delay: 0, authDelay: 0, clubsDelay: 0, statsDelay: 0, statsGate: null as Promise<void> | null, statsStatus: 200, clubsStatus: 200, status: 200, name: club.name, requests: [] as string[], timings: [] as { path: string; start: number; end: number }[], snapshots: 0, stats: 0 };
   await page.route("**/api/**", async route => {
     const url = new URL(route.request().url()); const path = url.pathname;
+    const timing = { path, start: Date.now(), end: 0 }; state.timings.push(timing);
     let data: unknown = {};
     let status = 200;
     if (path === "/api/auth/session") {
@@ -29,16 +30,83 @@ async function mockedApp(page: Page) {
     } else if (path.endsWith("/stats")) {
       state.stats++;
       if (state.statsGate) await state.statsGate;
+      if (state.statsDelay) await new Promise(resolve => setTimeout(resolve, state.statsDelay));
       status = state.statsStatus;
       data = status === 200 ? { user: member, recentSessions: [], matchHistory: [], profile: { matchHistory: [] } } : { error: "Unable to load statistics." };
     } else if (path.endsWith("/achievements")) data = { achievements: [], showcase: [], unseen: [], earned: [] };
     await route.fulfill({ status, json: data });
+    timing.end = Date.now();
   });
   await page.goto("/?chooser=1");
   await expect(page.getByRole("button", { name: /Riverside club Admin/ })).toBeVisible();
   return state;
 }
 const switcher = (page: Page, name = club.name) => page.getByRole("button", { name: `Switch club, current ${name}`, exact: true });
+
+test("production cold-open timing with real authentication and a fresh browser cache", async ({ page, browser }, testInfo) => {
+  test.skip(!testInfo.config.configFile?.endsWith("playwright.startup.config.ts"), "Production bundle timing only");
+  await signInAsAdmin(page);
+  await expect(page.getByRole("heading", { name: "Where are we playing?" })).toBeVisible();
+  await page.evaluate(() => localStorage.setItem("pc-club:account-user-admin-e2e", "community-host-e2e"));
+  const context = await browser.newContext({ storageState: await page.context().storageState(), baseURL: testInfo.project.use.baseURL, viewport: { width: 390, height: 844 } });
+  try {
+    const cold = await context.newPage();
+    const cdp = await context.newCDPSession(cold);
+    await cdp.send("Network.enable");
+    await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 80, downloadThroughput: 4 * 1024 * 1024 / 8, uploadThroughput: 1024 * 1024 / 8 });
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+    const requests: { path: string; start: number; end: number }[] = [];
+    const started = Date.now();
+    cold.on("request", request => { const path = new URL(request.url()).pathname; if (path.startsWith("/api/")) requests.push({ path, start: Date.now() - started, end: 0 }); });
+    cold.on("requestfinished", request => { const path = new URL(request.url()).pathname; const item = requests.find(r => r.path === path && !r.end); if (item) item.end = Date.now() - started; });
+    await cold.addInitScript(() => {
+      new MutationObserver(() => {
+        if (!document.querySelector(".app-launch-screen") && document.querySelector(".club-activity-totals")) {
+          const timing = window as unknown as { startupReadyAt?: number }; timing.startupReadyAt ??= Date.now();
+        }
+      }).observe(document, { childList: true, subtree: true });
+    });
+    await cold.goto("/");
+    await expect(cold.getByRole("region", { name: "Club activity" })).toBeVisible();
+    const metrics = await cold.evaluate(() => ({
+      readyAt: (window as unknown as { startupReadyAt: number }).startupReadyAt,
+      scripts: performance.getEntriesByType("resource").filter(r => r.name.includes("/_next/") && r.name.includes(".js")).map(r => ({ path: new URL(r.name).pathname, bytes: (r as PerformanceResourceTiming).encodedBodySize })),
+    }));
+    const result = { startupMs: metrics.readyAt - started, javascriptBytes: metrics.scripts.reduce((sum, s) => sum + s.bytes, 0), requests };
+    console.log(JSON.stringify(result));
+    await testInfo.attach("production-startup", { body: JSON.stringify(result, null, 2), contentType: "application/json" });
+  } finally { await context.close(); }
+});
+
+test("saved-club startup overlaps club lookup and opens within the latency budget", async ({ page }, testInfo) => {
+  const state = await mockedApp(page);
+  state.authDelay = 500; state.clubsDelay = 500; state.delay = 500; state.statsDelay = 500;
+  await page.evaluate(() => {
+    localStorage.setItem("pc-club:loading-account", "loading-club");
+    sessionStorage.clear();
+  });
+  await page.addInitScript(() => {
+    new MutationObserver(() => {
+      if (!document.querySelector(".app-launch-screen") && document.querySelector(".club-activity-totals")) {
+        const timing = window as unknown as { startupReadyAt?: number };
+        timing.startupReadyAt ??= Date.now();
+      }
+    }).observe(document, { subtree: true, childList: true });
+  });
+  state.timings = []; state.snapshots = 0; state.stats = 0;
+  const started = Date.now();
+  await page.goto("/");
+  await expect(page.getByRole("region", { name: "Club activity" })).toBeVisible();
+  const elapsed = await page.evaluate(() => (window as unknown as { startupReadyAt: number }).startupReadyAt) - started;
+  const timings = state.timings.map(t => ({ path: t.path, start: t.start - started, end: t.end ? t.end - started : null }));
+  console.log(JSON.stringify({ startupMs: elapsed, requests: timings }));
+  await testInfo.attach("startup-timings", { body: JSON.stringify({ elapsed, timings }, null, 2), contentType: "application/json" });
+  const list = state.timings.find(t => t.path === "/api/clubs")!;
+  const details = state.timings.find(t => t.path === "/api/clubs/loading-club")!;
+  expect(details.start).toBeLessThan(list.end);
+  if (testInfo.config.configFile?.endsWith("playwright.startup.config.ts")) expect(elapsed).toBeLessThan(2000);
+  expect(state.snapshots).toBe(1); expect(state.stats).toBe(1);
+});
 
 test("reopening a saved club shows one loading view until the dashboard is ready", async ({ page }) => {
   const state = await mockedApp(page);
@@ -105,6 +173,15 @@ test("direct session, history, and profile opens finish startup with real authen
   await expect(page.getByRole("status", { name: "Loading Anti-Selek" })).toBeHidden();
   await page.goto("/profile/user-admin-e2e?clubId=community-score-e2e");
   await expect(page.getByRole("heading", { name: "Admin E2E", exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Loading Anti-Selek" })).toBeHidden();
+  await page.getByRole("button", { name: "Account settings", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Your account", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.goto("/club/community-host-e2e/admin?tab=players");
+  await expect(page.getByRole("tab", { name: "Players", exact: true })).toBeVisible();
+  await expect(page.getByRole("status", { name: "Loading Anti-Selek" })).toBeHidden();
+  await page.goto("/club/community-host-e2e?tab=setup");
+  await expect(page.getByRole("region", { name: "Session setup", exact: true })).toBeVisible();
   await expect(page.getByRole("status", { name: "Loading Anti-Selek" })).toBeHidden();
 });
 

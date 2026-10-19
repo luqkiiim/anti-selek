@@ -35,6 +35,49 @@ describe("shared club reads", () => {
     const release = store.retain(url);
     expect(fetch).toHaveBeenCalledTimes(1); release();
   });
+  it("reuses a completed startup preload when the club list selects the same club", async () => {
+    store.prepareClub({ id: identity.id, name: "" }); await store.read(url);
+    store.prepareClub(identity);
+    const release = store.retain(url);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(store.get(url)).toMatchObject({ data: snapshot, validated: true });
+    release();
+  });
+  it("starts current viewer statistics before route code mounts and hands off both reads once", async () => {
+    store.prepareClub(identity, false, { preloadProfile: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([url, stats]);
+    store.prepareClub(identity);
+    const releaseClub = store.retain(url), releaseStats = store.retain(stats);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    releaseClub(); releaseStats();
+  });
+  it("cancels a preloaded profile when its saved club is unavailable", async () => {
+    const pending = deferred();
+    vi.mocked(fetch).mockImplementation(async request => String(request) === stats ? pending.promise : response(snapshot));
+    store.prepareClub(identity, false, { preloadProfile: true });
+    await vi.advanceTimersByTimeAsync(0);
+    const signal = vi.mocked(fetch).mock.calls.find(([request]) => String(request) === stats)?.[1]?.signal;
+    expect(signal).toBeDefined();
+    store.cancelPreparedClub(identity.id);
+    expect(signal?.aborted).toBe(true);
+    pending.resolve(response({ value: "obsolete profile" }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.get(stats).data).toBeNull();
+  });
+  it("does not preload a personal profile for global club reads", async () => {
+    store.prepareClub(identity, true, { preloadProfile: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([clubSnapshotUrl(identity.id, true)]);
+  });
+  it("does not launch profile reads from a late response after an account change", async () => {
+    const pending = deferred(); vi.mocked(fetch).mockReturnValue(pending.promise);
+    store.prepareClub(identity, false, { preloadProfile: true });
+    store.clear(); pending.resolve(response(snapshot));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it("shows warm content read-only and refreshes once on return", async () => {
     const release = store.retain(url); await store.read(url); release();
     await vi.advanceTimersByTimeAsync(1);

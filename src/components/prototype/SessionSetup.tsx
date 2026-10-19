@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useAppReady } from "@/components/app/AppStartup";
 import { CaretRight, Check, Minus, Plus, MagnifyingGlass, Shuffle, Scales, ChartBar, UsersThree, Trash, X } from "@phosphor-icons/react";
 import type { ClubPageMember } from "@/components/club/clubTypes";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
@@ -23,6 +24,7 @@ function Toggle({ title, hint, checked, onChange }: { title: string; hint?: stri
 }
 
 export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { clubId: string; members: ClubPageMember[]; onCreated: (code: string) => void; onAdvanced?: () => void }) {
+  useAppReady(true);
   const identities = new Set<string>();
   const memberIds = new Set([...rosterMembers].sort((a, b) => Number(b.isClaimed) - Number(a.isClaimed)).filter(member => {
     const key = member.offlineIdentityId ? `identity:${member.offlineIdentityId}` : `user:${member.id}`;

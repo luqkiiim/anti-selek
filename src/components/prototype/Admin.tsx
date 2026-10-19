@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useAppLocation } from "@/components/app/AppShell";
+import { useAppReady } from "@/components/app/AppStartup";
 import { useScrollRestoration } from "@/components/app/useScrollRestoration";
 import { changeAppQuery } from "@/lib/appNavigation";
 import { MainNav } from "./MainNav";
@@ -56,6 +57,7 @@ export default function Admin({
   onClubSaved?: (club: Partial<Snapshot["club"]>) => void;
 }) {
   const { club, clubMembers: players, viewer } = snapshot;
+  useAppReady(true);
   const href = useAppLocation();
   const requestedTab = new URL(href, "https://anti-selek.local").searchParams.get("tab");
   const [localTab, setLocalTab] = useState("Players"),

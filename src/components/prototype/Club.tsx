@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useState } from "react";
 import { useClubResource, useClubDataStore } from "@/components/app/ClubDataProvider";
@@ -42,17 +43,18 @@ import { MonthlyClimbers } from "./MonthlyClimbers";
 import { UpcomingSessions } from "./UpcomingSessions";
 import { NextMilestone, AchievementCabinet } from "./Achievements";
 import type { AchievementCollection, AchievementId } from "@/lib/clubAchievements";
-import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
 import { PlayerProfilePage, MemberProfileOverlay, type RankedMember } from "./PlayerProfilePage";
 import { Rankings } from "./Rankings";
-import { SessionSetup } from "./SessionSetup";
 import { PartnerChemistry } from "./PartnerChemistry";
 import { TopRivalries } from "./TopRivalries";
 import type { ClubPulseSnapshot } from "@/lib/clubPulse";
-import LiveSession from "./LiveSession";
-import SessionMatchHistory from "./SessionMatchHistory";
 import { formatProfileDate } from "./profileDate";
+
+const LiveSession = dynamic(() => import("./LiveSession"));
+const SessionMatchHistory = dynamic(() => import("./SessionMatchHistory"));
+const Admin = dynamic(() => import("./Admin"));
+const SessionSetup = dynamic(() => import("./SessionSetup").then(module => module.SessionSetup));
 export type Snapshot = {
   viewer: ClubPageUser;
   club: ClubPageClub;
@@ -112,12 +114,6 @@ export default function Club({
       : null,
   );
   const achievements = useResource<AchievementCollection>(viewerPlayerId && page !== "admin" ? `/api/clubs/${club.id}/achievements` : null);
-  // Only the cold launch waits for visible statistics; warm reads keep their content.
-  useAppReady(!!resource.error || (!!data && (
-    !viewerPlayerId || !["club", "profile", "recap"].includes(page) || !!profile.error || (
-      !!profile.data && (page !== "profile" || !!achievements.data || !!achievements.error)
-    )
-  )));
   const [achievementRequest, setAchievementRequest] = useState<{id:AchievementId;nonce:number}>();
   async function saveAchievementPreferences(body: unknown) {
     if (!resource.validated) return;
@@ -144,6 +140,13 @@ export default function Club({
     data?.viewer.isAdmin);
   const hasAdminRole = !readOnly && (data?.club.role === "ADMIN" || data?.viewer.isAdmin);
   const canAdmin = resource.validated && hasAdminRole;
+  // Deferred screens signal readiness after their code loads; denied routes show their error.
+  const deferredScreen = (page === "admin" && hasAdminRole) || (page === "setup" && canManage);
+  useAppReady(!deferredScreen && (!!resource.error || (!!data && (
+    !viewerPlayerId || !["club", "profile", "recap"].includes(page) || !!profile.error || (
+      !!profile.data && (page !== "profile" || !!achievements.data || !!achievements.error)
+    )
+  ))));
   const sessions = data?.sessions.filter((s) => !s.isTest) || [];
   const live = sessions.filter((s) => s.status === "ACTIVE");
   const upcoming = sessions.filter((s) => s.status === "WAITING");

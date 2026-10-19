@@ -1,4 +1,5 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type ReactNode, type PointerEvent } from "react";
 import { ArrowLeft, ArrowUp, ArrowDown, CaretRight, ChartLineUp, CalendarBlank } from "@phosphor-icons/react";
 import type { ClubPageMember } from "@/components/club/clubTypes";
@@ -14,12 +15,12 @@ import { formatProfileDate as dateLabel } from "./profileDate";
 import { ProfilePeople, ProfileRecords } from "./ProfileHighlights";
 import { ratingJourneyPoints } from "@/lib/ratingJourney";
 import { normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
-import { AccountSettings } from "./AccountSettings";
 import { MainNav } from "./MainNav";
 import "./player-profile.css";
 import { useClubResource } from "@/components/app/ClubDataProvider";
 import { useScrollRestoration } from "@/components/app/useScrollRestoration";
 
+const AccountSettings = dynamic(() => import("./AccountSettings").then(module => module.AccountSettings));
 export type MemberProfileResponse = {
   user: { id: string; name: string; avatarUrl?: string | null; elo: number };
   profile?: MemberProfileData;
@@ -57,7 +58,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canEdit = 
       <ProfileActivityHistory globalView={globalView} key={member.id} clubId={clubId} playerId={member.id} history={data.history} onOpen={setRecap} matches={data.matchHistory} onOpenMatch={setMatch} />
     </>}
     <details className="profile-rating-help"><summary>How ratings work</summary><p>Ratings and ranks belong to this club. Match results change your rating; manual adjustments are marked separately. Achievements are separate from matchmaking ratings.</p></details>
-    {isSelf && <AccountSettings disabled={!canEdit} clubContext={{ clubId, clubName, playerId: member.id, gender: member.gender, mixedSideOverride: normalizeMixedSideOverrideForGender(member.gender, member.mixedSideOverride, member.partnerPreference) }} open={accountOpen} onClose={() => setAccountOpen(false)} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
+    {isSelf && accountOpen && <AccountSettings disabled={!canEdit} clubContext={{ clubId, clubName, playerId: member.id, gender: member.gender, mixedSideOverride: normalizeMixedSideOverrideForGender(member.gender, member.mixedSideOverride, member.partnerPreference) }} open onClose={() => setAccountOpen(false)} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
     <Sheet open={!!recap} title="Session recap" onClose={() => setRecap(null)}>{recap && <div className="profile-recap"><Avatar name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h3>{user?.name ?? member.name}</h3><h2>{recap.name}</h2><p className="muted">{dateLabel(recap.date)}</p><div className="player-standing"><div><span>Result</span><strong>{recap.wins}W · {recap.losses}L</strong></div><div><span>Rating change</span><strong>{(recap as RecordedSessionSummary).ratingMode === "UNRATED" ? "Unrated" : (recap as RecordedSessionSummary).ratingVerified === false ? "—" : signed(recap.ratingChange)}</strong></div></div><div className="profile-joined-list profile-recap-matches">{data?.matchHistory.filter(m => m.sessionId === recap.id).map(m => <button className="profile-history-row" key={m.id} onClick={() => setMatch(m)}><b className={m.result === "WIN" ? "positive" : "negative"}>{m.result === "WIN" ? "W" : "L"}</b><span><strong>{m.score}</strong><small>With {m.partner.name}</small><small>vs {m.opponents.map(p => p.name).join(" & ")}</small></span><CaretRight size={18} /></button>)}</div>{recap.id === data?.records.bestSession?.id && <details className="profile-rating-help"><summary>What makes this the best session?</summary><p>Most wins first, then win rate, point difference, games played, and most recent session to break ties.</p></details>}</div>}</Sheet>
     <Sheet open={!!match} title="Match details" onClose={() => setMatch(null)}>{match && <div className="profile-match"><span className="eyebrow">{match.sessionName}</span><h2>{match.result === "WIN" ? "Win" : "Loss"} · {match.score}</h2><p className="muted">{dateLabel(match.date)}</p><h3>Partners</h3><p>{member.name} & {match.partner.name}</p><h3>Opponents</h3><p>{match.opponents.map(p => p.name).join(" & ")}</p><p>{match.ratingMode === "UNRATED" ? "Unrated" : match.eloChange === null ? "Rating change unavailable" : `${signed(match.eloChange)} rating`}</p></div>}</Sheet>
   </article>;

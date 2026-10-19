@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -18,9 +19,10 @@ import type { ClubIdentity } from "@/components/app/clubReadStore";
 import { AppShell } from "@/components/app/AppShell";
 import { clubHref, getClubTab, navigateApp } from "@/lib/appNavigation";
 import { BrowseClubs } from "./BrowseClubs";
-import { AccountSettings, type AccountUser } from "./AccountSettings";
+import type { AccountUser } from "./AccountSettings";
 import { JoinClubAdmission } from "./JoinClubAdmission";
 
+const AccountSettings = dynamic(() => import("./AccountSettings").then(module => module.AccountSettings));
 
 function ClubMark({ url, tone }: { url?: string | null; tone: number }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -55,9 +57,28 @@ export default function PrototypeApp() {
     if (status === "unauthenticated") router.replace("/signin?callbackUrl="+encodeURIComponent(location.pathname+location.search));
   }, [status, router]);
   const userId = auth?.user?.id;
+  const preparedStartup = useRef<string | null>(null);
+  useEffect(() => {
+    if (!clubStore || !userId || status !== "authenticated" || preparedStartup.current || destination.current) return;
+    const params = new URLSearchParams(location.search);
+    // Explicit destinations and the chooser take priority over a remembered club.
+    if (params.has("join") || params.has("club") || params.has("view") || params.get("chooser") === "1" || history.state?.antiSelekChooser) return;
+    try {
+      if (sessionStorage.getItem("anti-selek:show-chooser")) return;
+      const saved = localStorage.getItem("pc-club:" + userId);
+      if (!saved || saved.length > 100) return;
+      preparedStartup.current = saved;
+      router.prefetch?.(clubHref(saved));
+      clubStore.prepareClub(clubStore.identity(saved) ?? { id: saved, name: "" }, false, { preloadProfile: true });
+    } catch {}
+  }, [clubStore, userId, status, router]);
   useEffect(() => {
     if (!clubs.data || !userId || status !== "authenticated" || destination.current) return;
     const availableClubs=clubs.data;
+    if (preparedStartup.current && !availableClubs.some(c => c.id === preparedStartup.current)) {
+      clubStore?.cancelPreparedClub(preparedStartup.current);
+      preparedStartup.current = null;
+    }
     let cancelled=false;
     void Promise.resolve().then(()=>{if(cancelled)return;
     setSelectionResolved(true);
@@ -215,10 +236,10 @@ export default function PrototypeApp() {
         </div>
       )}
       {auth?.user?.canBrowseAllClubs && <BrowseClubs open={browseOpen} onClose={() => setBrowseOpen(false)} onPrepare={id => prefetch(id, true)} onSelect={club => { setBrowseOpen(false); select(club.id, "club", false, club, true); }} />}
-      <AccountSettings open={form === "account" || joinAccountOpen} onClose={() => {
+      {(form === "account" || joinAccountOpen) && <AccountSettings open onClose={() => {
         if (joinAccountOpen) void account.refresh().catch(() => {}).finally(() => setJoinAccountOpen(false));
         else setForm("");
-      }} onSaved={async () => { await account.refresh(); if (joinAccountOpen) setJoinAccountOpen(false); }} />
+      }} onSaved={async () => { await account.refresh(); if (joinAccountOpen) setJoinAccountOpen(false); }} />}
       <Sheet open={!!form && form !== "account" && form !== "join"}
           title="Create club"
           busy={action.busy}

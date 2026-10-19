@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import PrototypeApp from "./PrototypeApp";
 import { useResource } from "./api";
+import { ClubDataProvider } from "@/components/app/ClubDataProvider";
 
 const session = vi.hoisted(() => ({ data: { user: { id: "account-1", name: "Ari", canBrowseAllClubs: false } }, status: "authenticated" }));
 vi.mock("next-auth/react", () => ({ useSession: () => session }));
@@ -23,7 +24,7 @@ beforeEach(() => {
   session.status = "authenticated";
   vi.clearAllMocks();
   session.data.user.canBrowseAllClubs = false;
-  accountGender = "UNSPECIFIED"; localStorage.clear(); history.replaceState(null, "", "/?join=club-1");
+  accountGender = "UNSPECIFIED"; localStorage.clear(); sessionStorage.clear(); history.replaceState(null, "", "/?join=club-1");
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
   vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => ({ ok: true, json: async () => String(url) === "/api/user/me" ? { user: { id: "account-1", name: "Ari", gender: accountGender } } : String(url) === "/api/clubs" ? [] : { requiresJoinCode: false, club: { id: "club-1", name: "Riverside", allowJoinRequests: true, isPasswordProtected: false, avatarUrl: null }, players: [], requests: [], access: null, membership: null } }) as Response));
 });
@@ -184,4 +185,34 @@ it("gives a join link priority over a club Profile link", async () => {
   expect(container.textContent).not.toContain("Selected club");
   expect(localStorage.getItem("pc-club:account-1")).toBeNull();
   expect(location.search).toBe("");
+});
+
+it("preloads a saved club while its list is pending and selects it only after membership is confirmed", async () => {
+  history.replaceState(null, "", "/"); localStorage.setItem("pc-club:account-1", "club-1");
+  let resolveClubs!: (response: Response) => void;
+  const pending = new Promise<Response>(resolve => { resolveClubs = resolve; });
+  vi.mocked(fetch).mockImplementation(async url => String(url) === "/api/clubs" ? pending
+    : response(String(url) === "/api/clubs/club-1" ? { club: dashboardClub } : { user: { id: "account-1", name: "Ari", gender: "FEMALE" } }));
+  await act(async () => root.render(<ClubDataProvider><PrototypeApp /></ClubDataProvider>));
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url) === "/api/clubs/club-1")).toHaveLength(1);
+  expect(router.replace).not.toHaveBeenCalled();
+  await act(async () => resolveClubs(response([dashboardClub])));
+  expect(router.replace).toHaveBeenCalledWith("/club/club-1?tab=club", { scroll: false });
+  expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url) === "/api/clubs/club-1")).toHaveLength(1);
+});
+
+it("discards a saved club that is no longer available without navigating to it", async () => {
+  history.replaceState(null, "", "/"); localStorage.setItem("pc-club:account-1", "removed");
+  vi.mocked(fetch).mockImplementation(async url => String(url) === "/api/clubs" ? response([])
+    : String(url) === "/api/clubs/removed" ? response({ error: "Access unavailable" }, 403)
+    : response({ user: { id: "account-1", name: "Ari", gender: "FEMALE" } }));
+  await act(async () => root.render(<ClubDataProvider><PrototypeApp /></ClubDataProvider>));
+  expect(router.replace).not.toHaveBeenCalled();
+  expect(container.querySelector(".chooser-intro")).not.toBeNull();
+});
+
+it.each(["/?chooser=1", "/?join=club-1", "/?club=club-1&tab=profile"])("does not preload the saved club when opening %s", async href => {
+  history.replaceState(null, "", href); localStorage.setItem("pc-club:account-1", "saved");
+  await act(async () => root.render(<ClubDataProvider><PrototypeApp /></ClubDataProvider>));
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url) === "/api/clubs/saved")).toBe(false);
 });
