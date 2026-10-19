@@ -99,9 +99,10 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Courts" }).click();
   await expect(page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Courts" })).toHaveAttribute("aria-current", "page");
   await page.getByRole("button", { name: "Create on North Court" }).click();
-  await expect(page.getByRole("group", { name: "Create a match on North Court" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Create on North Court" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Best Match" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
+  await page.getByRole("dialog", { name: "Create on North Court" }).getByRole("button", { name: "Close", exact: true }).click();
 
   await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("button", { name: "Match history" }).click();
