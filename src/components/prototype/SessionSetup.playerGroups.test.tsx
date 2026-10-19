@@ -47,6 +47,48 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+it("only shows players chosen in Who’s playing when opening group assignments", async () => {
+  await act(async () => root.render(<SessionSetup clubId="home" members={members} onCreated={vi.fn()} />));
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-roster-summary")!.click());
+  await act(async () => {
+    const checkboxes = container.querySelectorAll<HTMLInputElement>(".setup-person-select input");
+    checkboxes[0].click();
+    checkboxes[1].click();
+  });
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-roster-done button")!.click());
+  await act(async () => {
+    const groups = Array.from(container.querySelectorAll<HTMLLabelElement>(".setup-toggle"))
+      .find(label => label.textContent?.includes("Player groups"))!;
+    groups.querySelector<HTMLInputElement>("input")!.click();
+  });
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-inline-action")!.click());
+
+  expect(Array.from(container.querySelectorAll(".setup-roster-list .setup-person strong"), node => node.textContent))
+    .toEqual(["Player 1", "Player 2"]);
+  expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Player groups");
+  expect(container.querySelectorAll('[role="dialog"] input[type="checkbox"]')).toHaveLength(0);
+
+  await act(async () => {
+    const group = container.querySelector<HTMLSelectElement>('[aria-label="Group for Player 1"]')!;
+    group.value = SessionPool.A;
+    group.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-roster-done button")!.click());
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-roster-summary")!.click());
+  await act(async () => {
+    const checkboxes = container.querySelectorAll<HTMLInputElement>(".setup-person-select input");
+    expect(Array.from(checkboxes, checkbox => checkbox.checked)).toEqual([true, true, false, false]);
+    checkboxes[1].click();
+    checkboxes[2].click();
+  });
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-roster-done button")!.click());
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-inline-action")!.click());
+
+  expect(Array.from(container.querySelectorAll(".setup-roster-list .setup-person strong"), node => node.textContent))
+    .toEqual(["Player 1", "Player 3"]);
+  expect(container.querySelector<HTMLSelectElement>('[aria-label="Group for Player 1"]')!.value).toBe(SessionPool.A);
+});
+
 it("preserves setup group choices through API parsing when club defaults are all Social", async () => {
   let submitted: ReturnType<typeof parseCreateSessionRequest> | undefined;
   const onCreated = vi.fn();
@@ -69,6 +111,8 @@ it("preserves setup group choices through API parsing when club defaults are all
   await act(async () => {
     container.querySelectorAll<HTMLInputElement>(".setup-person-select input").forEach(input => input.click());
   });
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-roster-done button")!.click());
+  await act(async () => container.querySelector<HTMLButtonElement>(".setup-inline-action")!.click());
   await act(async () => {
     for (const name of ["Player 1", "Player 2"]) {
       const select = container.querySelector<HTMLSelectElement>(`[aria-label="Group for ${name}"]`)!;

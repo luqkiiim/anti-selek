@@ -61,6 +61,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
   const [autoQueue, setAutoQueue] = useState(false);
   const [pools, setPools] = useState<Record<string, Pool>>({});
   const [rosterOpen, setRosterOpen] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
   const [addingGuest, setAddingGuest] = useState(false);
@@ -158,7 +159,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
 
         <details className="setup-options"><summary><span><strong>More options</strong></span><CaretRight size={18} /></summary><div className="setup-options-content">
           <Toggle title="Player groups" hint="Separate Competitive and Social groups." checked={groups} onChange={setGroups} />
-          {groups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setRosterOpen(true)}>{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
+          {groups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setGroupsOpen(true)} aria-haspopup="dialog">{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
           <Toggle title="Prepare the next game" hint="Automatically keep the next match queued." checked={autoQueue} onChange={setAutoQueue} />
 
         </div></details></>}
@@ -173,6 +174,26 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
         {guests.length > 0 && <div className="setup-guests"><h3>Guests</h3>{[...guests].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map(g => <div className="setup-person" key={g.id}><div className="setup-guest-heading"><Avatar name={g.name} /><span><strong>{g.name}</strong><small>Guest · {g.initialElo}</small></span><button type="button" className="icon-button" aria-label={`Remove guest ${g.name}`} onClick={() => setGuests(list => list.filter(item => item.id !== g.id))}><Trash size={18} /></button></div>{(mixed || groups) && <div className="setup-person-options">{mixed && <label>Gender<select aria-label={`Gender for ${g.name}`} value={g.gender} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, gender: e.target.value as Gender, mixedSideOverride: null } : item))}><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{groups && <label>Group<select aria-label={`Group for ${g.name}`} value={g.pool} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, pool: e.target.value as Pool } : item))}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}</div>}
         {addingGuest ? <div className="setup-add-guest"><h3>Add a guest</h3><label className="field-label">Guest name<input autoFocus value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Name" /></label><label className="field-label">Starting rating<input type="number" inputMode="numeric" min={0} max={5000} step={1} value={guestRating} onChange={e => setGuestRating(e.target.value)} /></label><label className="field-label">Gender<select value={guestGender} onChange={e => { setGuestGender(e.target.value as Gender); setGuestMixedSideOverride(null); }}><option value="UNSPECIFIED">Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>{guestSideOption && <label className="field-label">Mixed doubles side<select value={guestMixedSideOverride ?? ""} onChange={e => setGuestMixedSideOverride(e.target.value ? e.target.value as MixedSide : null)}><option value="">Default</option><option value={guestSideOption.value}>{guestSideOption.label}</option></select></label>}<ErrorText error={guestError} /><div className="setup-guest-actions"><button type="button" className="secondary" onClick={() => setAddingGuest(false)}>Cancel</button><button type="button" className="primary" onClick={addGuest} disabled={guestGender === "UNSPECIFIED"}>Add guest</button></div></div> : <button type="button" className="secondary full" onClick={() => openGuestForm()}><Plus size={18} />Add guest</button>}
         <div className="setup-roster-done"><button type="button" className="primary full" onClick={() => setRosterOpen(false)}>Done · {count} players</button></div>
+      </div>
+    </Sheet>
+
+    <Sheet open={groupsOpen} title="Player groups" onClose={() => setGroupsOpen(false)}>
+      <div className="setup-roster-sheet">
+        <div className="setup-roster-tools"><strong>{count} selected</strong></div>
+        {!count && <p className="setup-hint">Choose players in “Who’s playing?” first.</p>}
+        <div className="setup-roster-list">
+          {[...players].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map(p => <div key={p.id} className="setup-person">
+            <div className="setup-guest-heading"><Avatar name={p.name} url={p.avatarUrl} /><span><strong>{p.name}</strong><small>{p.status === "CORE" ? "Core" : "Occasional"} · {p.elo}</small></span></div>
+            <div className="setup-person-options"><label>Group<select value={getPool(p)} onChange={e => setPools(g => ({ ...g, [p.id]: e.target.value as Pool }))} aria-label={`Group for ${p.name}`}><option value="A">Competitive</option><option value="B">Social</option></select></label></div>
+          </div>)}
+        </div>
+        {guests.length > 0 && <div className="setup-guests"><h3>Guests</h3>
+          {[...guests].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map(g => <div key={g.id} className="setup-person">
+            <div className="setup-guest-heading"><Avatar name={g.name} /><span><strong>{g.name}</strong><small>Guest · {g.initialElo}</small></span></div>
+            <div className="setup-person-options"><label>Group<select aria-label={`Group for ${g.name}`} value={g.pool} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, pool: e.target.value as Pool } : item))}><option value="A">Competitive</option><option value="B">Social</option></select></label></div>
+          </div>)}
+        </div>}
+        <div className="setup-roster-done"><button type="button" className="primary full" onClick={() => setGroupsOpen(false)}>Done</button></div>
       </div>
     </Sheet>
   </section>;
