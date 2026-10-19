@@ -59,6 +59,7 @@ import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatc
 import {
   applyGeneratedMatches,
   applyQueuedMatch,
+  applyUndoneCourtMatch,
   applyScoreApproval,
   applyScoreSubmission,
   applyScoreReopen,
@@ -121,6 +122,8 @@ type MatchGenerationResponse = Partial<MatchPayload> & {
   matches?: MatchPayload[];
   queuedMatch?: SessionData["queuedMatch"];
   deferredQueueRecovery?: boolean;
+  undoneMatchId?: string;
+  autoAssignedMatch?: MatchPayload | null;
 };
 type QueuedMatchOverlay = {
   queuedMatch: SessionData["queuedMatch"] | null;
@@ -237,7 +240,15 @@ export default function LiveSession({
     const matches = result.matches ?? (result.id && result.status ? [result as MatchPayload] : []);
     if (result.queuedMatch !== undefined) setQueuedMatchOverlay(null);
     resource.update(current => {
-      let next = matches.length ? applyGeneratedMatches(current, matches) : current;
+      let next = current;
+      if (body.undoCurrentMatch && typeof body.courtId === "string" && result.undoneMatchId) {
+        const court = current.courts.find(court => court.id === body.courtId);
+        // A late acknowledgement must not erase a newer lineup on this court.
+        if (!court || (court.currentMatch && court.currentMatch.id !== result.undoneMatchId)) return current;
+        next = applyUndoneCourtMatch(next, body.courtId);
+        if (result.autoAssignedMatch) next = applyGeneratedMatches(next, [result.autoAssignedMatch]);
+      }
+      if (matches.length) next = applyGeneratedMatches(next, matches);
       if (result.queuedMatch !== undefined) next = applyQueuedMatch(next, result.queuedMatch ?? null);
       return next;
     }, { urgent: true });
@@ -1902,7 +1913,7 @@ export default function LiveSession({
                 disabled={action.busy}
                 onClick={() => void action.run(confirmControlAction, () => {
                   finishControlAction();
-                })}
+                }, { backgroundRefresh: confirmation.kind === "court-undo" })}
               >
                 {confirmation.kind === "court-player-rest" ? "Confirm rest" : confirmation.kind === "court-reshuffle" ? "Reshuffle match" : confirmation.kind === "court-undo" ? "Clear court" : "Clear next match"}
               </button>

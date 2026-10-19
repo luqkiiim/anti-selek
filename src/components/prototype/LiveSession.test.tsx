@@ -497,6 +497,48 @@ describe("LiveSession score and player controls", () => {
     });
   });
 
+  it("applies the confirmed cleared court before a follow-up refresh completes", async () => {
+    const currentMatch = match("cleared-match", 1);
+    const otherMatch = match("other-match", 2);
+    setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }, { id: "court-2", courtNumber: 2, currentMatch: otherMatch }]));
+    mocks.api.mockResolvedValue({ ok: true, undoneMatchId: currentMatch.id, autoAssignedMatch: null, queuedMatch: null });
+    const refresh = deferred<void>(); mocks.sessionResource!.refresh.mockReturnValue(refresh.promise);
+    try {
+      await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')!.click());
+      await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find(b => b.textContent === "Clear court")!.click());
+      await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find(b => b.textContent === "Clear court")!.click());
+      expect(mocks.sessionResource!.data!.courts[0].currentMatch).toBeNull();
+      expect(mocks.sessionResource!.data!.courts[1].currentMatch?.id).toBe(otherMatch.id);
+      expect(mocks.sessionResource!.update).toHaveBeenCalledWith(expect.any(Function), { urgent: true });
+    } finally { await act(async () => refresh.resolve()); }
+  });
+
+  it("applies the queued match automatically assigned by a confirmed clear", async () => {
+    const currentMatch = match("cleared-match", 1);
+    setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]));
+    mocks.api.mockResolvedValue({ ok: true, undoneMatchId: currentMatch.id, autoAssignedMatch: { ...currentMatch, id: "assigned-match", courtId: "court-1" }, queuedMatch: null });
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')!.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find(b => b.textContent === "Clear court")!.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find(b => b.textContent === "Clear court")!.click());
+    expect(mocks.sessionResource!.data!.courts[0].currentMatch?.id).toBe("assigned-match");
+    expect(mocks.sessionResource!.data!.queuedMatch).toBeNull();
+  });
+
+  it("does not clear a newer lineup when an older clear response arrives late", async () => {
+    const currentMatch = match("cleared-match", 1);
+    setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]));
+    const response = deferred<unknown>(); mocks.api.mockReturnValue(response.promise);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')!.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find(b => b.textContent === "Clear court")!.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find(b => b.textContent === "Clear court")!.click());
+    mocks.sessionResource!.data = { ...mocks.sessionResource!.data!, courts: [{ id: "court-1", courtNumber: 1, currentMatch: match("newer-match", 1) }] };
+    await act(async () => response.resolve({ ok: true, undoneMatchId: currentMatch.id, autoAssignedMatch: null, queuedMatch: null }));
+    expect(mocks.sessionResource!.data!.courts[0].currentMatch?.id).toBe("newer-match");
+  });
+
   it("lets a player open numeric pairing details directly from the court menu", async () => {
     const currentMatch = { ...match("match-details", 1), createdAt: "2026-09-28T10:30:00Z" };
     const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]);

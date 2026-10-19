@@ -67,6 +67,7 @@ export function useAction(refresh?: () => Promise<unknown>) {
   async function run(
     action: () => Promise<unknown>,
     success?: () => void | Promise<void>,
+    { backgroundRefresh = false } = {},
   ) {
     if (lock.current) return;
     lock.current = true;
@@ -74,8 +75,13 @@ export function useAction(refresh?: () => Promise<unknown>) {
     setError("");
     try {
       await action();
-      await refresh?.();
-      await success?.();
+      if (backgroundRefresh) {
+        await success?.();
+        if (refresh) void Promise.resolve().then(refresh).catch(() => {});
+      } else {
+        await refresh?.();
+        await success?.();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to save");
     } finally {
