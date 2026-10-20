@@ -1,6 +1,6 @@
 import { canReadClubGlobally } from "@/lib/globalClubViewer";
 import type { Session } from "next-auth";
-import { withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
+import { getSessionListProfiles, withSessionListProfiles } from "@/lib/sessionListProfiles";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { isClubAdminRole } from "@/lib/clubRoles";
 import { prisma } from "@/lib/prisma";
@@ -113,7 +113,8 @@ export async function listSessionsForClub({
     userIds
   );
 
-  return Promise.all(sessions.map(async (session) => {
+  const profiles = await getSessionListProfiles(prisma, sessions);
+  return sessions.map((session) => {
     const currentClubLink = session.sessionClubs.find(
       (link) => link.clubId === clubId
     );
@@ -124,7 +125,7 @@ export async function listSessionsForClub({
     return withLegacyClubAliases({
       ...session,
       players:
-        (await withSessionProfileRatings(prisma, session, (
+        (withSessionListProfiles((
           session.ratingPolicyVersion === 2 ? session.players : session.sessionClubs.length > 1
             ? withPlayerClubBadges(
                 session.players,
@@ -132,7 +133,7 @@ export async function listSessionsForClub({
                 clubId
               )
             : withClubElo(session.players, clubEloByUserId)
-        ))).map((player) => ({
+        ), profiles.get(session.id))).map((player) => ({
           ...player,
           player: serializeAvatarEntity(player.player),
         })),
@@ -147,5 +148,5 @@ export async function listSessionsForClub({
         status: link.status,
       })),
     });
-  }));
+  });
 }

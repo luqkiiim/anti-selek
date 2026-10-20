@@ -77,7 +77,7 @@ function admissionStatus(status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLE
     players: [{ id: "player-1", name: "Ari", avatarUrl: adoptedPhoto }],
     requests: [{ id: "request-1", clubId: "club-1", kind: "EXISTING_PLAYER", status, revision: 1, createdAt: "2026-10-01T00:00:00Z" }], access: null, membership: null };
 }
-function response(data: unknown) { return { ok: true, json: async () => data } as Response; }
+function response(data: unknown, status = 200) { return { ok: status >= 200 && status < 300, status, json: async () => data } as Response; }
 
 it("refreshes stale account and club resources after approved Open club without another sign-in", async () => {
   let approved = false;

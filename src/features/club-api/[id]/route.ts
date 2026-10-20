@@ -8,6 +8,7 @@ import { getClubStatUserResolver, getOfflineIdentityInfoByUserId } from "@/lib/o
 import { buildClubLeaderboardRankMovements } from "@/lib/profileClubRank";
 import { prisma } from "@/lib/prisma";
 import { getClubRoster } from "@/lib/clubRoster";
+import { getClubAdminRoster } from "@/lib/clubAdminRoster";
 import { deriveClubPairingPreferences } from "@/lib/clubPairingPreferences";
 import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { listSessionsForClub } from "@/app/api/sessions/listSessionsService";
@@ -41,6 +42,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const isOwner = !globalView && !quick && club.createdById === actorId && access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role);
     const canAdmin = !globalView && !quick && (!!session.user.isAdmin || isOwner || (access?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(access.role)));
     if (!globalView && (quick ? !viewerMembership : !canAdmin && access?.status !== "ACTIVE")) return invalidTargetResponse(request, "api:communities:id");
+    const adminView = new URL(request.url).searchParams.get("section") === "admin";
+    if (adminView && !canAdmin) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    const snapshotBase = (membersCount: number) => {
+      const player = globalView ? null : viewerMembership?.player;
+      const viewerPairingPreferences = !globalView && viewerMembership
+        ? deriveClubPairingPreferences(viewerMembership)
+        : { partnerPreference: "OPEN", mixedSideOverride: null };
+      const clubPayload = withLegacyClubAliases({ id: club.id, name: getTutorialClubDisplayName(club), rules: club.rules, avatarUrl: serializeAvatarEntity(club).avatarUrl, clubId: club.id, clubName: getTutorialClubDisplayName(club), isTutorial: club.isTutorial, tutorialOwnerId: club.tutorialOwnerId, viewerIsOwner: isOwner, role: globalView ? null : canAdmin ? "ADMIN" : access?.role ?? "MEMBER", readOnly: globalView, isPasswordProtected: club.isPasswordProtected, membersCount, sessionsCount: club._count.sessions });
+      return {
+        viewer: { id: actorId, userId: quick ? null : actorId, playerId: player?.id ?? null, name: player?.name ?? account?.name ?? "Guest", email: account?.email ?? null, avatarUrl: serializeAvatarEntity(player ?? account ?? { avatarKey: null }).avatarUrl, isAdmin: !globalView && !quick && !!session.user.isAdmin, isQuickAccess: quick, elo: viewerMembership?.elo ?? player?.elo ?? 1000, gender: player?.gender ?? "UNSPECIFIED", ...viewerPairingPreferences },
+        club: clubPayload, community: clubPayload,
+      };
+    };
+    if (adminView) {
+      const members = await getClubAdminRoster(id);
+      return NextResponse.json({ ...snapshotBase(members.length), clubMembers: members, communityMembers: members, sessions: [], claimRequests: [] });
+    }
     const [roster, storedMatches, sessions, unreadCount] = await Promise.all([
       getClubRoster(prisma, id),
       prisma.match.findMany({ where: { status: "COMPLETED", session: { isTest: false, OR: [{ clubId: id }, { sessionClubs: { some: { clubId: id, status: "ACCEPTED" } } }] } }, include: { team1Player1: true, team1Player2: true, team2Player1: true, team2Player2: true, eloAdjustments: { where: { clubId: id } }, session: true } }),
@@ -67,14 +85,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const likeState = new Map<string, { likeCount: number; likedByMe: boolean }>();
     for (const like of likes) { const state = likeState.get(like.newsItemId) ?? { likeCount: 0, likedByMe: false }; state.likeCount++; state.likedByMe ||= !globalView && !quick && like.userId === actorId; likeState.set(like.newsItemId, state); }
     pulse = applyClubPulseNewsLikes(pulse, likeState);
-    const player = globalView ? null : viewerMembership?.player;
-    const viewerPairingPreferences = !globalView && viewerMembership
-      ? deriveClubPairingPreferences(viewerMembership)
-      : { partnerPreference: "OPEN", mixedSideOverride: null };
-    const clubPayload = withLegacyClubAliases({ id: club.id, name: getTutorialClubDisplayName(club), rules: club.rules, avatarUrl: serializeAvatarEntity(club).avatarUrl, clubId: club.id, clubName: getTutorialClubDisplayName(club), isTutorial: club.isTutorial, tutorialOwnerId: club.tutorialOwnerId, viewerIsOwner: isOwner, role: globalView ? null : canAdmin ? "ADMIN" : access?.role ?? "MEMBER", readOnly: globalView, isPasswordProtected: club.isPasswordProtected, membersCount: members.length, sessionsCount: club._count.sessions });
     return NextResponse.json({
-      viewer: { id: actorId, userId: quick ? null : actorId, playerId: player?.id ?? null, name: player?.name ?? account?.name ?? "Guest", email: account?.email ?? null, avatarUrl: serializeAvatarEntity(player ?? account ?? { avatarKey: null }).avatarUrl, isAdmin: !globalView && !quick && !!session.user.isAdmin, isQuickAccess: quick, elo: viewerMembership?.elo ?? player?.elo ?? 1000, gender: player?.gender ?? "UNSPECIFIED", ...viewerPairingPreferences },
-      club: clubPayload, community: clubPayload, clubMembers: members, communityMembers: members, sessions: withLegacySportingAliases(sessions), clubPulse: pulse, communityPulse: pulse, notifications: { unreadCount }, claimRequests: [],
+      ...snapshotBase(members.length),
+      clubMembers: members, communityMembers: members, sessions: withLegacySportingAliases(sessions), clubPulse: pulse, communityPulse: pulse, notifications: { unreadCount }, claimRequests: [],
     });
   } catch (error) {
     if (error instanceof SessionRouteError) return NextResponse.json({ error: error.message }, { status: error.status });

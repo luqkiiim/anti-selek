@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(), account: vi.fn(), club: vi.fn(), access: vi.fn(), membership: vi.fn(), rosterMembers: vi.fn(), rosterAccess: vi.fn(), sessions: vi.fn(), notificationCount: vi.fn(),
-  write: vi.fn(),
+  write: vi.fn(), matches: vi.fn(async () => []),
 }));
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/prisma", () => ({ prisma: {
@@ -10,7 +10,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {
   clubAccess: { findUnique: mocks.access, findMany: mocks.rosterAccess, create: mocks.write },
   clubMember: { findFirst: mocks.membership, findMany: mocks.rosterMembers, create: mocks.write },
   player: { create: mocks.write }, sessionPlayer: { create: mocks.write }, clubAdmissionRequest: { create: mocks.write },
-  match: { findMany: vi.fn(async () => []) },
+  match: { findMany: mocks.matches },
   clubNotification: { count: mocks.notificationCount, updateMany: mocks.write },
   clubNewsLike: { findMany: vi.fn(async () => []) },
   $transaction: mocks.write,
@@ -40,6 +40,28 @@ describe("explicit global club viewing", () => {
     mocks.notificationCount.mockResolvedValue(3);
   });
   afterEach(() => vi.unstubAllEnvs());
+  it("loads an admin roster without dashboard, session, or notification work", async () => {
+    mocks.access.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
+    const response = await read("?section=admin");
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ club: { role: "ADMIN" }, sessions: [], clubMembers: [] });
+    expect(body).not.toHaveProperty("clubPulse");
+    expect(mocks.sessions).not.toHaveBeenCalled();
+    expect(mocks.notificationCount).not.toHaveBeenCalled();
+    expect(mocks.matches).toHaveBeenCalledWith(expect.objectContaining({ select: { team1Player1Id: true, team1Player2Id: true, team2Player1Id: true, team2Player2Id: true, winnerTeam: true } }));
+    expect(mocks.write).not.toHaveBeenCalled();
+  });
+  it.each(["MEMBER", "STAFF"])("denies the admin roster to %s access", async role => {
+    mocks.access.mockResolvedValue({ role, status: "ACTIVE" });
+    expect((await read("?section=admin")).status).toBe(403);
+    expect(mocks.rosterMembers).not.toHaveBeenCalled();
+  });
+  it("does not turn explicit global viewing into admin access", async () => {
+    mocks.access.mockResolvedValue({ role: "OWNER", status: "ACTIVE" });
+    expect((await read("?section=admin&view=global")).status).toBe(403);
+    expect(mocks.rosterMembers).not.toHaveBeenCalled();
+  });
   it("reads protected and closed clubs without creating sporting identities or membership", async () => {
     const response = await read();
     expect(response.status).toBe(200);
