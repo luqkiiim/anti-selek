@@ -5,7 +5,7 @@ import { Crown, RotateCw, Share2 } from "lucide-react";
 
 import type { Player, SessionData } from "@/components/session/sessionTypes";
 import { Avatar } from "@/components/ui/Avatar";
-import { SessionCrossoverFrequency, SessionType } from "@/types/enums";
+import { SessionCrossoverFrequency, SessionPool, SessionType } from "@/types/enums";
 import {
   getBalanceMetricLabel,
   getMatchmakingStyleLabel,
@@ -111,7 +111,7 @@ function buildStandingsRows({
       userId: player.userId,
       name: player.user.name,
       avatarUrl: player.user.avatarUrl,
-      group: "A",
+      group: player.pool === SessionPool.B ? "B" : "A",
       score: getStandingsScore(sessionType, player, stats),
       matchesPlayed: stats.played,
       wins: stats.wins,
@@ -385,7 +385,9 @@ export function SessionFinishView({
       {players.length > 0 ? (
         <LiveSessionStandings
           rows={standingsRows}
-          groupsEnabled={false}
+          groupsEnabled={sessionSettings.poolsEnabled}
+          groupAName={sessionSettings.poolAName ?? "Competitive"}
+          groupBName={sessionSettings.poolBName ?? "Social"}
           scoreLabel={isLadderSession ? "net wins" : "points"}
           onOpenMember={onOpenMember}
         />
