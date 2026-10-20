@@ -18,6 +18,7 @@ const empty = (): ReadState<unknown> => ({ data: null, error: "", errorStatus: n
 export function clubSnapshotUrl(id: string, globalView = false) {
   return `/api/clubs/${encodeURIComponent(id)}${globalView ? "?view=global" : ""}`;
 }
+export function clubAdminSnapshotUrl(id: string) { return `${clubSnapshotUrl(id)}?section=admin`; }
 function clubIdFor(url: string) {
   const parsed = new URL(url, "https://anti-selek.local");
   const match = parsed.pathname.match(/^\/api\/clubs\/([^/]+)$/);
@@ -213,10 +214,10 @@ export class ClubReadStore {
       throw new Error("Club details changed. Refresh again.");
     }
   }
-  refreshClub(id: string) {
+  refreshClub(id: string, exceptUrl?: string) {
     const reads: Promise<void>[] = [];
     for (const [url, entry] of this.entries) {
-      if (clubIdFor(url) !== id) continue;
+      if (clubIdFor(url) !== id || url === exceptUrl) continue;
       if (entry.users) reads.push(this.refresh(url));
       else { this.cancel(entry); entry.updatedAt = 0; }
     }

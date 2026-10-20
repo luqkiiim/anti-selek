@@ -163,6 +163,18 @@ describe("shared club reads", () => {
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url) === stats)).toHaveLength(2);
     expect(store.get(inactive).data).toBeNull(); release(); a(); b();
   });
+  it("invalidates the other club views after an admin save without repeating its confirmed read", async () => {
+    const admin = `${url}?section=admin`;
+    const release = store.retain(admin);
+    await Promise.all([store.read(admin), store.read(url), store.read(stats)]);
+    const count = vi.mocked(fetch).mock.calls.length;
+    await store.refreshClub(identity.id, admin);
+    expect(fetch).toHaveBeenCalledTimes(count);
+    expect(store.get(admin)).toMatchObject({ data: snapshot, validated: true });
+    expect(store.get(url).data).toBeNull();
+    expect(store.get(stats).data).toBeNull();
+    release();
+  });
   it("does not let a pre-save response overwrite authoritative local data", async () => {
     await store.read(stats);
     const pending = deferred(); vi.mocked(fetch).mockReturnValue(pending.promise);

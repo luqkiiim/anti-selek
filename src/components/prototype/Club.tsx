@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useClubResource, useClubDataStore } from "@/components/app/ClubDataProvider";
 import { adminApi } from "@/lib/adminClient";
-import { clubSnapshotUrl } from "@/components/app/clubReadStore";
+import { clubAdminSnapshotUrl, clubSnapshotUrl } from "@/components/app/clubReadStore";
 import { ClubHeader } from "@/components/app/ClubHeader";
 import { useAppLocation } from "@/components/app/AppShell";
 import { useAppReady } from "@/components/app/AppStartup";
@@ -95,11 +95,6 @@ export default function Club({
   onClubsChanged: () => Promise<unknown>;
 }) {
   const store = useClubDataStore();
-  const resource = useClubResource<Snapshot>(clubSnapshotUrl(club.id, globalView));
-  const data = resource.data;
-  const readOnly = globalView || !!data?.club.readOnly;
-  const pages: readonly string[] = readOnly ? mainPages.filter(p => p !== "profile") : mainPages;
-  const viewerPlayerId = readOnly ? null : data?.viewer.playerId ?? null;
   const href = useAppLocation();
   const route = new URL(href, "https://anti-selek.local");
   const [localMemberStack, setMemberStack] = useState<string[]>([]);
@@ -108,6 +103,14 @@ export default function Club({
     [sessionCode, setSessionCode] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   const page = onRoute ? (route.pathname.endsWith("/admin") ? "admin" : route.searchParams.get("tab") === "recap" ? "recap" : getClubTab(route.searchParams.get("tab"))) : localPage;
+  // Profiles opened from admin retain their existing complete ranking context.
+  const snapshotUrl = page === "admin" && !globalView && memberStack.length === 0
+    ? clubAdminSnapshotUrl(club.id) : clubSnapshotUrl(club.id, globalView);
+  const resource = useClubResource<Snapshot>(snapshotUrl);
+  const data = resource.data;
+  const readOnly = globalView || !!data?.club.readOnly;
+  const pages: readonly string[] = readOnly ? mainPages.filter(p => p !== "profile") : mainPages;
+  const viewerPlayerId = readOnly ? null : data?.viewer.playerId ?? null;
   const profile = useClubResource<Profile>(
     viewerPlayerId && page !== "admin"
       ? `/api/users/${encodeURIComponent(viewerPlayerId)}/stats?clubId=${encodeURIComponent(club.id)}`
@@ -127,6 +130,10 @@ export default function Club({
   });
   if (pastSessionPagination.clubId !== club.id) {
     setPastSessionPagination({ clubId: club.id, visibleCount: 5 });
+  }
+  function updateAdminSnapshot(updater: (current: Snapshot) => Snapshot) {
+    resource.update(updater);
+    if (store) void store.refreshClub(club.id, snapshotUrl).catch(() => {});
   }
   async function refresh() {
     await Promise.all(store
@@ -278,16 +285,16 @@ export default function Club({
         retryDisabled={resource.loading || resource.retryAt > 0}
         onRetry={() => void resource.refresh().catch(() => {})}
         refresh={async () => {
-          const url = clubSnapshotUrl(club.id, globalView);
-          if (store) await store.refreshConfirmed(url);
+          const url = snapshotUrl;
+          if (store) { await store.refreshConfirmed(url); await store.refreshClub(club.id, url); }
           else {
             const snapshot = await adminApi<Snapshot>(url);
             resource.update(() => snapshot);
           }
         }}
-        onMemberSaved={member => resource.update(current => ({ ...current, clubMembers: current.clubMembers.some(player => player.id === member.id) ? current.clubMembers.map(player => player.id === member.id ? { ...player, ...member, wins: player.wins, losses: player.losses, matchesPlayed: player.matchesPlayed } : player) : [...current.clubMembers, member] }))}
-        onMemberRemoved={id => resource.update(current => ({ ...current, clubMembers: current.clubMembers.filter(player => player.id !== id) }))}
-        onClubSaved={updated => resource.update(current => ({ ...current, club: { ...current.club, ...updated } }))}
+        onMemberSaved={member => updateAdminSnapshot(current => ({ ...current, clubMembers: current.clubMembers.some(player => player.id === member.id) ? current.clubMembers.map(player => player.id === member.id ? { ...player, ...member, wins: player.wins, losses: player.losses, matchesPlayed: player.matchesPlayed } : player) : [...current.clubMembers, member] }))}
+        onMemberRemoved={id => updateAdminSnapshot(current => ({ ...current, clubMembers: current.clubMembers.filter(player => player.id !== id) }))}
+        onClubSaved={updated => updateAdminSnapshot(current => ({ ...current, club: { ...current.club, ...updated } }))}
         onDeleted={async () => { store?.deleteClub(club.id); onSwitch(); await onClubsChanged(); }}
         onBack={() => go("club")}
         onNavigate={go}
