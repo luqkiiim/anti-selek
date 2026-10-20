@@ -50,7 +50,8 @@ import { deriveLiveSessionPlayerStats } from "./deriveLiveSessionStandings";
 import { SessionFinishView } from "./SessionFinishView";
 import { SessionStandbyView } from "./SessionStandbyView";
 import { sessionFinishHighlights } from "./sessionFinishHighlights";
-import { shareSessionStandingsImageBlob } from "@/lib/sessionShareImageClient";
+import { shareSessionStandingsImages } from "@/lib/sessionShareImageClient";
+import { SessionRecapSavePanel } from "@/components/session/SessionRecapSavePanel";
 import { useSessionStandingsImage } from "@/lib/useSessionStandingsImage";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
@@ -211,6 +212,7 @@ export default function LiveSession({
   const [deleting, setDeleting] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [saveRecapOpen, setSaveRecapOpen] = useState(false);
   const [celebrateFinish, setCelebrateFinish] = useState(false);
   const [shareError, setShareError] = useState("");
   const [liveSettingsDraft, setLiveSettingsDraft] = useState<LiveSettingsDraft | null>(null);
@@ -392,18 +394,19 @@ export default function LiveSession({
 
   async function shareResults() {
     if (!s || sharing) return;
-    if (!shareImage.blob) {
+    if (!shareImage.images) {
       if (shareImage.error) shareImage.retry();
       return;
     }
     setSharing(true);
     setShareError("");
     try {
-      await shareSessionStandingsImageBlob({
-        blob: shareImage.blob,
+      const result = await shareSessionStandingsImages({
+        images: shareImage.images,
         fileName: `${s.name}-standings`,
         shareTitle: `${s.name} standings`,
       });
+      if (result.method === "save-panel") setSaveRecapOpen(true);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         setShareError(error instanceof Error ? error.message : "Unable to share standings");
@@ -987,6 +990,8 @@ export default function LiveSession({
   }
   return (
     <div className={`pc-app${s?.status === "WAITING" ? " session-standby" : ""}`}>
+      {saveRecapOpen && shareImage.images && s && <SessionRecapSavePanel
+        images={shareImage.images} fileName={`${s.name}-standings`} onClose={() => setSaveRecapOpen(false)} />}
       <header className="pc-header">
         <button className="icon-button" aria-label="Back" onClick={onBack}>
           <ArrowLeft size={23} />

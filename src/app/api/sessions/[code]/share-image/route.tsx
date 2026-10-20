@@ -20,6 +20,7 @@ import {
   getSessionShareImageFonts,
   renderSessionShareImage,
   SESSION_SHARE_IMAGE_HEIGHT,
+  SESSION_SHARE_IMAGE_PLAYER_LIMIT,
   SESSION_SHARE_IMAGE_WIDTH,
 } from "@/lib/sessionShareImage";
 import { getSessionMembership, isAccountSessionPlayer } from "@/lib/sessionCollab";
@@ -192,6 +193,14 @@ async function getSessionShareImageRoute(
     );
   }
 
+  const pageParams = new URL(request.url).searchParams.getAll("page");
+  const pageValue = pageParams[0] ?? "1";
+  const page = Number(pageValue);
+  const pageCount = Math.ceil(sessionData.players.length / SESSION_SHARE_IMAGE_PLAYER_LIMIT);
+  if (pageParams.length > 1 || !/^[1-9]\d*$/.test(pageValue) || !Number.isSafeInteger(page) || page > pageCount) {
+    return sportingJson({ error: "Invalid recap page." }, { status: 400 });
+  }
+
   const viewModel = buildSessionShareImageViewModel({
     sessionName: sessionData.name,
     clubName: getShareImageClubName(sessionData),
@@ -213,7 +222,7 @@ async function getSessionShareImageRoute(
       },
     }))),
     matches: withLegacySportingAliases(sessionData.matches),
-  });
+  }, page);
   const avatarDataUrlsByUserId = await fetchShareImageAvatarDataUrls(
     viewModel.standings
   );
@@ -236,6 +245,7 @@ async function getSessionShareImageRoute(
     headers: {
       "Cache-Control": "private, no-store",
       "Content-Type": "image/png",
+      "X-Recap-Page-Count": String(viewModel.pageCount),
     },
   });
 }

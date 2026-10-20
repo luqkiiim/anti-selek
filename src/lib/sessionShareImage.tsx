@@ -26,25 +26,21 @@ const SHARE_ROW_AVATAR_MIN_SIZE = 78;
 const SHARE_ROW_AVATAR_MAX_SIZE = 136;
 const SHARE_ROW_AVATAR_VERTICAL_GUTTER = 16;
 const SHARE_TABLE_HEADER_HEIGHT = 64;
-const SHARE_TABLE_OVERFLOW_HEIGHT = 30;
 const SHARE_TABLE_FOOTER_HEIGHT = 90;
-const SHARE_TABLE_BODY_HEIGHT =
-  SESSION_SHARE_IMAGE_HEIGHT - 700 - 22 - SHARE_TABLE_HEADER_HEIGHT - SHARE_TABLE_FOOTER_HEIGHT;
+const SHARE_CONTINUATION_HEADER_HEIGHT = 260;
 const SHARE_STANDINGS_MIN_ROWS_FOR_SIZING = 6;
-const SHARE_STANDINGS_MAX_ROWS = SESSION_SHARE_IMAGE_PLAYER_LIMIT - 3;
 
 export function getSessionShareImageRowSizing(
   rowCount: number,
-  hasOverflow = false
+  isContinuation = false
 ) {
+  const headerHeight = isContinuation ? SHARE_CONTINUATION_HEADER_HEIGHT : 700;
+  const bodyHeight = SESSION_SHARE_IMAGE_HEIGHT - headerHeight - 22 - SHARE_TABLE_HEADER_HEIGHT - SHARE_TABLE_FOOTER_HEIGHT;
   const sizingRowCount = Math.min(
     Math.max(rowCount, SHARE_STANDINGS_MIN_ROWS_FOR_SIZING),
-    SHARE_STANDINGS_MAX_ROWS
+    isContinuation ? SESSION_SHARE_IMAGE_PLAYER_LIMIT : SESSION_SHARE_IMAGE_PLAYER_LIMIT - 3
   );
-  const rowHeight = Math.floor(
-    (SHARE_TABLE_BODY_HEIGHT - (hasOverflow ? SHARE_TABLE_OVERFLOW_HEIGHT : 0)) /
-      sizingRowCount
-  );
+  const rowHeight = Math.floor(bodyHeight / sizingRowCount);
 
   return {
     rowHeight,
@@ -130,7 +126,8 @@ export interface SessionShareImageViewModel {
   sessionDate: string | null;
   participantCount: number;
   completedMatchCount: number;
-  omittedPlayerCount: number;
+  page: number;
+  pageCount: number;
   standings: SessionShareImageStanding[];
 }
 
@@ -311,7 +308,12 @@ export function buildSessionShareImageViewModel({
   completedMatchCount,
   players,
   matches,
-}: SessionShareImageInput): SessionShareImageViewModel {
+}: SessionShareImageInput, page = 1): SessionShareImageViewModel {
+  const pageCount = Math.max(1, Math.ceil(players.length / SESSION_SHARE_IMAGE_PLAYER_LIMIT));
+  if (!Number.isSafeInteger(page) || page < 1 || page > pageCount) {
+    throw new RangeError("Invalid recap page.");
+  }
+  const offset = (page - 1) * SESSION_SHARE_IMAGE_PLAYER_LIMIT;
   const performanceByUserId = buildPlayerPerformanceMaps({
     sessionType,
     players,
@@ -361,13 +363,13 @@ export function buildSessionShareImageViewModel({
     sessionType,
     sessionTypeLabel: getSessionTypeLabel(sessionType),
     standings: sortedPlayers
-      .slice(0, SESSION_SHARE_IMAGE_PLAYER_LIMIT)
+      .slice(offset, offset + SESSION_SHARE_IMAGE_PLAYER_LIMIT)
       .map((player, index) => {
         const performance =
           performanceByUserId.get(player.userId) ?? createEmptyPerformance();
 
         return {
-          rank: index + 1,
+          rank: offset + index + 1,
           userId: player.userId,
           name: player.user.name,
           initials: getShareImageInitials(player.user.name),
@@ -386,7 +388,8 @@ export function buildSessionShareImageViewModel({
     completedMatchCount:
       completedMatchCount ??
       matches.filter((match) => match.status === MatchStatus.COMPLETED).length,
-    omittedPlayerCount: Math.max(0, sortedPlayers.length - SESSION_SHARE_IMAGE_PLAYER_LIMIT),
+    page,
+    pageCount,
   };
 }
 
@@ -571,7 +574,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#9a82ad", fontSize: 32, fontWeight: 700, letterSpacing: 0.5,
   },
   empty: { display: "flex", flex: 1, justifyContent: "center", alignItems: "center", color: "#856c98", fontSize: 26 },
-  overflow: { display: "flex", justifyContent: "center", paddingTop: 8, color: "#856c98", fontSize: 19, fontWeight: 700 },
+  pageLabel: { display: "flex", marginLeft: 18, fontSize: 24 },
 };
 
 const confettiBits: CSSProperties[] = [
@@ -739,23 +742,24 @@ export function renderSessionShareImage(
   viewModel: SessionShareImageViewModel,
   avatarDataUrlsByUserId = new Map<string, string>()
 ): ReactElement {
-  const topThree = viewModel.standings.slice(0, 3);
+  const isContinuation = viewModel.page > 1;
+  const topThree = isContinuation ? [] : viewModel.standings.slice(0, 3);
   const orderedPodium =
     topThree.length === 3
       ? [topThree[1], topThree[0], topThree[2]]
       : topThree.length === 2
         ? [topThree[1], topThree[0]]
         : topThree;
-  const rowStandings = viewModel.standings.slice(3, SESSION_SHARE_IMAGE_PLAYER_LIMIT);
+  const rowStandings = isContinuation ? viewModel.standings : viewModel.standings.slice(3);
   const rowSizing = getSessionShareImageRowSizing(
     rowStandings.length,
-    viewModel.omittedPlayerCount > 0
+    isContinuation
   );
 
   return (
     <div style={styles.frame}>
-      <div style={styles.hero}>
-        {confettiBits.map((style, index) => <div key={index} style={style} />)}
+      <div style={{ ...styles.hero, ...(isContinuation ? { height: SHARE_CONTINUATION_HEADER_HEIGHT } : {}) }}>
+        {!isContinuation && confettiBits.map((style, index) => <div key={index} style={style} />)}
         <div style={styles.header}>
           <div style={styles.club}>{truncateLabel(viewModel.clubName, 21)}</div>
           <div style={styles.sessionTitle}>{truncateLabel(viewModel.sessionName, 32)}</div>
@@ -765,11 +769,11 @@ export function renderSessionShareImage(
             <span>{`${viewModel.completedMatchCount} ${viewModel.completedMatchCount === 1 ? "match" : "matches"}`}</span>
           </div>
         </div>
-        <div style={styles.podiumRow}>
+        {!isContinuation && <div style={styles.podiumRow}>
           {orderedPodium.map((standing) => (
             <PodiumCard key={standing.userId} standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} centered={topThree.length === 1} />
           ))}
-        </div>
+        </div>}
       </div>
       <div style={styles.standingsPanel}>
         {rowStandings.length > 0 && <div style={styles.tableHeader}>
@@ -778,9 +782,11 @@ export function renderSessionShareImage(
           <div style={styles.numberCell}>Diff</div><div style={styles.numberCell}>MP</div><div style={styles.numberCell}>W/L</div>
         </div>}
         {rowStandings.map((standing) => <StandingRow key={standing.userId} standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} rowHeight={rowSizing.rowHeight} avatarSize={rowSizing.avatarSize} />)}
-        {viewModel.omittedPlayerCount > 0 && <div style={styles.overflow}>{`${viewModel.omittedPlayerCount} more ${viewModel.omittedPlayerCount === 1 ? "player" : "players"} not shown`}</div>}
         {viewModel.standings.length === 0 && <div style={styles.empty}>No standings available</div>}
-        <div style={styles.footer}>antiselek.com</div>
+        <div style={styles.footer}>
+          <span>antiselek.com</span>
+          {viewModel.pageCount > 1 && <span style={styles.pageLabel}>{`· ${viewModel.page} of ${viewModel.pageCount}`}</span>}
+        </div>
       </div>
     </div>
   );

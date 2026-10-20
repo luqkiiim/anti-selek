@@ -64,11 +64,13 @@ import { GET } from "./route";
 function createSessionData({
   status = SessionStatus.COMPLETED,
   communityIsTutorial = false,
+  playerCount = 13,
 }: {
   status?: string;
   communityIsTutorial?: boolean;
+  playerCount?: number;
 } = {}) {
-  const players = Array.from({ length: 13 }, (_, index) => ({
+  const players = Array.from({ length: playerCount }, (_, index) => ({
     playerId: `player-${index + 1}`,
     sessionPoints: 30 - index,
     joinedAt: new Date("2026-05-01T00:00:00.000Z"),
@@ -177,11 +179,11 @@ describe("session share image route", () => {
     expect(markup).toContain("1 match");
   });
 
-  it("rejects unauthenticated users", async () => {
+  it.each(["", "?page=2"])("rejects unauthenticated users for %s", async (query) => {
     mocks.auth.mockResolvedValue(null);
 
     const response = await GET(
-      new Request("http://localhost/api/sessions/ABC123/share-image"),
+      new Request(`http://localhost/api/sessions/ABC123/share-image${query}`),
       { params: Promise.resolve({ code: "ABC123" }) }
     );
     const body = await response.json();
@@ -191,7 +193,7 @@ describe("session share image route", () => {
     expect(mocks.imageResponses).toHaveLength(0);
   });
 
-  it("rejects unauthorized viewers", async () => {
+  it.each(["", "?page=2"])("rejects unauthorized viewers for %s", async (query) => {
     mocks.getSessionMembership.mockResolvedValue(null);
     mocks.sessionFindUnique.mockResolvedValue({
       ...createSessionData(),
@@ -202,11 +204,34 @@ describe("session share image route", () => {
     });
 
     const response = await GET(
-      new Request("http://localhost/api/sessions/ABC123/share-image"),
+      new Request(`http://localhost/api/sessions/ABC123/share-image${query}`),
       { params: Promise.resolve({ code: "ABC123" }) }
     );
 
     expect(response.status).toBe(403);
+    expect(mocks.imageResponses).toHaveLength(0);
+  });
+
+  it("renders only continuation ranks and reports the complete page count", async () => {
+    mocks.sessionFindUnique.mockResolvedValue(createSessionData({ playerCount: 29 }));
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123/share-image?page=2"), {
+      params: Promise.resolve({ code: "ABC123" }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Recap-Page-Count")).toBe("3");
+    const markup = renderToStaticMarkup(mocks.imageResponses[0].element as ReactElement);
+    expect(markup).toContain("Player 15");
+    expect(markup).toContain("Player 28");
+    expect(markup).not.toContain("Player 29");
+    expect(markup).not.toContain("Lina Kay");
+    expect(markup).toContain("2 of 3");
+  });
+
+  it.each(["0", "-1", "1.5", "abc", "", "2", "99999999999999999", "1&page=1"])("rejects invalid page %s", async (page) => {
+    const response = await GET(new Request(`http://localhost/api/sessions/ABC123/share-image?page=${page}`), {
+      params: Promise.resolve({ code: "ABC123" }),
+    });
+    expect(response.status).toBe(400);
     expect(mocks.imageResponses).toHaveLength(0);
   });
 

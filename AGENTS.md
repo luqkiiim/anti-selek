@@ -11,6 +11,7 @@
 
 ## Testing and Delivery
 
+- Ladder is a retired legacy format. Do not investigate, extend, or add Ladder-specific coverage for new feature work. Focus on current session settings; change legacy compatibility only when explicitly requested.
 - This is a hobby app. Keep the process proportional to the actual change and favour shipping a working result over exhaustive verification.
 - Add or run focused tests for hard logic and meaningful risks: permissions, scoring/rating calculations, concurrent updates, destructive operations, migrations, and preservation of existing data. Test outcomes and failure cases that could realistically go wrong.
 - Do not write tests for obvious arithmetic, trivial pass-throughs, copy/style changes, or tests that merely repeat the implementation. Use code inspection or a quick visual check where sufficient. Do not invent tests to satisfy a checklist.

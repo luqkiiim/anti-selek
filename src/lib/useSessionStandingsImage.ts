@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchSessionStandingsImageBlob } from "./sessionShareImageClient";
+import { fetchSessionStandingsImages } from "./sessionShareImageClient";
 
 interface UseSessionStandingsImageOptions {
   code: string;
@@ -13,13 +13,13 @@ interface UseSessionStandingsImageOptions {
 
 interface ShareImageState {
   key: string | null;
-  blob: Blob | null;
+  images: Blob[] | null;
   error: string;
 }
 
 const EMPTY_STATE: ShareImageState = {
   key: null,
-  blob: null,
+  images: null,
   error: "",
 };
 
@@ -30,7 +30,7 @@ export function useSessionStandingsImage({
 }: UseSessionStandingsImageOptions) {
   const [state, setState] = useState<ShareImageState>(EMPTY_STATE);
   const [retryCount, setRetryCount] = useState(0);
-  const requestRef = useRef<{ key: string; promise: Promise<Blob> } | null>(null);
+  const requestRef = useRef<{ key: string; promise: Promise<Blob[]> } | null>(null);
   const retry = useCallback(() => setRetryCount((count) => count + 1), []);
   const requestKey = enabled && code
     ? JSON.stringify([code, revision ?? null, retryCount])
@@ -47,21 +47,21 @@ export function useSessionStandingsImage({
     if (requestRef.current?.key !== requestKey) {
       requestRef.current = {
         key: requestKey,
-        promise: fetchSessionStandingsImageBlob({ code }),
+        promise: fetchSessionStandingsImages({ code }),
       };
     }
 
     void requestRef.current.promise
-      .then((blob) => {
+      .then((images) => {
         if (active) {
-          setState({ key: requestKey, blob, error: "" });
+          setState({ key: requestKey, images, error: "" });
         }
       })
       .catch((error: unknown) => {
         if (active) {
           setState({
             key: requestKey,
-            blob: null,
+            images: null,
             error: error instanceof Error && error.message.trim()
               ? error.message
               : "Could not prepare standings image.",
@@ -77,7 +77,7 @@ export function useSessionStandingsImage({
   const current = state.key === requestKey;
 
   return {
-    blob: current ? state.blob : null,
+    images: current ? state.images : null,
     preparing: Boolean(requestKey) && !current,
     error: current ? state.error : "",
     retry,

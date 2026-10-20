@@ -52,7 +52,8 @@ import {
   SessionPool,
   SessionStatus,
 } from "@/types/enums";
-import { shareSessionStandingsImageBlob } from "@/lib/sessionShareImageClient";
+import { shareSessionStandingsImages } from "@/lib/sessionShareImageClient";
+import { SessionRecapSavePanel } from "@/components/session/SessionRecapSavePanel";
 import { useSessionStandingsImage } from "@/lib/useSessionStandingsImage";
 import {
   applyCourtLabelUpdates,
@@ -161,6 +162,7 @@ export default function SessionTools() {
     useState<SessionMobileSection>("session");
   const [celebrationRunId, setCelebrationRunId] = useState(0);
   const [sharingResults, setSharingResults] = useState(false);
+  const [saveRecapOpen, setSaveRecapOpen] = useState(false);
 
   const replayWinnerCelebration = useCallback(() => {
     setCelebrationRunId((currentRunId) => currentRunId + 1);
@@ -649,7 +651,7 @@ export default function SessionTools() {
       setError("Results are not ready to share yet");
       return;
     }
-    if (!shareImage.blob) {
+    if (!shareImage.images) {
       if (shareImage.error) shareImage.retry();
       return;
     }
@@ -658,11 +660,12 @@ export default function SessionTools() {
     setError("");
 
     try {
-      await shareSessionStandingsImageBlob({
-        blob: shareImage.blob,
+      const result = await shareSessionStandingsImages({
+        images: shareImage.images,
         fileName: `${sessionData.name}-standings`,
         shareTitle: `${sessionData.name} final standings`,
       });
+      if (result.method === "save-panel") setSaveRecapOpen(true);
     } catch (err) {
       console.error(err);
       if (!(err instanceof DOMException && err.name === "AbortError")) {
@@ -1389,6 +1392,8 @@ export default function SessionTools() {
 
   return (
     <div className="app-page">
+      {saveRecapOpen && shareImage.images && <SessionRecapSavePanel
+        images={shareImage.images} fileName={`${sessionData.name}-standings`} onClose={() => setSaveRecapOpen(false)} />}
       <nav className="app-topbar">
         <div className="app-topbar-inner max-w-7xl">
           <div className="min-w-0 flex items-center gap-3">

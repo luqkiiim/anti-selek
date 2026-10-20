@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ImageResponse } from "next/og";
+import sharp from "sharp";
 import { SessionType } from "@/types/enums";
 import {
   buildSessionShareImageViewModel,
@@ -10,6 +11,20 @@ import {
 } from "./sessionShareImage";
 
 describe("session share image response", () => {
+  it("renders a full continuation page as a portrait PNG", async () => {
+    const viewModel = buildSessionShareImageViewModel({
+      sessionName: "Championship Finals", clubName: "Badminton Usuals", sessionType: SessionType.POINTS,
+      players: Array.from({ length: 29 }, (_, index) => ({
+        userId: `u${index + 1}`, sessionPoints: 50 - index,
+        user: { name: `Player ${index + 1} with a longer name` },
+      })), matches: [],
+    }, 2);
+    const response = new ImageResponse(renderSessionShareImage(viewModel), {
+      width: SESSION_SHARE_IMAGE_WIDTH, height: SESSION_SHARE_IMAGE_HEIGHT, fonts: await getSessionShareImageFonts(),
+    });
+    const bytes = Buffer.from(await response.arrayBuffer());
+    expect(await sharp(bytes).metadata()).toMatchObject({ format: "png", width: 1080, height: 1920 });
+  }, 15_000);
   it("renders the share card JSX into PNG bytes", async () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",

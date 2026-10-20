@@ -4,7 +4,7 @@ export interface FetchSessionStandingsImageOptions {
 }
 
 export interface ShareSessionStandingsImageResult {
-  method: "native-share" | "download";
+  method: "native-share" | "download" | "save-panel";
 }
 
 function slugifyFileName(input: string) {
@@ -16,8 +16,8 @@ function slugifyFileName(input: string) {
   return normalized || "tournament-standings";
 }
 
-function buildDownloadName(fileName: string) {
-  return `${slugifyFileName(fileName)}.png`;
+export function getSessionRecapFileName(fileName: string, index: number, count: number) {
+  return `${slugifyFileName(fileName)}${count > 1 ? `-${index + 1}-of-${count}` : ""}.png`;
 }
 
 async function getShareImageErrorMessage(response: Response) {
@@ -30,17 +30,19 @@ async function getShareImageErrorMessage(response: Response) {
     : "Could not generate standings image.";
 }
 
-export async function fetchSessionStandingsImageBlob({
+async function fetchSessionStandingsImagePage({
   code,
   fetchImpl = fetch,
-}: FetchSessionStandingsImageOptions) {
-  const response = await fetchImpl(
-    `/api/sessions/${encodeURIComponent(code)}/share-image`,
-    {
-      cache: "no-store",
-      credentials: "same-origin",
-    }
-  );
+}: FetchSessionStandingsImageOptions, page = 1) {
+  const url = `/api/sessions/${encodeURIComponent(code)}/share-image${page > 1 ? `?page=${page}` : ""}`;
+  const options: RequestInit = { cache: "no-store", credentials: "same-origin" };
+  let response = await fetchImpl(url, options);
+  if (response.status === 429) {
+    const retryAfter = response.headers.get("Retry-After");
+    const seconds = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) : 60;
+    await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+    response = await fetchImpl(url, options);
+  }
 
   if (!response.ok) {
     throw new Error(await getShareImageErrorMessage(response));
@@ -51,52 +53,87 @@ export async function fetchSessionStandingsImageBlob({
     throw new Error("Could not generate standings image.");
   }
 
-  return response.blob();
+  const pageCount = Number(response.headers.get("X-Recap-Page-Count") ?? "1");
+  if (!Number.isSafeInteger(pageCount) || pageCount < page) {
+    throw new Error("Could not prepare all recap images. Try again.");
+  }
+  return { blob: await response.blob(), pageCount };
+}
+
+export async function fetchSessionStandingsImageBlob(options: FetchSessionStandingsImageOptions) {
+  return (await fetchSessionStandingsImagePage(options)).blob;
+}
+
+export async function fetchSessionStandingsImages(options: FetchSessionStandingsImageOptions): Promise<Blob[]> {
+  const first = await fetchSessionStandingsImagePage(options);
+  const images = [first.blob];
+  // Two renders at a time avoid flooding the image endpoint on larger rosters.
+  for (let page = 2; page <= first.pageCount; page += 2) {
+    const pages = await Promise.all(
+      [page, page + 1].filter(value => value <= first.pageCount)
+        .map(value => fetchSessionStandingsImagePage(options, value)),
+    );
+    for (const result of pages) {
+      if (result.pageCount !== first.pageCount) {
+        throw new Error("Standings changed while preparing the recap. Try again.");
+      }
+      images.push(result.blob);
+    }
+  }
+  return images;
 }
 
 export function downloadSessionStandingsImageBlob(
   blob: Blob,
-  fileName: string
+  fileName: string,
+  index = 0,
+  count = 1,
 ) {
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
 
   link.href = url;
-  link.download = buildDownloadName(fileName);
+  link.download = getSessionRecapFileName(fileName, index, count);
   link.rel = "noopener";
   link.click();
 
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export async function shareSessionStandingsImageBlob({
-  blob,
+export async function shareSessionStandingsImages({
+  images,
   fileName,
   shareTitle,
 }: {
-  blob: Blob;
+  images: readonly Blob[];
   fileName: string;
   shareTitle: string;
 }): Promise<ShareSessionStandingsImageResult> {
-  const file = new File([blob], buildDownloadName(fileName), {
-    type: "image/png",
-  });
+  if (images.length === 0) throw new Error("The recap is not ready to share yet.");
+  const files = images.map((blob, index) => new File(
+    [blob], getSessionRecapFileName(fileName, index, images.length), { type: "image/png" },
+  ));
   const navigatorWithShare = navigator as Navigator & {
     canShare?: (data?: ShareData) => boolean;
   };
 
   if (
     typeof navigatorWithShare.share === "function" &&
-    (!navigatorWithShare.canShare ||
-      navigatorWithShare.canShare({ files: [file] }))
+    (typeof navigatorWithShare.canShare === "function"
+      ? navigatorWithShare.canShare({ files })
+      : files.length === 1)
   ) {
-    await navigatorWithShare.share({
-      files: [file],
-      title: shareTitle,
-    });
-    return { method: "native-share" };
+    try {
+      // Invoke before any await so the browser still has the user's activation.
+      await navigatorWithShare.share({ files, title: shareTitle });
+      return { method: "native-share" };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      return { method: "save-panel" };
+    }
   }
 
-  downloadSessionStandingsImageBlob(blob, fileName);
+  if (images.length > 1) return { method: "save-panel" };
+  downloadSessionStandingsImageBlob(images[0], fileName);
   return { method: "download" };
 }

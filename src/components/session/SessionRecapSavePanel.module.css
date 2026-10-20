@@ -1,0 +1,9 @@
+.frame { width: 100%; max-width: 680px; color: #351859; }
+.pages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 20px; }
+.page { display: flex; min-width: 0; flex-direction: column; gap: 10px; margin: 0; }
+.page figcaption { color: #806e8d; font-size: 14px; font-weight: 700; }
+.preview { display: block; width: 100%; height: auto; border: 1px solid #eee5ef; border-radius: 12px; background: #fffdf9; }
+.saveButton, .downloadAll { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 12px; border: 1px solid #dfd1eb; border-radius: 12px; background: #fffdf9; color: #7040bc; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.downloadAll { width: 100%; border-color: #7040bc; background: #7040bc; color: white; }
+.saveButton:focus-visible, .downloadAll:focus-visible { outline: 3px solid #c9b1ed; outline-offset: 2px; }
+@media (max-width: 479px) { .pages { grid-template-columns: minmax(0, 1fr); padding: 16px; } }

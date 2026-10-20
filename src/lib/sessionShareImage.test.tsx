@@ -27,15 +27,15 @@ describe("session share image", () => {
     const fiveRows = getSessionShareImageRowSizing(5);
     const sixRows = getSessionShareImageRowSizing(6);
     const elevenRows = getSessionShareImageRowSizing(11);
-    const elevenRowsWithOverflow = getSessionShareImageRowSizing(11, true);
+    const continuation = getSessionShareImageRowSizing(14, true);
 
     expect(fiveRows).toEqual(sixRows);
     expect(sixRows.rowHeight).toBeGreaterThan(elevenRows.rowHeight);
     expect(sixRows.avatarSize).toBeGreaterThan(elevenRows.avatarSize);
     expect(sixRows.avatarSize).toBe(136);
     expect(elevenRows.avatarSize).toBe(78);
-    expect(elevenRowsWithOverflow.rowHeight).toBeLessThan(elevenRows.rowHeight);
-    expect(elevenRowsWithOverflow.rowHeight * 11 + 30).toBeLessThanOrEqual(1044);
+    expect(continuation.avatarSize).toBeGreaterThanOrEqual(78);
+    expect(continuation.rowHeight * 14).toBeLessThanOrEqual(1484);
   });
 
   it("renders top 14 with podium ranks 1-3 and rows 4-14 only", () => {
@@ -49,9 +49,10 @@ describe("session share image", () => {
     const markup = renderToStaticMarkup(renderSessionShareImage(viewModel));
 
     expect(viewModel.standings).toHaveLength(14);
-    expect(viewModel.omittedPlayerCount).toBe(1);
+    expect(viewModel.pageCount).toBe(2);
     expect(markup).toContain("Weekend Cup");
-    expect(markup).toContain("1 more player not shown");
+    expect(markup).toContain("1 of 2");
+    expect(markup).not.toContain("not shown");
     expect(markup).toContain("Player");
     expect(markup).toContain("Pts");
     expect(markup).toContain("Diff");
@@ -63,6 +64,21 @@ describe("session share image", () => {
     expect(markup.match(/P01/g) ?? []).toHaveLength(1);
     expect(markup.match(/P02/g) ?? []).toHaveLength(1);
     expect(markup.match(/P03/g) ?? []).toHaveLength(1);
+  });
+
+  it.each([14, 15, 28, 29])("includes all %i players once across ordered recap pages", (count) => {
+    const input = { sessionName: "Cup", clubName: "Club", sessionType: SessionType.POINTS, players: createPlayers(count).reverse(), matches: [] };
+    const first = buildSessionShareImageViewModel(input);
+    const pages = Array.from({ length: first.pageCount }, (_, index) => buildSessionShareImageViewModel(input, index + 1));
+    const standings = pages.flatMap(page => page.standings);
+    expect(standings.map(row => row.userId)).toEqual(createPlayers(count).map(player => player.userId));
+    expect(standings.map(row => row.rank)).toEqual(Array.from({ length: count }, (_, index) => index + 1));
+    for (const page of pages.slice(1)) {
+      const markup = renderToStaticMarkup(renderSessionShareImage(page));
+      expect(markup).toContain(`${page.page} of ${page.pageCount}`);
+      expect(markup).not.toContain("P01");
+      expect(markup).toContain(page.standings.at(-1)!.name);
+    }
   });
 
   it("keeps a truthful empty state and centers a single podium winner", () => {
