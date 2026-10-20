@@ -67,8 +67,9 @@ export class ClubReadStore {
     if (entry.users++ === 0) {
       const handoff = entry.handoff;
       entry.handoff = false;
-      if (resuming && entry.pausedValidation) this.publish(entry, { ...entry.state, validated: true });
-      const expiredHandoff = handoff && !entry.pending && !entry.state.data && !entry.state.error;
+      if (resuming && entry.pausedValidation && entry.state.data) this.publish(entry, { ...entry.state, validated: true });
+      // A route can resume before cleanup after entry() has expired its data.
+      const expiredHandoff = (handoff || resuming) && !entry.pending && !entry.state.data && !entry.state.error;
       if ((!handoff && !resuming) || expiredHandoff) void this.read(url).catch(() => {});
     }
     return () => {

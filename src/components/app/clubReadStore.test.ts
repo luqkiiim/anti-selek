@@ -89,6 +89,43 @@ describe("shared club reads", () => {
     expect(store.identity(identity.id)?.name).toBe("Renamed");
     again(); other();
   });
+  it.each([CLUB_CACHE_MS - 1, CLUB_CACHE_MS, CLUB_CACHE_MS + 1])("resumes a route handoff after %i ms without losing the club read", async age => {
+    const release = store.retain(url); await store.read(url);
+    // Time passes while browsing profiles, with the club still mounted.
+    vi.setSystemTime(Date.now() + age);
+    release();
+    store.get(url); // The destination renders before its retain effect runs.
+    const pending = deferred(); vi.mocked(fetch).mockReturnValue(pending.promise);
+    const again = store.retain(url);
+    if (age < CLUB_CACHE_MS) {
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(store.get(url)).toMatchObject({ data: snapshot, validated: true, loading: false });
+    } else {
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(store.get(url)).toMatchObject({ data: null, validated: false, loading: true });
+      const other = store.retain(url);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(fetch).mock.calls[1][1]?.signal?.aborted).toBe(false);
+      pending.resolve(response(snapshot)); await store.read(url);
+      expect(store.get(url)).toMatchObject({ data: snapshot, validated: true, loading: false });
+      other();
+    }
+    again();
+  });
+  it("shows a recoverable timeout if an expired route handoff cannot reload", async () => {
+    const release = store.retain(url); await store.read(url);
+    vi.setSystemTime(Date.now() + CLUB_CACHE_MS);
+    release();
+    vi.mocked(fetch).mockReturnValue(deferred().promise);
+    const again = store.retain(url);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(store.get(url)).toMatchObject({ data: null, validated: false, loading: false, error: "Request timed out." });
+    vi.mocked(fetch).mockResolvedValue(response(snapshot));
+    await store.refresh(url);
+    expect(store.get(url)).toMatchObject({ data: snapshot, validated: true, loading: false, error: "" });
+    again();
+  });
   it("drops expired content while keeping the remembered header", async () => {
     const release = store.retain(url); await store.read(url); release();
     await vi.advanceTimersByTimeAsync(CLUB_CACHE_MS + 1);

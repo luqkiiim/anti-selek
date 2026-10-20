@@ -3,6 +3,7 @@ import { act, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ClubDataProvider, useClubDataStore, useClubIdentity, useClubResource } from "./ClubDataProvider";
+import { CLUB_CACHE_MS } from "./clubReadStore";
 const session = vi.hoisted(() => ({ status: "authenticated", data: { user: { id: "account", isQuickAccess: false, guestPlayerId: null as string | null, quickAccessClubId: null as string | null } } }));
 vi.mock("next-auth/react", () => ({ useSession: () => session }));
 const url = "/api/clubs/riverside";
@@ -31,6 +32,27 @@ it("shares selection, Strict Mode mounts, and simultaneous statistics consumers"
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url) === "/api/clubs/riverside")).toHaveLength(1);
   expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("stats"))).toHaveLength(1);
   expect(container.querySelector("output")?.textContent).toBe("Riverside");
+});
+it("reloads expired club data when the destination page remounts in the same commit", async () => {
+  vi.useFakeTimers();
+  try {
+    await act(async () => root.render(<ClubDataProvider><Reader key="club" /></ClubDataProvider>));
+    expect(container.querySelector("output")?.textContent).toBe("Riverside");
+    vi.setSystemTime(Date.now() + CLUB_CACHE_MS + 1);
+    let resolve!: (response: Response) => void;
+    vi.mocked(fetch).mockReturnValue(new Promise(accept => { resolve = accept; }));
+    await act(async () => root.render(<ClubDataProvider><Reader key="manage-club" /></ClubDataProvider>));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("button")?.disabled).toBe(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+      resolve(new Response(JSON.stringify({ club: { id: "riverside", name: "Refreshed club" } })));
+    });
+    expect(container.querySelector("output")?.textContent).toBe("Refreshed club");
+    expect(container.querySelector("button")?.disabled).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 it("preserves an open draft during session refresh and clears content on account change", async () => {
   await act(async () => root.render(<ClubDataProvider><Reader /></ClubDataProvider>));
