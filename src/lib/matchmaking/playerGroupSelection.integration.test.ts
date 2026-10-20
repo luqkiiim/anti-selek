@@ -364,9 +364,21 @@ describe("grouped no-catch-up crossover selection", () => {
       const next = selectSingleCourtMatch({ ...input, rankedCandidates: nextCandidates, reshuffleSource: null });
       expect(new Set(next.ids)).toEqual(new Set(["A1", "A2", "B1", "B2"]));
       expect(next.courtGroupType).toBe(CourtGroupType.CROSSOVER);
+    } else if (type === SessionType.RACE && path === "single") {
+      // Level has no personal crossover-debt or variety objective. The returning
+      // player is eligible in the same neutral band, without visible-count catch-up.
+      expect(selection.ids).toContain("B1");
+      expect(selection.ids).toContain("B2");
+      expect(selection.ids.map((id) => rankedCandidates.find((player) => player.userId === id)?.effectiveMatchCount))
+        .toEqual([9, 9, 9, 9]);
+      returningPlayer.matchesPlayed += 1;
+      const nextCandidates = getRankedCandidates(sessionData, new Set()).rankedCandidates;
+      const next = selectSingleCourtMatch({ ...input, rankedCandidates: nextCandidates, reshuffleSource: null });
+      expect(new Set(next.ids)).toEqual(new Set(["A1", "A2", "B1", "B2"]));
+      expect(next.courtGroupType).toBe(CourtGroupType.CROSSOVER);
     } else {
-      // Ladder/Race retain personal participation rules. Every format keeps
-      // the neutral credit baseline ahead of lower visible match counts.
+      // Legacy Ladder keeps its participation ordering; every format keeps
+      // neutral credit ahead of a returning player's lower visible count.
       expect(new Set(selection.ids)).toEqual(new Set(["A1", "A2", "B1", "B2"]));
     }
   });

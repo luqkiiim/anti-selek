@@ -1,3 +1,5 @@
+import type { LevelSelectionContext, LevelSelectionDiagnostics } from "./levelPolicy";
+
 export interface LadderRecord {
   wins: number;
   losses: number;
@@ -133,9 +135,14 @@ export interface LadderSingleCourtSelection<
   pointDiffGap: number;
   strengthGap: number;
   randomScore: number;
+  levelContext?: LevelSelectionContext;
+  levelDiagnostics?: LevelSelectionDiagnostics;
 }
 
 export interface LadderSingleCourtDebug {
+  searchLimitReached?: boolean;
+  baselineCertified?: boolean;
+  levelDiagnostics?: LevelSelectionDiagnostics;
   eligiblePlayerIds: string[];
   lowestBand: number | null;
   includedBandValues: number[];
@@ -175,6 +182,9 @@ export interface LadderBatchSelection<
 }
 
 export interface LadderBatchDebug {
+  searchLimitReached?: boolean;
+  baselineCertified?: boolean;
+  levelDiagnostics?: LevelSelectionDiagnostics;
   eligiblePlayerIds: string[];
   lowestBand: number | null;
   includedBandValues: number[];

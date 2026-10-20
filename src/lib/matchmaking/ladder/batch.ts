@@ -3,6 +3,8 @@ import { sortArrivalPriorityPlayers } from "../arrivalPriority";
 import { findBestBalancedPartition } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
 import { buildLadderGroupingSummary } from "./ladderGrouping";
+import { findBestLevelBatchSelection } from "./levelSelection";
+import type { LevelPolicy } from "./levelPolicy";
 import {
   buildRestSummary,
   compareBatchSelections,
@@ -511,13 +513,18 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
     sessionMode,
     respectPlayerRest = true,
     randomFn = Math.random,
+    levelPolicy,
   }: {
     courtCount: number;
     sessionMode: SessionMode;
     respectPlayerRest?: boolean;
     randomFn?: () => number;
+    levelPolicy?: LevelPolicy;
   }
 ): LadderBatchResult<ActiveMatchmakerLadderPlayer<T>> {
+  if (levelPolicy) {
+    return findBestLevelBatchSelection(players, { courtCount, sessionMode, respectPlayerRest, randomFn, levelPolicy });
+  }
   const requiredPlayerCount = courtCount * 4;
   const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount,

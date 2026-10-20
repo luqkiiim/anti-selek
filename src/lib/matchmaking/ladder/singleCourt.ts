@@ -4,6 +4,8 @@ import { sortArrivalPriorityPlayers } from "../arrivalPriority";
 import { evaluateBalancedPartitions } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
 import { buildLadderGroupingSummary } from "./ladderGrouping";
+import { findBestLevelBatchSelection } from "./levelSelection";
+import type { LevelPolicy, LevelSelectionContext } from "./levelPolicy";
 import {
   buildRestSummary,
   compareSingleCourtSelections,
@@ -160,6 +162,8 @@ export function findBestSingleCourtSelectionLadder<
     randomFn = Math.random,
     candidatePoolVariants,
     selectionConstraints,
+    levelPolicy,
+    selectionContext,
   }: {
     sessionMode: SessionMode;
     excludedQuartetKey?: string;
@@ -175,8 +179,35 @@ export function findBestSingleCourtSelectionLadder<
     selectionConstraints?: LadderSelectionConstraints<
       ActiveMatchmakerLadderPlayer<T>
     >;
+    levelPolicy?: LevelPolicy;
+    selectionContext?: LevelSelectionContext;
   }
 ): LadderSingleCourtResult<ActiveMatchmakerLadderPlayer<T>> {
+  if (levelPolicy) {
+    const excluded = new Set(excludedQuartetKeys);
+    if (excludedQuartetKey) excluded.add(excludedQuartetKey);
+    const result = findBestLevelBatchSelection(players, {
+      courtCount: 1, sessionMode, respectPlayerRest, randomFn, levelPolicy,
+      selectionContext, excludedQuartetKeys: excluded, excludedPartitionKey,
+      selectionConstraints: {
+        ...selectionConstraints,
+        isQuartetAllowed: (quartet) =>
+          (!targetPool || quartet.filter((player) => player.pool === targetPool).length >= (minimumTargetPoolPlayers ?? 1)) &&
+          (!selectionConstraints?.isQuartetAllowed || selectionConstraints.isQuartetAllowed(quartet)),
+      },
+    });
+    const chosen = result.selection?.selections[0] ?? null;
+    return {
+      selection: chosen,
+      debug: {
+        ...result.debug,
+        validPartitionCount: result.debug.validQuartetCount,
+        chosenIds: chosen?.ids ?? null,
+        chosenGrouping: chosen?.groupingSummary ?? null,
+        chosenBalanceGap: chosen?.balanceGap ?? null,
+      },
+    };
+  }
   const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount: 4,
     randomFn,

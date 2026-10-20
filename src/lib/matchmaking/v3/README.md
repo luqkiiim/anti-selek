@@ -10,6 +10,11 @@ remains the production fallback and rollback matcher. The API adapters cover
 single courts, global batches, player groups, Interclub, reshuffles and player
 replacement. Level Match uses the separate ladder matcher.
 
+Current Level Match (`RACE`) uses `ladder/levelSelection.ts` with the selected
+Rating or Session points metric, a fixed team-balance envelope, then player-level
+similarity. It has no variety or repeat objective. Legacy `LADDER` retains its
+old selection policy. See the [Level Match plan and implementation notes](../../../../docs/level-match-plan.md).
+
 ## Shared stronger priorities
 
 Legality, busy/paused availability, mandatory retained players and hard format

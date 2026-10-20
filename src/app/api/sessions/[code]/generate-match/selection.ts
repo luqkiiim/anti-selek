@@ -14,6 +14,7 @@ import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
   getEffectiveSessionMode,
   getEffectiveSessionType,
+  getSessionSettings,
 } from "@/lib/sessionSettings";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { getEffectiveMixedSide } from "@/lib/mixedSide";
@@ -45,7 +46,14 @@ import {
   findBestBatchSelectionLadder,
   findBestSingleCourtSelectionLadder,
   type MatchmakerLadderPlayer,
+  type ActiveMatchmakerLadderPlayer,
+  type LadderSelectionConstraints,
 } from "@/lib/matchmaking/ladder";
+import { findBestLevelBatchSelection } from "@/lib/matchmaking/ladder/levelSelection";
+import type {
+  LevelSelectionContext,
+  LevelSelectionDiagnostics,
+} from "@/lib/matchmaking/ladder/levelPolicy";
 import {
   buildRotationHistory,
   type PartitionCandidate,
@@ -96,6 +104,7 @@ import {
   CourtGroupType,
   MixedSide,
   MatchStatus,
+  SessionBalanceMetric,
   SessionMode,
   SessionPool,
   SessionType,
@@ -147,6 +156,8 @@ interface PoolAwareSelection extends CourtGroupSnapshot {
   matchmakingReasonJson?: string | null;
   socialPolicyDecision?: SocialCandidateDecision;
   balancedPolicyDecision?: BalancedCandidateDecision;
+  levelContext?: LevelSelectionContext;
+  levelDiagnostics?: LevelSelectionDiagnostics;
 }
 
 type MatchSelectionBase = {
@@ -164,6 +175,8 @@ type MatchSelectionBase = {
   matchmakingReasonJson?: string | null;
   socialPolicyDecision?: SocialCandidateDecision;
   balancedPolicyDecision?: BalancedCandidateDecision;
+  levelContext?: LevelSelectionContext;
+  levelDiagnostics?: LevelSelectionDiagnostics;
 };
 
 const MAX_POOL_SELECTION_OPTIONS_PER_PLAN = 64;
@@ -226,6 +239,23 @@ function withMatchmakingReason<
         poolASeatCount: null,
         poolBSeatCount: null,
       };
+
+  if (selection.levelDiagnostics) {
+    return withBalancedCandidateDecision(withSocialCandidateDecision({
+      ...selection,
+      ...groupSnapshot,
+      matchmakingReasonJson: JSON.stringify({
+        version: 1,
+        source: "level",
+        sessionType: getMatchmakerSessionType(sessionData),
+        sessionMode: getMatchmakerSessionMode(sessionData),
+        selectedUserIds: selection.ids,
+        team1UserIds: selection.partition.team1,
+        team2UserIds: selection.partition.team2,
+        ...selection.levelDiagnostics,
+      }),
+    }, selection.socialPolicyDecision), selection.balancedPolicyDecision);
+  }
 
   if (!isV3Selection(selection)) {
     return withBalancedCandidateDecision(withSocialCandidateDecision({
@@ -401,21 +431,29 @@ function withNoPlayerGroupSnapshot<TSelection>(selection: TSelection) {
 
 function getPlayerBalanceInput({
   sessionType,
+  balanceMetric,
   sessionPoints,
   clubElo,
   userElo,
 }: {
   sessionType: SessionType;
+  balanceMetric: SessionBalanceMetric;
   sessionPoints: number;
   clubElo?: number;
   userElo: number;
 }) {
+  if (
+    sessionType === SessionType.ELO ||
+    (sessionType === SessionType.RACE &&
+      balanceMetric === SessionBalanceMetric.RATING)
+  ) {
+    return clubElo ?? userElo;
+  }
+
   switch (sessionType) {
     case SessionType.POINTS:
     case SessionType.SOCIAL_MIX:
       return sessionPoints;
-    case SessionType.ELO:
-      return clubElo ?? userElo;
     case SessionType.LADDER:
     case SessionType.RACE:
       return 0;
@@ -424,7 +462,10 @@ function getPlayerBalanceInput({
   }
 }
 
-function buildCompletedMatches(sessionData: GenerateMatchSession) {
+function buildCompletedMatches(
+  sessionData: GenerateMatchSession,
+  options?: { includeResultDetails?: boolean }
+) {
   return sessionData.matches
     .filter((match) => match.status === MatchStatus.COMPLETED)
     .map((match) => ({
@@ -434,6 +475,11 @@ function buildCompletedMatches(sessionData: GenerateMatchSession) {
       team2Score: match.team2Score,
       status: match.status,
       completedAt: match.completedAt ?? null,
+      ...(options?.includeResultDetails ? {
+        winnerTeam: match.winnerTeam,
+        scoringFormat: match.scoringFormat,
+        gameScoresJson: match.gameScoresJson,
+      } : {}),
     }));
 }
 
@@ -599,7 +645,9 @@ function buildLadderPlayers(
   const availableUserIds = new Set(
     rankedCandidates.map((candidate) => candidate.userId)
   );
-  const completedMatches = buildCompletedMatches(sessionData);
+  const completedMatches = buildCompletedMatches(sessionData, {
+    includeResultDetails: getMatchmakerSessionType(sessionData) === SessionType.RACE,
+  });
   const restTurnsByUserId = buildRestTurnsByUserId(
     sessionData.players,
     completedMatches
@@ -620,6 +668,10 @@ function buildLadderPlayers(
           ladderEntryAtByUserId,
           completedMatches
         );
+  const useRaceRecordAsStrength =
+    getMatchmakerSessionType(sessionData) === SessionType.RACE &&
+    getSessionSettings(sessionData).balanceMetric ===
+      SessionBalanceMetric.SESSION_POINTS;
 
   return sessionData.players.map((player) => {
     const record = ladderRecordByUserId.get(player.userId) ?? {
@@ -637,7 +689,9 @@ function buildLadderPlayers(
       availableSince: player.availableSince,
       restTurns: restTurnsByUserId.get(player.userId) ?? 0,
       arrivalPriorityAt: player.arrivalPriorityAt ?? null,
-      strength: playersById.get(player.userId)?.elo ?? 0,
+      strength: useRaceRecordAsStrength
+        ? record.ladderScore
+        : playersById.get(player.userId)?.elo ?? 0,
       wins: record.wins,
       losses: record.losses,
       pointDiff: record.pointDiff,
@@ -657,6 +711,12 @@ export async function buildMatchmakingState(
   sessionData: GenerateMatchSession,
   options?: { reserveQueuedPlayers?: boolean }
 ): Promise<MatchmakingState> {
+  const sessionType = getMatchmakerSessionType(sessionData);
+  const balanceMetric = getSessionSettings(sessionData).balanceMetric;
+  const usesRatingInput =
+    sessionType === SessionType.ELO ||
+    (sessionType === SessionType.RACE &&
+      balanceMetric === SessionBalanceMetric.RATING);
   const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
   if (options?.reserveQueuedPlayers !== false) {
     for (const userId of getQueuedMatchUserIds(sessionData.queuedMatch)) {
@@ -664,7 +724,7 @@ export async function buildMatchmakingState(
     }
   }
   const sessionClubIds =
-    getMatchmakerSessionType(sessionData) === SessionType.ELO &&
+    usesRatingInput &&
     sessionData.clubId &&
     sessionData.players.length > 0
       ? await getAcceptedSessionClubIds(prisma, sessionData)
@@ -720,7 +780,7 @@ export async function buildMatchmakingState(
     }
   }
 
-  const guestRatings = getMatchmakerSessionType(sessionData) === SessionType.ELO
+  const guestRatings = usesRatingInput
     ? await getGuestRatingsByUserId(prisma, sessionData.players
       .filter(player => player.isGuest)
       .map(player => ({ userId: player.userId, startingRating: player.user.elo })))
@@ -732,15 +792,16 @@ export async function buildMatchmakingState(
       {
         userId: player.userId,
         elo: getPlayerBalanceInput({
-          sessionType: getMatchmakerSessionType(sessionData),
+          sessionType,
+          balanceMetric,
           sessionPoints: player.sessionPoints,
-        clubElo:
-          guestRatings.get(player.userId) ??
-          legacyClubEloByUserId.get(player.userId) ??
-          communityBadgesByUserId
-            .get(player.userId)
-            ?.find((badge) => badge.id === sessionData.clubId)?.elo ??
-          communityBadgesByUserId.get(player.userId)?.[0]?.elo,
+          clubElo:
+            guestRatings.get(player.userId) ??
+            legacyClubEloByUserId.get(player.userId) ??
+            communityBadgesByUserId
+              .get(player.userId)
+              ?.find((badge) => badge.id === sessionData.clubId)?.elo ??
+            communityBadgesByUserId.get(player.userId)?.[0]?.elo,
           userElo: player.user.elo,
         }),
         pointDiff: pointDiffByUserId.get(player.userId) ?? 0,
@@ -991,7 +1052,7 @@ function getV3BatchFailureMessage({
   }
 }
 
-function applyReshuffleExclusions<TSelection extends PoolAwareSelection>(
+function applyReshuffleExclusions<TSelection extends MatchSelectionBase>(
   selection: TSelection | null,
   reshuffleSource: ReshuffleSource | null,
   rerun: (options: {
@@ -1085,6 +1146,164 @@ function getSelectionSnapshot(
     new Map(
       sessionData.players.map((player) => [player.userId, player.pool])
     )
+  );
+}
+
+function getLevelSearchLimitError() {
+  return new GenerateMatchError(
+    400,
+    "Match search reached its time limit before establishing a fair batch. Try again."
+  );
+}
+
+/** Level evaluates complete schedules together, before any court is committed. */
+function selectLevelBatch({
+  rankedCandidates,
+  playersById,
+  sessionData,
+  requestedMatchCount,
+  requiredCourtGroupType,
+  randomFn,
+  lockedPlayerIds,
+  excludedQuartetKeys,
+  excludedPartitionKey,
+  selectionContext,
+  searchBudget,
+}: {
+  rankedCandidates: RankedCandidates;
+  playersById: Map<string, PartitionCandidate>;
+  sessionData: GenerateMatchSession;
+  requestedMatchCount: number;
+  requiredCourtGroupType?: CourtGroupType | string | null;
+  randomFn?: () => number;
+  lockedPlayerIds?: ReadonlySet<string>;
+  excludedQuartetKeys?: ReadonlySet<string>;
+  excludedPartitionKey?: string;
+  selectionContext?: LevelSelectionContext;
+  searchBudget?: MatchmakingSearchBudget;
+}) {
+  checkMatchmakingSearchBudget(searchBudget);
+  const players = buildLadderPlayers(sessionData, playersById, rankedCandidates);
+  const activeCounts = getPoolActiveCounts(sessionData);
+  const activePlayerCount = activeCounts[SessionPool.A] + activeCounts[SessionPool.B];
+  const competitiveTargetRatio = activePlayerCount > 0
+    ? activeCounts[SessionPool.A] / activePlayerCount
+    : 0.5;
+  const normalizedRequiredCourtGroupType = getNormalizedCourtGroupType(requiredCourtGroupType);
+  const waitingCounts = getPoolWaitingCounts(sessionData, rankedCandidates);
+  const plans = sessionData.poolsEnabled
+    ? buildPlayerGroupCourtPlans({
+        requestedCourtCount: requestedMatchCount,
+        activePoolAPlayerCount: activeCounts[SessionPool.A],
+        activePoolBPlayerCount: activeCounts[SessionPool.B],
+        waitingPoolAPlayerCount: waitingCounts[SessionPool.A],
+        waitingPoolBPlayerCount: waitingCounts[SessionPool.B],
+        history: getPlayerGroupHistory(sessionData),
+        crossoverFrequency: sessionData.crossoverFrequency,
+      }).filter((plan) => !normalizedRequiredCourtGroupType ||
+        plan.compositions.every((composition) => composition.courtGroupType === normalizedRequiredCourtGroupType))
+    : [];
+  const courtCounts = sessionData.poolsEnabled
+    ? [...new Set(plans.map((plan) => plan.filledCourtCount))]
+    : [requestedMatchCount];
+  // Reuse identical constraint objects so interchangeable courts remain symmetric.
+  const constraintsByComposition = new Map<string, LadderSelectionConstraints<ActiveMatchmakerLadderPlayer>>();
+  const constraintsFor = (composition: PlayerGroupCourtComposition) => {
+    const key = `${composition.courtGroupType}:${composition.poolASeatCount}`;
+    let constraints = constraintsByComposition.get(key);
+    if (!constraints) {
+      constraints = getPlayerGroupSelectionConstraints<ActiveMatchmakerLadderPlayer>(composition);
+      constraintsByComposition.set(key, constraints);
+    }
+    return constraints;
+  };
+
+  for (const courtCount of courtCounts) {
+    const sizedPlans = plans.filter((plan) => plan.filledCourtCount === courtCount);
+    let rank = 0;
+    let previousPriority: number[] | null = null;
+    const schedules = sessionData.poolsEnabled
+      ? sizedPlans.map((plan) => {
+          const priority = [plan.overflowCourtCount, plan.crossoverShortfall, plan.crossoverExcess, plan.ratioError];
+          if (previousPriority && priority.some((value, index) => Math.abs(value - previousPriority![index]) > Number.EPSILON)) {
+            rank += 1;
+          }
+          previousPriority = priority;
+          return {
+            rank,
+            // Keep the configured planner cadence; court history adds no Level preference.
+            courts: plan.compositions.map(constraintsFor),
+          };
+        })
+      : undefined;
+    const result = findBestLevelBatchSelection(players, {
+      courtCount,
+      sessionMode: getMatchmakerSessionMode(sessionData),
+      levelPolicy: { metric: getSessionSettings(sessionData).balanceMetric },
+      respectPlayerRest: sessionData.respectPlayerRest,
+      randomFn,
+      schedules,
+      lockedPlayerIds,
+      excludedQuartetKeys,
+      excludedPartitionKey,
+      selectionContext,
+      searchBudget,
+    });
+    if (!result.selection) {
+      if (result.debug.searchLimitReached) throw getLevelSearchLimitError();
+      continue;
+    }
+
+    const plan = result.scheduleIndex === null ? undefined : sizedPlans[result.scheduleIndex];
+    return {
+      ...result.selection,
+      selections: result.selection.selections.map((selection, index) => {
+        const composition = plan?.compositions[index];
+        const snapshot = sessionData.poolsEnabled
+          ? getSelectionSnapshot(sessionData, selection.partition)
+          : { courtGroupType: null, poolASeatCount: null, poolBSeatCount: null };
+        return withMatchmakingReason({
+          ...selection,
+          ...snapshot,
+          targetPool: composition ? getCompositionTargetPool(composition) : null,
+          missedPool: null,
+          competitiveTargetRatio,
+        }, sessionData);
+      }),
+      poolSchedulingState: sessionData,
+      competitiveTargetRatio,
+    };
+  }
+  return null;
+}
+
+function selectLevelSingleCourtMatch({
+  reshuffleSource,
+  ...options
+}: Parameters<typeof selectLevelBatch>[0] & { reshuffleSource: ReshuffleSource | null }) {
+  const initialSelection = selectLevelBatch(options)?.selections[0] ?? null;
+  if (initialSelection) {
+    // Exclusions request an alternative inside the original fairness and balance
+    // envelope. They must never establish a weaker balance baseline.
+    const selection = applyReshuffleExclusions(initialSelection, reshuffleSource,
+      ({ excludedQuartetKey, excludedPartitionKey }) => selectLevelBatch({
+        ...options,
+        excludedQuartetKeys: excludedQuartetKey ? new Set([excludedQuartetKey]) : undefined,
+        excludedPartitionKey,
+        selectionContext: initialSelection.levelContext,
+      })?.selections[0] ?? null);
+    if (selection) return selection;
+  }
+
+  if (reshuffleSource || getNormalizedCourtGroupType(options.requiredCourtGroupType)) {
+    throw new GenerateMatchError(
+      409,
+      "No alternative reshuffle preserving this court type was available. Undo this match if you want the same players returned to the pool."
+    );
+  }
+  throw new GenerateMatchError(
+    400,
+    `No valid pairing found for current ${getSessionModeLabel(getMatchmakerSessionMode(options.sessionData))} session rules. Try changing player preferences.`
   );
 }
 
@@ -2081,6 +2300,18 @@ export function selectSingleCourtMatch({
     );
   }
 
+  if (getMatchmakerSessionType(sessionData) === SessionType.RACE) {
+    return selectLevelSingleCourtMatch({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      requestedMatchCount: 1,
+      reshuffleSource,
+      requiredCourtGroupType,
+      searchBudget,
+    });
+  }
+
   if (sessionData.poolsEnabled) {
     return selectPoolEnabledSingleCourtMatch({
       rankedCandidates,
@@ -2418,6 +2649,7 @@ export function selectReplacementMatch({
   excludedUserIds = [],
   requiredCourtGroupType,
   socialPriorityPolicy,
+  searchBudget,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2427,7 +2659,9 @@ export function selectReplacementMatch({
   requiredCourtGroupType?: CourtGroupType | string | null;
   /** Session type is authoritative; this only permits internal policy overrides. */
   socialPriorityPolicy?: SocialCandidatePolicy;
+  searchBudget?: MatchmakingSearchBudget;
 }) {
+  checkMatchmakingSearchBudget(searchBudget);
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
@@ -2457,6 +2691,26 @@ export function selectReplacementMatch({
   }
 
   const excludedUserIdSet = new Set(excludedUserIds);
+
+  if (getMatchmakerSessionType(sessionData) === SessionType.RACE) {
+    const eligibleCandidates = rankedCandidates.filter((candidate) =>
+      retainedUserIdSet.has(candidate.userId) || !excludedUserIdSet.has(candidate.userId)
+    );
+    if (!retainedUserIds.every((id) => eligibleCandidates.some((player) => player.userId === id))) {
+      throw new GenerateMatchError(409, "The retained players are no longer available for this match.");
+    }
+    const selection = selectLevelBatch({
+      rankedCandidates: eligibleCandidates,
+      playersById,
+      sessionData,
+      requestedMatchCount: 1,
+      requiredCourtGroupType,
+      lockedPlayerIds: retainedUserIdSet,
+      searchBudget,
+    })?.selections[0];
+    if (selection) return selection;
+    throw new GenerateMatchError(409, "No eligible replacement player was available for this match.");
+  }
 
   if (usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) {
     const eligibleCandidates = rankedCandidates.filter((candidate) =>
@@ -2686,6 +2940,7 @@ export function selectReplacementMatchRespectingSkips({
   excludedUserIds = [],
   requiredCourtGroupType,
   socialPriorityPolicy,
+  searchBudget,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
@@ -2694,6 +2949,7 @@ export function selectReplacementMatchRespectingSkips({
   excludedUserIds?: string[];
   requiredCourtGroupType?: CourtGroupType | string | null;
   socialPriorityPolicy?: SocialCandidatePolicy;
+  searchBudget?: MatchmakingSearchBudget;
 }) {
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
@@ -2715,6 +2971,7 @@ export function selectReplacementMatchRespectingSkips({
         excludedUserIds: [...excludedUserIds, ...excludedSkipUserIds],
         requiredCourtGroupType,
         socialPriorityPolicy: resolvedSocialPriorityPolicy,
+        searchBudget,
       });
     } catch (error) {
       if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
@@ -2949,6 +3206,22 @@ export function selectBatchMatches({
       ...result,
       selections: result.selections.map(withNoPlayerGroupSnapshot),
     };
+  }
+
+  if (getMatchmakerSessionType(sessionData) === SessionType.RACE) {
+    const result = selectLevelBatch({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      requestedMatchCount,
+      randomFn,
+      searchBudget,
+    });
+    if (result) return result;
+    throw new GenerateMatchError(
+      400,
+      `No valid set of matches found for current ${getSessionModeLabel(getMatchmakerSessionMode(sessionData))} session rules. Try changing player preferences.`
+    );
   }
 
   if (sessionData.poolsEnabled) {

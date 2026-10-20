@@ -19,6 +19,8 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
   SessionMode,
   SessionPool,
   SessionStatus,
@@ -996,6 +998,72 @@ describe("Balanced default through production POST routes", () => {
 
     expect(candidateSpy).not.toHaveBeenCalled();
   });
+
+  it.each([SessionBalanceMetric.RATING, SessionBalanceMetric.SESSION_POINTS])(
+    "persists Level %s decisions across refill, queue rebuild, reshuffle, replacement and consumption",
+    async (metric) => {
+      const fixture = await createFixture({
+        prefix: `level-queue-${metric.toLowerCase()}-${randomUUID().slice(0, 8)}`,
+        type: SessionType.RACE,
+        playerCount: 16,
+        courtCount: 2,
+      });
+      await prisma.session.update({
+        where: { id: fixture.sessionId },
+        data: { matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH, balanceMetric: metric },
+      });
+      const busy = await createCurrentMatch(fixture);
+      const response = await postGenerateMatch(fixture.code, { courtId: fixture.courtIds[1] });
+      const payload = await response.json() as { id: string };
+      expect(response.status).toBe(200);
+      const refill = await prisma.match.findUniqueOrThrow({ where: { id: payload.id } });
+      const expectLevelReason = (reasonJson: string | null) => {
+        const reason = JSON.parse(reasonJson ?? "{}");
+        expect(reason).toMatchObject({ source: "level", metric, baselineCertified: true });
+        expect(reason.balanceGap).toBeLessThanOrEqual(reason.allowedBalanceGap);
+        expect(reason.balancedPolicyDecision).toBeUndefined();
+        return reason;
+      };
+      expectLevelReason(refill.matchmakingReasonJson);
+      let queued = await prisma.queuedMatch.findUniqueOrThrow({ where: { sessionId: fixture.sessionId } });
+      expect(queued.isAutomatic).toBe(true);
+      expectLevelReason(queued.matchmakingReasonJson);
+
+      const beforeRetain = selectedIds(queued);
+      await rebuildQueuedMatch(fixture.sessionId);
+      queued = await prisma.queuedMatch.findUniqueOrThrow({ where: { sessionId: fixture.sessionId } });
+      expect(selectedIds(queued)).toEqual(beforeRetain);
+      await rebuildAutomaticQueuedMatch(fixture.sessionId);
+      queued = await prisma.queuedMatch.findUniqueOrThrow({ where: { sessionId: fixture.sessionId } });
+      expectLevelReason(queued.matchmakingReasonJson);
+
+      const reshuffle = await postQueueMatch(fixture.code, { reshuffle: true });
+      expect(reshuffle.status).toBe(200);
+      queued = await prisma.queuedMatch.findUniqueOrThrow({ where: { sessionId: fixture.sessionId } });
+      expectLevelReason(queued.matchmakingReasonJson);
+      const removed = queued.team1Player1Id;
+      const retained = selectedIds(queued).filter((id) => id !== removed);
+      const replace = await postQueueMatch(fixture.code, { replaceUserId: removed });
+      expect(replace.status).toBe(200);
+      queued = await prisma.queuedMatch.findUniqueOrThrow({ where: { sessionId: fixture.sessionId } });
+      expect(selectedIds(queued)).toEqual(expect.arrayContaining(retained));
+      expect(selectedIds(queued)).not.toContain(removed);
+      expectLevelReason(queued.matchmakingReasonJson);
+
+      await prisma.match.update({ where: { id: refill.id }, data: {
+        status: MatchStatus.COMPLETED, completedAt: new Date("2026-10-02T00:00:00Z"),
+        team1Score: 21, team2Score: 18,
+      } });
+      await prisma.court.update({ where: { id: fixture.courtIds[1] }, data: { currentMatchId: null } });
+      const consumedResponse = await postAssignQueuedMatch(fixture.code);
+      const consumedPayload = await consumedResponse.json() as { id: string };
+      expect(consumedResponse.status).toBe(200);
+      const consumed = await prisma.match.findUniqueOrThrow({ where: { id: consumedPayload.id } });
+      expect(selectedIds(consumed)).toEqual(selectedIds(queued));
+      expect(consumed.matchmakingReasonJson).toBe(queued.matchmakingReasonJson);
+      expect((await prisma.court.findUniqueOrThrow({ where: { id: fixture.courtIds[0] } })).currentMatchId).toBe(busy.id);
+    },
+  );
 
   it.each([SessionType.POINTS, SessionType.ELO])(
     "%s refuses to create a match when candidate and production proofs are tampered",

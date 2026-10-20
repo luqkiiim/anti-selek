@@ -13,6 +13,7 @@ import {
   PlayerGender,
   SessionCollabFormat,
   SessionCrossoverFrequency,
+  SessionBalanceMetric,
   SessionMode,
   SessionPool,
   SessionStatus,
@@ -66,6 +67,11 @@ import {
   type V3SingleCourtSelection,
 } from "@/lib/matchmaking/v3";
 import { getClubEloByUserId } from "@/lib/clubElo";
+import { findBestLevelBatchSelection } from "@/lib/matchmaking/ladder/levelSelection";
+
+vi.mock("@/lib/matchmaking/ladder/levelSelection", () => ({
+  findBestLevelBatchSelection: vi.fn(),
+}));
 import {
   findBestBatchSelectionLadder,
   findBestSingleCourtSelectionLadder,
@@ -377,9 +383,27 @@ function createLadderSelection(
   };
 }
 
+function createLevelBatchResult(
+  selections: ReturnType<typeof createLadderSelection>[]
+): ReturnType<typeof findBestLevelBatchSelection> {
+  return {
+    selection: {
+      selections,
+      restSummary: { totalRestTurns: 0, minimumRestTurns: 0, restTurnVector: [] },
+      maxLadderGap: 0, totalLadderGap: 0, totalPointDiffGap: 0,
+      maxBalanceGap: 0, totalBalanceGap: 0,
+      maxPointDiffBalanceGap: 0, totalPointDiffBalanceGap: 0,
+      maxStrengthGap: 0, totalStrengthGap: 0, totalRandomScore: 0,
+    },
+    scheduleIndex: 0,
+    debug: {} as never,
+  };
+}
+
 describe("generate match service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(findBestLevelBatchSelection).mockReset();
     // These service unit fixtures return synthetic legacy V3 matcher outputs.
     // Keep them on the explicit production rollback path; real default behavior
     // is exercised by the Balanced route integration tests.
@@ -853,6 +877,209 @@ describe("generate match service", () => {
       expect(raceState.playersById.get("A")?.elo).toBe(0);
       expect(raceState.playersById.get("B")?.elo).toBe(0);
     });
+
+    it("uses the applicable rating sources for rating-based Level Match", async () => {
+      vi.mocked(getClubEloByUserId).mockResolvedValue(new Map([["B", 1330]]));
+      const players = [
+        createSessionPlayer("A", { elo: 1000, isGuest: true }),
+        createSessionPlayer("B", { elo: 1080 }),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
+      const guestMatch = {
+        team1Player1Id: "A",
+        team1Player2Id: "B",
+        team2Player1Id: "C",
+        team2Player2Id: "D",
+        team1EloChange: 70,
+        team2EloChange: -70,
+        session: { players: [{ playerId: "A" }] },
+      };
+      vi.mocked(prisma.match.findMany).mockResolvedValue([guestMatch] as never);
+      const sessionData = createSessionData({
+        type: SessionType.RACE,
+        balanceMetric: SessionBalanceMetric.RATING,
+        ratingPolicyVersion: 1,
+        players,
+      });
+      const state = await buildMatchmakingState(sessionData);
+
+      expect(getClubEloByUserId).toHaveBeenCalledTimes(1);
+      expect(state.playersById.get("A")?.elo).toBe(1070);
+      expect(state.playersById.get("B")?.elo).toBe(1330);
+      expect(state.playersById.get("C")?.elo).toBe(1000);
+
+      vi.mocked(prisma.match.findMany).mockResolvedValue([
+        guestMatch,
+        { ...guestMatch, team1EloChange: -20 },
+      ] as never);
+      const refreshedState = await buildMatchmakingState(sessionData);
+      expect(refreshedState.playersById.get("A")?.elo).toBe(1050);
+
+      vi.mocked(findBestLevelBatchSelection).mockReturnValueOnce(createLevelBatchResult([
+        createLadderSelection(["A", "B", "C", "D"], {
+          team1: ["A", "B"],
+          team2: ["C", "D"],
+        }),
+      ]));
+      selectSingleCourtMatch({
+        rankedCandidates: [] as ReturnType<
+          typeof getRankedCandidates
+        >["rankedCandidates"],
+        playersById: refreshedState.playersById,
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(findBestLevelBatchSelection).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({ levelPolicy: { metric: SessionBalanceMetric.RATING } })
+      );
+      expect(
+        vi.mocked(findBestLevelBatchSelection).mock.calls[0][0].map(
+          ({ userId, strength }) => [userId, strength]
+        )
+      ).toEqual([
+        ["A", 1050],
+        ["B", 1330],
+        ["C", 1000],
+        ["D", 1000],
+      ]);
+    });
+
+    it("uses profile ratings and earned guest ratings under rating policy v2", async () => {
+      const players = [
+        createSessionPlayer("A", { elo: 1000, isGuest: true }),
+        createSessionPlayer("B", { elo: 1120 }),
+      ];
+      const guestMatch = {
+        team1Player1Id: "A",
+        team1Player2Id: "B",
+        team2Player1Id: "C",
+        team2Player2Id: "D",
+        team1EloChange: 70,
+        team2EloChange: -70,
+        session: { players: [{ playerId: "A" }] },
+      };
+      vi.mocked(prisma.match.findMany).mockResolvedValue([guestMatch] as never);
+
+      const state = await buildMatchmakingState(
+        createSessionData({
+          type: SessionType.RACE,
+          balanceMetric: SessionBalanceMetric.RATING,
+          ratingPolicyVersion: 2,
+          players,
+        })
+      );
+
+      expect(getClubEloByUserId).not.toHaveBeenCalled();
+      expect(state.playersById.get("A")?.elo).toBe(1070);
+      expect(state.playersById.get("B")?.elo).toBe(1120);
+    });
+
+    it("uses entry-filtered race scores for Level points and keeps legacy Ladder records", async () => {
+      const players = [
+        createSessionPlayer("A", { elo: 1500, isGuest: true }),
+        createSessionPlayer("B", {
+          elo: 1400,
+          joinedAt: new Date("2026-02-02T00:00:00Z"),
+        }),
+        createSessionPlayer("C", { elo: 1300 }),
+        createSessionPlayer("D", { elo: 1200 }),
+      ];
+      const completedMatch = {
+        id: "completed-match",
+        team1User1Id: "A",
+        team1User2Id: "B",
+        team2User1Id: "C",
+        team2User2Id: "D",
+        team1Score: 21,
+        team2Score: 10,
+        status: MatchStatus.COMPLETED,
+        completedAt: new Date("2026-02-01T00:00:00Z"),
+        createdAt: new Date("2026-02-01T00:00:00Z"),
+      };
+      const sessionData = createSessionData({
+        type: SessionType.RACE,
+        balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+        players,
+        matches: [completedMatch] as GenerateMatchSession["matches"],
+      });
+      const state = await buildMatchmakingState(sessionData);
+      expect(getClubEloByUserId).not.toHaveBeenCalled();
+      expect(prisma.match.findMany).not.toHaveBeenCalled();
+      vi.mocked(findBestLevelBatchSelection).mockReturnValueOnce(createLevelBatchResult([
+        createLadderSelection(["A", "B", "C", "D"], {
+          team1: ["A", "B"],
+          team2: ["C", "D"],
+        }),
+      ]));
+      selectSingleCourtMatch({
+        rankedCandidates: [] as ReturnType<
+          typeof getRankedCandidates
+        >["rankedCandidates"],
+        playersById: state.playersById,
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(
+        vi.mocked(findBestLevelBatchSelection).mock.calls[0][0].map(
+          ({ userId, strength }) => [userId, strength]
+        )
+      ).toEqual([
+        ["A", 3],
+        ["B", 0],
+        ["C", 0],
+        ["D", 0],
+      ]);
+
+      const legacyLadderSession = createSessionData({
+        type: SessionType.LADDER,
+        players,
+        matches: [completedMatch] as GenerateMatchSession["matches"],
+      });
+      const legacyLadderState = await buildMatchmakingState(legacyLadderSession);
+      vi.mocked(findBestSingleCourtSelectionLadder).mockReturnValueOnce({
+        selection: createLadderSelection(["A", "B", "C", "D"], {
+          team1: ["A", "B"],
+          team2: ["C", "D"],
+        }),
+        debug: {} as never,
+      });
+      selectSingleCourtMatch({
+        rankedCandidates: [] as ReturnType<
+          typeof getRankedCandidates
+        >["rankedCandidates"],
+        playersById: legacyLadderState.playersById,
+        sessionData: legacyLadderSession,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(
+        vi.mocked(findBestSingleCourtSelectionLadder).mock.calls[0][0].map(
+          ({ userId, strength }) => [userId, strength]
+        )
+      ).toEqual([
+        ["A", 0],
+        ["B", 0],
+        ["C", 0],
+        ["D", 0],
+      ]);
+      expect(
+        vi.mocked(findBestSingleCourtSelectionLadder).mock.calls[0][0].map(
+          ({ userId, ladderScore }) => [userId, ladderScore]
+        )
+      ).toEqual([
+        ["A", 1],
+        ["B", 0],
+        ["C", -1],
+        ["D", -1],
+      ]);
+    });
   });
 
   describe("selectSingleCourtMatch", () => {
@@ -1317,15 +1544,14 @@ describe("generate match service", () => {
       expect(findBestSingleCourtSelectionV3).not.toHaveBeenCalled();
     });
 
-    it("uses the ladder selector for race sessions", () => {
+    it("uses the global Level selector for race sessions", () => {
       const selection = createLadderSelection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
         team2: ["C", "D"],
       });
-      vi.mocked(findBestSingleCourtSelectionLadder).mockReturnValueOnce({
-        selection,
-        debug: {} as never,
-      });
+      vi.mocked(findBestLevelBatchSelection).mockReturnValueOnce(
+        createLevelBatchResult([selection])
+      );
 
       const players = [
         createSessionPlayer("A"),
@@ -1353,7 +1579,18 @@ describe("generate match service", () => {
         poolASeatCount: null,
         poolBSeatCount: null,
         matchmakingReasonJson: null,
+        targetPool: null,
+        missedPool: null,
+        competitiveTargetRatio: 1,
       });
+      expect(findBestLevelBatchSelection).toHaveBeenCalledWith(
+        expect.any(Array), expect.objectContaining({
+          courtCount: 1,
+          levelPolicy: { metric: SessionBalanceMetric.SESSION_POINTS },
+        })
+      );
+      expect(findBestSingleCourtSelectionLadder).not.toHaveBeenCalled();
+      expect(findBestBatchSelectionLadder).not.toHaveBeenCalled();
       expect(findBestSingleCourtSelectionV3).not.toHaveBeenCalled();
     });
 
@@ -1400,7 +1637,7 @@ describe("generate match service", () => {
         createSessionPlayer("B4", { pool: SessionPool.B }),
       ];
       const sessionData = createSessionData({
-        type: SessionType.RACE,
+        type: SessionType.LADDER,
         mode: SessionMode.MIXICANO,
         poolsEnabled: true,
         players,
@@ -1429,14 +1666,14 @@ describe("generate match service", () => {
 
     it.each([
       { label: "standard", type: SessionType.ELO },
-      { label: "Level Match", type: SessionType.RACE },
+      { label: "legacy Ladder", type: SessionType.LADDER },
     ])(
       "applies arrival priority inside each Crossover quota ($label)",
       ({ type }) => {
         const players = [
           createSessionPlayer("A-late", {
             pool: SessionPool.A,
-            matchesPlayed: type === SessionType.RACE ? 5 : 0,
+            matchesPlayed: type === SessionType.LADDER ? 5 : 0,
             arrivalPriorityAt: new Date("2026-08-23T00:00:00Z"),
           }),
           createSessionPlayer("A-ready", { pool: SessionPool.A }),
@@ -1470,12 +1707,12 @@ describe("generate match service", () => {
             team2: [selectedPoolAIds[1], selectedPoolBIds[1]],
           } as { team1: [string, string]; team2: [string, string] };
 
-          return type === SessionType.RACE
+          return type === SessionType.LADDER
             ? createLadderSelection(ids, partition)
             : createV3Selection(ids, partition);
         };
 
-        if (type === SessionType.RACE) {
+        if (type === SessionType.LADDER) {
           vi.mocked(findBestSingleCourtSelectionLadder).mockImplementation(
             (matchmakerPlayers) => ({
               selection: buildSelection(matchmakerPlayers) as ReturnType<
@@ -1524,6 +1761,53 @@ describe("generate match service", () => {
         ).toBe(CourtGroupType.CROSSOVER);
       }
     );
+
+    it("preserves arrival priority in the global Level Crossover search", async () => {
+      const actual = await vi.importActual<
+        typeof import("@/lib/matchmaking/ladder/levelSelection")
+      >("@/lib/matchmaking/ladder/levelSelection");
+      vi.mocked(findBestLevelBatchSelection).mockImplementation(
+        (players, options) => actual.findBestLevelBatchSelection(players, {
+          ...options,
+          randomFn: () => 0,
+        })
+      );
+      const players = [
+        createSessionPlayer("A-late", {
+          pool: SessionPool.A,
+          arrivalPriorityAt: new Date("2026-08-23T00:00:00Z"),
+        }),
+        createSessionPlayer("A-ready", { pool: SessionPool.A }),
+        createSessionPlayer("A-third", { pool: SessionPool.A }),
+        createSessionPlayer("B1", { pool: SessionPool.B }),
+        createSessionPlayer("B2", { pool: SessionPool.B }),
+        createSessionPlayer("B3", { pool: SessionPool.B }),
+      ];
+      const sessionData = createSessionData({
+        type: SessionType.RACE,
+        mode: SessionMode.MIXICANO,
+        poolsEnabled: true,
+        respectPlayerRest: true,
+        courts: [createCourt("court-1")],
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+      const result = selectSingleCourtMatch({
+        rankedCandidates,
+        playersById: createPlayersById(players),
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(result.ids).toContain("A-late");
+      expect(result.ids).toHaveLength(4);
+      expect(result.poolASeatCount).toBe(2);
+      expect(result.poolBSeatCount).toBe(2);
+      expect(result.courtGroupType).toBe(CourtGroupType.CROSSOVER);
+      expect(findBestLevelBatchSelection).toHaveBeenCalledTimes(1);
+      expect(findBestSingleCourtSelectionLadder).not.toHaveBeenCalled();
+    });
 
     it("optimizes shared entropy within legal crossover seats instead of individual crossover debt", () => {
       const players = [
@@ -1651,7 +1935,7 @@ describe("generate match service", () => {
           >["rankedCandidates"],
           playersById: createPlayersById(players),
           sessionData: createSessionData({
-            type: SessionType.RACE,
+            type: SessionType.LADDER,
             players,
           }),
           rotationHistory: buildRotationHistory([]),
@@ -2134,7 +2418,7 @@ describe("generate match service", () => {
       expect(findBestBatchSelectionV3).not.toHaveBeenCalled();
     });
 
-    it("uses the ladder batch selector for race sessions", () => {
+    it("uses the global Level batch selector for race sessions", () => {
       const batchSelection: LadderBatchSelection<
         ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>
       > = {
@@ -2160,8 +2444,9 @@ describe("generate match service", () => {
         totalStrengthGap: 0,
         totalRandomScore: 0,
       };
-      vi.mocked(findBestBatchSelectionLadder).mockReturnValueOnce({
+      vi.mocked(findBestLevelBatchSelection).mockReturnValueOnce({
         selection: batchSelection,
+        scheduleIndex: 0,
         debug: {} as never,
       });
 
@@ -2193,12 +2478,25 @@ describe("generate match service", () => {
           poolASeatCount: null,
           poolBSeatCount: null,
           matchmakingReasonJson: null,
+          targetPool: null,
+          missedPool: null,
+          competitiveTargetRatio: 1,
         })),
+        poolSchedulingState: expect.objectContaining({ type: SessionType.RACE }),
+        competitiveTargetRatio: 1,
       });
+      expect(findBestLevelBatchSelection).toHaveBeenCalledWith(
+        expect.any(Array), expect.objectContaining({
+          courtCount: 1,
+          levelPolicy: { metric: SessionBalanceMetric.SESSION_POINTS },
+        })
+      );
+      expect(findBestSingleCourtSelectionLadder).not.toHaveBeenCalled();
+      expect(findBestBatchSelectionLadder).not.toHaveBeenCalled();
       expect(findBestBatchSelectionV3).not.toHaveBeenCalled();
     });
 
-    it("chooses a later, fairer complete batch over the first feasible branch", () => {
+    it("chooses a later, fairer legacy Ladder batch over the first feasible branch", () => {
       const firstQuartet = createLadderSelection(["A1", "A2", "A3", "A4"], {
         team1: ["A1", "A2"],
         team2: ["A3", "A4"],
@@ -2269,7 +2567,7 @@ describe("generate match service", () => {
         createSessionPlayer("B2", { pool: SessionPool.B }),
       ];
       const sessionData = createSessionData({
-        type: SessionType.RACE,
+        type: SessionType.LADDER,
         mode: SessionMode.MIXICANO,
         poolsEnabled: true,
         players,
@@ -2312,7 +2610,7 @@ describe("generate match service", () => {
       });
     });
 
-    it("rotates dedicated group types across the requested physical courts", () => {
+    it("rotates legacy Ladder group types across the requested physical courts", () => {
       const competitiveSelection = createLadderSelection(
         ["A1", "A2", "A3", "A4"],
         { team1: ["A1", "A2"], team2: ["A3", "A4"] }
@@ -2378,7 +2676,7 @@ describe("generate match service", () => {
           poolBSeatCount: 4 - poolASeatCount,
         }) as unknown as GenerateMatchSession["matches"][number];
       const sessionData = createSessionData({
-        type: SessionType.RACE,
+        type: SessionType.LADDER,
         poolsEnabled: true,
         players,
         courts: [
