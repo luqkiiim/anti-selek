@@ -54,7 +54,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canEdit = 
       {!!data.recentForm.length && <section className="profile-form"><div className="section-heading"><h2>Recent form</h2><small>Latest first</small></div><div>{data.recentForm.map(m => <button key={m.id} className={m.result === "WIN" ? "win" : "loss"} aria-label={`${m.result === "WIN" ? "Win" : "Loss"}, ${m.score}, ${m.sessionName}`} onClick={() => setMatch(m)}>{m.result === "WIN" ? "W" : "L"}</button>)}</div></section>}
       {data.timeline.length > 0 && <RatingJourney timeline={data.timeline} onOpenSession={id => { const session = data.timeline.find(p => p.sessionId === id && p.session)?.session ?? data.history.items.find(s => s.id === id); if (session) setRecap(session); }} />}
       {isSelf ? <section className="profile-achievements" aria-label="Achievements"><div className="section-heading"><h2>Achievements</h2></div>{achievements ?? <OwnAchievements disabled={!canEdit} clubId={clubId} onOpenSession={onOpenSession} />}{milestone}</section> : pins.data?.earned.length ? <MemberPins collection={pins.data} /> : <ErrorText error={pins.error} />}
-      <ProfilePeople relationships={data.relationships} isSelf={isSelf} onOpenMember={onOpenMember} />
+      <ProfilePeople key={`${clubId}:${member.id}`} relationships={data.relationships} matches={data.matchHistory} onOpenMatch={setMatch} isSelf={isSelf} onOpenMember={onOpenMember} />
       <ProfileRecords records={data.records} onOpenSession={setRecap} />
       <ProfileActivityHistory key={member.id} profile={data} onOpen={setRecap} onOpenMatch={setMatch} />
     </>}

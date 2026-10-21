@@ -45,6 +45,12 @@ vi.mock("@/lib/avatarClient", () => ({
   uploadPlayerAvatar: mocks.uploadPlayerAvatar,
 }));
 
+vi.mock("@/components/prototype/Primitives", () => ({
+  Sheet: ({ open = true, title, children, onClose }: {
+    open?: boolean; title: string; children: React.ReactNode; onClose: () => void;
+  }) => open ? <div role="dialog" aria-label={title}>{children}<button aria-label="Close" onClick={onClose}>Close</button></div> : null,
+}));
+
 import { PlayerProfileView } from "./PlayerProfileView";
 
 function createJsonResponse(body: unknown, status = 200) {
@@ -311,6 +317,7 @@ describe("PlayerProfileView", () => {
     },
     mode = "standalone",
     clubId = "",
+    readOnly = false,
   }: {
     profileResponse?: ReturnType<typeof buildProfileResponse>;
     currentUser?: {
@@ -323,6 +330,7 @@ describe("PlayerProfileView", () => {
     };
     mode?: "standalone" | "embedded";
     clubId?: string;
+    readOnly?: boolean;
   } = {}) {
     mocks.fetch.mockImplementation((input: string | Request | URL) => {
       const url =
@@ -349,7 +357,7 @@ describe("PlayerProfileView", () => {
     });
 
     await act(async () => {
-      root.render(<PlayerProfileView playerId="player-1" mode={mode} clubId={clubId} />);
+      root.render(<PlayerProfileView playerId="player-1" mode={mode} clubId={clubId} readOnly={readOnly} />);
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -371,8 +379,8 @@ describe("PlayerProfileView", () => {
     expect(hrefFor("Exact partner")).toBe("/profile/exact?clubId=club-a");
     expect(hrefFor("Uncertain opponent")).toBe("/profile/uncertain");
     expect(hrefFor("Legacy opponent")).toBe("/profile/legacy?clubId=viewer-club");
-    expect(hrefFor("Exact summary")).toBe("/profile/summary-exact?clubId=club-a");
-    expect(hrefFor("Mixed summary")).toBe("/profile/summary-mixed");
+    expect(container.querySelector('a[aria-label="View Exact summary’s profile"]')?.getAttribute("href")).toBe("/profile/summary-exact?clubId=club-a");
+    expect(container.querySelector('a[aria-label="View Mixed summary’s profile"]')?.getAttribute("href")).toBe("/profile/summary-mixed");
   });
 
   it("opens and closes an enlarged profile photo from the read-only hero avatar", async () => {
@@ -740,6 +748,73 @@ describe("PlayerProfileView", () => {
     });
 
     expect(document.body.textContent).not.toContain("Syafiq Halim");
+  });
+
+  it("shows only the selected relationship's matches from the profile owner's perspective", async () => {
+    const response = buildProfileResponse({ matchHistory: [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        ...buildMatch(`together-${index}`),
+        date: `2026-10-${String(index + 1).padStart(2, "0")}T12:00:00Z`, sessionName: `Together ${index + 1}`,
+      })),
+      { ...buildMatch("against", {
+        partner: { id: "another", name: "Another", avatarUrl: null },
+        opponents: [{ id: "partner-1", name: "Haziq Azman", avatarUrl: null }], result: "LOSS", score: "16-21",
+      }), sessionName: "Against Haziq" },
+      { ...buildMatch("different-id", { partner: { id: "lookalike", name: "Haziq Azman", avatarUrl: null } }), sessionName: "Different player" },
+    ] });
+    response.partners.best = [buildConnection("partner-1", "Haziq Azman", 12, 0)];
+    response.opponents.toughest = [buildConnection("partner-1", "Haziq Azman", 0, 1)];
+    await renderView({ profileResponse: response });
+    const click = async (element: Element | null | undefined) => {
+      expect(element).toBeTruthy();
+      await act(async () => { element!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
+    };
+    const getDialog = (title: string) => container.querySelector(`[role="dialog"][aria-label="${title}"]`)!;
+    await click(container.querySelector('button[aria-label="Matches with Haziq Azman"] span'));
+    let history = getDialog("Matches with Haziq Azman");
+    expect(history.querySelectorAll("[data-match-row-variant]")).toHaveLength(10);
+    expect(history.querySelector("[data-match-row-variant]")?.textContent).toContain("Together 12");
+    expect(history.textContent).not.toContain("Against Haziq");
+    expect(history.textContent).not.toContain("Different player");
+    expect(history.querySelector('a[href="/session/session-1/history"]')).toBeTruthy();
+    await click(Array.from(history.querySelectorAll("button")).find(node => node.textContent === "Load more"));
+    expect(history.querySelectorAll("[data-match-row-variant]")).toHaveLength(12);
+    await click(history.querySelector('button[aria-label="Close"]'));
+    await click(container.querySelector('button[aria-label="Matches with Haziq Azman"]'));
+    history = getDialog("Matches with Haziq Azman");
+    expect(history.querySelectorAll("[data-match-row-variant]")).toHaveLength(10);
+    await click(history.querySelector('button[aria-label="Close"]'));
+    await click(container.querySelector('button[aria-label="Matches against Haziq Azman"] svg'));
+    const against = getDialog("Matches against Haziq Azman");
+    expect(against.querySelectorAll("[data-match-row-variant]")).toHaveLength(1);
+    expect(against.textContent).toContain("Against Haziq");
+    expect(against.textContent).toContain("16-21");
+    expect(against.querySelector(".bg-rose-100")?.textContent).toBe("L");
+    expect(mocks.router.push).not.toHaveBeenCalled();
+  });
+
+  it("preserves View all beneath history and navigates through the photo with read-only club context", async () => {
+    const response = buildProfileResponse();
+    response.partners.best = Array.from({ length: 4 }, (_, index) => buildConnection(`p-${index}`, `Partner ${index}`, 4, 1));
+    const click = async (element: Element | null) => {
+      expect(element).toBeTruthy();
+      await act(async () => { element!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
+    };
+    await renderView({ profileResponse: response, clubId: "club-a", readOnly: true });
+    await click(container.querySelector('button[aria-label="View all Best partners"]'));
+    const list = container.querySelector('[role="dialog"][aria-label="Best partners list"]')!;
+    await click(list.querySelector('button[aria-label="Matches with Partner 3"]'));
+    const history = container.querySelector('[role="dialog"][aria-label="Matches with Partner 3"]')!;
+    expect(history.textContent).toContain("No matches found.");
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
+    expect(container.querySelector('[aria-label="Best partners list"]')).toBe(list);
+    await click(history.querySelector('button[aria-label="Close"]'));
+    const photo = list.querySelector('a[aria-label="View Partner 3’s profile"]');
+    expect(photo?.getAttribute("href")).toBe("/profile/p-3?clubId=club-a&view=global");
+    await click(photo);
+    expect(container.querySelector('[aria-label="Best partners list"]')).toBeNull();
+    expect(mocks.router.push).toHaveBeenCalledWith("/profile/p-3?clubId=club-a&view=global", { scroll: false });
+    expect(container.querySelector("button button")).toBeNull();
   });
 
   it("does not show the long avatar upload helper text for admins", async () => {

@@ -3,19 +3,53 @@ import { formatProfileDate } from "./profileDate";
 import { useState } from "react";
 import { CaretRight, Fire, Trophy, ChartLineUp, UsersThree } from "@phosphor-icons/react";
 import type { MemberProfileData } from "@/lib/memberProfile";
-import type { PlayerProfileSessionSummary } from "@/lib/profileStats";
+import type { PlayerProfileMatchHistoryEntry, PlayerProfileSessionSummary } from "@/lib/profileStats";
+import type { ProfileConnectionSelection } from "@/lib/profileConnectionHistory";
+import { ConnectionMatchHistorySheet } from "@/components/profile/ConnectionMatchHistorySheet";
 import { Avatar, Sheet } from "./Primitives";
+import { ProfileMatchList } from "./ProfileMatchHistory";
 
-export function ProfilePeople({relationships,onOpenMember,isSelf}:{isSelf:boolean;relationships:MemberProfileData["relationships"];onOpenMember:(id:string)=>void}) {
-  const [expanded,setExpanded]=useState<"partners"|"rivals"|null>(null);
-  const partners=relationships.partners ?? (relationships.partner ? [relationships.partner] : []);
-  const rivals=relationships.rivals ?? (relationships.rival ? [relationships.rival] : []);
-  function rows(kind:"partners"|"rivals", full=false) {
-    const list=kind==="partners"?partners:rivals;
-    return <div className="profile-joined-list">{(full?list:list.slice(0,3)).map((person,index)=><button key={person.id} className="profile-person-row" onClick={()=>onOpenMember(person.id)}><span className="chemistry-rank">{index+1}</span><Avatar name={person.name} url={person.avatarUrl}/><span><strong>{person.name}</strong>{kind==="partners" && <small>{person.wins} wins together</small>}</span><span className="profile-person-stat">{kind==="partners"?`${Math.round(person.wins/Math.max(1,person.wins+person.losses)*100)}%`:`${person.wins}W · ${person.losses}L`}{kind==="partners"&&<small>win rate</small>}</span><CaretRight size={16}/></button>)}</div>;
+export function ProfilePeople({ relationships, matches, onOpenMatch, onOpenMember, isSelf }: {
+  isSelf: boolean;
+  relationships: MemberProfileData["relationships"];
+  matches: PlayerProfileMatchHistoryEntry[];
+  onOpenMatch: (match: PlayerProfileMatchHistoryEntry) => void;
+  onOpenMember: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState<"partners" | "rivals" | null>(null);
+  const [connection, setConnection] = useState<ProfileConnectionSelection | null>(null);
+  const partners = relationships.partners ?? (relationships.partner ? [relationships.partner] : []);
+  const rivals = relationships.rivals ?? (relationships.rival ? [relationships.rival] : []);
+  function openMember(id: string) {
+    setConnection(null);
+    setExpanded(null);
+    onOpenMember(id);
+  }
+  function rows(kind: "partners" | "rivals", full = false) {
+    const list = kind === "partners" ? partners : rivals;
+    return <div className="profile-joined-list">{(full ? list : list.slice(0, 3)).map((person, index) => {
+      const role = kind === "partners" ? "partner" : "opponent";
+      return <div key={person.id} className="profile-person-row">
+        <span className="chemistry-rank">{index + 1}</span>
+        <button type="button" className="profile-person-photo" aria-label={`View ${person.name}’s profile`} onClick={() => openMember(person.id)}><Avatar name={person.name} url={person.avatarUrl} /></button>
+        <button type="button" className="profile-person-history" aria-label={`Matches ${role === "partner" ? "with" : "against"} ${person.name}`} onClick={() => setConnection({ id: person.id, name: person.name, role })}>
+          <span><strong>{person.name}</strong>{kind === "partners" && <small>{person.wins} wins together</small>}</span>
+          <span className="profile-person-stat">{kind === "partners" ? `${Math.round(person.wins / Math.max(1, person.wins + person.losses) * 100)}%` : `${person.wins}W · ${person.losses}L`}{kind === "partners" && <small>win rate</small>}</span>
+          <CaretRight size={16} />
+        </button>
+      </div>;
+    })}</div>;
   }
   if (!partners.length && !rivals.length) return null;
-  return <section className="profile-people"><div className="section-heading"><h2>{isSelf ? "Your people" : "Connections"}</h2><UsersThree size={22} weight="duotone" /></div>{(["partners","rivals"] as const).filter(kind => (kind === "partners" ? partners : rivals).length > 0).map(kind=><div key={kind} className="profile-people-group"><div className="section-heading"><h3>{kind==="partners"?"Best partners":"Top rivalries"}</h3>{(kind==="partners"?partners:rivals).length>3&&<button className="text-button" onClick={()=>setExpanded(kind)}>View all</button>}</div>{(kind==="partners"?partners:rivals).length?rows(kind):<p className="profile-footnote">More games with core members will build this list.</p>}</div>)}<Sheet open={!!expanded} title={expanded==="partners"?"Best partners":"Top rivalries"} onClose={()=>setExpanded(null)}>{expanded&&rows(expanded,true)}</Sheet></section>;
+  return <section className="profile-people">
+    <div className="section-heading"><h2>{isSelf ? "Your people" : "Connections"}</h2><UsersThree size={22} weight="duotone" /></div>
+    {(["partners", "rivals"] as const).filter(kind => (kind === "partners" ? partners : rivals).length > 0).map(kind => <div key={kind} className="profile-people-group">
+      <div className="section-heading"><h3>{kind === "partners" ? "Best partners" : "Top rivalries"}</h3>{(kind === "partners" ? partners : rivals).length > 3 && <button className="text-button" onClick={() => setExpanded(kind)}>View all</button>}</div>
+      {rows(kind)}
+    </div>)}
+    <Sheet open={!!expanded} title={expanded === "partners" ? "Best partners" : "Top rivalries"} onClose={() => setExpanded(null)}>{expanded && rows(expanded, true)}</Sheet>
+    <ConnectionMatchHistorySheet connection={connection} matches={matches} onClose={() => setConnection(null)} renderMatches={items => <ProfileMatchList matches={items} onOpen={onOpenMatch} showSession />} />
+  </section>;
 }
 
 export function ProfileRecords({records,onOpenSession}:{records:MemberProfileData["records"];onOpenSession:(session:PlayerProfileSessionSummary)=>void}) {

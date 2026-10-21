@@ -82,7 +82,7 @@ function SheetDialog({ title, onClose, children, footer, busy = false }: SheetPr
   const close = () => { if (!busy) onClose(); };
   return (
     <dialog ref={ref} aria-label={title} className="prototype-sheet"
-      onCancel={e => { e.preventDefault(); close(); }}>
+      onCancel={e => { e.preventDefault(); e.stopPropagation(); close(); }}>
       <motion.div className="sheet-shade" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
         exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : 0.16 }} onClick={close} />
       <motion.div className={`sheet-panel${footer != null ? " has-footer" : ""}`} style={{ touchAction: "pan-y" }}

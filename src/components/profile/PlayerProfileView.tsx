@@ -21,6 +21,7 @@ import {
   Award,
   BarChart3,
   CalendarDays,
+  ChevronRight,
   Flame,
   LayoutGrid,
   Medal,
@@ -49,9 +50,11 @@ import { deletePlayerAvatar, uploadPlayerAvatar } from "@/lib/avatarClient";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { EmptyState, FlashMessage } from "@/components/ui/chrome";
 import { navigateApp } from "@/lib/appNavigation";
+import type { ProfileConnectionSelection } from "@/lib/profileConnectionHistory";
+import { ConnectionMatchHistorySheet } from "./ConnectionMatchHistorySheet";
 
 const ProfileNavigationContext = createContext<{ clubId: string; readOnly: boolean } | null>(null);
-function ProfileDestinationLink({ href, children, className }: { href: string; children: ReactNode; className?: string }) {
+function ProfileDestinationLink({ href, children, className, label, onNavigate }: { href: string; children: ReactNode; className?: string; label?: string; onNavigate?: () => void }) {
   const context = useContext(ProfileNavigationContext);
   const router = useRouter();
   const url = new URL(href, "https://anti-selek.local");
@@ -60,7 +63,8 @@ function ProfileDestinationLink({ href, children, className }: { href: string; c
     if (!url.searchParams.has("clubId") && context.clubId) url.searchParams.set("clubId", context.clubId);
   }
   const destination = url.pathname + (url.searchParams.size ? `?${url.searchParams}` : "");
-  return <Link href={destination} className={className} onClick={event => {
+  return <Link href={destination} className={className} aria-label={label} onClick={event => {
+    onNavigate?.();
     if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigateApp(router, destination); }
   }}>{children}</Link>;
 }
@@ -152,6 +156,7 @@ interface RatingSeriesPoint {
 interface RelationshipDialogState {
   title: string;
   summaries: PlayerProfileConnectionSummary[];
+  role: ProfileConnectionSelection["role"];
 }
 
 export interface PlayerProfileViewProps {
@@ -988,28 +993,41 @@ function ConnectionRow({
   summary,
   rank,
   clubId,
+  role,
+  onOpenHistory,
+  onOpenProfile,
 }: {
   summary: PlayerProfileConnectionSummary;
   rank: number;
   clubId: string;
+  role: ProfileConnectionSelection["role"];
+  onOpenHistory: (connection: ProfileConnectionSelection) => void;
+  onOpenProfile: () => void;
 }) {
   return (
-    <div className="grid min-h-14 grid-cols-[2rem_2.4rem_minmax(0,1fr)_4.1rem_3rem] items-center gap-2 border-b border-[var(--line)] px-3 py-2.5 last:border-b-0">
+    <div className="grid min-h-14 grid-cols-[1.5rem_2.75rem_minmax(0,1fr)] items-center gap-2 border-b border-[var(--line)] px-3 py-2.5 last:border-b-0">
       <span className="text-left text-xs font-extrabold text-gray-600">
         #{rank}
       </span>
-      <Avatar name={summary.user.name} avatarUrl={summary.user.avatarUrl} size="xs" />
-      <div className="min-w-0 truncate text-sm font-bold text-gray-950">
-        <ProfileLink href={getPlayerProfileHref(summary.user.id, summary.user.profileClubId === undefined ? clubId : summary.user.profileClubId ?? "")}>
-          {summary.user.name}
-        </ProfileLink>
-      </div>
-      <span className="text-right text-sm font-bold text-gray-600">
-        {formatConnectionRecord(summary)}
-      </span>
-      <span className="text-right text-sm font-extrabold text-[var(--accent-strong)]">
-        {summary.winRate}%
-      </span>
+      <ProfileDestinationLink
+        href={getPlayerProfileHref(summary.user.id, summary.user.profileClubId === undefined ? clubId : summary.user.profileClubId ?? "")}
+        label={`View ${summary.user.name}’s profile`}
+        onNavigate={onOpenProfile}
+        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+      ><Avatar name={summary.user.name} avatarUrl={summary.user.avatarUrl} size="xs" /></ProfileDestinationLink>
+      <button
+        type="button"
+        aria-label={`Matches ${role === "partner" ? "with" : "against"} ${summary.user.name}`}
+        onClick={() => onOpenHistory({ id: summary.user.id, name: summary.user.name, role })}
+        className="grid min-h-11 min-w-0 grid-cols-[minmax(0,1fr)_1rem] items-center gap-x-2 gap-y-0.5 rounded-lg text-left min-[480px]:grid-cols-[minmax(0,1fr)_auto_1rem] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+      >
+        <span className="col-start-1 row-start-1 min-w-0 text-sm font-bold break-words text-gray-950 min-[480px]:truncate">{summary.user.name}</span>
+        <span className="col-start-1 row-start-2 inline-flex items-center gap-2 min-[480px]:col-start-2 min-[480px]:row-start-1">
+          <span className="text-sm font-bold text-gray-600">{formatConnectionRecord(summary)}</span>
+          <span className="text-sm font-extrabold text-[var(--accent-strong)]">{summary.winRate}%</span>
+        </span>
+        <ChevronRight aria-hidden="true" size={16} className="col-start-2 row-span-2 row-start-1 text-[var(--accent-strong)] min-[480px]:col-start-3 min-[480px]:row-span-1" />
+      </button>
     </div>
   );
 }
@@ -1018,10 +1036,16 @@ function ConnectionRankList({
   summaries,
   clubId,
   emptyText,
+  role,
+  onOpenHistory,
+  onOpenProfile,
 }: {
   summaries: PlayerProfileConnectionSummary[];
   clubId: string;
   emptyText: string;
+  role: ProfileConnectionSelection["role"];
+  onOpenHistory: (connection: ProfileConnectionSelection) => void;
+  onOpenProfile: () => void;
 }) {
   if (summaries.length === 0) {
     return (
@@ -1039,6 +1063,9 @@ function ConnectionRankList({
           summary={summary}
           rank={index + 1}
           clubId={clubId}
+          role={role}
+          onOpenHistory={onOpenHistory}
+          onOpenProfile={onOpenProfile}
         />
       ))}
     </div>
@@ -1051,12 +1078,18 @@ function RelationshipGroup({
   clubId,
   emptyText,
   onViewAll,
+  role,
+  onOpenHistory,
+  onOpenProfile,
 }: {
   title: string;
   summaries: PlayerProfileConnectionSummary[];
   clubId: string;
   emptyText: string;
   onViewAll: () => void;
+  role: ProfileConnectionSelection["role"];
+  onOpenHistory: (connection: ProfileConnectionSelection) => void;
+  onOpenProfile: () => void;
 }) {
   const visibleSummaries = summaries.slice(0, RELATIONSHIP_PREVIEW_COUNT);
   const hasMore = summaries.length > RELATIONSHIP_PREVIEW_COUNT;
@@ -1080,6 +1113,9 @@ function RelationshipGroup({
         summaries={visibleSummaries}
         clubId={clubId}
         emptyText={emptyText}
+        role={role}
+        onOpenHistory={onOpenHistory}
+        onOpenProfile={onOpenProfile}
       />
     </div>
   );
@@ -1089,13 +1125,17 @@ function RelationshipDialog({
   group,
   clubId,
   onClose,
+  historyOpen,
+  onOpenHistory,
 }: {
   group: RelationshipDialogState | null;
   clubId: string;
   onClose: () => void;
+  historyOpen: boolean;
+  onOpenHistory: (connection: ProfileConnectionSelection) => void;
 }) {
   useEffect(() => {
-    if (!group) {
+    if (!group || historyOpen) {
       return undefined;
     }
 
@@ -1108,7 +1148,7 @@ function RelationshipDialog({
     window.addEventListener("keydown", handleEscape);
 
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [group, onClose]);
+  }, [group, historyOpen, onClose]);
 
   if (!group) {
     return null;
@@ -1142,6 +1182,9 @@ function RelationshipDialog({
             summaries={group.summaries}
             clubId={clubId}
             emptyText="No data yet"
+            role={group.role}
+            onOpenHistory={onOpenHistory}
+            onOpenProfile={onClose}
           />
         </div>
       </div>
@@ -1159,6 +1202,8 @@ function RelationshipCards({
   const [activeGroup, setActiveGroup] = useState<RelationshipDialogState | null>(
     null
   );
+  const [connection, setConnection] = useState<ProfileConnectionSelection | null>(null);
+  const closeRelationships = () => { setConnection(null); setActiveGroup(null); };
 
   return (
     <ProfileSection icon={Users} title="Partners & opponents">
@@ -1168,10 +1213,14 @@ function RelationshipCards({
           summaries={data.partners.best}
           clubId={clubId}
           emptyText="No partner data yet"
+          role="partner"
+          onOpenHistory={setConnection}
+          onOpenProfile={closeRelationships}
           onViewAll={() =>
             setActiveGroup({
               title: "Best partners",
               summaries: data.partners.best,
+              role: "partner",
             })
           }
         />
@@ -1180,10 +1229,14 @@ function RelationshipCards({
           summaries={data.opponents.toughest}
           clubId={clubId}
           emptyText="No opponent data yet"
+          role="opponent"
+          onOpenHistory={setConnection}
+          onOpenProfile={closeRelationships}
           onViewAll={() =>
             setActiveGroup({
               title: "Toughest opponents",
               summaries: data.opponents.toughest,
+              role: "opponent",
             })
           }
         />
@@ -1191,8 +1244,11 @@ function RelationshipCards({
       <RelationshipDialog
         group={activeGroup}
         clubId={clubId}
-        onClose={() => setActiveGroup(null)}
+        onClose={closeRelationships}
+        historyOpen={!!connection}
+        onOpenHistory={setConnection}
       />
+      <ConnectionMatchHistorySheet connection={connection} matches={data.matchHistory} onClose={() => setConnection(null)} renderMatches={matches => <MatchesList matches={matches} clubId={clubId} />} />
     </ProfileSection>
   );
 }
@@ -1548,7 +1604,7 @@ function OverviewTab({
   return (
     <div className="grid gap-4">
       <PerformanceSummary data={data} ratingSeries={ratingSeries} />
-      <RelationshipCards data={data} clubId={clubId} />
+      <RelationshipCards key={`${clubId}:${data.user.id}`} data={data} clubId={clubId} />
       <AchievementPreview
         achievements={achievements}
         onViewAll={onViewAchievements}
