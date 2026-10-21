@@ -6,7 +6,7 @@ import type { ClubPageMember } from "@/components/club/clubTypes";
 import type { PlayerProfileSessionSummary, PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
 import type { MemberProfileData, RecordedSessionSummary } from "@/lib/memberProfile";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
-import { api, useResource } from "./api";
+import { api } from "./api";
 import { AchievementCabinet, NextMilestone } from "./Achievements";
 import type { AchievementCollection, AchievementId } from "@/lib/clubAchievements";
 import { MemberPins, type PublicAchievementCollection } from "./MemberPins";
@@ -18,6 +18,7 @@ import { normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
 import { MainNav } from "./MainNav";
 import "./player-profile.css";
 import { useClubResource } from "@/components/app/ClubDataProvider";
+import { clubProfileUrl } from "@/components/app/clubReadStore";
 import { useScrollRestoration } from "@/components/app/useScrollRestoration";
 
 const AccountSettings = dynamic(() => import("./AccountSettings").then(module => module.AccountSettings));
@@ -34,8 +35,8 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canEdit = 
   canInvite?: boolean; globalView?: boolean; canEdit?: boolean;
   achievements?: ReactNode; milestone?: ReactNode; onOpenMember: (id: string) => void;
 }) {
-  const resource = useClubResource<MemberProfileResponse>(`/api/users/${encodeURIComponent(member.id)}/stats?clubId=${encodeURIComponent(clubId)}${globalView ? "&view=global" : ""}`);
-  const pins = useResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${encodeURIComponent(clubId)}/achievements?userId=${encodeURIComponent(member.id)}${globalView ? "&view=global" : ""}`);
+  const resource = useClubResource<MemberProfileResponse>(clubProfileUrl(clubId, member.id, { globalView }));
+  const pins = useClubResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${encodeURIComponent(clubId)}/achievements?userId=${encodeURIComponent(member.id)}${globalView ? "&view=global" : ""}`);
   const data = resource.data?.profile;
   const user = resource.data?.user;
   const [accountOpen, setAccountOpen] = useState(false);
@@ -55,7 +56,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canEdit = 
       {isSelf ? <section className="profile-achievements" aria-label="Achievements"><div className="section-heading"><h2>Achievements</h2></div>{achievements ?? <OwnAchievements disabled={!canEdit} clubId={clubId} onOpenSession={onOpenSession} />}{milestone}</section> : pins.data?.earned.length ? <MemberPins collection={pins.data} /> : <ErrorText error={pins.error} />}
       <ProfilePeople relationships={data.relationships} isSelf={isSelf} onOpenMember={onOpenMember} />
       <ProfileRecords records={data.records} onOpenSession={setRecap} />
-      <ProfileActivityHistory globalView={globalView} key={member.id} clubId={clubId} playerId={member.id} history={data.history} onOpen={setRecap} matches={data.matchHistory} onOpenMatch={setMatch} />
+      <ProfileActivityHistory key={member.id} profile={data} onOpen={setRecap} onOpenMatch={setMatch} />
     </>}
     <details className="profile-rating-help"><summary>How ratings work</summary><p>Ratings and ranks belong to this club. Match results change your rating; manual adjustments are marked separately. Achievements are separate from matchmaking ratings.</p></details>
     {isSelf && accountOpen && <AccountSettings disabled={!canEdit} clubContext={{ clubId, clubName, playerId: member.id, gender: member.gender, mixedSideOverride: normalizeMixedSideOverrideForGender(member.gender, member.mixedSideOverride, member.partnerPreference) }} open onClose={() => setAccountOpen(false)} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
@@ -66,7 +67,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canEdit = 
 
 function OwnAchievements({ clubId, onOpenSession, disabled }: { clubId: string; onOpenSession?: (code: string) => void; disabled: boolean }) {
   const [openRequest, setOpenRequest] = useState<{ id: AchievementId; nonce: number }>();
-  const resource = useResource<AchievementCollection>(`/api/clubs/${encodeURIComponent(clubId)}/achievements`);
+  const resource = useClubResource<AchievementCollection>(`/api/clubs/${encodeURIComponent(clubId)}/achievements`);
   async function save(body: unknown) { if (disabled) return; await api(`/api/clubs/${encodeURIComponent(clubId)}/achievements`, "PATCH", body); await resource.refresh(); }
   return resource.data ? <><AchievementCabinet disabled={disabled} embedded openRequest={openRequest} collection={resource.data} onSaveShowcase={showcase => save({ showcase })} onSeen={seen => save({ seen })} onOpenSession={code => { if (onOpenSession) onOpenSession(code); else location.href = `/session/${encodeURIComponent(code)}`; }} /><NextMilestone embedded collection={resource.data} onOpen={id => setOpenRequest({ id, nonce: Date.now() })} /></> : <ErrorText error={resource.error} />;
 }

@@ -769,7 +769,8 @@ function buildAchievementsFromSessions(
 
 export function buildPlayerProfileDerivedData(
   userId: string,
-  matches: ProfileMatchSource[]
+  matches: ProfileMatchSource[],
+  { includeAchievements = true } = {}
 ): PlayerProfileDerivedData {
   const sortedMatches = matches
     .slice()
@@ -871,42 +872,44 @@ export function buildPlayerProfileDerivedData(
 
     sessionAggregates.set(match.session.id, existingSession);
 
-    const existingAchievementSession =
-      achievementSessionAggregates.get(match.session.id) ?? {
-        id: match.session.id,
-        code: match.session.code,
-        name: match.session.name,
-        latestCompletedAtMs: 0,
-        matches: [],
-        wins: 0,
-        losses: 0,
-        pointDifferential: 0,
-        podiumRank: getSessionPodiumRank(userId, match.session),
-      };
+    if (includeAchievements) {
+      const existingAchievementSession =
+        achievementSessionAggregates.get(match.session.id) ?? {
+          id: match.session.id,
+          code: match.session.code,
+          name: match.session.name,
+          latestCompletedAtMs: 0,
+          matches: [],
+          wins: 0,
+          losses: 0,
+          pointDifferential: 0,
+          podiumRank: getSessionPodiumRank(userId, match.session),
+        };
 
-    existingAchievementSession.latestCompletedAtMs = Math.max(
-      existingAchievementSession.latestCompletedAtMs,
-      getTimeOrZero(match.completedAt)
-    );
-    existingAchievementSession.matches.push({
-      id: match.id,
-      completedAtMs: getTimeOrZero(match.completedAt),
-      result,
-      pointDifferential,
-      scoreDifference,
-    });
-    existingAchievementSession.pointDifferential += pointDifferential;
+      existingAchievementSession.latestCompletedAtMs = Math.max(
+        existingAchievementSession.latestCompletedAtMs,
+        getTimeOrZero(match.completedAt)
+      );
+      existingAchievementSession.matches.push({
+        id: match.id,
+        completedAtMs: getTimeOrZero(match.completedAt),
+        result,
+        pointDifferential,
+        scoreDifference,
+      });
+      existingAchievementSession.pointDifferential += pointDifferential;
 
-    if (result === "WIN") {
-      existingAchievementSession.wins += 1;
-    } else {
-      existingAchievementSession.losses += 1;
+      if (result === "WIN") {
+        existingAchievementSession.wins += 1;
+      } else {
+        existingAchievementSession.losses += 1;
+      }
+
+      achievementSessionAggregates.set(
+        match.session.id,
+        existingAchievementSession
+      );
     }
-
-    achievementSessionAggregates.set(
-      match.session.id,
-      existingAchievementSession
-    );
 
     matchHistory.push({
       id: match.id,
@@ -1064,7 +1067,7 @@ export function buildPlayerProfileDerivedData(
       latest: recentSessions[0] ?? null,
       best: sessionSummaries.slice().sort(compareBestSessions)[0] ?? null,
     },
-    achievements: buildAchievementsFromSessions(achievementSessions),
+    achievements: includeAchievements ? buildAchievementsFromSessions(achievementSessions) : [],
     matchHistory,
   };
 }

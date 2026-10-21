@@ -203,6 +203,44 @@ describe("user stats route", () => {
     }));
     expect(mocks.buildMemberProfileData).toHaveBeenCalledWith(expect.objectContaining({ userId: "player-1" }));
   });
+  it("serves the ledger profile without loading duplicate legacy statistics or ranking matches", async () => {
+    mocks.clubMemberFindUnique.mockResolvedValue({id:"member-player-1",elo:1275,status:"CORE"});
+    const profile = {history:{items:[],hasMore:false,nextOffset:null},matchHistory:[],timeline:[]};
+    mocks.buildMemberProfileData.mockReturnValue(profile);
+    const response = await getStats("player-1", "?clubId=club-1&section=profile");
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({user:{id:"player-1",elo:1275},profile});
+    expect(body).not.toHaveProperty("stats");
+    expect(mocks.buildPlayerProfileDerivedData).not.toHaveBeenCalled();
+    expect(mocks.buildProfileClubRankWindow).not.toHaveBeenCalled();
+    expect(mocks.offlineIdentityMemberFindMany).not.toHaveBeenCalled();
+    expect(mocks.matchFindMany).toHaveBeenCalledTimes(1);
+    expect(mocks.matchFindMany.mock.calls[0][0].include.session.select).not.toHaveProperty("matches");
+    expect(mocks.matchEloAdjustmentFindMany).toHaveBeenCalledWith({where:{clubId:"club-1",playerId:"player-1"}});
+  });
+  it("serves Home's recent sessions and exact rank context without a member profile or legacy badges", async () => {
+    mocks.clubMemberFindUnique.mockResolvedValue({id:"member-player-1",elo:1275,status:"CORE"});
+    const response = await getStats("player-1", "?clubId=club-1&section=overview");
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({user:{id:"player-1",elo:1275},context:{clubId:"club-1"},recentSessions:[]});
+    expect(body).not.toHaveProperty("matchHistory");
+    expect(body).not.toHaveProperty("profile");
+    expect(body).not.toHaveProperty("achievements");
+    expect(mocks.buildPlayerProfileDerivedData).toHaveBeenCalledWith("player-1",[],{includeAchievements:false});
+    expect(mocks.buildProfileClubRankWindow).toHaveBeenCalledTimes(1);
+    expect(mocks.buildMemberProfileData).not.toHaveBeenCalled();
+    expect(mocks.matchEloAdjustmentFindMany).not.toHaveBeenCalled();
+    expect(mocks.clubRatingAdjustmentFindMany).not.toHaveBeenCalled();
+  });
+  it.each(["profile","overview"])("keeps authorization before compact %s reads", async section => {
+    mocks.clubAccessFindUnique.mockResolvedValue({role:"ADMIN",status:"REVOKED"});
+    mocks.clubMemberFindUnique.mockResolvedValue({id:"member-player-1",elo:1275,status:"CORE"});
+    expect((await getStats("player-1", `?clubId=club-1&section=${section}`)).status).toBe(403);
+    expect(mocks.matchFindMany).not.toHaveBeenCalled();
+    expect(mocks.buildMemberProfileData).not.toHaveBeenCalled();
+  });
 
   it("counts only actual club match participants for leaderboard rank eligibility", async () => {
     mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
