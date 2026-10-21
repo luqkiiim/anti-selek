@@ -19,9 +19,12 @@ export function clubSnapshotUrl(id: string, globalView = false) {
   return `/api/clubs/${encodeURIComponent(id)}${globalView ? "?view=global" : ""}`;
 }
 export function clubAdminSnapshotUrl(id: string) { return `${clubSnapshotUrl(id)}?section=admin`; }
+export function clubProfileUrl(clubId: string, playerId: string, { globalView = false, overview = false } = {}) {
+  return `/api/users/${encodeURIComponent(playerId)}/stats?clubId=${encodeURIComponent(clubId)}&section=${overview ? "overview" : "profile"}${globalView ? "&view=global" : ""}`;
+}
 function clubIdFor(url: string) {
   const parsed = new URL(url, "https://anti-selek.local");
-  const match = parsed.pathname.match(/^\/api\/clubs\/([^/]+)$/);
+  const match = parsed.pathname.match(/^\/api\/clubs\/([^/]+)(?:\/achievements)?$/);
   return match ? decodeURIComponent(match[1]) : parsed.searchParams.get("clubId");
 }
 function retryTime(value: string | null) {
@@ -105,7 +108,7 @@ export class ClubReadStore {
       const snapshot = prepared.state.data as { viewer?: { playerId?: string | null } } | null;
       const playerId = snapshot?.viewer?.playerId;
       if (!playerId) return;
-      const profileUrl = `/api/users/${encodeURIComponent(playerId)}/stats?clubId=${encodeURIComponent(identity.id)}`;
+      const profileUrl = clubProfileUrl(identity.id, playerId, { overview: true });
       const profile = this.entry(profileUrl);
       if (profile.users || profile.handoff) return;
       clearTimeout(profile.releaseTimer);
@@ -169,7 +172,7 @@ export class ClubReadStore {
       } catch (error) {
         if (!current()) return;
         const status = error instanceof ApiError ? error.status : null;
-        const snapshotRead = new URL(url, "https://anti-selek.local").pathname.startsWith("/api/clubs/");
+        const snapshotRead = /^\/api\/clubs\/[^/]+$/.test(new URL(url, "https://anti-selek.local").pathname);
         if (status === 401 || status === 403 || (status === 404 && snapshotRead)) {
           this.evictClub(clubIdFor(url), url, status === 401, { error: error instanceof Error ? error.message : "Access unavailable.", errorStatus: status });
           if (status === 404) this.forgetIdentity(clubIdFor(url));

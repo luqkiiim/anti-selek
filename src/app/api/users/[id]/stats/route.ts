@@ -124,6 +124,10 @@ async function getUserStatsRoute(
   }> = [];
   let leaderboardMatchCountByUserId = new Map<string, number>();
   let resolveClubStatUserId = (playerId: string) => playerId;
+  // The current club profile uses the ledger-based profile and gets its rank
+  // from the shared club snapshot. Legacy callers retain the full stats DTO.
+  let profileOnly = false;
+  const overviewOnly = !!clubId && url.searchParams.get("section") === "overview";
 
   if (clubId) {
     if (!canQuickAccessClub(session, clubId)) {
@@ -184,6 +188,7 @@ async function getUserStatsRoute(
     targetMemberId = targetMembership?.id ?? null;
     usesClubRating = !!targetMembership;
     effectiveElo = targetMembership?.elo ?? user.elo;
+    profileOnly = !!targetMemberId && url.searchParams.get("section") === "profile";
 
     leaderboardMembers = await prisma.clubMember.findMany({
       where: {
@@ -203,43 +208,45 @@ async function getUserStatsRoute(
         },
       },
     });
-    resolveClubStatUserId = await getClubStatUserResolver(prisma, {
-      clubId,
-      memberUserIds: leaderboardMembers.map((member) => member.playerId),
-    });
+    if (!profileOnly) {
+      resolveClubStatUserId = await getClubStatUserResolver(prisma, {
+        clubId,
+        memberUserIds: leaderboardMembers.map((member) => member.playerId),
+      });
 
-    const leaderboardMatches = await prisma.match.findMany({
-      where: {
-        status: MatchStatus.COMPLETED,
-        session: getClubScopedSessionWhere(clubId),
-      },
-      select: {
-        team1Player1Id: true,
-        team1Player2Id: true,
-        team2Player1Id: true,
-        team2Player2Id: true,
-      },
-    });
-    leaderboardMatchCountByUserId = new Map(
-      leaderboardMembers.map((member) => [member.playerId, 0])
-    );
-
-    for (const match of leaderboardMatches) {
-      const participantIds = new Set(
-        [
-          match.team1Player1Id,
-          match.team1Player2Id,
-          match.team2Player1Id,
-          match.team2Player2Id,
-        ].map(resolveClubStatUserId)
+      const leaderboardMatches = await prisma.match.findMany({
+        where: {
+          status: MatchStatus.COMPLETED,
+          session: getClubScopedSessionWhere(clubId),
+        },
+        select: {
+          team1Player1Id: true,
+          team1Player2Id: true,
+          team2Player1Id: true,
+          team2Player2Id: true,
+        },
+      });
+      leaderboardMatchCountByUserId = new Map(
+        leaderboardMembers.map((member) => [member.playerId, 0])
       );
 
-      for (const participantId of participantIds) {
-        if (leaderboardMatchCountByUserId.has(participantId)) {
-          leaderboardMatchCountByUserId.set(
-            participantId,
-            (leaderboardMatchCountByUserId.get(participantId) ?? 0) + 1
-          );
+      for (const match of leaderboardMatches) {
+        const participantIds = new Set(
+          [
+            match.team1Player1Id,
+            match.team1Player2Id,
+            match.team2Player1Id,
+            match.team2Player2Id,
+          ].map(resolveClubStatUserId)
+        );
+
+        for (const participantId of participantIds) {
+          if (leaderboardMatchCountByUserId.has(participantId)) {
+            leaderboardMatchCountByUserId.set(
+              participantId,
+              (leaderboardMatchCountByUserId.get(participantId) ?? 0) + 1
+            );
+          }
         }
       }
     }
@@ -286,7 +293,7 @@ async function getUserStatsRoute(
               player: { select: { id: true, name: true, avatarKey: true } },
             },
           },
-          matches: {
+          ...(!profileOnly && !overviewOnly ? { matches: {
             where: { status: MatchStatus.COMPLETED },
             select: {
               id: true,
@@ -300,7 +307,7 @@ async function getUserStatsRoute(
               team2Score: true,
               winnerTeam: true,
             },
-          },
+          } } : {}),
         },
       },
     },
@@ -310,25 +317,30 @@ async function getUserStatsRoute(
       match.session.ratingMode !== "UNRATED" && match.session.players.some((player) => player.playerId === id && player.isGuest))
     ));
   }
-  const profileData = buildPlayerProfileDerivedData(
-    id,
-    withLegacySportingAliases(matches.map((match) => ({
+  const serializeSession = (source: (typeof matches)[number]["session"]) => withLegacySportingAliases({
+    ...source,
+    players: source.players.map((player) => ({ ...player, player: serializeAvatarEntity(player.player) })),
+  });
+  const sessionSources = new Map<string, ReturnType<typeof serializeSession>>();
+  const profileMatches = matches.map(({ session: source, ...match }) => {
+    let profileSession = sessionSources.get(source.id);
+    if (!profileSession) {
+      profileSession = serializeSession(source);
+      sessionSources.set(source.id, profileSession);
+    }
+    return { ...withLegacySportingAliases({
       ...match,
       team1Player1: serializeAvatarEntity(match.team1Player1),
       team1Player2: serializeAvatarEntity(match.team1Player2),
       team2Player1: serializeAvatarEntity(match.team2Player1),
       team2Player2: serializeAvatarEntity(match.team2Player2),
-      session: {
-        ...match.session,
-        players: match.session.players.map((player) => ({
-          ...player,
-          player: serializeAvatarEntity(player.player),
-        })),
-      },
-    })))
-  );
+    }), session: profileSession };
+  });
+  const profileData = profileOnly ? undefined : overviewOnly
+    ? buildPlayerProfileDerivedData(id, profileMatches, { includeAchievements: false })
+    : buildPlayerProfileDerivedData(id, profileMatches);
 
-  if (clubId) {
+  if (clubId && profileData) {
     const recentSessionIds = profileData.recentSessions.map((session) => session.id);
     const rankWindowMatches =
       recentSessionIds.length > 0
@@ -371,19 +383,19 @@ async function getUserStatsRoute(
     });
   }
 
-  const profile = clubId && targetMemberId ? buildMemberProfileData({
+  const [matchEloAdjustments, manualRatingAdjustments] = clubId && targetMemberId && !overviewOnly
+    ? await Promise.all([
+      prisma.matchEloAdjustment.findMany({ where: { clubId, playerId: id } }),
+      prisma.clubRatingAdjustment.findMany({ where: { memberId: targetMemberId } }),
+    ]) : [[], []];
+  const profile = clubId && targetMemberId && !overviewOnly ? buildMemberProfileData({
     clubId,
     userId: id,
     memberStatus: targetMemberStatus,
     currentCoreMemberIds: leaderboardMembers.map(member => member.playerId),
-    matches: withLegacySportingAliases(matches.map(match => ({ ...match,
-      team1Player1: serializeAvatarEntity(match.team1Player1),
-      team1Player2: serializeAvatarEntity(match.team1Player2),
-      team2Player1: serializeAvatarEntity(match.team2Player1),
-      team2Player2: serializeAvatarEntity(match.team2Player2),
-    }))),
-    matchEloAdjustments: withLegacySportingAliases(await prisma.matchEloAdjustment.findMany({ where: { clubId, playerId: id } })),
-    manualRatingAdjustments: await prisma.clubRatingAdjustment.findMany({ where: { memberId: targetMemberId } }),
+    matches: profileMatches,
+    matchEloAdjustments: withLegacySportingAliases(matchEloAdjustments),
+    manualRatingAdjustments,
     historyOffset: Number(url.searchParams.get("historyOffset") ?? 0),
     historyLimit: Number(url.searchParams.get("historyLimit") ?? 3),
   }) : undefined;
@@ -395,7 +407,7 @@ async function getUserStatsRoute(
       isRetired: isRetiredPlayer,
     },
     context,
-    ...profileData,
+    ...(overviewOnly ? { recentSessions: profileData?.recentSessions } : profileData),
     ...(profile ? { profile } : {}),
   });
 }

@@ -7,6 +7,7 @@ import { PlayerProfilePage, MemberProfileOverlay, type MemberProfileResponse } f
 import { PlayerProfileView } from "@/components/profile/PlayerProfileView";
 import { ErrorText } from "@/components/prototype/Primitives";
 import { useClubResource } from "./ClubDataProvider";
+import { clubProfileUrl } from "./clubReadStore";
 import type { Snapshot } from "@/components/prototype/Club";
 import { AppShell, useAppLocation } from "./AppShell";
 import { backInApp, clubHref, navigateApp, sessionHref } from "@/lib/appNavigation";
@@ -24,7 +25,7 @@ function ScopedProfile({ playerId, clubId, globalView = false, onBack, onOpenMem
   const snapshot = useClubResource<Snapshot>(clubId ? `/api/clubs/${encodeURIComponent(clubId)}${globalView ? "?view=global" : ""}` : null);
   const data = snapshot.data;
   const member = data?.clubMembers.find(p => p.id === playerId);
-  const profile = useClubResource<MemberProfileResponse>(member ? `/api/users/${encodeURIComponent(playerId)}/stats?clubId=${encodeURIComponent(clubId)}${globalView ? "&view=global" : ""}` : null);
+  const profile = useClubResource<MemberProfileResponse>(member ? clubProfileUrl(clubId, playerId, { globalView }) : null);
   useAppReady(!overlay && (!clubId || !!snapshot.error || (!!data && (!member || !!profile.data || !!profile.error))));
   const ranked = data?.clubMembers.filter(p => p.status === "CORE" && (p.matchesPlayed ?? 0) > 0).sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name, undefined, { sensitivity: "base" })) ?? [];
   const rank = ranked.findIndex(p => p.id === playerId);

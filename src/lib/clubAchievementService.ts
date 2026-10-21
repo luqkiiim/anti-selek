@@ -26,7 +26,13 @@ export async function getClubAchievementCollection(clubId: string,playerId: stri
   const sessions=await prisma.session.findMany({
     where:{status:"COMPLETED",isTest:false,OR:[{clubId},{sessionClubs:{some:{clubId,status:"ACCEPTED"}}}]},
     orderBy:[{endedAt:"asc"},{id:"asc"}],
-    include:{players:{select:{playerId:true,isGuest:true}},sessionClubs:{where:{role:"HOST",status:"ACCEPTED"},select:{clubId:true,creditedHostPlayerId:true}},matches:{where:{status:"COMPLETED",winnerTeam:{in:[1,2]}},include:{eloAdjustments:{where:{clubId}}}}}
+    select:{id:true,code:true,name:true,createdAt:true,endedAt:true,clubId:true,ratingMode:true,ratingPolicyVersion:true,achievementEligibilityJson:true,
+      players:{select:{playerId:true,isGuest:true}},
+      sessionClubs:{where:{role:"HOST",status:"ACCEPTED"},select:{clubId:true,creditedHostPlayerId:true}},
+      matches:{where:{status:"COMPLETED",winnerTeam:{in:[1,2]}},select:{id:true,completedAt:true,scoringFormat:true,gameScoresJson:true,
+        team1Player1Id:true,team1Player2Id:true,team2Player1Id:true,team2Player2Id:true,
+        team1Score:true,team2Score:true,winnerTeam:true,team1EloChange:true,team2EloChange:true,
+        eloAdjustments:{where:{clubId},select:{playerId:true,delta:true}}}}}
   });
   const sources: AchievementSession[]=[];
   for(const session of sessions) {

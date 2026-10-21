@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ClubReadStore, CLUB_CACHE_MS, clubSnapshotUrl } from "./clubReadStore";
+import { ClubReadStore, CLUB_CACHE_MS, clubSnapshotUrl, clubProfileUrl } from "./clubReadStore";
 
 const url = clubSnapshotUrl("riverside");
-const stats = "/api/users/player/stats?clubId=riverside";
+const stats = clubProfileUrl("riverside", "player", { overview: true });
 const identity = { id: "riverside", name: "Riverside", avatarUrl: "/club.png" };
 const snapshot = { club: { ...identity, role: "ADMIN" }, viewer: { playerId: "player" }, sessions: [] };
 function response(data: unknown, status = 200, headers?: Record<string, string>) { return new Response(JSON.stringify(data), { status, headers }); }
@@ -154,6 +154,26 @@ describe("shared club reads", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     await Promise.all([store.refresh(stats), store.refresh(stats)]);
     expect(fetch).toHaveBeenCalledTimes(2); a(); b();
+  });
+  it("shares badge reads and refreshes public and private collections after club changes", async () => {
+    const own = "/api/clubs/riverside/achievements";
+    const publicBadges = `${own}?userId=other`;
+    const unrelated = "/api/clubs/elsewhere/achievements";
+    const a = store.retain(own), b = store.retain(own), c = store.retain(publicBadges);
+    await Promise.all([store.read(own), store.read(publicBadges), store.read(unrelated)]);
+    expect(vi.mocked(fetch).mock.calls.filter(([request]) => request === own)).toHaveLength(1);
+    await store.refreshClub("riverside");
+    expect(vi.mocked(fetch).mock.calls.filter(([request]) => request === own)).toHaveLength(2);
+    expect(vi.mocked(fetch).mock.calls.filter(([request]) => request === publicBadges)).toHaveLength(2);
+    expect(vi.mocked(fetch).mock.calls.filter(([request]) => request === unrelated)).toHaveLength(1);
+    a(); b(); c();
+  });
+  it("does not evict a club because one player's badges are unavailable", async () => {
+    await store.read(url);
+    vi.mocked(fetch).mockResolvedValue(response({error:"Club unavailable"},404));
+    await expect(store.read("/api/clubs/riverside/achievements?userId=retired")).rejects.toThrow();
+    expect(store.get(url).data).toEqual(snapshot);
+    expect(store.identity(identity.id)).toEqual(identity);
   });
   it("refreshes affected active statistics once and invalidates inactive reads after a club save", async () => {
     const release = store.retain(url); const a = store.retain(stats); const b = store.retain(stats);

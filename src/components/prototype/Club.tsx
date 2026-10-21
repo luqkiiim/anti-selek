@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { useClubResource, useClubDataStore } from "@/components/app/ClubDataProvider";
 import { adminApi } from "@/lib/adminClient";
-import { clubAdminSnapshotUrl, clubSnapshotUrl } from "@/components/app/clubReadStore";
+import { clubAdminSnapshotUrl, clubSnapshotUrl, clubProfileUrl } from "@/components/app/clubReadStore";
 import { ClubHeader } from "@/components/app/ClubHeader";
 import { useAppLocation } from "@/components/app/AppShell";
 import { useAppReady } from "@/components/app/AppStartup";
@@ -32,7 +32,7 @@ import type {
   PlayerProfileSessionSummary,
   PlayerProfileMatchHistoryEntry,
 } from "@/lib/profileStats";
-import { api, useResource, useAction } from "./api";
+import { api, useAction } from "./api";
 import {
   ErrorText,
 } from "./Primitives";
@@ -72,7 +72,7 @@ type Profile = {
       rankDelta: number | null;
     };
   };
-  recentSessions: PlayerProfileSessionSummary[];
+  recentSessions?: PlayerProfileSessionSummary[];
   matchHistory: PlayerProfileMatchHistoryEntry[];
 };
 export default function Club({
@@ -113,10 +113,10 @@ export default function Club({
   const viewerPlayerId = readOnly ? null : data?.viewer.playerId ?? null;
   const profile = useClubResource<Profile>(
     viewerPlayerId && page !== "admin"
-      ? `/api/users/${encodeURIComponent(viewerPlayerId)}/stats?clubId=${encodeURIComponent(club.id)}`
+      ? clubProfileUrl(club.id, viewerPlayerId, { overview: page !== "profile" })
       : null,
   );
-  const achievements = useResource<AchievementCollection>(viewerPlayerId && page !== "admin" ? `/api/clubs/${club.id}/achievements` : null);
+  const achievements = useClubResource<AchievementCollection>(viewerPlayerId && page !== "admin" ? `/api/clubs/${encodeURIComponent(club.id)}/achievements` : null);
   const [achievementRequest, setAchievementRequest] = useState<{id:AchievementId;nonce:number}>();
   async function saveAchievementPreferences(body: unknown) {
     if (!resource.validated) return;
@@ -137,7 +137,7 @@ export default function Club({
   }
   async function refresh() {
     await Promise.all(store
-      ? [store.refreshClub(club.id), achievements.refresh()]
+      ? [store.refreshClub(club.id)]
       : [resource.refresh(), profile.refresh(), achievements.refresh()]);
   }
   const action = useAction(refresh);
@@ -166,7 +166,7 @@ export default function Club({
     );
   const visiblePastSessionCount = pastSessionPagination.visibleCount;
   const recent = profile.data?.recentSessions?.find(r=>sessions.some(s=>s.id===r.id&&s.status==="COMPLETED"));
-  const displayedRecap = onRoute && page === "recap" ? profile.data?.recentSessions.find(r => r.code === route.searchParams.get("session")) ?? recap : recap;
+  const displayedRecap = onRoute && page === "recap" ? profile.data?.recentSessions?.find(r => r.code === route.searchParams.get("session")) ?? recap : recap;
   const member = viewerPlayerId ? data?.clubMembers.find((p) => p.id === viewerPlayerId) : undefined;
   const rating = profile.data?.user.elo ?? member?.elo;
   const rank = profile.data?.context?.rankContext;

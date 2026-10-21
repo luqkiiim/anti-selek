@@ -164,14 +164,20 @@ function getGuests(session: MemberProfileSessionSource | MemberProfileMatchSourc
 function getMatchAdjustment(
   match: MemberProfileMatchSource,
   userId: string,
-  allAdjustments: MemberProfileMatchEloAdjustmentSource[]
+  allAdjustments: ReadonlyMap<string, MemberProfileMatchEloAdjustmentSource>
 ) {
   return (
     match.eloAdjustments?.find((entry) => entry.userId === userId) ??
-    allAdjustments.find(
-      (entry) => entry.matchId === match.id && entry.userId === userId
-    )
+    allAdjustments.get(match.id)
   );
+}
+
+function indexMatchAdjustments(userId: string, adjustments: MemberProfileMatchEloAdjustmentSource[]) {
+  const index = new Map<string, MemberProfileMatchEloAdjustmentSource>();
+  for (const adjustment of adjustments) {
+    if (adjustment.userId === userId && !index.has(adjustment.matchId)) index.set(adjustment.matchId, adjustment);
+  }
+  return index;
 }
 
 function makeConnection(
@@ -341,7 +347,7 @@ function buildTimeline(
   userId: string,
   matches: MemberProfileMatchSource[],
   sessions: MemberProfileSessionSource[],
-  matchAdjustments: MemberProfileMatchEloAdjustmentSource[],
+  matchAdjustments: ReadonlyMap<string, MemberProfileMatchEloAdjustmentSource>,
   manualAdjustments: MemberProfileRatingAdjustmentSource[],
   sessionSummaries: Map<string, PlayerProfileSessionSummary>
 ) {
@@ -453,7 +459,7 @@ function buildRecords(
   userId: string,
   matches: MemberProfileMatchSource[],
   sessions: MemberProfileSessionSource[],
-  matchAdjustments: MemberProfileMatchEloAdjustmentSource[],
+  matchAdjustments: ReadonlyMap<string, MemberProfileMatchEloAdjustmentSource>,
   manualAdjustments: MemberProfileRatingAdjustmentSource[],
   bestSession: PlayerProfileSessionSummary | null
 ) {
@@ -527,15 +533,17 @@ export function buildMemberProfileData({
   matches = matches.filter(m => !m.session.isTest && m.session.type !== "PRACTICE");
   const recordedAdjustments = matchEloAdjustments;
   matchEloAdjustments = [...recordedAdjustments, ...reconstructLegacyRatings(userId, clubId, matches, recordedAdjustments, manualRatingAdjustments)];
+  const adjustmentByMatchId = indexMatchAdjustments(userId, matchEloAdjustments);
+  const recordedByMatchId = indexMatchAdjustments(userId, recordedAdjustments);
   const completedMatches = matches.filter(m => m.session.status === "COMPLETED");
 
   const sessions = inputSessions.slice();
   const profileData =
     buildPlayerProfileDerivedData(userId, completedMatches.map(m => {
-      const ledger = getMatchAdjustment(m, userId, matchEloAdjustments);
+      const ledger = getMatchAdjustment(m, userId, adjustmentByMatchId);
       const delta = ledger ? ledger.afterElo - ledger.beforeElo : null;
       return { ...m, team1EloChange: delta, team2EloChange: delta };
-    }));
+    }), { includeAchievements: false });
   const allSessionSummaries = new Map<string, PlayerProfileSessionSummary>();
   const sessionAggregates = new Map<
     string,
@@ -595,9 +603,15 @@ export function buildMemberProfileData({
     if (summary) allSessionSummaries.set(summary.id, summary);
   }
 
+  const completedBySessionId = new Map<string, MemberProfileMatchSource[]>();
+  for (const match of completedMatches) {
+    const group = completedBySessionId.get(match.session.id) ?? [];
+    group.push(match);
+    completedBySessionId.set(match.session.id, group);
+  }
   for (const [id, summary] of allSessionSummaries) {
-    const played = completedMatches.filter(m => m.session.id === id);
-    Object.assign(summary, { ratingMode: played[0]?.session.ratingMode, ratingVerified: played[0]?.session.ratingMode !== "UNRATED" && played.every(m => !!getMatchAdjustment(m, userId, matchEloAdjustments)) });
+    const played = completedBySessionId.get(id) ?? [];
+    Object.assign(summary, { ratingMode: played[0]?.session.ratingMode, ratingVerified: played[0]?.session.ratingMode !== "UNRATED" && played.every(m => !!getMatchAdjustment(m, userId, adjustmentByMatchId)) });
   }
   const summaries = [...allSessionSummaries.values()].sort(
     (left, right) => asTime(right.date) - asTime(left.date) || left.id.localeCompare(right.id)
@@ -613,7 +627,7 @@ export function buildMemberProfileData({
       userId,
       matches,
       sessions,
-      matchEloAdjustments,
+      adjustmentByMatchId,
       manualRatingAdjustments,
       allSessionSummaries
     ),
@@ -621,7 +635,7 @@ export function buildMemberProfileData({
       userId,
       matches,
       sessions,
-      recordedAdjustments,
+      recordedByMatchId,
       manualRatingAdjustments,
       profileData.sessions.best
     ),
@@ -641,5 +655,4 @@ export function buildMemberProfileData({
     ) : { partner: null, rival: null, partners: [], rivals: [] },
   };
 }
-
 
