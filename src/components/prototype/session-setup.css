@@ -62,6 +62,7 @@
 .setup-submit .primary { min-height: 52px; }
 .setup-submit > p { font-size: 11px; text-align: center; color: #80718b; margin: 12px 0 0; }
 .setup-roster-sheet { min-width: 0; }
+.setup-roster-header { position: sticky; top: 0; z-index: 1; padding-bottom: 8px; background: #fffaf3; }
 .setup-roster-tools { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; }
 .setup-roster-tools strong { margin-right: auto; font-size: 13px; }
 .setup-search { display: flex; align-items: center; gap: 8px; background: #fffdfb; padding-left: 12px; border: 1px solid #e8ddef; border-radius: 12px; color: #80718b; }
