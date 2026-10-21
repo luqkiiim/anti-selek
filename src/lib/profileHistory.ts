@@ -13,5 +13,3 @@ export function getMemberProfileSessionHistory(profile: Pick<MemberProfileData, 
     (left, right) => new Date(right.date ?? 0).getTime() - new Date(left.date ?? 0).getTime() || left.id.localeCompare(right.id)
   );
 }
-
-
