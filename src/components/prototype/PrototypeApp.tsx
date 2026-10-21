@@ -11,6 +11,7 @@ import {
   CaretRight,
 } from "@phosphor-icons/react";
 import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
+import { validateCreateClubInput } from "@/components/dashboard/clubFormValidation";
 import { api, useResource, useAction } from "./api";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 import { useClubDataStore } from "@/components/app/ClubDataProvider";
@@ -50,6 +51,7 @@ export default function PrototypeApp() {
     [form, setForm] = useState(""),
     [value, setValue] = useState("");
   const [browseOpen, setBrowseOpen] = useState(false);
+  const [clubPassword, setClubPassword] = useState("");
   const [selectionResolved, setSelectionResolved] = useState(false);
   const [joinAccountOpen, setJoinAccountOpen] = useState(false);
   const action = useAction(clubs.refresh);
@@ -214,6 +216,8 @@ export default function PrototypeApp() {
                     onClick={() => {
                       setForm("create");
                       setValue("");
+                      setClubPassword("");
+                      action.setError("");
                     }}
                   >
                     <Plus size={19} />
@@ -243,7 +247,7 @@ export default function PrototypeApp() {
       <Sheet open={!!form && form !== "account" && form !== "join"}
           title="Create club"
           busy={action.busy}
-          onClose={() => setForm("")}
+          onClose={() => { setForm(""); setClubPassword(""); }}
         >
           <ErrorText error={action.error} />
             <>
@@ -253,19 +257,33 @@ export default function PrototypeApp() {
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   placeholder="Your club name"
+                  autoComplete="organization"
+                />
+              </label>
+              <label className="field-label">
+                Password (optional)
+                <input
+                  type="password"
+                  value={clubPassword}
+                  onChange={(e) => setClubPassword(e.target.value)}
+                  minLength={4}
+                  maxLength={100}
+                  autoComplete="new-password"
+                  placeholder="At least 4 characters"
                 />
               </label>
               <button
                 className="primary"
-                disabled={!value.trim()}
+                disabled={validateCreateClubInput(value, clubPassword) !== null}
                 onClick={() =>
                   void action.run(
                     async () => {
                       const result = await api<{ id: string }>(
                         "/api/clubs",
                         "POST",
-                        { name: value.trim(), allowJoinRequests: true },
+                        { name: value.trim(), allowJoinRequests: true, ...(clubPassword ? { password: clubPassword } : {}) },
                       );
+                      setClubPassword("");
                       select(result.id, "club", false, { id: result.id, name: value.trim() });
                     },
                     () => setForm(""),

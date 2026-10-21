@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import bcrypt from "bcryptjs";
 import { getClubRoster } from "@/lib/clubRoster";
 import { claimClubPlayer, clubOwnershipTransaction, removeClubPlayerOwnership } from "@/lib/clubPlayerOwnership";
 import { repairSbcCreator } from "../../../scripts/repair-sbc-creator";
@@ -48,11 +49,11 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/rateLimit", () => ({ rateLimit: async () => null }));
 import { GET, POST } from "./route";
 
-function createClub(name = "New Club") {
+function createClub(name = "New Club", password?: string) {
   return POST(new Request("http://localhost/api/clubs", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ clubName: name }),
+    body: JSON.stringify({ clubName: name, password }),
   }));
 }
 
@@ -112,6 +113,23 @@ describe.each(["sqlite", "libsql"] as const)("club creator profile (%s)", provid
     });
     const listing = await GET(new Request("http://localhost/api/clubs"));
     expect(await listing.json()).toEqual([expect.objectContaining({ id: body.id, membersCount: 1 })]);
+  });
+
+  it.each(["", "club-secret"])("stores optional password protection without returning credentials (%j)", async password => {
+    const response = await createClub("New Club", password);
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body.isPasswordProtected).toBe(Boolean(password));
+    expect(body).not.toHaveProperty("password");
+    expect(body).not.toHaveProperty("passwordHash");
+    const club = await db.club.findUniqueOrThrow({ where: { id: body.id } });
+    expect(club.isPasswordProtected).toBe(Boolean(password));
+    if (password) {
+      expect(club.passwordHash).not.toBe(password);
+      expect(await bcrypt.compare(password, club.passwordHash!)).toBe(true);
+    } else {
+      expect(club.passwordHash).toBeNull();
+    }
   });
 
   it("starts another club with an independent local profile and preserves existing ratings and preferences", async () => {
