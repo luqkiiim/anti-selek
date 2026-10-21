@@ -522,12 +522,15 @@ export default function LiveSession({
     }
     return isRosterPlayerPaused(player) ? "Paused" : "Waiting";
   }
-  const activePlayers = s?.players.filter((player) =>
+  const alphabeticalPlayers = [...(s?.players ?? [])].sort((left, right) =>
+    left.user.name.localeCompare(right.user.name, undefined, { sensitivity: "base" }),
+  );
+  const activePlayers = alphabeticalPlayers.filter((player) =>
     !isRosterPlayerPaused(player) || !!playingCourtFor(player.userId),
-  ) ?? [];
-  const pausedPlayers = s?.players.filter((player) =>
+  );
+  const pausedPlayers = alphabeticalPlayers.filter((player) =>
     isRosterPlayerPaused(player) && !playingCourtFor(player.userId),
-  ) ?? [];
+  );
   function ownsSessionSeat(player: SessionData["players"][number]) {
     if (!s || globalClubId || s.viewerIsQuickAccess) return false;
     if (s.ratingPolicyVersion === 2) return s.eligibleProfiles?.some(profile => profile.playerId === player.userId && profile.profileClubId === player.profileClubId) ?? false;
