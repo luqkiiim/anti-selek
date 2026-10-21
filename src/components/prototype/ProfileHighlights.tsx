@@ -7,12 +7,13 @@ import type { PlayerProfileMatchHistoryEntry, PlayerProfileSessionSummary } from
 import type { ProfileConnectionSelection } from "@/lib/profileConnectionHistory";
 import { ConnectionMatchHistorySheet } from "@/components/profile/ConnectionMatchHistorySheet";
 import { Avatar, Sheet } from "./Primitives";
-import { ProfileMatchList } from "./ProfileMatchHistory";
+import { ProfileMatchList } from "@/components/profile/ProfileMatchList";
 
-export function ProfilePeople({ relationships, matches, onOpenMatch, onOpenMember, isSelf }: {
+export function ProfilePeople({ relationships, matches, ownerName, onOpenMatch, onOpenMember, isSelf }: {
   isSelf: boolean;
   relationships: MemberProfileData["relationships"];
   matches: PlayerProfileMatchHistoryEntry[];
+  ownerName: string;
   onOpenMatch: (match: PlayerProfileMatchHistoryEntry) => void;
   onOpenMember: (id: string) => void;
 }) {
@@ -48,7 +49,7 @@ export function ProfilePeople({ relationships, matches, onOpenMatch, onOpenMembe
       {rows(kind)}
     </div>)}
     <Sheet open={!!expanded} title={expanded === "partners" ? "Best partners" : "Top rivalries"} onClose={() => setExpanded(null)}>{expanded && rows(expanded, true)}</Sheet>
-    <ConnectionMatchHistorySheet connection={connection} matches={matches} onClose={() => setConnection(null)} renderMatches={items => <ProfileMatchList matches={items} onOpen={onOpenMatch} showSession />} />
+    <ConnectionMatchHistorySheet connection={connection} matches={matches} onClose={() => setConnection(null)} renderMatches={items => <ProfileMatchList matches={items} ownerName={ownerName} onOpen={onOpenMatch} highlightPlayerId={connection?.id} />} />
   </section>;
 }
 

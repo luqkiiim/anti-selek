@@ -375,6 +375,7 @@ describe("PlayerProfileView", () => {
     profileResponse.partners.best = [{ user: { id: "summary-exact", name: "Exact summary", profileClubId: "club-a" }, matches: 1, wins: 1, losses: 0, winRate: 100, pointDifferential: 2, ratingChange: 0 }];
     profileResponse.opponents.toughest = [{ user: { id: "summary-mixed", name: "Mixed summary", profileClubId: null }, matches: 2, wins: 1, losses: 1, winRate: 50, pointDifferential: 0, ratingChange: 0 }];
     await renderView({ clubId: "viewer-club", profileResponse });
+    await act(async () => { container.querySelector<HTMLButtonElement>("[data-profile-match]")!.click(); });
     const hrefFor = (name: string) => Array.from(container.querySelectorAll("a")).find((link) => link.textContent === name)?.getAttribute("href");
     expect(hrefFor("Exact partner")).toBe("/profile/exact?clubId=club-a");
     expect(hrefFor("Uncertain opponent")).toBe("/profile/uncertain");
@@ -570,7 +571,7 @@ describe("PlayerProfileView", () => {
     expect(document.body.textContent).not.toContain("R32");
   });
 
-  it("shows avatars only in the overview recent matches rows", async () => {
+  it("keeps profile match cards concise and exposes full identities in details", async () => {
     await renderView({
       profileResponse: buildProfileResponse({
         matchHistory: [
@@ -593,14 +594,15 @@ describe("PlayerProfileView", () => {
     });
 
     expect(document.body.textContent).toContain("Recent matches");
-    expect(document.body.textContent).toContain("Haziq Azman");
-    expect(document.body.textContent).toContain("Daniel Nabil");
-    expect(document.body.textContent).toContain("Khairul Zaim Longname");
-    expect(container.querySelector('img[alt="Haziq Azman avatar"]')).toBeTruthy();
-    expect(container.querySelector('img[alt="Daniel Nabil avatar"]')).toBeTruthy();
-    expect(
-      container.querySelector('img[alt="Khairul Zaim Longname avatar"]')
-    ).toBeTruthy();
+    const card = container.querySelector<HTMLButtonElement>("[data-profile-match]")!;
+    expect(card.querySelector('[data-team="owner"]')?.textContent).toBe("AlexHaziq");
+    expect(card.querySelector('[data-team="opponents"]')?.textContent).toBe("DanielKhairul");
+    expect(card.querySelector('[data-score="owner"][data-winner="true"]')?.textContent).toBe("21");
+    await act(async () => card.click());
+    const details = container.querySelector('[role="dialog"][aria-label="Match details"]')!;
+    expect(details.textContent).toContain("Alex Lee & Haziq Azman");
+    expect(details.textContent).toContain("Daniel Nabil & Khairul Zaim Longname");
+    await act(async () => details.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
 
     const matchesTab = Array.from(
       container.querySelectorAll('button[role="tab"]')
@@ -612,12 +614,7 @@ describe("PlayerProfileView", () => {
       await Promise.resolve();
     });
 
-    expect(document.body.textContent).toContain("Khairul Zaim Longname");
-    expect(container.querySelector('img[alt="Haziq Azman avatar"]')).toBeNull();
-    expect(container.querySelector('img[alt="Daniel Nabil avatar"]')).toBeNull();
-    expect(
-      container.querySelector('img[alt="Khairul Zaim Longname avatar"]')
-    ).toBeNull();
+    expect(container.querySelector('[data-team="opponents"]')?.textContent).toBe("DanielKhairul");
   });
 
   it("keeps the stats tab to rating ledger and prototype-style session form", async () => {
@@ -771,25 +768,29 @@ describe("PlayerProfileView", () => {
     };
     const getDialog = (title: string) => container.querySelector(`[role="dialog"][aria-label="${title}"]`)!;
     await click(container.querySelector('button[aria-label="Matches with Haziq Azman"] span'));
-    let history = getDialog("Matches with Haziq Azman");
-    expect(history.querySelectorAll("[data-match-row-variant]")).toHaveLength(10);
-    expect(history.querySelector("[data-match-row-variant]")?.textContent).toContain("Together 12");
+    let history = getDialog("With Haziq");
+    expect(history.querySelectorAll("[data-profile-match]")).toHaveLength(10);
+    expect(history.querySelector("[data-profile-match]")?.getAttribute("aria-label")).toContain("Together 12");
     expect(history.textContent).not.toContain("Against Haziq");
     expect(history.textContent).not.toContain("Different player");
-    expect(history.querySelector('a[href="/session/session-1/history"]')).toBeTruthy();
+    await click(history.querySelector("[data-profile-match]"));
+    const details = getDialog("Match details");
+    expect(details.querySelector('a[href="/session/session-1/history"]')).toBeTruthy();
+    expect(details.textContent).toContain("Alex Lee & Haziq Azman");
+    await click(details.querySelector('button[aria-label="Close"]'));
     await click(Array.from(history.querySelectorAll("button")).find(node => node.textContent === "Load more"));
-    expect(history.querySelectorAll("[data-match-row-variant]")).toHaveLength(12);
+    expect(history.querySelectorAll("[data-profile-match]")).toHaveLength(12);
     await click(history.querySelector('button[aria-label="Close"]'));
     await click(container.querySelector('button[aria-label="Matches with Haziq Azman"]'));
-    history = getDialog("Matches with Haziq Azman");
-    expect(history.querySelectorAll("[data-match-row-variant]")).toHaveLength(10);
+    history = getDialog("With Haziq");
+    expect(history.querySelectorAll("[data-profile-match]")).toHaveLength(10);
     await click(history.querySelector('button[aria-label="Close"]'));
     await click(container.querySelector('button[aria-label="Matches against Haziq Azman"] svg'));
-    const against = getDialog("Matches against Haziq Azman");
-    expect(against.querySelectorAll("[data-match-row-variant]")).toHaveLength(1);
+    const against = getDialog("Against Haziq");
+    expect(against.querySelectorAll("[data-profile-match]")).toHaveLength(1);
     expect(against.textContent).toContain("Against Haziq");
-    expect(against.textContent).toContain("16-21");
-    expect(against.querySelector(".bg-rose-100")?.textContent).toBe("L");
+    expect(against.querySelector('[data-score="owner"]')?.textContent).toBe("16");
+    expect(against.querySelector('[data-score="opponent"][data-winner="true"]')?.textContent).toBe("21");
     expect(mocks.router.push).not.toHaveBeenCalled();
   });
 
@@ -804,7 +805,7 @@ describe("PlayerProfileView", () => {
     await click(container.querySelector('button[aria-label="View all Best partners"]'));
     const list = container.querySelector('[role="dialog"][aria-label="Best partners list"]')!;
     await click(list.querySelector('button[aria-label="Matches with Partner 3"]'));
-    const history = container.querySelector('[role="dialog"][aria-label="Matches with Partner 3"]')!;
+    const history = container.querySelector('[role="dialog"][aria-label="With Partner"]')!;
     expect(history.textContent).toContain("No matches found.");
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); });
     expect(container.querySelector('[aria-label="Best partners list"]')).toBe(list);

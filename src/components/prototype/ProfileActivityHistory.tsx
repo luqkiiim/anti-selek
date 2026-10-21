@@ -8,10 +8,11 @@ import { ProfileMatchHistory } from "./ProfileMatchHistory";
 
 type Props = {
   profile: MemberProfileData;
+  ownerName: string;
   onOpen: (session: PlayerProfileSessionSummary) => void;
   onOpenMatch: (match: PlayerProfileMatchHistoryEntry) => void;
 };
-export function ProfileActivityHistory({ profile, onOpen, onOpenMatch }: Props) {
+export function ProfileActivityHistory({ profile, ownerName, onOpen, onOpenMatch }: Props) {
   const [view, setView] = useState<"sessions" | "matches">("sessions");
   const controls = <div className="profile-chart-tabs" role="group" aria-label="History view">
     <button aria-pressed={view === "sessions"} onClick={() => setView("sessions")}>Sessions</button>
@@ -19,5 +20,5 @@ export function ProfileActivityHistory({ profile, onOpen, onOpenMatch }: Props) 
   </div>;
   return view === "sessions"
     ? <ProfileHistory sessions={getMemberProfileSessionHistory(profile)} onOpen={onOpen} title="History" controls={controls} />
-    : <ProfileMatchHistory matches={profile.matchHistory} onOpen={onOpenMatch} title="History" controls={controls} />;
+    : <ProfileMatchHistory matches={profile.matchHistory} ownerName={ownerName} onOpen={onOpenMatch} title="History" controls={controls} />;
 }

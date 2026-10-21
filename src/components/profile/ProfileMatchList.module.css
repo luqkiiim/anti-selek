@@ -1,0 +1,63 @@
+.list {
+  --match-ink: #291440;
+  --match-muted: #75647f;
+  --match-line: #e9dfee;
+  --match-green: #28613b;
+  --match-rose: #8c4057;
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.cards { display: grid; gap: 8px; }
+.sessionHeading { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.sessionHeading .sessionName { margin: 0; min-width: 0; font-size: 13px; line-height: 1.4; font-weight: 800; overflow-wrap: anywhere; color: var(--match-ink); }
+.unrated { color: var(--match-muted); font-weight: 400; }
+.date { flex-shrink: 0; font-size: 12px; line-height: 1.4; color: #75647f; }
+
+.list .card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 60px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--match-line);
+  border-left: 3px solid var(--match-green);
+  border-radius: 12px;
+  background: #fffdfb;
+  color: var(--match-ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.list .card.loss { border-left-color: var(--match-rose); }
+.list .card:focus-visible { outline: 2px solid #7040cf; outline-offset: 2px; }
+.team { display: grid; gap: 2px; min-width: 0; }
+.player { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.selected { color: #7040cf; }
+.score { display: flex; align-items: baseline; justify-content: center; gap: 7px; white-space: nowrap; font-size: 26px; line-height: 1.1; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--match-muted); }
+.score .winner { color: var(--match-ink); font-weight: 900; }
+.win .score .ownScore { color: var(--match-green); }
+.loss .score .ownScore { color: var(--match-rose); }
+.dash { font-size: 18px; font-weight: 400; }
+
+.details { display: grid; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+.details h2, .details h3, .details p { margin: 0; }
+.details h3 { font-size: 14px; font-weight: 800; }
+.detailSession { font-size: 12px; color: #75647f; }
+.rating { color: #75647f; }
+.connectionHistory { display: grid; gap: 14px; }
+.connectionHistory .record { margin: 0; font-size: 13px; color: #75647f; }
+.record strong { color: #291440; font-weight: 800; }
+
+@media (max-width: 380px) {
+  .list .card { padding-inline: 8px; gap: 7px; }
+  .score { font-size: 24px; gap: 5px; }
+}

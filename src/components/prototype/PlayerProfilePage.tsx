@@ -19,6 +19,7 @@ import { MainNav } from "./MainNav";
 import "./player-profile.css";
 import { useClubResource } from "@/components/app/ClubDataProvider";
 import { clubProfileUrl } from "@/components/app/clubReadStore";
+import { ProfileMatchDetails, ProfileMatchList } from "@/components/profile/ProfileMatchList";
 import { useScrollRestoration } from "@/components/app/useScrollRestoration";
 
 const AccountSettings = dynamic(() => import("./AccountSettings").then(module => module.AccountSettings));
@@ -39,6 +40,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canEdit = 
   const pins = useClubResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${encodeURIComponent(clubId)}/achievements?userId=${encodeURIComponent(member.id)}${globalView ? "&view=global" : ""}`);
   const data = resource.data?.profile;
   const user = resource.data?.user;
+  const ownerName = user?.name ?? member.name;
   const [accountOpen, setAccountOpen] = useState(false);
   const [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   const [match, setMatch] = useState<PlayerProfileMatchHistoryEntry | null>(null);
@@ -54,14 +56,14 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canEdit = 
       {!!data.recentForm.length && <section className="profile-form"><div className="section-heading"><h2>Recent form</h2><small>Latest first</small></div><div>{data.recentForm.map(m => <button key={m.id} className={m.result === "WIN" ? "win" : "loss"} aria-label={`${m.result === "WIN" ? "Win" : "Loss"}, ${m.score}, ${m.sessionName}`} onClick={() => setMatch(m)}>{m.result === "WIN" ? "W" : "L"}</button>)}</div></section>}
       {data.timeline.length > 0 && <RatingJourney timeline={data.timeline} onOpenSession={id => { const session = data.timeline.find(p => p.sessionId === id && p.session)?.session ?? data.history.items.find(s => s.id === id); if (session) setRecap(session); }} />}
       {isSelf ? <section className="profile-achievements" aria-label="Achievements"><div className="section-heading"><h2>Achievements</h2></div>{achievements ?? <OwnAchievements disabled={!canEdit} clubId={clubId} onOpenSession={onOpenSession} />}{milestone}</section> : pins.data?.earned.length ? <MemberPins collection={pins.data} /> : <ErrorText error={pins.error} />}
-      <ProfilePeople key={`${clubId}:${member.id}`} relationships={data.relationships} matches={data.matchHistory} onOpenMatch={setMatch} isSelf={isSelf} onOpenMember={onOpenMember} />
+      <ProfilePeople key={`${clubId}:${member.id}`} relationships={data.relationships} matches={data.matchHistory} ownerName={ownerName} onOpenMatch={setMatch} isSelf={isSelf} onOpenMember={onOpenMember} />
       <ProfileRecords records={data.records} onOpenSession={setRecap} />
-      <ProfileActivityHistory key={member.id} profile={data} onOpen={setRecap} onOpenMatch={setMatch} />
+      <ProfileActivityHistory key={member.id} profile={data} ownerName={ownerName} onOpen={setRecap} onOpenMatch={setMatch} />
     </>}
     <details className="profile-rating-help"><summary>How ratings work</summary><p>Ratings and ranks belong to this club. Match results change your rating; manual adjustments are marked separately. Achievements are separate from matchmaking ratings.</p></details>
     {isSelf && accountOpen && <AccountSettings disabled={!canEdit} clubContext={{ clubId, clubName, playerId: member.id, gender: member.gender, mixedSideOverride: normalizeMixedSideOverrideForGender(member.gender, member.mixedSideOverride, member.partnerPreference) }} open onClose={() => setAccountOpen(false)} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
-    <Sheet open={!!recap} title="Session recap" onClose={() => setRecap(null)}>{recap && <div className="profile-recap"><Avatar name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h3>{user?.name ?? member.name}</h3><h2>{recap.name}</h2><p className="muted">{dateLabel(recap.date)}</p><div className="player-standing"><div><span>Result</span><strong>{recap.wins}W · {recap.losses}L</strong></div><div><span>Rating change</span><strong>{(recap as RecordedSessionSummary).ratingMode === "UNRATED" ? "Unrated" : (recap as RecordedSessionSummary).ratingVerified === false ? "—" : signed(recap.ratingChange)}</strong></div></div><div className="profile-joined-list profile-recap-matches">{data?.matchHistory.filter(m => m.sessionId === recap.id).map(m => <button className="profile-history-row" key={m.id} onClick={() => setMatch(m)}><b className={m.result === "WIN" ? "positive" : "negative"}>{m.result === "WIN" ? "W" : "L"}</b><span><strong>{m.score}</strong><small>With {m.partner.name}</small><small>vs {m.opponents.map(p => p.name).join(" & ")}</small></span><CaretRight size={18} /></button>)}</div>{recap.id === data?.records.bestSession?.id && <details className="profile-rating-help"><summary>What makes this the best session?</summary><p>Most wins first, then win rate, point difference, games played, and most recent session to break ties.</p></details>}</div>}</Sheet>
-    <Sheet open={!!match} title="Match details" onClose={() => setMatch(null)}>{match && <div className="profile-match"><span className="eyebrow">{match.sessionName}</span><h2>{match.result === "WIN" ? "Win" : "Loss"} · {match.score}</h2><p className="muted">{dateLabel(match.date)}</p><h3>Partners</h3><p>{member.name} & {match.partner.name}</p><h3>Opponents</h3><p>{match.opponents.map(p => p.name).join(" & ")}</p><p>{match.ratingMode === "UNRATED" ? "Unrated" : match.eloChange === null ? "Rating change unavailable" : `${signed(match.eloChange)} rating`}</p></div>}</Sheet>
+    <Sheet open={!!recap} title="Session recap" onClose={() => setRecap(null)}>{recap && <div className="profile-recap"><Avatar name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h3>{ownerName}</h3><h2>{recap.name}</h2><p className="muted">{dateLabel(recap.date)}</p><div className="player-standing"><div><span>Result</span><strong>{recap.wins}W · {recap.losses}L</strong></div><div><span>Rating change</span><strong>{(recap as RecordedSessionSummary).ratingMode === "UNRATED" ? "Unrated" : (recap as RecordedSessionSummary).ratingVerified === false ? "—" : signed(recap.ratingChange)}</strong></div></div><div className="profile-recap-matches"><ProfileMatchList matches={data?.matchHistory.filter(m => m.sessionId === recap.id) ?? []} ownerName={ownerName} onOpen={setMatch} showSession={false} /></div>{recap.id === data?.records.bestSession?.id && <details className="profile-rating-help"><summary>What makes this the best session?</summary><p>Most wins first, then win rate, point difference, games played, and most recent session to break ties.</p></details>}</div>}</Sheet>
+    <ProfileMatchDetails match={match} ownerName={ownerName} onClose={() => setMatch(null)} />
   </article>;
 }
 

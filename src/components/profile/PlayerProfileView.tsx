@@ -52,6 +52,7 @@ import { EmptyState, FlashMessage } from "@/components/ui/chrome";
 import { navigateApp } from "@/lib/appNavigation";
 import type { ProfileConnectionSelection } from "@/lib/profileConnectionHistory";
 import { ConnectionMatchHistorySheet } from "./ConnectionMatchHistorySheet";
+import { ProfileMatchDetails, ProfileMatchList } from "./ProfileMatchList";
 
 const ProfileNavigationContext = createContext<{ clubId: string; readOnly: boolean } | null>(null);
 function ProfileDestinationLink({ href, children, className, label, onNavigate }: { href: string; children: ReactNode; className?: string; label?: string; onNavigate?: () => void }) {
@@ -202,31 +203,6 @@ function formatShortDate(value: string | null) {
   });
 }
 
-function formatMatchDateParts(value: string | null) {
-  if (!value) {
-    return { date: "No date", year: "" };
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return { date: "No date", year: "" };
-  }
-
-  return {
-    date: date.toLocaleDateString(undefined, {
-      day: "numeric",
-      month: "short",
-    }),
-    year: date.toLocaleDateString(undefined, {
-      year: "numeric",
-    }),
-  };
-}
-
-function formatMatchScore(score: string) {
-  return score.replace(/\s*-\s*/g, "-");
-}
-
 function formatConnectionRecord(summary: PlayerProfileConnectionSummary) {
   return `${summary.wins}W/${summary.losses}L`;
 }
@@ -299,12 +275,6 @@ function getTierLabel(elo: number) {
   if (elo >= 1200) return "Contender";
   if (elo >= 1000) return "Recent results up";
   return "Developing";
-}
-
-function getMatchResultSurfaceClass(result: PlayerProfileMatchHistoryEntry["result"]) {
-  return result === "WIN"
-    ? "bg-[rgba(15,118,110,0.045)]"
-    : "bg-rose-50/70";
 }
 
 function formatRatingTooltipDate(value: string | null) {
@@ -1248,7 +1218,7 @@ function RelationshipCards({
         historyOpen={!!connection}
         onOpenHistory={setConnection}
       />
-      <ConnectionMatchHistorySheet connection={connection} matches={data.matchHistory} onClose={() => setConnection(null)} renderMatches={matches => <MatchesList matches={matches} clubId={clubId} />} />
+      <ConnectionMatchHistorySheet connection={connection} matches={data.matchHistory} onClose={() => setConnection(null)} renderMatches={matches => <MatchesList matches={matches} ownerName={data.user.name} clubId={clubId} highlightPlayerId={connection?.id} />} />
     </ProfileSection>
   );
 }
@@ -1430,162 +1400,28 @@ function AchievementPreview({
   );
 }
 
-type MatchListVariant = "recent" | "full";
-
-function MatchParticipantAvatars({
-  participants,
-}: {
-  participants: PlayerProfileMatchHistoryEntry["opponents"];
-}) {
-  return (
-    <span className="flex shrink-0 -space-x-2">
-      {participants.map((participant) => (
-        <Avatar
-          key={participant.id}
-          name={participant.name}
-          avatarUrl={participant.avatarUrl}
-          size="match"
-          className="border-2 border-white shadow-[0_2px_8px_rgba(23,32,31,0.12)]"
-        />
-      ))}
-    </span>
-  );
-}
-
-function MatchParticipantCell({
-  label,
-  participants,
-  clubId,
-  showAvatars,
-}: {
-  label: "with" | "vs";
-  participants: PlayerProfileMatchHistoryEntry["opponents"];
-  clubId: string;
-  showAvatars: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <span className="block text-xs font-semibold text-gray-500">{label}</span>
-      <div className="mt-1 flex min-w-0 items-start gap-2">
-        {showAvatars ? <MatchParticipantAvatars participants={participants} /> : null}
-        <div className="min-w-0 text-sm font-semibold leading-snug text-gray-950">
-          {participants.map((participant, index) => (
-            <span key={participant.id}>
-              {index > 0 ? " / " : ""}
-              <ProfileLink href={getPlayerProfileHref(participant.id, participant.profileClubId === undefined ? clubId : participant.profileClubId ?? "")}>
-                {participant.name}
-              </ProfileLink>
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MatchCard({
-  match,
-  clubId,
-  variant,
-}: {
-  match: PlayerProfileMatchHistoryEntry;
-  clubId: string;
-  variant: MatchListVariant;
-}) {
-  const { date, year } = formatMatchDateParts(match.date);
-  const showAvatars = variant === "recent";
-
-  return (
-    <article
-      className={cx(
-        "grid gap-2 border-b border-[var(--line)] px-3 py-3 last:border-b-0",
-        getMatchResultSurfaceClass(match.result)
-      )}
-      data-match-row-variant={variant}
-    >
-      <div className="grid grid-cols-[minmax(4.25rem,auto)_minmax(0,1fr)_2.75rem] items-center gap-2">
-        <div className="grid grid-cols-[1.1rem_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 border-r border-[var(--line)] pr-2 text-xs font-semibold text-gray-600">
-          <CalendarDays
-            aria-hidden="true"
-            size={17}
-            strokeWidth={1.7}
-            className="row-span-2 mt-0.5 text-gray-900"
-          />
-          <span>{date}</span>
-          <span>{year}</span>
-        </div>
-        <div className="min-w-0 border-r border-[var(--line)] pr-2">
-          <strong
-            className={cx(
-              "block text-base font-[760] leading-tight",
-              match.result === "WIN" ? "text-[var(--accent-strong)]" : "text-rose-600"
-            )}
-          >
-            {formatMatchScore(match.score)}
-          </strong>
-          <ProfileDestinationLink
-            href={getSessionHistoryHref(match.sessionCode)}
-            className="mt-0.5 block text-xs font-semibold leading-tight text-gray-600 hover:text-[var(--accent-strong)] hover:underline"
-          >
-            {match.sessionName}
-          </ProfileDestinationLink>
-        </div>
-        <span
-          className={cx(
-            "inline-flex h-10 w-10 items-center justify-center justify-self-center rounded-xl text-base font-extrabold",
-            match.result === "WIN"
-              ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
-              : "bg-rose-100 text-rose-700"
-          )}
-        >
-          {match.result === "WIN" ? "W" : "L"}
-        </span>
-      </div>
-      <div className="grid gap-2 border-t border-[rgba(23,32,31,0.08)] pt-2 min-[380px]:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
-        <MatchParticipantCell
-          label="with"
-          participants={[match.partner]}
-          clubId={clubId}
-          showAvatars={showAvatars}
-        />
-        <div className="min-w-0 border-t border-[rgba(23,32,31,0.08)] pt-2 min-[380px]:border-l min-[380px]:border-t-0 min-[380px]:pl-2 min-[380px]:pt-0">
-          <MatchParticipantCell
-            label="vs"
-            participants={match.opponents}
-            clubId={clubId}
-            showAvatars={showAvatars}
-          />
-        </div>
-      </div>
-    </article>
-  );
-}
-
 function MatchesList({
   matches,
   clubId,
-  variant = "full",
+  ownerName,
+  highlightPlayerId,
 }: {
   matches: PlayerProfileMatchHistoryEntry[];
   clubId: string;
-  variant?: MatchListVariant;
+  ownerName: string;
+  highlightPlayerId?: string;
 }) {
+  const [match, setMatch] = useState<PlayerProfileMatchHistoryEntry | null>(null);
   if (matches.length === 0) {
     return <EmptyState title="No matches yet" />;
   }
-
-  return (
-    <div>
-      {matches.map((match) => (
-        <MatchCard
-          key={match.id}
-          match={match}
-          clubId={clubId}
-          variant={variant}
-        />
-      ))}
-    </div>
-  );
+  return <>
+    <ProfileMatchList matches={matches} ownerName={ownerName} onOpen={setMatch} highlightPlayerId={highlightPlayerId} />
+    <ProfileMatchDetails match={match} ownerName={ownerName} onClose={() => setMatch(null)}
+      renderParticipant={person => <ProfileLink href={getPlayerProfileHref(person.id, person.profileClubId === undefined ? clubId : person.profileClubId ?? "")}>{person.name}</ProfileLink>}
+      sessionAction={match && <ProfileDestinationLink href={getSessionHistoryHref(match.sessionCode)} className="text-sm font-semibold underline underline-offset-2">View session</ProfileDestinationLink>}
+    />
+  </>;
 }
 
 function OverviewTab({
@@ -1623,7 +1459,7 @@ function OverviewTab({
         <MatchesList
           matches={data.matchHistory.slice(0, 4)}
           clubId={clubId}
-          variant="recent"
+          ownerName={data.user.name}
         />
       </ProfileSection>
     </div>
@@ -1647,7 +1483,7 @@ function MatchesTab({
         </span>
       }
     >
-      <MatchesList matches={data.matchHistory} clubId={clubId} />
+      <MatchesList matches={data.matchHistory} ownerName={data.user.name} clubId={clubId} />
     </ProfileSection>
   );
 }
