@@ -18,15 +18,17 @@ describe("ClubSettings join code", () => {
   let container: HTMLDivElement;
   let root: Root;
   let refresh: ReturnType<typeof vi.fn<() => Promise<unknown>>>;
+  let deleted: ReturnType<typeof vi.fn<() => Promise<void>>>;
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
     refresh = vi.fn<() => Promise<unknown>>(async () => {});
+    deleted = vi.fn<() => Promise<void>>(async () => {});
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ id: "club-1" }) }) as Response));
   });
   afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
   async function render(overrides: Partial<ClubPageClub> = {}) {
-    await act(async () => root.render(<ClubSettings club={{ ...baseClub, ...overrides }} allowJoinRequests busy={false} onInvite={() => {}} onToggleJoins={() => {}} refresh={refresh} onDeleted={async () => {}} />));
+    await act(async () => root.render(<ClubSettings club={{ ...baseClub, ...overrides }} allowJoinRequests busy={false} onInvite={() => {}} onToggleJoins={() => {}} refresh={refresh} onDeleted={deleted} />));
   }
   function button(label: string) {
     const found = Array.from(container.querySelectorAll("button")).find(item => item.textContent?.includes(label));
@@ -102,6 +104,27 @@ describe("ClubSettings join code", () => {
     await act(async () => button("Refresh details").click());
     expect(refresh).toHaveBeenCalledOnce();
     expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("requires confirmation and leaves the club only after deletion succeeds", async () => {
+    await render({ membersCount: 1, sessionsCount: 0 });
+    await act(async () => button("Delete club").click());
+    const confirmButton = () => Array.from(container.querySelectorAll("button")).filter(item => item.textContent === "Delete club").at(-1)!;
+    expect(confirmButton().disabled).toBe(true);
+    const confirmation = container.querySelector<HTMLInputElement>('[aria-label="Deletion confirmation"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(confirmation, "DELETE");
+      confirmation.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ error: "This club has session history and cannot be deleted." }, { status: 409 }));
+    await act(async () => confirmButton().click());
+    expect(deleted).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("This club has session history and cannot be deleted.");
+    expect(confirmation.value).toBe("DELETE");
+    await act(async () => confirmButton().click());
+    expect(fetch).toHaveBeenLastCalledWith("/api/clubs/club-1", expect.objectContaining({ method: "DELETE", body: JSON.stringify({ confirmation: "DELETE" }) }));
+    expect(deleted).toHaveBeenCalledOnce();
+    expect(container.querySelector('[aria-label="Deletion confirmation"]')).toBeNull();
   });
 
 });

@@ -14,6 +14,7 @@ import { withLegacySportingAliases } from "@/lib/sportingIdentity";
 import { listSessionsForClub } from "@/app/api/sessions/listSessionsService";
 import { SessionRouteError } from "@/app/api/sessions/sessionRouteShared";
 import { logAuditEvent } from "@/lib/serverAudit";
+import { ClubDeletionError, deleteUnusedClub } from "@/lib/clubDeletion";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { deleteTutorialPlayground, getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
@@ -337,39 +338,6 @@ export async function DELETE(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const [membership, existing] = await Promise.all([
-      prisma.clubAccess.findUnique({
-        where: {
-          clubId_userId: {
-            clubId: id,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true, status: true },
-      }),
-      prisma.club.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          createdById: true,
-          isTutorial: true,
-          tutorialOwnerId: true,
-        },
-      }),
-    ]);
-
-    if (!existing) {
-      return invalidTargetResponse(request, "api:communities:id");
-    }
-    const viewerIsOwner = existing.createdById === session.user.id && membership?.status === "ACTIVE" && ["ADMIN", "OWNER"].includes(membership.role);
-    if (
-      !viewerIsOwner &&
-      (membership?.status !== "ACTIVE" || !["ADMIN", "OWNER"].includes(membership.role)) &&
-      !session.user.isAdmin
-    ) {
-      return invalidTargetResponse(request, "api:communities:id");
-    }
-
     const body = await request.json().catch(() => null);
     const confirmation =
       body && typeof body === "object"
@@ -379,27 +347,25 @@ export async function DELETE(
       return NextResponse.json({ error: "Invalid confirmation text" }, { status: 400 });
     }
 
-    const admissionHistory = await prisma.clubAdmissionRequest.findFirst({
-      where: { clubId: id },
-      select: { id: true },
-    });
-    if (admissionHistory) {
-      return NextResponse.json(
-        { error: "This club has admission history that must be retained and cannot be deleted." },
-        { status: 409 },
-      );
+    const [existing, access] = await Promise.all([
+      prisma.club.findUnique({ where: { id }, select: { isTutorial: true, tutorialOwnerId: true } }),
+      prisma.clubAccess.findUnique({
+        where: { clubId_userId: { clubId: id, userId: session.user.id } },
+        select: { role: true, status: true },
+      }),
+    ]);
+    // Deny existing-club nonmembers before reserving a writer. The service
+    // rechecks authority under that reservation to catch access revocation.
+    if (existing && !session.user.isAdmin && (access?.status !== "ACTIVE" || !["ADMIN", "OWNER"].includes(access.role))) {
+      return invalidTargetResponse(request, "api:communities:id");
     }
-
-    const invitationHistory = await prisma.playerInvitation.findFirst({ where: { clubId: id }, select: { id: true } });
-    if (invitationHistory) return NextResponse.json({ error: "This club has Player invitation history that must be retained and cannot be deleted." }, { status: 409 });
-
-    if (existing.isTutorial) {
+    if (existing?.isTutorial) {
       if (existing.tutorialOwnerId !== session.user.id) {
         return invalidTargetResponse(request, "api:communities:id");
       }
       await deleteTutorialPlayground(session.user.id, id);
     } else {
-      await prisma.club.delete({ where: { id } });
+      await deleteUnusedClub(prisma, { clubId: id, actorUserId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
     }
 
     logAuditEvent({
@@ -423,12 +389,19 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof ClubDeletionError) {
+      if (error.statusCode === 404) return invalidTargetResponse(request, "api:communities:id");
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    if (error instanceof Error && error.message.includes("UNUSED_CLUB_DELETION_INVALID")) {
+      return NextResponse.json({ error: "This club changed. Refresh before trying to delete it." }, { status: 409 });
+    }
     const code =
       typeof error === "object" && error !== null && "code" in error
         ? (error as { code?: unknown }).code
         : undefined;
     if (["P2003", "P2004", "P2014"].includes(String(code))
-      || (error instanceof Error && error.message.includes("LOCAL_ROSTER_HISTORY_PRESERVED"))) {
+      || (error instanceof Error && /LOCAL_ROSTER_HISTORY_PRESERVED|FOREIGN KEY constraint failed/i.test(error.message))) {
       return NextResponse.json(
         { error: "This club has linked history that must be retained and cannot be deleted." },
         { status: 409 },

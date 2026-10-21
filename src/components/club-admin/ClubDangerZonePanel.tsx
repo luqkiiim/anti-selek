@@ -63,7 +63,7 @@ export function ClubDangerZonePanel({
         {!isTutorial ? (
           <div className={`${styles.dangerAction} ${styles.deleteAction}`}>
             <p>Delete this club</p>
-            <span>Permanently removes this club and all related data.</span>
+            <span>Permanently removes an unused club and its player profile.</span>
             <button
               type="button"
               onClick={onDeleteClub}

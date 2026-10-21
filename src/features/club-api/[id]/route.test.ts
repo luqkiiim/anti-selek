@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   invitationFindFirst: vi.fn(),
   clubDelete: vi.fn(),
   clubUpdate: vi.fn(),
+  deleteUnusedClub: vi.fn(),
   deleteTutorialPlayground: vi.fn(),
   rateLimit: vi.fn(async () => null),
   checkInvalidTargetRateLimit: vi.fn(async () => null),
@@ -19,6 +20,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth", () => ({
   auth: mocks.auth,
+}));
+
+vi.mock("@/lib/clubDeletion", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/clubDeletion")>(),
+  deleteUnusedClub: mocks.deleteUnusedClub,
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -67,6 +73,7 @@ vi.mock("@/lib/tutorialPlayground", () => ({
 }));
 
 import { DELETE, PATCH } from "./route";
+import { ClubDeletionError } from "@/lib/clubDeletion";
 
 const session = {
   user: {
@@ -96,6 +103,7 @@ describe("club settings rules", () => {
     mocks.clubFindUnique.mockResolvedValue(existingClub());
     mocks.clubFindMany.mockResolvedValue([]);
     mocks.clubAdmissionFindFirst.mockResolvedValue(null);
+    mocks.deleteUnusedClub.mockReset().mockResolvedValue(undefined);
     mocks.rateLimit.mockResolvedValue(null);
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
   });
@@ -169,7 +177,7 @@ describe("club settings rules", () => {
   });
 
   it("preserves admission history and returns a conflict when deleting a club", async () => {
-    mocks.clubAdmissionFindFirst.mockResolvedValue({ id: "admission-1" });
+    mocks.deleteUnusedClub.mockRejectedValue(new ClubDeletionError("This club has admission history that must be retained and cannot be deleted.", 409, "ADMISSION_HISTORY"));
 
     const response = await DELETE(
       new Request("http://localhost/api/clubs/club-1", {
@@ -190,7 +198,7 @@ describe("club settings rules", () => {
     Object.assign(new Error("foreign key constraint failed"), { code: "P2003" }),
     new Error("SQLITE_CONSTRAINT: LOCAL_ROSTER_HISTORY_PRESERVED"),
   ])("explains retained history when the database rejects club deletion", async (error) => {
-    mocks.clubDelete.mockRejectedValue(error);
+    mocks.deleteUnusedClub.mockRejectedValue(error);
 
     const response = await DELETE(
       new Request("http://localhost/api/clubs/club-1", {
@@ -223,5 +231,6 @@ describe("club settings rules", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.deleteTutorialPlayground).toHaveBeenCalledWith("owner-1", "club-1");
+    expect(mocks.deleteUnusedClub).not.toHaveBeenCalled();
   });
 });

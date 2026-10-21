@@ -57,6 +57,7 @@ model User {
   localOwnershipActions         ClubPlayerOwnershipEvent[]   @relation("LocalOwnershipActor")
   localOwnershipPrevious        ClubPlayerOwnershipEvent[]   @relation("LocalOwnershipPrevious")
   localOwnershipNew             ClubPlayerOwnershipEvent[]   @relation("LocalOwnershipNew")
+  clubDeletions                  ClubDeletionReceipt[]
 
   @@map("Account")
 }
@@ -162,6 +163,21 @@ model ClubRatingAdjustment {
   actor     User       @relation("ClubRatingAdjustmentActor", fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([memberId, createdAt])
+}
+
+// Permanent deletion audit. Target IDs are snapshots, deliberately not foreign
+// keys to the club/profile rows removed by the validated insert trigger.
+model ClubDeletionReceipt {
+  clubId          String   @id
+  clubName        String
+  creatorUserId   String
+  actorUserId     String
+  clubMemberId    String?  @unique
+  playerId        String?  @unique
+  setupEventId    String?  @unique
+  setupEventJson  String?
+  createdAt       DateTime @default(now())
+  actor           User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
 }
 
 model ClubMember {
