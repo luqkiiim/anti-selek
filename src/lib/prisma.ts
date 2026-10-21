@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
-import { createClient } from "@libsql/client";
+// Turso uses the remote transports; local SQLite uses Prisma's own engine below.
+// The Node entry also loads libSQL's native SQLite driver into every API bundle.
+import { createClient } from "@libsql/client/web";
 import { resolvePrismaRuntimeMode, selectPrismaTursoCredentials } from "./prismaRuntime";
 import { assertRuntimeTursoEndpoint } from "../../scripts/turso-local-target-guard.mjs";
 
