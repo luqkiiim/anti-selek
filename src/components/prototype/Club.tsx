@@ -39,6 +39,7 @@ import {
 import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
+import { ClubMembersSheet } from "./ClubMembersSheet";
 import { MonthlyClimbers } from "./MonthlyClimbers";
 import { UpcomingSessions } from "./UpcomingSessions";
 import { NextMilestone, AchievementCabinet } from "./Achievements";
@@ -98,6 +99,7 @@ export default function Club({
   const href = useAppLocation();
   const route = new URL(href, "https://anti-selek.local");
   const [localMemberStack, setMemberStack] = useState<string[]>([]);
+  const [membersOpen, setMembersOpen] = useState(false);
   const memberStack = onRoute ? route.searchParams.getAll("member") : localMemberStack;
   const [localPage, setPage] = useState<string>(globalView ? "club" : initialPage),
     [sessionCode, setSessionCode] = useState(""),
@@ -358,7 +360,7 @@ export default function Club({
                     <strong>{data.clubPulse?.metrics.totalMatches.toLocaleString() ?? "—"}</strong>
                     <span>Matches</span>
                   </div>
-                  <button type="button" onClick={() => go("rankings")} aria-label={`${data.clubMembers.length.toLocaleString()} Members, view rankings`}>
+                  <button type="button" onClick={() => setMembersOpen(true)} aria-label={`${data.clubMembers.length.toLocaleString()} Members, view members`}>
                     <UsersThree size={19} aria-hidden="true" />
                     <strong>{data.clubMembers.length.toLocaleString()}</strong>
                     <span>Members</span>
@@ -504,6 +506,7 @@ export default function Club({
       {!["setup", "recap"].includes(page) && (
         <MainNav active={page} onNavigate={go} readOnly={readOnly} />
       )}
+      {data && <ClubMembersSheet members={data.clubMembers} open={membersOpen} onClose={() => setMembersOpen(false)} />}
       {memberOverlay}
     </div>
   );

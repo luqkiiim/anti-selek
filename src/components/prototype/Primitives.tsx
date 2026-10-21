@@ -76,8 +76,14 @@ function SheetDialog({ title, onClose, children, footer, busy = false }: SheetPr
   const [travel] = useState(() => typeof window === "undefined" ? 1000 : window.innerHeight + 36);
   useEffect(() => {
     const node = ref.current;
+    const previousFocus = document.activeElement;
     node?.showModal();
-    return () => { if (node?.open) node.close(); };
+    return () => {
+      if (node?.open) node.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
+    };
   }, []);
   const close = () => { if (!busy) onClose(); };
   return (

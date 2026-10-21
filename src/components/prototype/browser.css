@@ -388,6 +388,12 @@
 .rankings-page details { margin-top: 22px; }
 .rankings-note { font-size: 13px; color: #80718b; }
 
+.prototype-sheet .club-members-list { list-style: none; margin: 0; padding: 0; background: #fffdfb; border: 1px solid #eee5ef; border-radius: 20px; }
+.prototype-sheet .club-members-list li { display: flex; align-items: center; gap: 12px; padding: 14px; }
+.prototype-sheet .club-members-list li + li { border-top: 1px solid #eee5ef; }
+.prototype-sheet .club-members-list .avatar { width: 40px; height: 40px; flex: 0 0 40px; }
+.prototype-sheet .club-members-list strong { min-width: 0; overflow-wrap: anywhere; font-size: 15px; }
+
 .prototype-root .club-activity-totals {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

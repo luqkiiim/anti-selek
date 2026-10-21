@@ -49,3 +49,36 @@ it("dismisses a sheet without cancelling its parent profile dialog", async () =>
     else Reflect.deleteProperty(HTMLDialogElement.prototype, "close");
   }
 });
+
+it("returns keyboard focus to the opener after the sheet unmounts", async () => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  const showModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "showModal");
+  const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, "close");
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() {
+    this.open = true;
+    this.querySelector("button")?.focus();
+  } });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
+  const opener = document.createElement("button");
+  opener.textContent = "Members";
+  const container = document.createElement("div");
+  document.body.append(opener, container);
+  const root = createRoot(container);
+  let unmounted = false;
+  try {
+    opener.focus();
+    await act(async () => root.render(<Sheet title="Members" onClose={() => {}}>Member list</Sheet>));
+    expect(document.activeElement).toBe(container.querySelector('[aria-label="Close"]'));
+    await act(async () => root.unmount());
+    unmounted = true;
+    expect(document.activeElement).toBe(opener);
+  } finally {
+    if (!unmounted) await act(async () => root.unmount());
+    container.remove();
+    opener.remove();
+    if (showModal) Object.defineProperty(HTMLDialogElement.prototype, "showModal", showModal);
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, "showModal");
+    if (close) Object.defineProperty(HTMLDialogElement.prototype, "close", close);
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, "close");
+  }
+});
