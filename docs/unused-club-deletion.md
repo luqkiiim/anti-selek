@@ -1,71 +1,65 @@
 # Permanent deletion of unused clubs
 
-An unused ordinary club can be deleted, along with its creator's automatically
-created local player profile. The login account and profiles in other clubs are
-unchanged. Deleting the actual club row frees its name for reuse.
+An unused ordinary club can be deleted with its creator's local player profile
+and offline placeholders. This includes placeholders that are still on the
+roster or were removed, local starting/manual ratings, profile preferences and
+the creator's access edits. Setup bookkeeping is cleaned up by deletion; it is
+not a reason to refuse it. The actual club row is deleted so its name is reusable.
+Login accounts and data in other clubs are unchanged.
 
-The only permitted roster is the creator's initial local profile, with its
-original OWNER access and initial automatic CLAIM. A genuinely empty club with
-no roster also qualifies. Hosted, test and shared sessions (including pending
-collaborations), other players/access, admission or invitation history, rating
-changes, shared profiles, identity relationships and other sporting references
-block deletion. The service returns the specific blocker where available.
+Actual hosted/test/shared sessions, match or queue references, profiles shared
+with other clubs, other registered accounts, admissions/invitations and identity
+relationships remain protected. Deleting an unused club does not authorize
+erasing another club's data or an account's sporting history.
 
-`deleteUnusedClub` takes the existing ownership writer reservation before
-checking the authenticated account, current club access and eligibility. Current
-local ADMIN/OWNER permissions and the existing global-admin capability apply.
-The endpoint continues to require the exact `DELETE` confirmation. A successful
-retry is allowed for the original actor, creator or global admin with an active
-account; other callers receive the same invalid-target response.
+The service reserves the writer before reading the account, authority and
+eligibility. Active local ADMIN/OWNER permissions and the existing global-admin
+capability apply; exact DELETE confirmation is required. Retries work for the
+original actor, creator or global admin with an active account. Other callers
+receive the usual invalid-target response.
 
-The forward migration `20261021120000_delete_unused_clubs` changes no existing
-rows. It adds shared eligibility/setup views and an immutable deletion receipt.
-Inserting that receipt validates the exact live setup and atomically removes the
-initial ownership event, roster/account connection, club access, club and unused
-player. The full original setup event is retained as JSON in the receipt. Receipt
-target IDs deliberately have no foreign keys to deleted rows. The actor remains
-an Account foreign key. Deleted club/profile/roster IDs cannot be reused, so a
-receipt cannot become a later deletion bypass. New clubs may reuse the old name
-with fresh IDs. An error at any cleanup step rolls back the entire statement and
-transaction, including the receipt. Direct unaudited deletions remain blocked.
+## Database cleanup
 
-## Verification
+Migration 20261021120000_delete_unused_clubs introduced the deletion receipt
+and guarded cleanup. The forward correction
+20261021180000_delete_unused_placeholders adds nullable cleanupJson, makes
+the setup view return one row per club, and allows local offline placeholders
+regardless of archive state or number of setup events.
 
-Focused integration tests run the real create/delete/list handlers against both
-SQLite and the Prisma libSQL adapter. They cover physical cleanup, name reuse,
-account/other-club preservation, typed confirmation, access failures, retries,
-global admins, retained sessions/ratings/memberships, forged receipts, immutable
-audits, deleted-ID reuse, failed-cleanup rollback and competing session/admission
-writers. A migration test compares every existing table/row/column value before
-and after installation, including a valid ownership event and password hash.
-The settings component test checks confirmation, a rejected deletion and the
-success callback. Existing read-store tests cover cache eviction.
+The service inserts a snapshot selected from the database. The receipt guard
+validates that it matches the entire current local roster, ownership events and
+manual rating adjustments. The same statement removes local ownership events,
+rosters, access, the club and its unused player profiles. Full ownership and
+rating audit payloads stay in the immutable receipt, so those records no longer
+hold foreign keys to profiles that the user wants deleted. They cannot become
+user-visible deletion blockers. Deleted IDs cannot be reused. Any failure rolls
+back every row and the receipt.
 
-## Production release remains held
+The new migration changes no existing values. Historical receipts get only a
+new NULL field. The previously deployed service can still delete the original
+creator-only/empty case without the new snapshot. Deletion involving extra
+placeholders requires the matching new app. Direct unaudited deletion remains
+blocked.
 
-This application requires the migration; a build or push does not apply it.
-Migration first is compatible with the old app: its direct ordinary-club deletes
-remain blocked. New application deletion requests require the new receipt/views.
-Other application routes continue to use the unchanged existing schema.
+## Verification and release
 
-Before production release, inspect the actual applied chain and prepare a finite
-writer procedure for this SQL and the verified production target. Reuse the
-existing maintenance procedure and guards where applicable, with independent
-review of the migration and writer differences, exact source/SQL pins, explicit
-user approval, a fresh backup and rehearsal on a local protected copy. Historical
-release runners pin earlier manifests and must not be invoked for this migration.
-The generic production rehearsal is disabled in current target policy; do not
-enable it or repurpose development credentials to bypass those guards.
+Integration tests use the real create-player, remove-player and delete-club
+handlers on both SQLite and libSQL. They cover mixed active/removed placeholders,
+manual starting ratings, physical cleanup, preserved accounts/other clubs, name
+reuse, exact audit snapshots, forged/missing snapshots, ID reuse, permissions,
+rollback, sessions/shared profiles and concurrent writers. Migration checks
+compare every original table/column value, including old deletion receipts and
+credentials, then check foreign keys and integrity.
 
-Verify the installed receipt/views/triggers and untouched original row values,
-deploy the matching app, then smoke create → delete → recreate and inspect fresh
-runtime logs. Use the existing coordinated maintenance window if the selected
-writer requires it. No production migration, deployment or cutover is authorized
-by the implementation request alone.
+The original migration and app are live. This forward correction requires a
+separately reviewed, explicitly approved production migration and matching
+deployment; a normal build or push never applies migrations. Reuse the release64
+procedure with fresh finite pins and preservation of original receipt columns.
+Do not run that historical writer against migration65 or repurpose development
+credentials. Follow [database-release-policy.md](database-release-policy.md).
 
-Recovery: stop further deletion requests and use a reviewed forward repair if
-verification fails. Keep the receipt and backup. Never replay an uncertain writer
-or restore an older whole database over newer user activity. Reverting the app
-leaves the new database safeguards installed and stops ordinary-club deletion;
-it does not restore already deleted clubs. Follow
-[database-release-policy.md](database-release-policy.md).
+After release, smoke create club → add placeholder → remove placeholder → delete
+club → recreate the name. Verify physical cleanup and fresh runtime logs. Keep a
+backup and the migration receipt. Do not restore an old database over later user
+activity. Reverting the app stops the expanded deletion path and remains schema
+compatible; it does not restore already deleted clubs.

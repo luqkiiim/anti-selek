@@ -176,6 +176,7 @@ model ClubDeletionReceipt {
   playerId        String?  @unique
   setupEventId    String?  @unique
   setupEventJson  String?
+  cleanupJson     String?
   createdAt       DateTime @default(now())
   actor           User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
 }

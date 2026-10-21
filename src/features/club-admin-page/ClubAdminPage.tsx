@@ -172,7 +172,7 @@ function getClubActionDialogCopy(
   return {
     title: "Delete club permanently?",
     subtitle:
-      "This removes an unused club and its player profile.",
+      "This removes an unused club and its player profiles.",
     confirmLabel: "Delete Club",
     confirmationKeyword: "DELETE",
     details: (

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { migrateFixture } from "./clubOwnership.integration.fixture";
 import { deleteUnusedClub } from "./clubDeletion";
+import { claimClubPlayer, clubOwnershipTransaction } from "./clubPlayerOwnership";
 import { admissionTransaction, submitClubAdmission } from "./clubAdmissions";
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn() }));
@@ -22,8 +23,10 @@ vi.mock("@/lib/rateLimit", () => ({
 vi.mock("@/lib/serverAudit", () => ({ logAuditEvent: vi.fn() }));
 import { GET as listClubs, POST } from "@/features/club-api/route";
 import { DELETE } from "@/features/club-api/[id]/route";
+import { POST as addPlaceholder } from "@/features/club-api/[id]/members/route";
+import { DELETE as removePlaceholder } from "@/features/club-api/[id]/members/[userId]/route";
 
-const migration = "20261021120000_delete_unused_clubs";
+const migration = "20261021180000_delete_unused_placeholders";
 const dir = mkdtempSync(path.join(tmpdir(), "unused-club-deletion-"));
 const baseline = path.join(dir, "baseline.db");
 let sequence = 0;
@@ -61,6 +64,7 @@ async function snapshot() {
     access: await db.clubAccess.findMany({ orderBy: { id: "asc" } }),
     events: await db.clubPlayerOwnershipEvent.findMany({ orderBy: { id: "asc" } }),
     receipts: await db.clubDeletionReceipt.findMany({ orderBy: { clubId: "asc" } }),
+    ratings: await db.clubRatingAdjustment.findMany({ orderBy: { id: "asc" } }),
   };
 }
 
@@ -148,22 +152,77 @@ describe.each(["sqlite", "libsql"] as const)("unused club deletion (%s)", provid
     expect(await db.session.findUnique({ where: { id: session.id } })).not.toBeNull();
   });
 
-  it.each(["other player", "rating adjustment", "shared profile", "access change"])("retains a club with %s", async kind => {
+  it.each(["other account", "shared profile", "other account access"])("retains a club with %s", async kind => {
     const club = await createClub();
     const member = await db.clubMember.findFirstOrThrow({ where: { clubId: club.id } });
-    if (kind === "other player") {
+    if (kind === "other account") {
       const player = await db.player.create({ data: { name: "Guest" } });
       await db.clubMember.create({ data: { clubId: club.id, playerId: player.id } });
-    } else if (kind === "rating adjustment") {
-      await db.clubRatingAdjustment.create({ data: { memberId: member.id, actorId: "owner", actorName: "Owner", beforeElo: 1000, afterElo: 1200, reason: "Recorded adjustment" } });
+      await clubOwnershipTransaction(db, tx => claimClubPlayer(tx, { clubId: club.id, playerId: player.id, userId: "stranger", actorUserId: "owner" }));
     } else if (kind === "shared profile") {
       await db.clubMember.create({ data: { clubId: otherClub.id, playerId: member.playerId } });
     } else {
-      await db.clubAccess.update({ where: { clubId_userId: { clubId: club.id, userId: "owner" } }, data: { role: "ADMIN" } });
+      await db.clubAccess.create({ data: { clubId: club.id, userId: "stranger", role: "MEMBER" } });
     }
     const before = await snapshot();
     expect((await requestDelete(club.id)).status).toBe(409);
     expect(await snapshot()).toEqual(before);
+  });
+
+  it("deletes active and removed placeholders with their setup ratings and archive records", async () => {
+    const before = await snapshot();
+    const club = await createClub();
+    const placeholders: string[] = [];
+    for (const [name, initialRating] of [["Keep until club deletion", 1400], ["Remove first", 1200]] as const) {
+      const response = await addPlaceholder(new Request(`http://localhost/api/clubs/${club.id}/members`, {
+        method: "POST", body: JSON.stringify({ name, gender: "FEMALE", initialRating }),
+      }), { params: Promise.resolve({ id: club.id }) });
+      const body = await response.json();
+      expect(response.status, JSON.stringify(body)).toBe(201);
+      placeholders.push(body.id);
+    }
+    const removed = await removePlaceholder(new Request(`http://localhost/api/clubs/${club.id}/members/${placeholders[1]}`, { method: "DELETE" }), {
+      params: Promise.resolve({ id: club.id, userId: placeholders[1] }),
+    });
+    expect(removed.status, await removed.text()).toBe(200);
+    expect(await db.clubMember.count({ where: { clubId: club.id, archivedAt: { not: null } } })).toBe(1);
+    const members = await db.clubMember.findMany({ where: { clubId: club.id } });
+    const [setup] = await db.$queryRaw<Array<{ cleanupJson: string }>>`SELECT "cleanupJson" FROM "UnusedClubDeletionSetup" WHERE "clubId"=${club.id}`;
+    const live = await snapshot();
+    // Neither a missing nor a forged snapshot may erase extra profiles/audits.
+    await expect(db.$executeRaw`INSERT INTO "ClubDeletionReceipt" ("clubId","clubName","creatorUserId","actorUserId","clubMemberId","playerId","setupEventId","setupEventJson")
+      SELECT "clubId","clubName","creatorUserId",'owner',"clubMemberId","playerId","setupEventId","setupEventJson" FROM "UnusedClubDeletionSetup" WHERE "clubId"=${club.id}`).rejects.toThrow();
+    await expect(db.$executeRaw`INSERT INTO "ClubDeletionReceipt" ("clubId","clubName","creatorUserId","actorUserId","clubMemberId","playerId","setupEventId","setupEventJson","cleanupJson")
+      SELECT "clubId","clubName","creatorUserId",'owner',"clubMemberId","playerId","setupEventId","setupEventJson",json_set("cleanupJson",'$.playerIds[0]','other-club-player') FROM "UnusedClubDeletionSetup" WHERE "clubId"=${club.id}`).rejects.toThrow();
+    expect(await snapshot()).toEqual(live);
+    const response = await requestDelete(club.id);
+    expect(response.status, await response.text()).toBe(200);
+    const after = await snapshot();
+    expect({ ...after, receipts: [] }).toEqual(before);
+    expect(after.receipts[0].cleanupJson).toBe(setup.cleanupJson);
+    const cleanup = JSON.parse(setup.cleanupJson);
+    expect(cleanup.memberIds.sort()).toEqual(members.map(m => m.id).sort());
+    expect(cleanup.playerIds.sort()).toEqual(members.map(m => m.playerId).sort());
+    expect(cleanup.ownershipEvents.map((event: { action: string }) => event.action).sort()).toEqual(["ARCHIVE", "CLAIM"]);
+    expect(cleanup.ratingAdjustments).toHaveLength(2);
+    for (const member of members) {
+      expect(await db.player.findUnique({ where: { id: member.playerId } })).toBeNull();
+      await expect(db.player.create({ data: { id: member.playerId, name: "Reused" } })).rejects.toThrow();
+      await expect(db.clubMember.create({ data: { id: member.id, clubId: otherClub.id, playerId: (await db.clubMember.findFirstOrThrow({ where: { clubId: otherClub.id } })).playerId } })).rejects.toThrow();
+    }
+    expect((await createClub()).name).toBe(club.name);
+    expect(await db.$queryRaw`PRAGMA foreign_key_check`).toEqual([]);
+  });
+
+  it("allows creator access edits and preserves old-app deletion of a fresh club", async () => {
+    const club = await createClub();
+    await db.clubAccess.update({ where: { clubId_userId: { clubId: club.id, userId: "owner" } }, data: { role: "ADMIN" } });
+    expect((await requestDelete(club.id)).status).toBe(200);
+    const legacy = await createClub("Old application request");
+    await db.$executeRaw`INSERT INTO "ClubDeletionReceipt" ("clubId","clubName","creatorUserId","actorUserId","clubMemberId","playerId","setupEventId","setupEventJson")
+      SELECT "clubId","clubName","creatorUserId",'owner',"clubMemberId","playerId","setupEventId","setupEventJson" FROM "UnusedClubDeletionSetup" WHERE "clubId"=${legacy.id}`;
+    expect(await db.club.findUnique({ where: { id: legacy.id } })).toBeNull();
+    expect(await db.clubDeletionReceipt.findUnique({ where: { clubId: legacy.id } })).toMatchObject({ cleanupJson: null });
   });
 
   it("keeps setup history immutable unless the complete deletion is authorized", async () => {
@@ -184,11 +243,35 @@ describe.each(["sqlite", "libsql"] as const)("unused club deletion (%s)", provid
 
   it("rolls back every deletion and its receipt if final profile cleanup fails", async () => {
     const club = await createClub();
+    const placeholder = await db.player.create({ data: { name: "Removed before rollback" } });
+    await db.clubMember.create({ data: { clubId: club.id, playerId: placeholder.id } });
+    const removal = await removePlaceholder(new Request(`http://localhost/api/clubs/${club.id}/members/${placeholder.id}`, { method: "DELETE" }), {
+      params: Promise.resolve({ id: club.id, userId: placeholder.id }),
+    });
+    expect(removal.status).toBe(200);
     const before = await snapshot();
     await db.$executeRawUnsafe(`CREATE TRIGGER fixture_cleanup_failure BEFORE DELETE ON "User" BEGIN SELECT RAISE(ABORT,'FIXTURE_CLEANUP_FAILURE'); END`);
     await expect(deleteUnusedClub(db, { clubId: club.id, actorUserId: "owner", isGlobalAdmin: false })).rejects.toThrow();
     expect(await snapshot()).toEqual(before);
   });
+
+  it("does not leave an orphan if adding a placeholder races club deletion", async () => {
+    const before = await snapshot();
+    const club = await createClub();
+    const results = await Promise.allSettled([
+      deleteUnusedClub(db, { clubId: club.id, actorUserId: "owner", isGlobalAdmin: false }),
+      db.$transaction(async tx => {
+        const player = await tx.player.create({ data: { name: "Concurrent placeholder" } });
+        await tx.clubMember.create({ data: { clubId: club.id, playerId: player.id } });
+        return player.id;
+      }),
+    ]);
+    expect(results[0].status).toBe("fulfilled");
+    const after = await snapshot();
+    expect({ ...after, receipts: [] }).toEqual(before);
+    expect(after.receipts).toHaveLength(1);
+    expect(await db.$queryRaw`PRAGMA foreign_key_check`).toEqual([]);
+  }, 20000);
 
   it.each(["session", "join"])("cannot delete a club and concurrently commit a %s for it", async kind => {
     const club = await createClub();
@@ -214,7 +297,8 @@ it("installs the migration without changing any existing row or column value", (
     const predecessor = readdirSync("prisma/migrations").filter(name => name < migration && /^\d{14}_/.test(name)).sort().at(-1)!;
     migrateFixture(sqlite, predecessor);
     sqlite.exec(`INSERT INTO Account(id,name,email,passwordHash,createdAt,updatedAt) VALUES ('a','Preserved','preserved@test.invalid','preserved-password',1,2);
-      INSERT INTO Community(id,name,createdById,createdAt,updatedAt) VALUES ('c','Preserved Club','a',3,4);
+      INSERT INTO Community(id,name,createdById,createdAt,updatedAt) VALUES ('c','Preserved Club','a',3,4),('deleted','Previously deleted','a',3,4);
+      INSERT INTO ClubDeletionReceipt(clubId,clubName,creatorUserId,actorUserId) VALUES ('deleted','Previously deleted','a','a');
       INSERT INTO User(id,name,elo,createdAt,updatedAt) VALUES ('p','Preserved Player',1432,5,6);
       INSERT INTO CommunityMember(id,communityId,userId,elo,createdAt) VALUES ('m','c','p',1432,7);
       INSERT INTO ClubAccess(id,clubId,userId,role,status,createdAt,updatedAt) VALUES ('x','c','a','OWNER','ACTIVE',7,7);
@@ -225,9 +309,10 @@ it("installs the migration without changing any existing row or column value", (
         '{"name":"Preserved Player","avatarKey":null}','{"name":"Preserved","avatarKey":null}',
         '{"previousArchivedAt":null,"newArchivedAt":null}','Preserved initial claim',8);`);
     const tables = sqlite.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(row => String(row.name));
-    const before = tables.map(table => ({ table, rows: sqlite.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all() }));
+    const before = tables.map(table => ({ table, columns: sqlite.prepare(`PRAGMA table_info("${table}")`).all().map(column => `"${column.name}"`).join(","), rows: sqlite.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all() }));
     sqlite.exec(readFileSync(path.join("prisma/migrations", migration, "migration.sql"), "utf8"));
-    for (const { table, rows } of before) expect(sqlite.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all(), table).toEqual(rows);
+    for (const { table, columns, rows } of before) expect(sqlite.prepare(`SELECT ${columns} FROM "${table}" ORDER BY rowid`).all(), table).toEqual(rows);
+    expect(sqlite.prepare('SELECT cleanupJson FROM ClubDeletionReceipt').all()).toEqual([{ cleanupJson: null }]);
     expect(sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
     expect(sqlite.prepare("PRAGMA integrity_check").get()).toMatchObject({ integrity_check: "ok" });
   } finally { sqlite.close(); }

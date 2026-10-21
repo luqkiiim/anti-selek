@@ -6,8 +6,8 @@ const blockers: Record<string, string> = {
   SESSION_HISTORY: "This club has sessions or shared session history and cannot be deleted.",
   ADMISSION_HISTORY: "This club has admission history that must be retained and cannot be deleted.",
   INVITATION_HISTORY: "This club has Player invitation history that must be retained and cannot be deleted.",
-  OTHER_MEMBERS: "Only unused clubs with no other players can be deleted.",
-  ACCESS_HISTORY: "This club has other account access or access changes and cannot be deleted.",
+  OTHER_MEMBERS: "This club has profiles connected to other accounts and cannot be deleted.",
+  ACCESS_HISTORY: "This club has access for other accounts and cannot be deleted.",
   OWNERSHIP_HISTORY: "This club has player ownership history beyond its initial setup and cannot be deleted.",
   SHARED_PROFILE: "This club's player profile is shared with another club and cannot be deleted.",
   RATING_HISTORY: "This club has rating history and cannot be deleted.",
@@ -53,8 +53,8 @@ export async function deleteUnusedClub(db: PrismaClient, input: {
     // INSERT validates and applies all cleanup in one database statement. The
     // snapshot is read from the database, never supplied by the client.
     await tx.$executeRaw`INSERT INTO "ClubDeletionReceipt" (
-      "clubId","clubName","creatorUserId","actorUserId","clubMemberId","playerId","setupEventId","setupEventJson","createdAt"
-    ) SELECT "clubId","clubName","creatorUserId",${input.actorUserId},"clubMemberId","playerId","setupEventId","setupEventJson",${Date.now()}
+      "clubId","clubName","creatorUserId","actorUserId","clubMemberId","playerId","setupEventId","setupEventJson","cleanupJson","createdAt"
+    ) SELECT "clubId","clubName","creatorUserId",${input.actorUserId},"clubMemberId","playerId","setupEventId","setupEventJson","cleanupJson",${Date.now()}
       FROM "UnusedClubDeletionSetup" WHERE "clubId"=${input.clubId}`;
     if (await tx.club.findUnique({ where: { id: input.clubId }, select: { id: true } })) {
       throw new Error("Unused club deletion did not complete");
