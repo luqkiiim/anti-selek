@@ -526,8 +526,13 @@ const styles: Record<string, CSSProperties> = {
   },
   podiumBlock: {
     display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
-    width: "100%", marginTop: 14, padding: "10px 8px 6px",
+    position: "relative", width: "100%", marginTop: 14, padding: "10px 8px 6px",
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
+  },
+  podiumWatermark: {
+    display: "flex", position: "absolute", left: 0, right: 0, bottom: 18, justifyContent: "center",
+    fontSize: 22, fontWeight: 400, lineHeight: 1.2, color: "#bfa9d1", letterSpacing: 0.5,
+    whiteSpace: "nowrap",
   },
   podiumRank: { display: "flex", fontSize: 44, fontWeight: 900, lineHeight: 1 },
   podiumName: {
@@ -703,6 +708,7 @@ function PodiumCard({
         <div style={{ ...styles.podiumDetails, color: "#ddc8ee" }}>
           {`${formatPointDiff(standing.pointDiff)} Diff`}
         </div>
+        {standing.rank === 1 && <div style={styles.podiumWatermark}>antiselek.com</div>}
       </div>
     </div>
   );
@@ -771,6 +777,7 @@ export function renderSessionShareImage(
             <PodiumCard key={standing.userId} standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} centered={topThree.length === 1} />
           ))}
         </div>}
+        {isContinuation && <div style={styles.podiumWatermark}>antiselek.com</div>}
       </div>
       <div style={styles.standingsPanel}>
         {rowStandings.length > 0 && <div style={styles.tableHeader}>
