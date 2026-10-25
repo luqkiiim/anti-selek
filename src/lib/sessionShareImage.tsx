@@ -503,7 +503,7 @@ const styles: Record<string, CSSProperties> = {
   },
   meta: {
     display: "flex", flexDirection: "row", justifyContent: "center", gap: 15,
-    marginTop: 8, fontSize: 25, fontWeight: 400, color: "#e9ddf2",
+    flexShrink: 0, fontSize: 25, fontWeight: 400, lineHeight: 1.2, color: "#70568f",
   },
   metaDot: { color: "#c8a5e6" },
   podiumRow: {
@@ -570,9 +570,11 @@ const styles: Record<string, CSSProperties> = {
   numberCell: { display: "flex", justifyContent: "center", width: 98, fontSize: 30, fontWeight: 400 },
   pointsCell: { display: "flex", justifyContent: "center", width: 104, fontSize: 34, fontWeight: 800 },
   footer: {
-    display: "flex", justifyContent: "center", alignItems: "center", height: SHARE_TABLE_FOOTER_HEIGHT, marginTop: "auto",
+    display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 4,
+    height: SHARE_TABLE_FOOTER_HEIGHT, flexShrink: 0, marginTop: "auto",
     color: "#9a82ad", fontSize: 32, fontWeight: 700, letterSpacing: 0.5,
   },
+  footerBrand: { display: "flex", alignItems: "center", flexShrink: 0, lineHeight: 1.2 },
   empty: { display: "flex", flex: 1, justifyContent: "center", alignItems: "center", color: "#856c98", fontSize: 26 },
   pageLabel: { display: "flex", marginLeft: 18, fontSize: 24 },
 };
@@ -763,11 +765,6 @@ export function renderSessionShareImage(
         <div style={styles.header}>
           <div style={styles.club}>{truncateLabel(viewModel.clubName, 21)}</div>
           <div style={styles.sessionTitle}>{truncateLabel(viewModel.sessionName, 32)}</div>
-          <div style={styles.meta}>
-            <span>{getFormattedSessionDate(viewModel.sessionDate)}</span><span style={styles.metaDot}>•</span>
-            <span>{viewModel.participantCount} players</span><span style={styles.metaDot}>•</span>
-            <span>{`${viewModel.completedMatchCount} ${viewModel.completedMatchCount === 1 ? "match" : "matches"}`}</span>
-          </div>
         </div>
         {!isContinuation && <div style={styles.podiumRow}>
           {orderedPodium.map((standing) => (
@@ -784,8 +781,15 @@ export function renderSessionShareImage(
         {rowStandings.map((standing) => <StandingRow key={standing.userId} standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} rowHeight={rowSizing.rowHeight} avatarSize={rowSizing.avatarSize} />)}
         {viewModel.standings.length === 0 && <div style={styles.empty}>No standings available</div>}
         <div style={styles.footer}>
-          <span>antiselek.com</span>
-          {viewModel.pageCount > 1 && <span style={styles.pageLabel}>{`· ${viewModel.page} of ${viewModel.pageCount}`}</span>}
+          <div style={styles.meta}>
+            <span>{getFormattedSessionDate(viewModel.sessionDate)}</span><span style={styles.metaDot}>•</span>
+            <span>{viewModel.participantCount} players</span><span style={styles.metaDot}>•</span>
+            <span>{`${viewModel.completedMatchCount} ${viewModel.completedMatchCount === 1 ? "match" : "matches"}`}</span>
+          </div>
+          <div style={styles.footerBrand}>
+            <span>antiselek.com</span>
+            {viewModel.pageCount > 1 && <span style={styles.pageLabel}>{`· ${viewModel.page} of ${viewModel.pageCount}`}</span>}
+          </div>
         </div>
       </div>
     </div>
