@@ -34,8 +34,8 @@ export function ProfilePeople({ relationships, matches, ownerName, onOpenMatch, 
         <span className="chemistry-rank">{index + 1}</span>
         <button type="button" className="profile-person-photo" aria-label={`View ${person.name}’s profile`} onClick={() => openMember(person.id)}><Avatar name={person.name} url={person.avatarUrl} /></button>
         <button type="button" className="profile-person-history" aria-label={`Matches ${role === "partner" ? "with" : "against"} ${person.name}`} onClick={() => setConnection({ id: person.id, name: person.name, role })}>
-          <span><strong>{person.name}</strong>{kind === "partners" && <small>{person.wins} wins together</small>}</span>
-          <span className="profile-person-stat">{kind === "partners" ? `${Math.round(person.wins / Math.max(1, person.wins + person.losses) * 100)}%` : `${person.wins}W · ${person.losses}L`}{kind === "partners" && <small>win rate</small>}</span>
+          <span><strong>{person.name}</strong>{kind === "partners" && <small>{Math.round(person.wins / Math.max(1, person.wins + person.losses) * 100)}% win rate</small>}</span>
+          <span className="profile-person-stat">{person.wins}W · {person.losses}L</span>
           <CaretRight size={16} />
         </button>
       </div>;
