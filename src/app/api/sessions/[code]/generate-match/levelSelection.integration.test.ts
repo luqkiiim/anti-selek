@@ -108,6 +108,25 @@ describe("Level generation adapters with the real selector", () => {
   beforeEach(() => vi.spyOn(Math, "random").mockReturnValue(0.25));
   afterEach(() => vi.restoreAllMocks());
 
+  it("generates three Rating courts for the 21-player first-batch regression", async () => {
+    const ratings = [700, 921, 1802, 1673, 754, 1415, 1676, 797, 938, 989, 1300,
+      931, 892, 653, 1754, 1625, 2076, 907, 1198, 959, 1630];
+    const data = session({
+      courts: [{ id: "court-1" }, { id: "court-2" }, { id: "court-3" }] as GenerateMatchSession["courts"],
+      players: ratings.map((rating, index) => player(`p${String(index).padStart(2, "0")}`, rating, { matchesPlayed: 0 })),
+    });
+    const state = await inputs(data);
+    const result = selectBatchMatches({ ...state, requestedMatchCount: 3, randomFn: () => 0.25 });
+    expect(result.selections).toHaveLength(3);
+    expect(new Set(result.selections.flatMap((selection) => selection.ids)).size).toBe(12);
+    for (const selection of result.selections) {
+      const reason = JSON.parse(selection.matchmakingReasonJson!);
+      expect(reason).toMatchObject({ source: "level", metric: SessionBalanceMetric.RATING, baselineCertified: true,
+        bestBalanceGap: 0, allowedBalanceGap: 30 });
+      expect(reason.balanceGap).toBeLessThanOrEqual(reason.allowedBalanceGap);
+    }
+  });
+
   it("uses the series winner for session points even when the winner scores fewer rallies", async () => {
     const data = session({
       balanceMetric: SessionBalanceMetric.SESSION_POINTS,

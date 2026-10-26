@@ -179,12 +179,26 @@ authorised deployment, check important live flows and fresh runtime logs.
   retain neutral entry handling and include recorded best-of-three winners.
 - Grouped plans retain the configured crossover/seat rules, while personal
   crossover debt and physical-court repeat preferences do not rank Level games.
-- The shared selector uses one 1.5-second / 200,000-branch allowance for candidate
-  preparation and both passes. Small exhaustive cases are exact. Larger cases
-  may return an admitted best-found layout after final ranking is interrupted;
-  `searchLimitReached` records this, and global quality optimality is not claimed.
-  An interrupted baseline returns a controlled failure instead of weakening the
-  fairness class or balance limit.
+- The shared selector allows two seconds for candidate preparation plus the
+  fairness/balance baseline, followed by up to two seconds for final ranking,
+  with a four-second invocation cap and one 200,000-branch total allowance.
+  An explicit `searchLimits.maxMs` remains an overall cap; an earlier caller
+  deadline always wins. Small exhaustive cases are exact. A certified baseline's
+  actual batch seeds final ranking, so a final-ranking interruption can return
+  that admitted batch even before any quality-search branch is explored.
+  `searchLimitReached` records interrupted ranking without claiming globally
+  optimal quality. An uncertified baseline still returns a controlled failure.
+- Player overlap and mandatory checks use arbitrary-width bit masks. Request-local,
+  bounded caches reuse player-set priorities, optimistic completion bounds and
+  compatible candidate scans. Incumbent-dependent balance pruning is evaluated
+  against the current incumbent, separately from those caches. Quality bounds
+  are calculated only in final ranking. Identically constrained courts use a
+  canonical quartet order without forcing any surplus player to participate.
+  A legal batch reaching independent global fairness and zero-balance lower
+  bounds certifies the baseline immediately. Every eligible player and legal
+  quartet remains available; there is no roster cap, shortlist or new matcher.
+- Internal batch debug data includes `searchLimitPhase` and `phaseElapsedMs`
+  for preparation, baseline and quality ranking. Public API and UI are unchanged.
 - Internal `source: "level"` JSON stores the selected metric, lineups, level
   spread, baseline/allowed/actual balance, ceiling feasibility and search status.
   Existing queue and match writers preserve it. The existing public V3 reason
@@ -204,3 +218,14 @@ TypeScript checking, affected-file ESLint, diff whitespace checks, the normal
 Next.js build and validation of the updated delegation skill passed. The
 implementation phase performed no production deployment, database migration or
 data write. No schema migration is required for delivery.
+
+The batch-reliability follow-up freezes the previously timing-out 21-player,
+three-court Rating fixture and checks additional irregular ratings, equal and
+evenly spaced controls, nearby roster sizes, three-court exhaustive comparisons,
+surplus-player/court symmetry, player masks above index 31, priority changes and
+interrupted phases. In an isolated local comparison, the original selector
+failed at about 1.5 seconds; the updated selector completed both passes in
+0.34–0.40 seconds across five runs. These are measurements, not timing assertions
+or a guarantee for every roster. A local production-build browser check also
+created three disjoint courts and an automatic queue, verified stored Level
+diagnostics, reloaded the page and rebuilt the queue against temporary SQLite.

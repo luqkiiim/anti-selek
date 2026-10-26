@@ -3,6 +3,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ClubPageMember } from "@/components/club/clubTypes";
+import { ClubPlayerStatus } from "@/types/enums";
 import Club from "./Club";
 vi.mock("./Pager", () => ({ Pager: ({ active, children }: { active: string; children: (page: string) => unknown }) => children(active) }));
 vi.mock("./LiveSession", () => ({ default: ({ code, globalClubId }: { code: string; globalClubId?: string }) => <div data-session={code} data-global-club={globalClubId} /> }));
@@ -30,9 +31,9 @@ it("opens Manage Club with the admin roster read instead of the full dashboard",
 
 it.each([false, true])("lists the full roster without navigating or fetching in global mode %s", async (globalView) => {
   members = [
-    { id: "core", name: "Zoe", status: "CORE", matchesPlayed: 4, isClaimed: true },
-    { id: "occasional", name: "anna", status: "OCCASIONAL", matchesPlayed: 2, isClaimed: true },
-    { id: "new", name: "Ben", status: "CORE", matchesPlayed: 0, isClaimed: false },
+    { id: "core", name: "Zoe", status: ClubPlayerStatus.CORE, matchesPlayed: 4, isClaimed: true },
+    { id: "occasional", name: "anna", status: ClubPlayerStatus.OCCASIONAL, matchesPlayed: 2, isClaimed: true },
+    { id: "new", name: "Ben", status: ClubPlayerStatus.CORE, matchesPlayed: 0, isClaimed: false },
   ];
   await render(globalView);
   const requests = vi.mocked(fetch).mock.calls.length;

@@ -183,6 +183,8 @@ export interface LadderBatchSelection<
 
 export interface LadderBatchDebug {
   searchLimitReached?: boolean;
+  searchLimitPhase?: "preparation" | "baseline" | "quality" | null;
+  phaseElapsedMs?: { preparation: number; baseline: number; quality: number };
   baselineCertified?: boolean;
   levelDiagnostics?: LevelSelectionDiagnostics;
   eligiblePlayerIds: string[];

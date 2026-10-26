@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PlayerGender, SessionBalanceMetric, SessionMode } from "@/types/enums";
 import { getExactPartitionKey } from "../v3/rematch";
+import * as balanceGuardrail from "../v3/balanceGuardrail";
+import { createMatchmakingSearchBudget } from "../v3/searchBudget";
 import { findBestLevelBatchSelection } from "./levelSelection";
 import type {
   LadderSelectionConstraints,
@@ -116,6 +118,214 @@ function exhaustiveTwoCourtOracle(players: MatchmakerLadderPlayer[], metric: Ses
 }
 
 describe("Level selection policy", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const regressionRatings = [700, 921, 1802, 1673, 754, 1415, 1676, 797, 938, 989, 1300,
+    931, 892, 653, 1754, 1625, 2076, 907, 1198, 959, 1630];
+
+  function firstBatch(ratings: number[]) {
+    return ratings.map((rating, i) => player(`p${String(i).padStart(2, "0")}`, rating,
+      { matchesPlayed: 0, matchmakingBaseline: 0 }));
+  }
+
+  function expectAdmittedThreeCourts(result: ReturnType<typeof select>) {
+    expect(result.debug.baselineCertified).toBe(true);
+    expect(result.selection?.selections).toHaveLength(3);
+    expect(new Set(result.selection!.selections.flatMap((court) => court.ids)).size).toBe(12);
+    const guardrail = result.selection!.selections[0].levelContext!.balanceGuardrail;
+    expect(result.selection!.maxBalanceGap).toBeLessThanOrEqual(guardrail.allowedMaxBalanceGap);
+    if (guardrail.allowedTotalBalanceGap !== null) {
+      expect(result.selection!.totalBalanceGap).toBeLessThanOrEqual(guardrail.allowedTotalBalanceGap);
+    }
+  }
+
+  it("generates the previously timing-out 21-player, three-court first batch", () => {
+    const result = select(firstBatch(regressionRatings), { courtCount: 3 });
+    expectAdmittedThreeCourts(result);
+    expect(result.debug.eligiblePlayerIds).toHaveLength(21);
+    expect(result.selection!.selections[0].levelContext!.balanceGuardrail.bestMaxBalanceGap).toBe(0);
+    expect(result.selection!.selections[0].levelContext!.balanceGuardrail.allowedMaxBalanceGap).toBe(30);
+  });
+
+  it.each([1, 17, 104729])("admits three-court first batches with irregular ratings, seed %s", (seed) => {
+    const random = seededRandom(seed);
+    const ratings = Array.from({ length: 21 }, (_, i) => 600 + Math.floor(random() * 150) * 10 + i);
+    expectAdmittedThreeCourts(select(firstBatch(ratings), { courtCount: 3, randomFn: seededRandom(seed) }));
+  });
+
+  it.each([
+    Array(21).fill(1000),
+    Array.from({ length: 21 }, (_, i) => 700 + i * 50),
+    regressionRatings.slice(0, 18),
+    [...regressionRatings, 1123, 1567, 1879],
+  ].map((ratings) => ({ ratings })))("admits the equal, evenly spaced and nearby roster controls (%#)", ({ ratings }) => {
+    expectAdmittedThreeCourts(select(firstBatch(ratings), { courtCount: 3 }));
+  });
+
+  it.each([SessionBalanceMetric.RATING, SessionBalanceMetric.SESSION_POINTS])(
+    "matches a constrained exhaustive three-court oracle with a surplus outlier, metric=%s", (metric) => {
+      const players = [player("A-outlier", 3000), ...[900, 930, 970, 1010, 1160, 1190, 1230, 1270, 1400, 1440, 1510, 1590]
+        .map((strength, i) => player(`P${String(i).padStart(2, "0")}`, metric === SessionBalanceMetric.RATING ? strength : strength / 100))];
+      const regulars = players.slice(1);
+      const allowed = [
+        regulars.slice(0, 4), regulars.slice(4, 8), regulars.slice(8, 12),
+        [regulars[0], regulars[1], regulars[4], regulars[5]],
+        [regulars[2], regulars[3], regulars[8], regulars[9]],
+        [regulars[6], regulars[7], regulars[10], regulars[11]],
+        [players[0], ...regulars.slice(1, 4)],
+      ];
+      const layouts: { players: MatchmakerLadderPlayer[]; spread: number; pairwise: number; gap: number }[] = [];
+      for (const court of allowed) {
+        for (const partner of [1, 2, 3]) {
+          const other = court.filter((_, i) => i !== 0 && i !== partner);
+          let pairwise = 0;
+          for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) pairwise += Math.abs(court[a].strength - court[b].strength);
+          layouts.push({ players: court, spread: Math.max(...court.map((p) => p.strength)) - Math.min(...court.map((p) => p.strength)),
+            pairwise, gap: Math.abs(court[0].strength + court[partner].strength - other[0].strength - other[1].strength) / 2 });
+        }
+      }
+      const batches: number[][] = [];
+      for (const a of layouts) for (const b of layouts) for (const c of layouts) {
+        if (new Set([...a.players, ...b.players, ...c.players].map((p) => p.userId)).size !== 12) continue;
+        batches.push([Math.max(a.spread, b.spread, c.spread), a.pairwise + b.pairwise + c.pairwise,
+          Math.max(a.gap, b.gap, c.gap), a.gap + b.gap + c.gap]);
+      }
+      const compare = (a: number[], b: number[]) => {
+        for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i];
+        return 0;
+      };
+      const baseline = [...batches].sort((a, b) => compare(a.slice(2), b.slice(2)))[0];
+      const rating = metric === SessionBalanceMetric.RATING;
+      const ceilingFeasible = !rating || baseline[2] <= 50;
+      const maximum = ceilingFeasible ? Math.min(baseline[2] + (rating ? 30 : 1.5), rating ? 50 : Infinity) : baseline[2];
+      const expected = batches.filter((batch) => batch[2] <= maximum && (ceilingFeasible || batch[3] <= baseline[3])).sort(compare)[0];
+      const constraints = allowQuartets(...allowed);
+      const result = select(players, { courtCount: 3, levelPolicy: { metric }, selectionConstraints: constraints });
+      const chosen = result.selection!;
+      expect(result.debug.baselineCertified).toBe(true);
+      expect([chosen.maxLadderGap, chosen.totalLadderGap, chosen.maxBalanceGap, chosen.totalBalanceGap]).toEqual(expected);
+      expect(chosen.selections.flatMap((court) => court.ids)).not.toContain("A-outlier");
+    }
+  );
+
+  it("keeps distinct player bits above index 31 when filling multiple courts", () => {
+    const players = firstBatch(Array(35).fill(1000));
+    const first = players.slice(0, 4);
+    const last = players.slice(31, 35);
+    const constraints = allowQuartets(first, last);
+    const result = select(players, { courtCount: 2, selectionConstraints: constraints });
+    expect(result.debug.baselineCertified).toBe(true);
+    expect(result.selection?.selections.flatMap((court) => court.ids).sort())
+      .toEqual([...first, ...last].map((p) => p.userId).sort());
+  });
+
+  it("does not order courts with different constraints as if they were interchangeable", () => {
+    const a = quartet("A", [900, 910, 920, 930]);
+    const b = quartet("B", [1100, 1110, 1120, 1130]);
+    const c = quartet("C", [1300, 1310, 1320, 1330]);
+    const result = select([...a, ...b, ...c], {
+      courtCount: 3,
+      schedules: [{ rank: 0, courts: [allowQuartets(c), allowQuartets(a), allowQuartets(b)] }],
+    });
+    expect(result.selection?.selections.map((court) => [...court.ids].sort()))
+      .toEqual([c, a, b].map((players) => players.map((p) => p.userId)));
+  });
+
+  it.each(["count", "arrival", "overdue"])("does not let a balanced incumbent block better multi-court %s priority", (priority) => {
+    const regulars = Array.from({ length: 8 }, (_, i) => player(`regular${i}`));
+    const outlier = player("outlier", 3000, priority === "count"
+      ? { matchesPlayed: 3, matchmakingBaseline: 3 }
+      : priority === "arrival" ? { arrivalPriorityAt: new Date("2026-10-01T01:00:00Z") } : { restTurns: 10 });
+    const result = select([...regulars, outlier], { courtCount: 2 });
+    expect(result.debug.baselineCertified).toBe(true);
+    expect(result.selection?.selections.flatMap((court) => court.ids)).toContain(outlier.userId);
+    expect(result.selection?.selections).toHaveLength(2);
+  });
+
+  it("returns a controlled failure when the baseline branch allowance expires", () => {
+    const result = select(firstBatch(regressionRatings), { courtCount: 3, searchLimits: { maxBranches: 1 } });
+    expect(result.selection).toBeNull();
+    expect(result.debug).toMatchObject({ baselineCertified: false, searchLimitReached: true, searchLimitPhase: "baseline" });
+  });
+
+  it("shares one branch cap across baseline and quality instead of resetting it", () => {
+    const result = select(quartet("A", [1000, 1010, 1020, 1030]), { searchLimits: { maxBranches: 2 } });
+    expect(result.selection).not.toBeNull();
+    expect(result.debug).toMatchObject({ baselineCertified: true, exploredBranches: 2,
+      searchLimitReached: true, searchLimitPhase: "quality" });
+  });
+
+  it("keeps a certified batch when final ranking runs out of time before its first visit", () => {
+    let now = 0;
+    let certified = false;
+    vi.spyOn(performance, "now").mockImplementation(() => certified ? now += 2_001 : now);
+    const build = balanceGuardrail.buildBalanceGuardrail;
+    vi.spyOn(balanceGuardrail, "buildBalanceGuardrail").mockImplementation((...args) => {
+      const result = build(...args);
+      certified = true;
+      return result;
+    });
+    const result = select(firstBatch(regressionRatings), { courtCount: 3 });
+    expectAdmittedThreeCourts(result);
+    expect(result.debug).toMatchObject({ searchLimitReached: true, searchLimitPhase: "quality" });
+    expect(result.selection!.selections.every((court) => court.levelDiagnostics?.searchLimitReached)).toBe(true);
+  });
+
+  it.each([undefined, 2_000])("gives quality a new phase allowance while respecting total maxMs=%s", (maxMs) => {
+    let now = 0;
+    let certified = false;
+    vi.spyOn(performance, "now").mockImplementation(() => {
+      if (certified) now = Math.min(2_100, now + 100);
+      return now;
+    });
+    const build = balanceGuardrail.buildBalanceGuardrail;
+    vi.spyOn(balanceGuardrail, "buildBalanceGuardrail").mockImplementation((...args) => {
+      const result = build(...args);
+      certified = true;
+      return result;
+    });
+    const result = select(quartet("A", [1000, 1010, 1020, 1030]), {
+      searchLimits: { maxMs }, selectionConstraints: { isQuartetAllowed: () => { now = 1_900; return true; } },
+    });
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.baselineCertified).toBe(true);
+    expect(result.debug.searchLimitReached).toBe(maxMs !== undefined);
+    expect(result.debug.searchLimitPhase).toBe(maxMs !== undefined ? "quality" : null);
+  });
+
+  it("stops a long preparation scan at the explicit total deadline", () => {
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const result = select(firstBatch(regressionRatings), {
+      courtCount: 3, searchLimits: { maxMs: 50 },
+      selectionConstraints: { isQuartetAllowed: () => { now = 51; return false; } },
+    });
+    expect(result.selection).toBeNull();
+    expect(result.debug).toMatchObject({ baselineCertified: false, searchLimitReached: true, searchLimitPhase: "preparation" });
+  });
+
+  it("honours an already expired caller deadline", () => {
+    const searchBudget = createMatchmakingSearchBudget({ maxMs: 0 });
+    const result = select(firstBatch(regressionRatings), { courtCount: 3, searchBudget });
+    expect(result.selection).toBeNull();
+    expect(result.debug).toMatchObject({ searchLimitReached: true, searchLimitPhase: "preparation" });
+    expect(result.debug.quartetCount).toBe(0);
+  });
+
+  it("stops quality at an earlier caller deadline while retaining the certified batch", () => {
+    let callerNow = 0;
+    const searchBudget = createMatchmakingSearchBudget({ maxMs: 10, now: () => callerNow });
+    const build = balanceGuardrail.buildBalanceGuardrail;
+    vi.spyOn(balanceGuardrail, "buildBalanceGuardrail").mockImplementation((...args) => {
+      const result = build(...args);
+      callerNow = 11;
+      return result;
+    });
+    const result = select(firstBatch(regressionRatings), { courtCount: 3, searchBudget });
+    expectAdmittedThreeCourts(result);
+    expect(result.debug).toMatchObject({ searchLimitReached: true, searchLimitPhase: "quality" });
+  });
+
   it.each([SessionBalanceMetric.RATING, SessionBalanceMetric.SESSION_POINTS])(
     "prefers the 200-spread quartet over balanced 800-spread extremes with %s",
     (metric) => {
