@@ -662,7 +662,7 @@ export default function LiveSession({
                 : next,
               response.queuedMatch ?? null,
             );
-          });
+          }, { urgent: true });
           setScores((current) => {
             const next = { ...current };
             delete next[match.id];
@@ -673,10 +673,10 @@ export default function LiveSession({
         () => Promise.all([refreshSession(), refreshStandings()]),
       );
     } catch (error) {
-      if (isCollaboration && error instanceof ApiError && error.status === 409) {
+      if (error instanceof ApiError && error.status === 409) {
         setScores(current=>{const next={...current};delete next[match.id];return next;});
         setMatchConfirmation(match.id,false);
-        await refresh();
+        await refresh().catch(() => {});
       }
       setScoreErrors((previous) => ({
         ...previous,

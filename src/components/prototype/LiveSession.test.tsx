@@ -29,7 +29,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/image", () => ({ default: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} /> }));
 vi.mock("./useSessionController", () => ({ useSessionController: (code: string, globalClubId?: string) => ({ ...mocks.useResource(`/api/sessions/${code}${globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : ""}`), scheduleDeferredQueueRecovery: mocks.scheduleDeferredQueueRecovery, cancelDeferredQueueRecovery: mocks.cancelDeferredQueueRecovery }) }));
-vi.mock("./api", () => ({
+vi.mock("./api", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./api")>(),
   api: mocks.api,
   useResource: mocks.useResource,
   useAction: mocks.useAction,

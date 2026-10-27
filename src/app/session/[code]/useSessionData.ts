@@ -20,6 +20,28 @@ const POLL_INTERVAL_MS = 2_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_REVALIDATE_DELAY_MS = 1_200;
 
+function hasOlderScores(current: SessionData, incoming: SessionData) {
+  if (
+    current.resultsRevision !== undefined && incoming.resultsRevision !== undefined &&
+    incoming.resultsRevision < current.resultsRevision
+  ) return true;
+
+  const scoreRevisions = (snapshot: SessionData) => [
+    ...(snapshot.matches ?? []),
+    ...(snapshot.courts ?? []).flatMap(court => court.currentMatch ? [court.currentMatch] : []),
+  ];
+  const knownRevisions = new Map<string, number>();
+  for (const match of scoreRevisions(current)) {
+    if (match.scoreRevision !== undefined) {
+      knownRevisions.set(match.id, Math.max(knownRevisions.get(match.id) ?? 0, match.scoreRevision));
+    }
+  }
+  return scoreRevisions(incoming).some(match => {
+    const known = knownRevisions.get(match.id);
+    return known !== undefined && match.scoreRevision !== undefined && match.scoreRevision < known;
+  });
+}
+
 function getRetryAfterDelay(value: string | null) {
   if (!value?.trim()) return 0;
 
@@ -137,7 +159,12 @@ export function useSessionData({
 
         lastServerSnapshotRef.current = snapshotSignature;
         startTransition(() => {
-          setSessionData(data as SessionData);
+          // A read can start after a save yet still contain its previous score.
+          // Compare at application time so an accepted mutation cannot be undone
+          // by a queued refresh. Newer revisions still allow corrections/reopens.
+          setSessionData(current => current && hasOlderScores(current, data as SessionData)
+            ? current
+            : data as SessionData);
           setInitialLoadError(null);
           setIsInitialLoadPending(false);
         });
