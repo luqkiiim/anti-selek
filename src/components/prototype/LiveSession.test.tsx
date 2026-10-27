@@ -742,6 +742,7 @@ describe("LiveSession score and player controls", () => {
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Session settings")?.click());
 
     const courtLabel = container.querySelector<HTMLInputElement>('[aria-label="Court 1 label"]');
+    expect(container.querySelector('[aria-label="Session name"]')).toBeNull();
     expect(courtLabel).toBeTruthy();
     await act(async () => setInputValue(courtLabel!, "North"));
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Prepare the next game"]')?.click());
@@ -841,6 +842,35 @@ describe("LiveSession score and player controls", () => {
     expect(container.textContent).toContain("Not started");
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
+  });
+
+  it("saves a trimmed session name before starting and rejects a blank draft", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }]);
+    session.status = "WAITING";
+    session.viewerCanRename = true;
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Review session settings"]')?.click());
+    const nameInput = container.querySelector<HTMLInputElement>('[aria-label="Session name"]')!;
+    expect(nameInput.value).toBe("Test session");
+    const save = Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Save settings")!;
+    expect(save.disabled).toBe(true);
+    await act(async () => setInputValue(nameInput, "   "));
+    expect(save.disabled).toBe(true);
+    await act(async () => setInputValue(nameInput, "  Friday games  "));
+    expect(save.disabled).toBe(false);
+    await act(async () => save.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01", "PATCH", expect.objectContaining({ name: "Friday games" }));
+  });
+
+  it("hides the name field from a partner operator", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }]);
+    session.status = "WAITING";
+    session.viewerCanRename = false;
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Review session settings"]')?.click());
+    expect(container.querySelector('[aria-label="Session name"]')).toBeNull();
   });
 
   it("confirms reset data loss and returns to a ready state for setup changes", async () => {

@@ -57,6 +57,7 @@ import { getAccountClubContext } from "@/lib/playerIdentity";
 export const dynamic = "force-dynamic";
 
 interface UpdateSessionSettingsRequest {
+  name?: unknown;
   autoQueueEnabled?: unknown;
   respectPlayerRest?: unknown;
   courtLabels?: unknown;
@@ -482,6 +483,9 @@ async function getSessionRoute(
     viewerIsQuickAccess: isQuickAccess,
     viewerCanManage:
       !globalView && !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
+    viewerCanRename:
+      !globalView && !isQuickAccess && sessionData.status === SessionStatus.WAITING &&
+      (session.user.isAdmin || hostClubContext?.canOperate === true),
     viewerCanUseAdminSessionControls:
       !globalView && !isQuickAccess && (session.user.isAdmin || !!adminMembership),
     viewerCanDelete:
@@ -553,6 +557,10 @@ export async function PATCH(
     }
     const autoQueueEnabled = body.autoQueueEnabled;
     const respectPlayerRest = body.respectPlayerRest;
+    if (body.name !== undefined && (typeof body.name !== "string" || !body.name.trim())) {
+      throw new SessionRouteError("Session name required", 400);
+    }
+    const name = typeof body.name === "string" ? body.name.trim() : undefined;
     const courtLabels = parseCourtLabels(body.courtLabels ?? []);
     const gameplaySettings = parseGameplaySettings(body.gameplaySettings);
 
@@ -598,6 +606,18 @@ export async function PATCH(
     const canManage = session.user.isAdmin || !!operatorMembership;
     if (!canManage) {
       return invalidTargetResponse(request, "api:sessions:code");
+    }
+
+    if (name !== undefined) {
+      const hostClubContext = sessionData.clubId && !session.user.isAdmin
+        ? await getAccountClubContext(prisma, { userId: session.user.id, clubId: sessionData.clubId })
+        : null;
+      if (!session.user.isAdmin && !hostClubContext?.canOperate) {
+        throw new SessionRouteError("Only the host can rename this session", 403);
+      }
+      if (sessionData.status !== SessionStatus.WAITING) {
+        throw new SessionRouteError("Session name can only be changed before it starts", 409);
+      }
     }
 
     if (gameplaySettings && sessionData.status !== SessionStatus.WAITING) {
@@ -648,7 +668,16 @@ export async function PATCH(
         const {session: current} = await assertCollaborationPermission(tx,{sessionId:sessionData.id,userId:session.user.id,isGlobalAdmin:!!session.user.isAdmin,kind:"host"});
         if(current.schedulingMode === "LINEUP" && autoQueueEnabled) throw new IdentityConflictError("Lineup sessions use manual court assignments.");
       }
-      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, ...(name !== undefined ? { hostOnly: true } : {}) });
+      if (name !== undefined) {
+        const renamed = await tx.session.updateMany({
+          where: { id: sessionData.id, status: SessionStatus.WAITING },
+          data: { name },
+        });
+        if (renamed.count !== 1) {
+          throw new SessionRouteError("Session name can only be changed before it starts", 409);
+        }
+      }
       let initializeLegacyPools = false;
       if (
         gameplaySettings?.poolsEnabled &&
@@ -801,6 +830,7 @@ export async function PATCH(
     }
 
     return sportingJson({
+      name: updatedSession.name,
       type: updatedSession.type,
       mode: updatedSession.mode,
       scoringType: updatedSession.scoringType,

@@ -161,6 +161,7 @@ export interface SessionData {
   crossoverMissThreshold: number;
   crossoverFrequency: SessionCrossoverFrequency;
   viewerCanManage?: boolean;
+  viewerCanRename?: boolean;
   viewerCanUseAdminSessionControls?: boolean;
   viewerCanDelete?: boolean;
   viewerCanRollback?: boolean;

@@ -1223,7 +1223,8 @@
 .live-settings-court + .live-settings-court {
   border-top: 1px solid #eee7e5;
 }
-.live-settings-court input {
+.live-settings-court input,
+.live-settings-field input {
   width: 100%;
   min-width: 0;
   min-height: 44px;

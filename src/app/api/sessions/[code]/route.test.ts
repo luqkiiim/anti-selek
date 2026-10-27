@@ -12,6 +12,10 @@ import {
 } from "@/types/enums";
 
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/playerIdentity", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/playerIdentity")>(),
+  getAccountClubContext: vi.fn(),
+}));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
@@ -42,6 +46,8 @@ vi.mock("./queue-match/shared", () => ({
 import { auth } from "@/lib/auth";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
+import { getAccountClubContext } from "@/lib/playerIdentity";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { GET, PATCH } from "./route";
 
 const baseSession = {
@@ -63,6 +69,7 @@ const baseSession = {
 function updatedSession(overrides: Record<string, unknown> = {}) {
   return {
     id: "session-1",
+    name: "Friday games",
     type: SessionType.POINTS,
     mode: SessionMode.MEXICANO,
     scoringType: SessionScoringType.POINTS,
@@ -81,7 +88,10 @@ function updatedSession(overrides: Record<string, unknown> = {}) {
 
 function transactionDouble(queuedMatch: unknown = null) {
   return {
-    session: { update: vi.fn().mockResolvedValue({}) },
+    session: {
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     sessionPlayer: {
       findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -142,6 +152,8 @@ describe("session settings route", () => {
   });
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getAccountClubContext).mockResolvedValue({ canOperate: false } as never);
+    vi.mocked(getSessionOperatorMembership).mockResolvedValue(null);
     vi.mocked(auth).mockResolvedValue({
       user: { id: "admin-1", isAdmin: true },
     } as never);
@@ -150,6 +162,91 @@ describe("session settings route", () => {
       appliedUserIds: [],
       automaticQueueInvalidated: false,
     });
+  });
+
+  it("allows a host operator to rename a waiting session and returns the trimmed name", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "host-1", isAdmin: false } } as never);
+    vi.mocked(getSessionOperatorMembership).mockResolvedValue({ clubId: "club-1", role: "STAFF" } as never);
+    vi.mocked(getAccountClubContext).mockResolvedValue({ canOperate: true } as never);
+    vi.mocked(prisma.session.findUnique)
+      .mockResolvedValueOnce(baseSession as never)
+      .mockResolvedValueOnce(updatedSession({ name: "Saturday games" }) as never);
+    const tx = transactionDouble();
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(tx as never));
+
+    const response = await PATCH(request({ name: "  Saturday games  ", autoQueueEnabled: true, respectPlayerRest: true }), {
+      params: Promise.resolve({ code: "session-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ name: "Saturday games" });
+    expect(getAccountClubContext).toHaveBeenCalledWith(prisma, { userId: "host-1", clubId: "club-1" });
+    expect(tx.session.updateMany).toHaveBeenCalledWith({
+      where: { id: "session-1", status: SessionStatus.WAITING },
+      data: { name: "Saturday games" },
+    });
+  });
+
+  it.each(["", "   ", null, 42, {}, []])("rejects an invalid session name %j", async (name) => {
+    const response = await PATCH(request({ name, autoQueueEnabled: true, respectPlayerRest: true }), {
+      params: Promise.resolve({ code: "session-1" }),
+    });
+    expect(response.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([SessionStatus.ACTIVE, SessionStatus.COMPLETED])("rejects renaming a %s session", async (status) => {
+    vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({ ...baseSession, status } as never);
+    const response = await PATCH(request({ name: "New name", autoQueueEnabled: true, respectPlayerRest: true }), {
+      params: Promise.resolve({ code: "session-1" }),
+    });
+    expect(response.status).toBe(409);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("blocks a partner operator from renaming the host session", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "partner-1", isAdmin: false } } as never);
+    vi.mocked(getSessionOperatorMembership).mockResolvedValue({ clubId: "partner-club", role: "ADMIN" } as never);
+    vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(baseSession as never);
+    const response = await PATCH(request({ name: "New name", autoQueueEnabled: true, respectPlayerRest: true }), {
+      params: Promise.resolve({ code: "session-1" }),
+    });
+    expect(response.status).toBe(403);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("blocks an ordinary member from renaming", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "member-1", isAdmin: false } } as never);
+    vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(baseSession as never);
+    const response = await PATCH(request({ name: "New name", autoQueueEnabled: true, respectPlayerRest: true }), {
+      params: Promise.resolve({ code: "session-1" }),
+    });
+    expect(response.status).toBe(403);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("blocks quick access from renaming even with operator access", async () => {
+    vi.mocked(auth).mockResolvedValue({ user: { id: "quick-1", isQuickAccess: true, isAdmin: false } } as never);
+    const response = await PATCH(request({ name: "New name", autoQueueEnabled: true, respectPlayerRest: true }), {
+      params: Promise.resolve({ code: "session-1" }),
+    });
+    expect(response.status).toBe(403);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects renaming if the session starts during the save", async () => {
+    vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(baseSession as never);
+    const tx = transactionDouble();
+    tx.session.updateMany.mockResolvedValue({ count: 0 });
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback) => callback(tx as never));
+    const response = await PATCH(request({
+      name: "New name",
+      autoQueueEnabled: true, respectPlayerRest: true,
+    }), { params: Promise.resolve({ code: "session-1" }) });
+    expect(response.status).toBe(409);
+    expect(tx.session.update).not.toHaveBeenCalled();
+    expect(tx.court.createMany).not.toHaveBeenCalled();
+    expect(tx.court.deleteMany).not.toHaveBeenCalled();
   });
 
   it("updates operational settings and clears the queue atomically", async () => {

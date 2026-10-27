@@ -72,6 +72,7 @@ import { ClubCollaboration, useClubCollaboration } from "./ClubCollaboration";
 import { SeriesScoreEditor } from "./SeriesScoreEditor";
 import { CourtPairingDetails } from "./CourtPairingDetails";
 type LiveSettingsDraft = {
+  name: string;
   autoQueueEnabled: boolean;
   courtLabels: Record<number, string>;
   matchmakingStyle: SessionMatchmakingStyle;
@@ -83,6 +84,7 @@ type LiveSettingsDraft = {
 };
 function settingsDraft(session: SessionData): LiveSettingsDraft {
   return {
+    name: session.name,
     autoQueueEnabled: session.autoQueueEnabled,
     courtLabels: Object.fromEntries(session.courts.map(court => [court.courtNumber, court.label ?? ""])),
     matchmakingStyle: session.matchmakingStyle ?? SessionMatchmakingStyle.BALANCED,
@@ -306,6 +308,7 @@ export default function LiveSession({
   }, [refreshSession, refreshStandings, action.busy, savingScoreMatchIds, isCollaboration]);
   const canManage = !globalClubId && !s?.viewerIsQuickAccess && (isCollaboration ? !!collaboration.data?.capabilities.host : !!s?.viewerCanManage);
   const canJoin = !!s && !globalClubId && !s.viewerIsQuickAccess && !s.selectedSelf && !!s.eligibleProfiles?.length && s.status !== "COMPLETED";
+  const canRename = canManage && !!s?.viewerCanRename && s.status === "WAITING";
   const ended = s?.status === "COMPLETED";
   const sessionPlayerById = new Map(s?.players.map((player) => [player.userId, player]) ?? []);
   const profileMemberIdSet = new Set(profileMemberIds ?? s?.players.filter(p => !p.isGuest).map(p => p.userId) ?? []);
@@ -417,6 +420,7 @@ export default function LiveSession({
   }
   const hasLiveSettingsChanges = !!(
     s && liveSettingsDraft && (
+      (canRename && liveSettingsDraft.name.trim() !== s.name) ||
       liveSettingsDraft.autoQueueEnabled !== s.autoQueueEnabled ||
       s.courts.some(
         (court) =>
@@ -762,6 +766,7 @@ export default function LiveSession({
   }
   function saveLiveSettings() {
     if (!s || !liveSettingsDraft) return;
+    if (canRename && !liveSettingsDraft.name.trim()) return;
     const queuedMatchWillBeCleared =
       !liveSettingsDraft.autoQueueEnabled && !!s.queuedMatch;
     if (queuedMatchWillBeCleared && confirmedQueueId !== s.queuedMatch?.id) {
@@ -769,6 +774,7 @@ export default function LiveSession({
       return;
     }
     const payload = {
+      ...(canRename && liveSettingsDraft.name.trim() !== s.name ? { name: liveSettingsDraft.name.trim() } : {}),
       autoQueueEnabled: liveSettingsDraft.autoQueueEnabled,
       respectPlayerRest: s.respectPlayerRest,
       courtLabels: Array.from({ length: liveSettingsDraft.courtCount }, (_, index) => ({
@@ -1511,6 +1517,24 @@ export default function LiveSession({
             <>
               {s && liveSettingsDraft ? (
                 <div className="live-settings">
+                  {canRename ? (
+                    <section className="live-settings-section">
+                      <label className="live-settings-field">
+                        Session name
+                        <input
+                          aria-label="Session name"
+                          type="text"
+                          value={liveSettingsDraft.name}
+                          required
+                          disabled={action.busy}
+                          onChange={(event) => setLiveSettingsDraft((current) => current ? {
+                            ...current,
+                            name: event.target.value,
+                          } : current)}
+                        />
+                      </label>
+                    </section>
+                  ) : null}
                   <section className="live-settings-section" aria-labelledby="live-matchmaking-heading">
                     <h3 id="live-matchmaking-heading">Session controls</h3>
                     <div className="live-settings-options">
@@ -1709,7 +1733,7 @@ export default function LiveSession({
                   <button
                     type="button"
                     className="primary"
-                    disabled={!hasLiveSettingsChanges || action.busy}
+                    disabled={!hasLiveSettingsChanges || action.busy || (canRename && !liveSettingsDraft.name.trim())}
                     onClick={saveLiveSettings}
                   >
                     {action.busy ? "Saving settings…" : "Save settings"}

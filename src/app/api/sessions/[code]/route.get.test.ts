@@ -228,6 +228,22 @@ describe("session route GET", () => {
     });
   });
 
+  it.each([
+    { status: "WAITING", role: "STAFF", canRename: true },
+    { status: "WAITING", role: "MEMBER", canRename: false },
+    { status: "ACTIVE", role: "ADMIN", canRename: false },
+    { status: "COMPLETED", role: "ADMIN", canRename: false },
+  ])("exposes rename permission for $role during $status: $canRename", async ({ status, role, canRename }) => {
+    const session = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...session, status });
+    mocks.clubAccessFindUnique.mockResolvedValue({ status: "ACTIVE", role });
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123"), {
+      params: Promise.resolve({ code: "ABC123" }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ viewerCanRename: canRename });
+  });
+
   it("includes avatarUrl in players, live match participants, and queued match participants", async () => {
     const response = await GET(
       new Request("http://localhost/api/sessions/ABC123"),
@@ -418,7 +434,7 @@ describe("session route GET", () => {
     mocks.getSessionOperatorMembership.mockResolvedValue({ role: "OWNER" });
     const response = await GET(new Request("http://localhost/api/sessions/ABC123?view=global&clubId=community-1&recoverDeferredQueue=1"), { params: Promise.resolve({ code: "ABC123" }) });
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ readOnly: true, viewerClubRole: null, viewerPlayerId: null, selectedSelf: null, eligibleProfiles: [], viewerCanParticipate: false, viewerCanScore: false, viewerCanManage: false, viewerCanUseAdminSessionControls: false, viewerCanDelete: false, viewerCanRollback: false });
+    expect(await response.json()).toMatchObject({ readOnly: true, viewerClubRole: null, viewerPlayerId: null, selectedSelf: null, eligibleProfiles: [], viewerCanParticipate: false, viewerCanScore: false, viewerCanManage: false, viewerCanRename: false, viewerCanUseAdminSessionControls: false, viewerCanDelete: false, viewerCanRollback: false });
     expect(mocks.getSessionMembership).not.toHaveBeenCalled();
     expect(mocks.getSessionAdminMembership).not.toHaveBeenCalled();
     expect(mocks.getSessionOperatorMembership).not.toHaveBeenCalled();
