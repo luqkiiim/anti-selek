@@ -82,7 +82,7 @@ export async function POST(
         await collaborationEvent(tx,current.id,session.user.id,"SESSION_RESET",{resultsRevision:current.resultsRevision});
         await tx.sessionLineupRow.updateMany({where:{sessionId:current.id},data:{matchId:null,revision:{increment:1},hostConfirmedRevision:null,partnerConfirmedRevision:null}});
         await tx.sessionClub.updateMany({where:{sessionId:current.id},data:{rulesConfirmedRevision:null,resetConfirmedRevision:null}});
-        await tx.session.update({where:{id:current.id},data:{resultsRevision:{increment:1},rulesRevision:{increment:1}}});
+        await tx.session.update({where:{id:current.id},data:{rulesRevision:{increment:1}}});
       }
       if (!targetSession.isTest) {
         await reverseSessionEloChanges(tx, {
@@ -141,6 +141,7 @@ export async function POST(
         where: { id: targetSession.id },
         data: {
           status: SessionStatus.WAITING,
+          resultsRevision: { increment: 1 },
           endedAt: null,
           poolACourtAssignments: 0,
           poolBCourtAssignments: 0,

@@ -29,6 +29,17 @@ vi.mock("@/lib/clubElo", () => ({
   getClubEloByUserId: vi.fn(),
   withClubElo: vi.fn((players) => players),
 }));
+vi.mock("@/lib/sessionCollaboration", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/sessionCollaboration")>(),
+  assertCollaborationPermission: vi.fn().mockResolvedValue({ session: {
+    id: "session-1", status: "ACTIVE", resultsRevision: 5,
+    sessionClubs: [
+      { status: "ACCEPTED", resetConfirmedRevision: 5 },
+      { status: "ACCEPTED", resetConfirmedRevision: 5 },
+    ],
+  } }),
+  collaborationEvent: vi.fn(),
+}));
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -36,7 +47,7 @@ import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { POST } from "./route";
 
 describe("reset session route", () => {
-  it("clears gameplay state while preserving settings and player groups", async () => {
+  it.each([1, 2])("clears gameplay state, advances the revision once, and preserves settings and groups for session version %s", async (collaborationVersion) => {
     vi.mocked(auth).mockResolvedValue({
       user: { id: "staff-account-1", isAdmin: false },
     } as never);
@@ -45,6 +56,7 @@ describe("reset session route", () => {
       id: "session-1",
       clubId: "club-1",
       isTest: true,
+      collaborationVersion,
       status: SessionStatus.ACTIVE,
     } as never);
 
@@ -53,6 +65,7 @@ describe("reset session route", () => {
       id: "session-1",
       clubId: null,
       status: SessionStatus.WAITING,
+      resultsRevision: 6,
       matchmakingStyle: SessionMatchmakingStyle.SOCIAL,
       poolsEnabled: true,
       courts: [],
@@ -80,6 +93,8 @@ describe("reset session route", () => {
         updateMany: sessionPlayerUpdateMany,
       },
       session: { update: sessionUpdate },
+      sessionLineupRow: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      sessionClub: { updateMany: vi.fn().mockResolvedValue({ count: 2 }) },
     };
     vi.mocked(prisma.$transaction).mockImplementation(async (callback) =>
       callback(tx as never)
@@ -96,6 +111,7 @@ describe("reset session route", () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({
       status: SessionStatus.WAITING,
+      resultsRevision: 6,
       matchmakingStyle: SessionMatchmakingStyle.SOCIAL,
       poolsEnabled: true,
       players: [{ userId: "player-1", pool: SessionPool.B }],
@@ -111,6 +127,9 @@ describe("reset session route", () => {
     expect(sessionPlayerUpdateMany.mock.calls[0][0].data).not.toHaveProperty(
       "pool"
     );
+    // The final update returns the reset snapshot with its new revision.
+    expect(sessionUpdate.mock.calls.at(-1)![0].data.resultsRevision).toEqual({ increment: 1 });
+    expect(sessionUpdate.mock.calls.reduce((total, [args]) => total + (args.data.resultsRevision?.increment ?? 0), 0)).toBe(1);
     expect(getSessionOperatorMembership).toHaveBeenCalledWith(prisma, {
       session: expect.objectContaining({ id: "session-1", clubId: "club-1" }),
       userId: "staff-account-1",

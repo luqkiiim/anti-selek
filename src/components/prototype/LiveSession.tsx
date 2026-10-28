@@ -64,7 +64,9 @@ import {
   applyScoreApproval,
   applyScoreSubmission,
   applyScoreReopen,
+  mergeSessionSnapshot,
   type MatchPayload,
+  type SessionSnapshotLike,
 } from "@/app/session/[code]/sessionDataMutations";
 import { MatchStatus } from "@/types/enums";
 import { saveScoreWithBackgroundRefresh } from "./scoreSave";
@@ -808,16 +810,22 @@ export default function LiveSession({
     void action.run(
       async () => {
         await resource.cancelDeferredQueueRecovery();
-        return api(endpoint + "/reset", "POST");
+        const snapshot = await api<SessionSnapshotLike>(endpoint + "/reset", "POST");
+        resource.update(current => mergeSessionSnapshot(current, snapshot), { urgent: true });
       },
       () => {
         setScores({});
         confirmingMatchIdsRef.current = new Set();
         setConfirmingMatchIds(new Set());
         setScoreErrors({});
+        setPauseOverlays({});
+        setPauseError("");
+        setQueuedMatchOverlay(null);
+        setConfirmedQueueId(null);
         setSheet("");
         setTab("Courts");
       },
+      { backgroundRefresh: true },
     );
   }
   async function deleteSession() {

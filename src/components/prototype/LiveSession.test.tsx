@@ -881,9 +881,14 @@ describe("LiveSession score and player controls", () => {
     setup(session);
     mocks.api.mockImplementation(async (url: string) => {
       if (url.endsWith("/reset")) {
-        session.status = "WAITING";
-        session.courts[0].currentMatch = null;
-        session.matches = [];
+        return {
+          ...session,
+          status: "WAITING",
+          resultsRevision: 1,
+          courts: session.courts.map(court => ({ ...court, currentMatch: null })),
+          matches: [],
+          queuedMatch: null,
+        };
       }
       return {};
     });

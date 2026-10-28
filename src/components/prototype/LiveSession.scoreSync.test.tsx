@@ -12,6 +12,11 @@ import LiveSession from "./LiveSession";
 vi.mock("./Pager", () => ({
   Pager: ({ children, active }: { children: (tab: string) => ReactNode; active: string }) => children(active),
 }));
+vi.mock("./Primitives", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./Primitives")>(),
+  Sheet: ({ open, title, children }: { open?: boolean; title: string; children: ReactNode }) =>
+    open ? <div role="dialog" aria-label={title}>{children}</div> : null,
+}));
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -138,5 +143,101 @@ describe("live score saves with the real session controller", () => {
     await act(async () => container.querySelector<HTMLButtonElement>(".court-card .primary")!.click());
     expect(reads).toBe(2);
     expect(container.querySelector(".court-card input")).toBeNull();
+  });
+
+  async function confirmReset() {
+    const click = async (label: string) => {
+      const button = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+        .find(button => button.textContent === label || button.getAttribute("aria-label") === label);
+      expect(button, label).toBeTruthy();
+      await act(async () => button!.click());
+    };
+    await click("More options");
+    await click("Session settings");
+    await click("Reset session to change setup");
+    await click("Reset session");
+  }
+
+  it.each(["pending", "stale", "failed"])("shows an accepted reset immediately when follow-up reads are %s", async (readState) => {
+    const initial = session();
+    initial.resultsRevision = 5;
+    initial.players[0].sessionPoints = 3;
+    const reset = {
+      ...initial, status: "WAITING", resultsRevision: 6,
+      courts: [{ ...initial.courts[0], currentMatch: null }], matches: [], queuedMatch: null,
+      players: initial.players.map(player => ({ ...player, sessionPoints: 0 })),
+    };
+    let resolveRead!: (response: Response) => void;
+    const pendingRead = new Promise<Response>(resolve => { resolveRead = resolve; });
+    let resetAccepted = false;
+    let restarted = false;
+    const snapshots: SessionData[] = [];
+    const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith("/reset") && options?.method === "POST") {
+        resetAccepted = true;
+        return json(reset);
+      }
+      if (url.endsWith("/start") && options?.method === "POST") {
+        restarted = true;
+        return json({ ...reset, status: "ACTIVE" });
+      }
+      if (url.endsWith("/leaderboard")) {
+        if (resetAccepted && !restarted && readState === "failed") return json({ error: "Standings unavailable" }, 503);
+        return json({ currentLeaderboard: [] });
+      }
+      if (url === "/api/sessions/SCORE1") {
+        if (restarted) return json({ ...reset, status: "ACTIVE" });
+        if (!resetAccepted) return json(initial);
+        if (readState === "pending") return pendingRead;
+        if (readState === "failed") return json({ error: "Session refresh unavailable" }, 503);
+        return json(initial);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () => root.render(<LiveSession code="SCORE1" onBack={() => {}} onEnded={async () => {}} onSessionData={data => snapshots.push(data)} />));
+    await confirmReset();
+
+    const expectReset = () => {
+      expect(container.textContent).toContain("Not started");
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+      const start = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === "Start session");
+      expect(start).toBeTruthy();
+      expect(start!.disabled).toBe(false);
+      expect(snapshots.at(-1)).toMatchObject({ status: "WAITING", resultsRevision: 6, matches: [], queuedMatch: null });
+      expect(snapshots.at(-1)!.courts[0].currentMatch).toBeNull();
+      expect(snapshots.at(-1)!.players[0].sessionPoints).toBe(0);
+    };
+    expect(resetAccepted).toBe(true);
+    expectReset();
+    if (readState === "pending") await act(async () => resolveRead(json(initial)));
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    expectReset();
+    expect(fetchMock.mock.calls.filter(([url, options]) => url.endsWith("/reset") && options?.method === "POST")).toHaveLength(1);
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .find(button => button.textContent === "Start session")!.click());
+    expect(container.textContent).toContain("Live session");
+    expect(container.textContent).not.toContain("Not started");
+    expect(snapshots.at(-1)).toMatchObject({ status: "ACTIVE", resultsRevision: 6, matches: [] });
+    expect(snapshots.at(-1)!.players[0].sessionPoints).toBe(0);
+  });
+
+  it("keeps the active session intact when reset is rejected", async () => {
+    const initial = session();
+    initial.players[0].sessionPoints = 3;
+    const snapshots: SessionData[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith("/reset") && options?.method === "POST") return json({ error: "Reset permission changed" }, 409);
+      if (url.endsWith("/leaderboard")) return json({ currentLeaderboard: [] });
+      if (url === "/api/sessions/SCORE1") return json(initial);
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    await act(async () => root.render(<LiveSession code="SCORE1" onBack={() => {}} onEnded={async () => {}} onSessionData={data => snapshots.push(data)} />));
+    await confirmReset();
+    expect(container.textContent).toContain("Reset permission changed");
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(snapshots.at(-1)!.status).toBe("ACTIVE");
+    expect(snapshots.at(-1)!.players[0].sessionPoints).toBe(3);
+    expect(snapshots.at(-1)!.courts[0].currentMatch?.id).toBe("match-1");
   });
 });
