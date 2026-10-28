@@ -3,10 +3,12 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { getErrorMessage, type SafeJson } from "@/lib/http";
 import type { SessionData } from "@/components/session/sessionTypes";
+import { sessionPollInterval, useSessionPolling } from "@/components/session/useSessionPolling";
 
 interface UseSessionDataArgs {
   code: string;
   enabled: boolean;
+  pollingEnabled?: boolean;
   readQuery?: string;
   safeJson: SafeJson;
   setError: (message: string) => void;
@@ -16,7 +18,7 @@ interface PatchSessionDataOptions {
   urgent?: boolean;
 }
 
-const POLL_INTERVAL_MS = 2_000;
+const RETRY_DELAY_MS = 5_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_REVALIDATE_DELAY_MS = 1_200;
 
@@ -57,6 +59,7 @@ function getRetryAfterDelay(value: string | null) {
 export function useSessionData({
   code,
   enabled,
+  pollingEnabled = true,
   readQuery = "",
   safeJson,
   setError,
@@ -127,7 +130,7 @@ export function useSessionData({
               res.headers.get("Retry-After")
             );
             nextRequestAllowedAtRef.current = Date.now() +
-              (retryAfterMs > 0 ? retryAfterMs : POLL_INTERVAL_MS);
+              (retryAfterMs > 0 ? retryAfterMs : RETRY_DELAY_MS);
           }
 
           if (!silent && localRevisionRef.current === localRevision) {
@@ -346,31 +349,12 @@ export function useSessionData({
     });
     void fetchSession();
 
-    const pollForUpdates = () => {
-      if (document.visibilityState !== "hidden") {
-        void fetchSession({ silent: true });
-      }
-    };
-    const refreshWhenVisible = () => {
-      if (document.visibilityState !== "hidden") {
-        void fetchSession({ silent: true });
-      }
-    };
-    const interval = window.setInterval(pollForUpdates, POLL_INTERVAL_MS);
-    window.addEventListener("focus", refreshWhenVisible);
-    window.addEventListener("online", refreshWhenVisible);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-
     return () => {
       if (activeGenerationRef.current === generation) {
         activeGenerationRef.current += 1;
         isActiveRef.current = false;
         activeCodeRef.current = "";
       }
-      window.clearInterval(interval);
-      window.removeEventListener("focus", refreshWhenVisible);
-      window.removeEventListener("online", refreshWhenVisible);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
       if (revalidateTimeoutRef.current !== null) {
         window.clearTimeout(revalidateTimeoutRef.current);
         revalidateTimeoutRef.current = null;
@@ -387,6 +371,12 @@ export function useSessionData({
       }
     };
   }, [enabled, code, fetchSession]);
+
+  const pollSession = useCallback(() => fetchSession({ silent: true }), [fetchSession]);
+  useSessionPolling(pollSession, {
+    enabled: enabled && !!code && pollingEnabled,
+    intervalMs: sessionPollInterval(sessionData?.status),
+  });
 
   return {
     sessionData,
