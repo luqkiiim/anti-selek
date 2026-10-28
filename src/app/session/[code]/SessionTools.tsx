@@ -1647,7 +1647,7 @@ export default function SessionTools() {
         autoQueueEnabled={sessionData.autoQueueEnabled}
         autoQueueDraft={autoQueueDraft}
         canEditGameplay={sessionData.status === SessionStatus.WAITING}
-        canEditCourtCount={sessionData.status !== SessionStatus.COMPLETED}
+        canEditCourtCount={sessionData.status !== SessionStatus.COMPLETED && sessionData.viewerCanChangeCourtCount !== false}
         collabFormat={
           sessionData.collabFormat ?? SessionCollabFormat.FREE_PLAY
         }

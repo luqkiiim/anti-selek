@@ -1598,7 +1598,7 @@ export default function LiveSession({
                       <h3 id="live-courts-heading">Courts</h3>
                       <p>Leave blank to use the default court name.</p>
                     </div>
-                    {s.status !== "COMPLETED" && (
+                    {s.status !== "COMPLETED" && s.viewerCanChangeCourtCount !== false && (
                       <label className="live-settings-field">
                         Available courts
                         <select
