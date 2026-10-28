@@ -66,6 +66,56 @@ describe("live score saves with the real session controller", () => {
     vi.unstubAllGlobals();
   });
 
+  it("uses one session poller and loads standings only when displayed or their results change", async () => {
+    let snapshot = session();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/leaderboard")) return json({ currentLeaderboard: [] });
+      if (url === "/api/sessions/SCORE1") return json(snapshot);
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const render = async (activeTab = "Courts") => {
+      await act(async () => root.render(<LiveSession code="SCORE1" activeTab={activeTab} onBack={() => {}} onEnded={async () => {}} />));
+    };
+    const sessionReads = () => fetchMock.mock.calls.filter(([url]) => url === "/api/sessions/SCORE1").length;
+    const standingsReads = () => fetchMock.mock.calls.filter(([url]) => url.endsWith("/leaderboard")).length;
+    await render();
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(sessionReads()).toBe(13);
+    expect(standingsReads()).toBe(0);
+    await render("Standings");
+    expect(standingsReads()).toBe(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(standingsReads()).toBe(1);
+    snapshot = { ...snapshot, players: snapshot.players.map((player, i) => i === 0 ? { ...player, sessionPoints: 3 } : player) };
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(standingsReads()).toBe(2);
+    await render("Courts");
+    snapshot = { ...snapshot, resultsRevision: 2 };
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(standingsReads()).toBe(2);
+    await render("Standings");
+    expect(standingsReads()).toBe(3);
+  });
+
+  it("pauses the mounted parent while history is open and refreshes on return", async () => {
+    const snapshot = session();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/sessions/SCORE1") return json(snapshot);
+      if (url.endsWith("/history")) return json({ session: { code: snapshot.code, name: snapshot.name, status: "ACTIVE", createdAt: "2026-10-01T00:00:00Z" }, matches: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () => root.render(<LiveSession code="SCORE1" onBack={() => {}} onEnded={async () => {}} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="More options"]')!.click());
+    await act(async () => Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Match history")!.click());
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/sessions/SCORE1")).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith("/history"))).toHaveLength(4);
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Back to session"]')!.click());
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/sessions/SCORE1")).toHaveLength(2);
+  });
+
   it.each(["COMPLETED", "PENDING_APPROVAL"])("keeps a saved %s score when a subsequent refresh returns the previous match revision", async (status) => {
     const initial = session();
     const saved = {
@@ -104,7 +154,7 @@ describe("live score saves with the real session controller", () => {
       }
     }
     expectSaved();
-    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
     expect(reads).toBe(3);
     expectSaved();
     expect(fetchMock.mock.calls.filter(([url, options]) => url.endsWith("/score") && options?.method === "POST")).toHaveLength(1);
@@ -118,7 +168,7 @@ describe("live score saves with the real session controller", () => {
         scoreRevision: status === "COMPLETED" ? 0 : 2,
       } }],
     };
-    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
     expect(container.textContent).toContain("Save score");
     expect(Array.from(container.querySelectorAll<HTMLInputElement>('.court-card input[aria-label$="score"]')).map(input => input.value)).toEqual(["", ""]);
   });
@@ -211,7 +261,7 @@ describe("live score saves with the real session controller", () => {
     expect(resetAccepted).toBe(true);
     expectReset();
     if (readState === "pending") await act(async () => resolveRead(json(initial)));
-    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
     expectReset();
     expect(fetchMock.mock.calls.filter(([url, options]) => url.endsWith("/reset") && options?.method === "POST")).toHaveLength(1);
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button"))

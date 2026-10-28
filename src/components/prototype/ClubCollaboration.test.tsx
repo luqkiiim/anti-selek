@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionData } from "@/components/session/sessionTypes";
-import { ClubCollaboration, type Collaboration } from "./ClubCollaboration";
+import { ClubCollaboration, useClubCollaboration, type Collaboration } from "./ClubCollaboration";
 const mocks=vi.hoisted(()=>({api:vi.fn()}));
 vi.mock("./api",async()=>({...await vi.importActual<typeof import("./api")>("./api"),api:mocks.api}));
 import { ApiError } from "./api";
@@ -14,7 +14,7 @@ describe("Club collaboration controls",()=>{
 let container:HTMLDivElement,root:Root;
 const changed=vi.fn(async()=>{});
 beforeEach(()=>{vi.clearAllMocks();(globalThis as {IS_REACT_ACT_ENVIRONMENT?:boolean}).IS_REACT_ACT_ENVIRONMENT=true;container=document.createElement("div");document.body.append(container);root=createRoot(container);mocks.api.mockResolvedValue({});});
-afterEach(async()=>{await act(async()=>root.unmount());container.remove();});
+afterEach(async()=>{await act(async()=>root.unmount());container.remove();vi.useRealTimers();});
 async function render(data=state()){await act(async()=>root.render(<ClubCollaboration session={session} data={data} error="" onChanged={changed} onManagePlayers={()=>{}} onReset={()=>{}}/>));}
 async function choose(index:number,value:string){const selects=container.querySelectorAll("select");await act(async()=>{selects[index].value=value;selects[index].dispatchEvent(new Event("change",{bubbles:true}));});}
 async function click(text:string){await act(async()=>Array.from(container.querySelectorAll("button")).find(button=>button.textContent===text)?.click());}
@@ -24,4 +24,20 @@ it("shows invitation review only for the invited club admin capability",async()=
 it("lets a dual-club admin withdraw only the visiting club",async()=>{const data=state();data.capabilities={host:true,manageClubIds:["host","guest"],adminClubIds:["host","guest"]};await render(data);await click("Withdraw club");expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST/collaboration","PATCH",{action:"withdraw",clubId:"guest"});});
 it("keeps the edited order revision when another host reorders the sheet",async()=>{const data=state();data.capabilities.host=true;await render(data);const field=container.querySelector('input[type="number"]') as HTMLInputElement;await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value")!.set!.call(field,"2");field.dispatchEvent(new Event("input",{bubbles:true}));});const newer=state();newer.capabilities.host=true;newer.lineup[0].revision=4;await render(newer);await click("Save order / court");expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST/lineup/row","PATCH",{revision:3,action:"schedule",position:2});});
 it("requires both current result approvals before the host can execute reset",async()=>{const data=state();data.capabilities.host=true;data.status="ACTIVE";const live={...session,status:"ACTIVE"};await act(async()=>root.render(<ClubCollaboration session={live} data={data} error="" onChanged={changed} onManagePlayers={()=>{}} onReset={()=>{}}/>));const reset=Array.from(container.querySelectorAll("button")).find(button=>button.textContent==="Reset session");expect(reset?.disabled).toBe(true);await click("Approve reset · Visitors");expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST/collaboration","PATCH",{action:"confirmReset",revision:1,clubId:"guest"});});
+it("resumes collaboration polling after a request times out", async () => {
+  vi.useFakeTimers();
+  mocks.api.mockImplementationOnce((_url: string, _method: string, _body: unknown, signal: AbortSignal) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => reject(new Error("Request timed out")), { once: true });
+  })).mockResolvedValueOnce(state());
+  function Harness() {
+    const collaboration = useClubCollaboration("TEST", true, "ACTIVE");
+    return <output>{collaboration.data ? "loaded" : collaboration.error}</output>;
+  }
+  await act(async () => root.render(<Harness />));
+  await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+  expect(container.textContent).toContain("Request timed out");
+  await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+  expect(mocks.api).toHaveBeenCalledTimes(2);
+  expect(container.textContent).toBe("loaded");
+});
 });

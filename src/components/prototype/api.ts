@@ -8,43 +8,58 @@ export async function api<T>(
   url: string,
   method = "GET",
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(url, {
     method,
     headers:
       body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
   const data = await response.json().catch(() => null);
   if (!response.ok)
     throw new ApiError(data?.error || `Request failed (${response.status})`, response.status, data?.code);
   return data as T;
 }
-export function useResource<T>(url: string | null) {
+export function useResource<T>(url: string | null, { enabled = true, refreshKey }: { enabled?: boolean; refreshKey?: string } = {}) {
   const [state, setState] = useState<{ url: string; data: T } | null>(null);
   const [error, setError] = useState("");
   const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const latest = useRef(url);
   const requestVersion = useRef(0);
+  const inFlight = useRef<{ url: string; refreshKey?: string; version: number; promise: Promise<void> } | null>(null);
   useEffect(() => { latest.current = url; }, [url]);
   const refresh = useCallback(async () => {
-    if (!url) return;
-    const version = ++requestVersion.current;
-    try {
-      const data = await api<T>(url);
-      if (latest.current === url && requestVersion.current === version) {
-        setState({ url, data });
-        setError("");
-        setErrorStatus(null);
-      }
-    } catch (e) {
-      if (latest.current === url && requestVersion.current === version) {
-        setError(e instanceof Error ? e.message : "Unable to load");
-        setErrorStatus(e instanceof ApiError ? e.status : null);
-      }
-      throw e;
+    if (!url || !enabled) return;
+    if (refreshKey !== undefined && inFlight.current?.url === url && inFlight.current.refreshKey === refreshKey && inFlight.current.version === requestVersion.current) {
+      return inFlight.current.promise;
     }
-  }, [url]);
+    const version = ++requestVersion.current;
+    const controller = refreshKey === undefined ? undefined : new AbortController();
+    const timeout = controller ? setTimeout(() => controller.abort(), 10_000) : undefined;
+    const promise = (async () => {
+      try {
+        const data = await api<T>(url, "GET", undefined, controller?.signal);
+        if (latest.current === url && requestVersion.current === version) {
+          setState({ url, data });
+          setError("");
+          setErrorStatus(null);
+        }
+      } catch (e) {
+        if (latest.current === url && requestVersion.current === version) {
+          setError(e instanceof Error ? e.message : "Unable to load");
+          setErrorStatus(e instanceof ApiError ? e.status : null);
+        }
+        throw e;
+      } finally {
+        clearTimeout(timeout);
+        if (inFlight.current?.version === version) inFlight.current = null;
+      }
+    })();
+    inFlight.current = { url, refreshKey, version, promise };
+    return promise;
+  }, [url, enabled, refreshKey]);
   const update = useCallback((updater: (current: T) => T) => {
     if (!url || latest.current !== url) return;
     // Ignore reads that started before this authoritative local update.

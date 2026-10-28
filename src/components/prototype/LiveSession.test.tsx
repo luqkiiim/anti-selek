@@ -1127,7 +1127,7 @@ describe("LiveSession score and player controls", () => {
     setup(session);
     await act(async () => root.render(<LiveSession globalClubId="club with spaces" code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
     expect(mocks.useResource).toHaveBeenCalledWith("/api/sessions/TEST01?view=global&clubId=club%20with%20spaces");
-    expect(mocks.useResource).toHaveBeenCalledWith("/api/sessions/TEST01/leaderboard?view=global&clubId=club%20with%20spaces");
+    expect(mocks.useResource).toHaveBeenCalledWith("/api/sessions/TEST01/leaderboard?view=global&clubId=club%20with%20spaces", expect.objectContaining({ enabled: false }));
     expect(container.querySelector('[aria-label="Team 1 score"]')).toBeNull();
     expect(container.textContent).not.toContain("Save score");
     expect(container.querySelector('[aria-label="Player actions for Score Player 1A"]')).toBeNull();

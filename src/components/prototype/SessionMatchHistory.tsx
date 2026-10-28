@@ -16,6 +16,7 @@ import { ErrorText, Sheet } from "./Primitives";
 import styles from "./SessionMatchHistory.module.css";
 import "./club-collaboration.css";
 import { useScrollRestoration } from "@/components/app/useScrollRestoration";
+import { sessionPollInterval, useSessionPolling } from "@/components/session/useSessionPolling";
 
 type HistoryPlayer = { id: string; name: string };
 
@@ -286,11 +287,12 @@ export default function SessionMatchHistory({
     }
   };
 
-  useEffect(() => {
-    if (data?.session.status !== "ACTIVE" || saving) return;
-    const timer = setInterval(() => { if (!document.hidden) void loadHistory(false); }, 2_000);
-    return () => clearInterval(timer);
-  }, [data?.session.status, saving, loadHistory]);
+  const refreshHistory = useCallback(() => loadHistory(false), [loadHistory]);
+  useSessionPolling(refreshHistory, {
+    enabled: !saving,
+    intervalMs: data ? sessionPollInterval(data.session.status) : null,
+    refreshOnResume: false,
+  });
   function playerLink(player: HistoryPlayer, teamClubId?: string | null) {
     const stored = data?.playerProfiles?.find(p => p.playerId === player.id);
     const profileClubId = data?.session.ratingPolicyVersion === 2 && !stored?.isGuest

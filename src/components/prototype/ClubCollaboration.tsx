@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionData } from "@/components/session/sessionTypes";
+import { sessionPollInterval, useSessionPolling } from "@/components/session/useSessionPolling";
 import { api, ApiError } from "./api";
 import { ErrorText } from "./Primitives";
 import "./club-collaboration.css";
@@ -46,7 +47,7 @@ export type Collaboration = {
   };
   lineup: LineupRow[];
 };
-export function useClubCollaboration(code: string, enabled: boolean) {
+export function useClubCollaboration(code: string, enabled: boolean, status?: string, pollingEnabled = true) {
   const [state, setState] = useState<{
     code: string;
     data: Collaboration;
@@ -56,9 +57,12 @@ export function useClubCollaboration(code: string, enabled: boolean) {
   const refresh = useCallback(async () => {
     if (!enabled) return;
     const version = ++requestVersion.current;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
     try {
       const next = await api<Collaboration>(
         `/api/sessions/${code}/collaboration`,
+        "GET", undefined, controller.signal,
       );
       if (version === requestVersion.current) {
         setState({ code, data: next });
@@ -71,22 +75,19 @@ export function useClubCollaboration(code: string, enabled: boolean) {
             ? error.message
             : "Unable to refresh collaboration.",
         );
+    } finally {
+      clearTimeout(timeout);
     }
   }, [code, enabled]);
   const invalidate = useCallback(() => {
     requestVersion.current += 1;
   }, []);
-  useEffect(() => {
-    if (!enabled) return;
-    void Promise.resolve().then(refresh);
-    const timer = setInterval(() => {
-      if (!document.hidden) void refresh();
-    }, 2000);
-    return () => {
-      clearInterval(timer);
-      invalidate();
-    };
-  }, [enabled, refresh, invalidate]);
+  useEffect(() => () => invalidate(), [code, enabled, invalidate]);
+  useSessionPolling(refresh, {
+    enabled: enabled && pollingEnabled,
+    intervalMs: sessionPollInterval(status),
+    refreshOnEnable: true,
+  });
   return {
     data: enabled && state?.code === code ? state.data : null,
     error,
