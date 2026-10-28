@@ -5,7 +5,7 @@ This release applies only `20261028000000_court_availability` to the verified 65
 ## Source and database pins
 
 - Project `anti-selek`, `prj_qouB4g5zkv4d8nL2g4NjLfdvjfeY`, team `team_sS6kaZurbqCwtgU9VGhynSMR`.
-- Existing live application at preflight: `acd06e0d8214d753a1a888e4114e5ca82a599c7d`; recheck the live aliases before applying.
+- Existing live application at the refreshed preflight: `6e3cefafa0edebe687eba3c0048248edf28fe762` (polling optimization on the pre-migration application); recheck the live aliases before applying. The release source includes main's matching polling change `c24d67313d629c2adc13239f67fc176bf448426e`.
 - Production endpoint SHA256: `af6c24a4939dcfccb80220dffc4f164896015ca83380547609a3e29d178f6a6d`.
 - Migration LF SHA256: `7fa23720fab0a714e93e12b7d77619f79e5f2c1646675453fdc22d21eeff5a33`.
 - Expected schema SHA256, from release65 reader evidence: `369bc9bb34aa20d1f5fd8e12702a10201cdc3c753ce4333841575ab94c114062`. A fresh authenticated source must match before writes. Historical evidence alone does not authorize or establish the current state.
