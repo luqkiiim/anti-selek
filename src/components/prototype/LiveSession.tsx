@@ -73,6 +73,7 @@ import { saveScoreWithBackgroundRefresh } from "./scoreSave";
 import { ClubCollaboration, useClubCollaboration } from "./ClubCollaboration";
 import { SeriesScoreEditor } from "./SeriesScoreEditor";
 import { CourtPairingDetails } from "./CourtPairingDetails";
+import { useSessionPolling } from "@/components/session/useSessionPolling";
 type LiveSettingsDraft = {
   name: string;
   autoQueueEnabled: boolean;
@@ -161,14 +162,17 @@ export default function LiveSession({
 }) {
   const endpoint = "/api/sessions/" + code;
   const readQuery = globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : "";
-  const resource = useSessionController(code, globalClubId);
+  const [showHistory, setShowHistory] = useState(false);
+  const [localTab, setLocalTab] = useState("Courts");
+  const tab = activeTab ?? localTab;
+  const resource = useSessionController(code, globalClubId, !showHistory);
   const [pauseOverlays, setPauseOverlays] = useState<Record<string, PlayerPauseOverlay>>({});
   const [pauseError, setPauseError] = useState("");
   const [queuedMatchOverlay, setQueuedMatchOverlay] = useState<QueuedMatchOverlay | null>(null);
   const pauseRequestsRef = useRef(new Set<string>());
   const rawSession = resource.data;
   const isCollaboration = rawSession?.collaborationVersion === 2 && (rawSession.clubs?.length ?? 0) > 1;
-  const collaboration = useClubCollaboration(code, !!isCollaboration && !globalClubId);
+  const collaboration = useClubCollaboration(code, !!isCollaboration && !globalClubId, rawSession?.status, !showHistory);
   const lineupMode = !!isCollaboration && rawSession?.schedulingMode === "LINEUP";
   const manageableClubIds = isCollaboration ? collaboration.data?.capabilities.manageClubIds ?? [] : undefined;
   const mayManagePlayer = (player: SessionData["players"][number]) => !isCollaboration || !!manageableClubIds?.includes(player.representingClubId ?? player.profileClubId ?? rawSession?.clubId ?? "");
@@ -180,6 +184,12 @@ export default function LiveSession({
       : rawSession,
     [rawSession, queuedMatchOverlay],
   );
+  const standingsVisible = !!rawSession && !showHistory && (tab === "Standings" || rawSession.status === "COMPLETED");
+  const standingsRevision = useMemo(() => JSON.stringify([
+    rawSession?.status, rawSession?.type, rawSession?.mode, rawSession?.resultsRevision,
+    rawSession?.players.map(player => [player.userId, player.sessionPoints, player.user.name, player.user.elo, player.isGuest, player.joinedAt, player.ladderEntryAt]),
+    rawSession?.matches,
+  ]), [rawSession]);
   const standings = useResource<{
     currentLeaderboard: {
       userId: string;
@@ -187,12 +197,12 @@ export default function LiveSession({
       sessionPoints: number;
       score?: number;
     }[];
-  }>(endpoint + "/leaderboard" + readQuery);
+  }>(endpoint + "/leaderboard" + readQuery, { enabled: standingsVisible, refreshKey: standingsRevision });
+  useSessionPolling(standings.refresh, { enabled: standingsVisible, intervalMs: null, refreshOnResume: false });
   useAppReady(!!resource.error || (!!rawSession && (
     !isCollaboration || !!globalClubId || !!collaboration.data || !!collaboration.error
   ) && (rawSession.status !== "COMPLETED" || !!standings.data || !!standings.error)));
-  const [localTab, setLocalTab] = useState("Courts"),
-    [sheet, setSheet] = useState(""),
+  const [sheet, setSheet] = useState(""),
     [confirmingMatchIds, setConfirmingMatchIds] = useState<Set<string>>(() => new Set()),
     [savingScoreMatchIds, setSavingScoreMatchIds] = useState<Set<string>>(() => new Set()),
     [scoreErrors, setScoreErrors] = useState<Record<string, string>>({}),
@@ -210,7 +220,6 @@ export default function LiveSession({
   const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.UNSPECIFIED);
   const [guestMixedSideOverride, setGuestMixedSideOverride] = useState<MixedSide | null>(null);
   const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const [restPlayerId, setRestPlayerId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -223,7 +232,6 @@ export default function LiveSession({
   const [confirmAutoQueueOff, setConfirmAutoQueueOff] = useState(false);
   const [confirmedQueueId, setConfirmedQueueId] = useState<string | null>(null);
   const sessionTabs = ["Players", "Courts", "Standings"] as const;
-  const tab = activeTab ?? localTab;
   function setTab(next: string) { if (onTabChange) onTabChange(next); else setLocalTab(next); }
   function navigateTab(nextTab: string) { setTab(nextTab); }
   function openHistory() { if (onHistory) onHistory(); else setShowHistory(true); }
@@ -299,15 +307,6 @@ export default function LiveSession({
       return { ...current, conflictingRefreshes: 1 };
     });
   }, [rawSession]);
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (!document.hidden && !action.busy && savingScoreMatchIds.size === 0) {
-        void refreshSession().catch(() => {});
-        void refreshStandings().catch(() => {});
-      }
-    }, isCollaboration ? 2000 : 15000);
-    return () => clearInterval(timer);
-  }, [refreshSession, refreshStandings, action.busy, savingScoreMatchIds, isCollaboration]);
   const canManage = !globalClubId && !s?.viewerIsQuickAccess && (isCollaboration ? !!collaboration.data?.capabilities.host : !!s?.viewerCanManage);
   const canJoin = !!s && !globalClubId && !s.viewerIsQuickAccess && !s.selectedSelf && !!s.eligibleProfiles?.length && s.status !== "COMPLETED";
   const canRename = canManage && !!s?.viewerCanRename && s.status === "WAITING";
