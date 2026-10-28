@@ -89,6 +89,7 @@ function updatedSession(overrides: Record<string, unknown> = {}) {
 function transactionDouble(queuedMatch: unknown = null) {
   return {
     session: {
+      findUnique: vi.fn().mockResolvedValue({ ...baseSession, courts: baseSession.courts.map(court => ({ ...court, matches: [] })) }),
       update: vi.fn().mockResolvedValue({}),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
@@ -316,6 +317,54 @@ describe("session settings route", () => {
     );
   });
 
+  it("changes active court availability while retaining an ongoing match and completed history", async () => {
+    const liveMatch = { id: "live-1", matchmakingReasonJson: null, team1Player1: { id: "p1", name: "One" }, team1Player2: { id: "p2", name: "Two" }, team2Player1: { id: "p3", name: "Three" }, team2Player2: { id: "p4", name: "Four" } };
+    vi.mocked(prisma.session.findUnique)
+      .mockResolvedValueOnce({ ...baseSession, status: SessionStatus.ACTIVE } as never)
+      .mockResolvedValueOnce(updatedSession({ courts: [{ id: "court-1", courtNumber: 1, currentMatch: liveMatch }] }) as never);
+    const tx = transactionDouble();
+    tx.session.findUnique.mockResolvedValue({ status: SessionStatus.ACTIVE, courts: [
+      { courtNumber: 1, currentMatchId: "live-1", matches: [{ id: "live-1" }] },
+      { courtNumber: 2, currentMatchId: null, matches: [] },
+      { courtNumber: 3, currentMatchId: null, matches: [] },
+    ] } as never);
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(tx as never));
+    const response = await PATCH(request({ courtCount: 1, autoQueueEnabled: false, respectPlayerRest: true }), { params: Promise.resolve({ code: "session-1" }) });
+    expect(response.status).toBe(200);
+    expect((await response.json()).courts[0].currentMatch.id).toBe("live-1");
+    expect(tx.court.updateMany).toHaveBeenCalledWith({ where: { sessionId: "session-1", courtNumber: { gt: 1 } }, data: { isActive: false } });
+    expect(tx.court.deleteMany).not.toHaveBeenCalled();
+    expect(tx.sessionPlayer.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("reopens retained courts without creating duplicate courts", async () => {
+    vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(baseSession as never).mockResolvedValueOnce(updatedSession() as never);
+    const tx = transactionDouble();
+    tx.session.findUnique.mockResolvedValue({ status: SessionStatus.ACTIVE, courts: [1, 2, 3].map(courtNumber => ({ courtNumber, currentMatchId: null, matches: [] })) } as never);
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(tx as never));
+    const response = await PATCH(request({ courtCount: 3, autoQueueEnabled: false, respectPlayerRest: true }), { params: Promise.resolve({ code: "session-1" }) });
+    expect(response.status).toBe(200);
+    expect(tx.court.createMany).not.toHaveBeenCalled();
+    expect(tx.court.updateMany).toHaveBeenCalledWith({ where: { sessionId: "session-1", courtNumber: { lte: 3 } }, data: { isActive: true } });
+  });
+
+  it("rejects a count change if the session completes during the save", async () => {
+    vi.mocked(prisma.session.findUnique).mockResolvedValueOnce({ ...baseSession, status: SessionStatus.ACTIVE } as never);
+    const tx = transactionDouble();
+    tx.session.findUnique.mockResolvedValue({ status: SessionStatus.COMPLETED, courts: [] } as never);
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(tx as never));
+    const response = await PATCH(request({ courtCount: 2, autoQueueEnabled: true, respectPlayerRest: true }), { params: Promise.resolve({ code: "session-1" }) });
+    expect(response.status).toBe(409);
+    expect(tx.court.updateMany).not.toHaveBeenCalled();
+    expect(tx.session.update).not.toHaveBeenCalled();
+  });
+
+  it.each([null, 0, 11, 1.5, "3"])("rejects invalid court quantity %j", async courtCount => {
+    const response = await PATCH(request({ courtCount, autoQueueEnabled: true, respectPlayerRest: true }), { params: Promise.resolve({ code: "session-1" }) });
+    expect(response.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("updates waiting gameplay settings, legacy shadows, courts, and labels", async () => {
     vi.mocked(prisma.session.findUnique)
       .mockResolvedValueOnce(baseSession as never)
@@ -426,7 +475,7 @@ describe("session settings route", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("refuses to remove a court that has match history", async () => {
+  it("refuses to close a court with an unfinished match", async () => {
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       ...baseSession,
       courts: [
@@ -434,12 +483,18 @@ describe("session settings route", () => {
         {
           id: "court-2",
           courtNumber: 2,
-          currentMatchId: null,
+          currentMatchId: "match-live",
           _count: { matches: 1 },
         },
       ],
     } as never);
 
+    const tx = transactionDouble();
+    tx.session.findUnique.mockResolvedValue({ ...baseSession, courts: [
+      { courtNumber: 1, currentMatchId: null, matches: [] },
+      { courtNumber: 2, currentMatchId: "match-live", matches: [] },
+    ] } as never);
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(tx as never));
     const response = await PATCH(
       request({
         autoQueueEnabled: true,
@@ -458,7 +513,7 @@ describe("session settings route", () => {
     );
 
     expect(response.status).toBe(409);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.court.updateMany).not.toHaveBeenCalled();
   });
 
   it("restores legacy group assignments from club preferences once", async () => {

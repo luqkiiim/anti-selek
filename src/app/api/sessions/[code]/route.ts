@@ -53,6 +53,7 @@ import {
 import { isValidSessionCrossoverFrequency } from "@/lib/sessionPools";
 import { SessionRouteError } from "../sessionRouteShared";
 import { getAccountClubContext } from "@/lib/playerIdentity";
+import { setSessionCourtCount } from "@/lib/sessionCourts";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,7 @@ interface UpdateSessionSettingsRequest {
   respectPlayerRest?: unknown;
   courtLabels?: unknown;
   gameplaySettings?: unknown;
+  courtCount?: unknown;
 }
 
 interface ParsedCourtLabel {
@@ -180,6 +182,8 @@ async function getSessionRoute(
         },
       },
       courts: {
+        where: { isActive: true },
+        orderBy: { courtNumber: "asc" },
         include: {
           currentMatch: {
             select: {
@@ -563,6 +567,13 @@ export async function PATCH(
     const name = typeof body.name === "string" ? body.name.trim() : undefined;
     const courtLabels = parseCourtLabels(body.courtLabels ?? []);
     const gameplaySettings = parseGameplaySettings(body.gameplaySettings);
+    const courtCount = body.courtCount !== undefined ? body.courtCount : gameplaySettings?.courtCount;
+    if (courtCount !== undefined && (!Number.isInteger(courtCount) || (courtCount as number) < 1 || (courtCount as number) > 10)) {
+      throw new SessionRouteError("Court count must be between 1 and 10", 400);
+    }
+    if (body.courtCount !== undefined && gameplaySettings && body.courtCount !== gameplaySettings.courtCount) {
+      throw new SessionRouteError("Court counts must match", 400);
+    }
 
     const { code } = await params;
 
@@ -583,14 +594,6 @@ export async function PATCH(
         collaborationVersion: true,
         schedulingMode: true,
         poolAssignmentsInitialized: true,
-        courts: {
-          select: {
-            id: true,
-            courtNumber: true,
-            currentMatchId: true,
-            _count: { select: { matches: true } },
-          },
-        },
       },
     });
 
@@ -636,30 +639,14 @@ export async function PATCH(
       );
     }
     if (
-      gameplaySettings &&
+      courtCount !== undefined &&
       courtLabels.some(
-        (court) => court.courtNumber > gameplaySettings.courtCount
+        (court) => court.courtNumber > (courtCount as number)
       )
     ) {
       return sportingJson(
         { error: "Court labels must match the selected court count" },
         { status: 400 }
-      );
-    }
-
-    const courtsToRemove = gameplaySettings
-      ? sessionData.courts.filter(
-          (court) => court.courtNumber > gameplaySettings.courtCount
-        )
-      : [];
-    if (
-      courtsToRemove.some(
-        (court) => court.currentMatchId || court._count.matches > 0
-      )
-    ) {
-      return sportingJson(
-        { error: "Courts with match history cannot be removed" },
-        { status: 409 }
       );
     }
 
@@ -669,6 +656,9 @@ export async function PATCH(
         if(current.schedulingMode === "LINEUP" && autoQueueEnabled) throw new IdentityConflictError("Lineup sessions use manual court assignments.");
       }
       await assertSessionMutationActor(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, ...(name !== undefined ? { hostOnly: true } : {}) });
+      if (courtCount !== undefined) {
+        await setSessionCourtCount(tx, sessionData.id, courtCount as number);
+      }
       if (name !== undefined) {
         const renamed = await tx.session.updateMany({
           where: { id: sessionData.id, status: SessionStatus.WAITING },
@@ -753,29 +743,6 @@ export async function PATCH(
         },
       });
 
-      if (gameplaySettings) {
-        const existingCourtNumbers = new Set(
-          sessionData.courts.map((court) => court.courtNumber)
-        );
-        const newCourts = Array.from(
-          { length: gameplaySettings.courtCount },
-          (_, index) => index + 1
-        ).filter((courtNumber) => !existingCourtNumbers.has(courtNumber));
-        if (newCourts.length > 0) {
-          await tx.court.createMany({
-            data: newCourts.map((courtNumber) => ({
-              sessionId: sessionData.id,
-              courtNumber,
-            })),
-          });
-        }
-        if (courtsToRemove.length > 0) {
-          await tx.court.deleteMany({
-            where: { id: { in: courtsToRemove.map((court) => court.id) } },
-          });
-        }
-      }
-
       for (const courtLabel of courtLabels) {
         await tx.court.updateMany({
           where: {
@@ -809,7 +776,16 @@ export async function PATCH(
     const updatedSession = await prisma.session.findUnique({
       where: { id: sessionData.id },
       include: {
-        courts: { orderBy: { courtNumber: "asc" } },
+        courts: {
+          where: { isActive: true },
+          orderBy: { courtNumber: "asc" },
+          include: { currentMatch: { include: {
+            team1Player1: { select: { id: true, name: true, avatarKey: true } },
+            team1Player2: { select: { id: true, name: true, avatarKey: true } },
+            team2Player1: { select: { id: true, name: true, avatarKey: true } },
+            team2Player2: { select: { id: true, name: true, avatarKey: true } },
+          } } },
+        },
         players: {
           include: {
             player: {
@@ -845,11 +821,18 @@ export async function PATCH(
         id: court.id,
         label: court.label,
       })),
-      ...(gameplaySettings
+      ...(gameplaySettings || courtCount !== undefined
         ? {
             courts: updatedSession.courts.map((court) => ({
               ...court,
-              currentMatch: null,
+              currentMatch: court.currentMatch ? {
+                ...court.currentMatch,
+                team1Player1: serializeAvatarEntity(court.currentMatch.team1Player1),
+                team1Player2: serializeAvatarEntity(court.currentMatch.team1Player2),
+                team2Player1: serializeAvatarEntity(court.currentMatch.team2Player1),
+                team2Player2: serializeAvatarEntity(court.currentMatch.team2Player2),
+                matchmakingReason: parseMatchmakingReasonJson(court.currentMatch.matchmakingReasonJson),
+              } : null,
             })),
             players: updatedSession.players.map((player) => ({
               ...player,

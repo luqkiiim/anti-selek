@@ -767,12 +767,10 @@ export default function SessionTools() {
       balanceMetricDraft !== currentGameplaySettings.balanceMetric ||
       pairingModeDraft !== currentGameplaySettings.pairingMode ||
       poolsEnabledDraft !== sessionData.poolsEnabled ||
-      crossoverFrequencyDraft !== sessionData.crossoverFrequency ||
-      courtCountDraft !== sessionData.courts.length
+      crossoverFrequencyDraft !== sessionData.crossoverFrequency
     );
   }, [
     balanceMetricDraft,
-    courtCountDraft,
     crossoverFrequencyDraft,
     currentGameplaySettings,
     matchmakingStyleDraft,
@@ -788,6 +786,7 @@ export default function SessionTools() {
     return autoQueueDraft !== sessionData.autoQueueEnabled;
   }, [autoQueueDraft, sessionData]);
   const hasSettingsChanges =
+    (!!sessionData && sessionData.status !== SessionStatus.COMPLETED && courtCountDraft !== sessionData.courts.length) ||
     hasCourtLabelChanges ||
     hasGameplayChanges ||
     hasAutoQueueChange;
@@ -878,7 +877,7 @@ export default function SessionTools() {
 
     try {
       const labelCourtCount =
-        sessionData.status === SessionStatus.WAITING
+        sessionData.status !== SessionStatus.COMPLETED
           ? courtCountDraft
           : sessionData.courts.length;
       const res = await fetch(`/api/sessions/${code}`, {
@@ -887,13 +886,14 @@ export default function SessionTools() {
         body: JSON.stringify({
           autoQueueEnabled: autoQueueDraft,
           respectPlayerRest: sessionData.respectPlayerRest,
+          ...(sessionData.status !== SessionStatus.COMPLETED && courtCountDraft !== sessionData.courts.length ? { courtCount: courtCountDraft } : {}),
           courtLabels: Array.from(
             { length: labelCourtCount },
             (_, index) => ({
               courtNumber: index + 1,
               label: courtLabelDrafts[index + 1] ?? "",
             })
-          ),
+          ).filter(court => Object.hasOwn(courtLabelDrafts, court.courtNumber)),
           ...(hasGameplayChanges
             ? {
                 gameplaySettings: {
@@ -1647,6 +1647,7 @@ export default function SessionTools() {
         autoQueueEnabled={sessionData.autoQueueEnabled}
         autoQueueDraft={autoQueueDraft}
         canEditGameplay={sessionData.status === SessionStatus.WAITING}
+        canEditCourtCount={sessionData.status !== SessionStatus.COMPLETED}
         collabFormat={
           sessionData.collabFormat ?? SessionCollabFormat.FREE_PLAY
         }

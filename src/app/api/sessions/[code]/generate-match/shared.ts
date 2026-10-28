@@ -34,7 +34,7 @@ const sessionRecordInclude = {
   players: {
     include: { player: { select: { id: true, name: true, elo: true } } },
   },
-  courts: true,
+  courts: { where: { isActive: true } },
   matches: true,
   sessionClubs: {
     include: {
@@ -64,6 +64,7 @@ export async function loadCourtRecords(
     where: {
       id: { in: requestedCourtIds },
       sessionId,
+      isActive: true,
     },
     include: { currentMatch: true },
   });

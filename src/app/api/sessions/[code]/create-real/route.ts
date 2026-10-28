@@ -64,6 +64,7 @@ export async function POST(
             id: true,
             courtNumber: true,
             label: true,
+            isActive: true,
           },
           orderBy: { courtNumber: "asc" },
         },
@@ -315,10 +316,11 @@ export async function POST(
           crossoverFrequency: sourceSession.crossoverFrequency,
           endedAt: includeResults ? sourceSession.endedAt : null,
           courts: {
-            create: sourceSession.courts.map((court) => ({
+            create: sourceSession.courts.filter(court => includeResults || court.isActive).map((court) => ({
               id: courtIdBySourceCourtId.get(court.id),
               courtNumber: court.courtNumber,
               label: court.label ?? null,
+              isActive: court.isActive,
             })),
           },
         },
@@ -459,7 +461,7 @@ export async function POST(
       return tx.session.findUnique({
         where: { id: nextSession.id },
         include: {
-          courts: true,
+          courts: { where: { isActive: true } },
           players: {
             include: {
               player: {

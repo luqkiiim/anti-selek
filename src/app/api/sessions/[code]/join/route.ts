@@ -265,7 +265,7 @@ export async function POST(
       const existingSeat = await tx.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: sessionData.id, playerId: playerIdToJoin } } });
       if (existingSeat) {
         if (existingSeat.profileClubId !== pair.profileClubId) throw new IdentityConflictError("This player already joined with another club profile. Remove the entry before choosing a different profile.");
-        return tx.session.findUniqueOrThrow({ where: { id: sessionData.id }, include: { courts: { include: { currentMatch: true } }, players: { include: { player: true } } } });
+        return tx.session.findUniqueOrThrow({ where: { id: sessionData.id }, include: { courts: { where: { isActive: true }, include: { currentMatch: true } }, players: { include: { player: true } } } });
       }
       return tx.session.update({
       where: { id: sessionData.id },
@@ -291,7 +291,7 @@ export async function POST(
         },
       },
       include: {
-        courts: { include: { currentMatch: true } },
+        courts: { where: { isActive: true }, include: { currentMatch: true } },
         players: {
           include: {
             player: {

@@ -90,6 +90,7 @@ export async function POST(
       where: {
         sessionId: sessionData.id,
         currentMatchId: null,
+        isActive: true,
       },
       orderBy: { courtNumber: "asc" },
       include: { currentMatch: true },

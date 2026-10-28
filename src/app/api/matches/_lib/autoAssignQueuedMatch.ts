@@ -31,6 +31,7 @@ export async function autoAssignQueuedMatch(
       },
       queuedMatch: true,
       courts: {
+        where: { isActive: true },
         include: { currentMatch: true },
       },
     },

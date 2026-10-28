@@ -93,7 +93,7 @@ async function shouldSuppressAutomaticQueueCreation(
   }
 
   const courtCount = await prisma.court.count({
-    where: { sessionId: sessionData.id },
+    where: { sessionId: sessionData.id, isActive: true },
   });
 
   return courtCount === 1;
@@ -109,7 +109,7 @@ async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
   }
 
   const courts = await prisma.court.findMany({
-    where: { sessionId: sessionData.id },
+    where: { sessionId: sessionData.id, isActive: true },
     select: {
       id: true,
       currentMatchId: true,
@@ -243,7 +243,7 @@ async function createQueuedMatchRecord({
           select: { autoQueueEnabled: true },
         });
         const openCourt = await tx.court.findFirst({
-          where: { sessionId, currentMatchId: null },
+          where: { sessionId, isActive: true, currentMatchId: null },
           select: { id: true },
         });
         if (!currentSession?.autoQueueEnabled || openCourt) {

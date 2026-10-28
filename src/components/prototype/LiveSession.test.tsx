@@ -760,6 +760,20 @@ describe("LiveSession score and player controls", () => {
     });
   });
 
+  it("saves court quantity during play without sending locked gameplay settings", async () => {
+    setup(sessionWithCourts([1, 2, 3].map(courtNumber => ({ id: `court-${courtNumber}`, courtNumber, currentMatch: null }))));
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find(button => button.textContent === "Session settings")?.click());
+    await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Court count"]')!, "1"));
+    expect(container.textContent).toContain("Scores and history stay.");
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find(button => button.textContent === "Save settings")?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01", "PATCH", {
+      autoQueueEnabled: false, respectPlayerRest: true, courtCount: 1,
+      courtLabels: [{ courtNumber: 1, label: null }],
+    });
+  });
+
   it("confirms the queued-match removal before saving auto queue off", async () => {
     const session = sessionWithCourts([
       { id: "court-1", courtNumber: 1, currentMatch: null },
@@ -828,9 +842,8 @@ describe("LiveSession score and player controls", () => {
       respectPlayerRest: true,
       courtLabels: [
         { courtNumber: 1, label: null },
-        { courtNumber: 2, label: null },
-        { courtNumber: 3, label: null },
       ],
+      courtCount: 3,
       gameplaySettings: {
         matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH,
         balanceMetric: SessionBalanceMetric.SESSION_POINTS,

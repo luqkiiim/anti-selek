@@ -206,14 +206,14 @@ async function createMatchAssignment(
   }
 
   const updatedCourt = await tx.court.updateMany({
-    where: { id: assignment.courtId, currentMatchId: null },
+    where: { id: assignment.courtId, sessionId, isActive: true, currentMatchId: null },
     data: { currentMatchId: match.id },
   });
 
   if (updatedCourt.count === 0) {
     throw new GenerateMatchError(
       409,
-      "This court already has a match in progress."
+      "This court is unavailable or already has a match in progress."
     );
   }
 

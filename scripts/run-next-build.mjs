@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import { assertDeployedCourtSchema } from "./check-court-schema.mjs";
 
 const require = createRequire(import.meta.url);
+await assertDeployedCourtSchema();
 
 if (process.env.VERCEL === "1" && process.env.VERCEL_PREVIEW_COMMENTS_ENABLED === "1") {
   // Work around a Vercel Next adapter crash in modifyConfig when preview comments are enabled.

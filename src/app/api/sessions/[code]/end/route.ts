@@ -112,7 +112,7 @@ export async function POST(
         where: { code },
         data: { status: SessionStatus.COMPLETED, endedAt },
         include: {
-          courts: { include: { currentMatch: true } },
+          courts: { where: { isActive: true }, include: { currentMatch: true } },
           players: {
             include: {
               player: {

@@ -82,7 +82,7 @@ export async function listSessionsForClub({
           club: { select: { id: true, name: true, isTutorial: true } },
         },
       },
-      courts: true,
+      courts: { where: { isActive: true } },
       players: {
         include: {
           player: { select: { id: true, name: true, avatarKey: true, elo: true } },

@@ -172,7 +172,7 @@ export async function POST(
         },
       },
       include: {
-        courts: { include: { currentMatch: true } },
+        courts: { where: { isActive: true }, include: { currentMatch: true } },
         players: {
           include: {
             player: { select: { id: true, name: true, avatarKey: true, elo: true } },

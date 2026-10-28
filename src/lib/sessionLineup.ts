@@ -241,7 +241,7 @@ export async function editLineupRow(
       body.courtPreferenceId !== null &&
       (typeof body.courtPreferenceId !== "string" ||
         !(await db.court.findFirst({
-          where: { id: body.courtPreferenceId, sessionId },
+          where: { id: body.courtPreferenceId, sessionId, isActive: true },
         })))
     )
       throw new IdentityConflictError("Choose a court in this session.");
@@ -340,7 +340,7 @@ export async function startLineupRow(
   const courtId =
     typeof body.courtId === "string" ? body.courtId : row.courtPreferenceId;
   const court = courtId
-    ? await db.court.findFirst({ where: { id: courtId, sessionId } })
+    ? await db.court.findFirst({ where: { id: courtId, sessionId, isActive: true } })
     : null;
   if (!court || court.currentMatchId)
     throw new IdentityConflictError("Choose an available court.");
@@ -366,7 +366,7 @@ export async function startLineupRow(
     },
   });
   const assigned = await db.court.updateMany({
-    where: { id: court.id, sessionId, currentMatchId: null },
+    where: { id: court.id, sessionId, isActive: true, currentMatchId: null },
     data: { currentMatchId: match.id },
   });
   if (assigned.count !== 1)

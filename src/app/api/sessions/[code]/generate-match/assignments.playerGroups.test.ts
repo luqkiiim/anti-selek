@@ -83,6 +83,18 @@ describe("player-group assignment lifecycle", () => {
     });
   });
 
+  it("rejects a court closed after match selection at the assignment writer", async () => {
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({ poolsEnabled: false } as never);
+    tx.court.updateMany.mockResolvedValue({ count: 0 });
+    mocks.transaction.mockImplementation(async callback => callback(tx));
+    await expect(createMatchesForAssignments("session-1", [{ courtId: "court-1", selectedIds: [...partition.team1, ...partition.team2], partition }])).rejects.toThrow("This court is unavailable");
+    expect(tx.court.updateMany).toHaveBeenCalledWith({
+      where: { id: "court-1", sessionId: "session-1", isActive: true, currentMatchId: null },
+      data: { currentMatchId: "created-match" },
+    });
+  });
+
   it("snapshots the current scoring format and freezes participation even if the match is later undone", async () => {
     const tx = createTransactionMock();
     tx.session.findUnique.mockResolvedValue({ poolsEnabled: false, scoringFormat: "BEST_OF_THREE", collaborationVersion: 2 } as never);

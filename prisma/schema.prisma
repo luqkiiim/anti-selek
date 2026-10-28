@@ -312,6 +312,7 @@ model Court {
   id             String  @id @default(cuid())
   sessionId      String
   courtNumber    Int // 1, 2, or 3
+  isActive       Boolean @default(true)
   label          String?
   currentMatchId String? @unique
 

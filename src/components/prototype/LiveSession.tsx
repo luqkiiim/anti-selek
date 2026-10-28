@@ -424,6 +424,7 @@ export default function LiveSession({
     s && liveSettingsDraft && (
       (canRename && liveSettingsDraft.name.trim() !== s.name) ||
       liveSettingsDraft.autoQueueEnabled !== s.autoQueueEnabled ||
+      (s.status !== "COMPLETED" && liveSettingsDraft.courtCount !== s.courts.length) ||
       s.courts.some(
         (court) =>
           (liveSettingsDraft.courtLabels[court.courtNumber] ?? "").trim() !==
@@ -434,8 +435,7 @@ export default function LiveSession({
         liveSettingsDraft.balanceMetric !== (s.balanceMetric ?? SessionBalanceMetric.RATING) ||
         liveSettingsDraft.pairingMode !== (s.pairingMode ?? SessionPairingMode.OPEN) ||
         liveSettingsDraft.poolsEnabled !== s.poolsEnabled ||
-        liveSettingsDraft.crossoverFrequency !== s.crossoverFrequency ||
-        liveSettingsDraft.courtCount !== s.courts.length
+        liveSettingsDraft.crossoverFrequency !== s.crossoverFrequency
       ))
     )
   );
@@ -779,10 +779,11 @@ export default function LiveSession({
       ...(canRename && liveSettingsDraft.name.trim() !== s.name ? { name: liveSettingsDraft.name.trim() } : {}),
       autoQueueEnabled: liveSettingsDraft.autoQueueEnabled,
       respectPlayerRest: s.respectPlayerRest,
+      ...(s.status !== "COMPLETED" && liveSettingsDraft.courtCount !== s.courts.length ? { courtCount: liveSettingsDraft.courtCount } : {}),
       courtLabels: Array.from({ length: liveSettingsDraft.courtCount }, (_, index) => ({
         courtNumber: index + 1,
         label: liveSettingsDraft.courtLabels[index + 1]?.trim() || null,
-      })),
+      })).filter(court => Object.hasOwn(liveSettingsDraft.courtLabels, court.courtNumber)),
       ...(s.status === "WAITING" ? {
         gameplaySettings: {
           matchmakingStyle: liveSettingsDraft.matchmakingStyle,
@@ -1594,9 +1595,32 @@ export default function LiveSession({
 
                   <section className="live-settings-section" aria-labelledby="live-courts-heading">
                     <div className="live-settings-section-heading">
-                      <h3 id="live-courts-heading">Court labels</h3>
+                      <h3 id="live-courts-heading">Courts</h3>
                       <p>Leave blank to use the default court name.</p>
                     </div>
+                    {s.status !== "COMPLETED" && (
+                      <label className="live-settings-field">
+                        Available courts
+                        <select
+                          aria-label="Court count"
+                          className="live-settings-select"
+                          value={liveSettingsDraft.courtCount}
+                          disabled={action.busy}
+                          onChange={(event) => setLiveSettingsDraft(current => current ? {
+                            ...current, courtCount: Number(event.target.value),
+                          } : current)}
+                        >
+                          {Array.from({ length: 10 }, (_, index) => index + 1).map(count => (
+                            <option value={count} key={count}>{count}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {liveSettingsDraft.courtCount < s.courts.length && (
+                      <p className="live-settings-hint" role="status">
+                        Courts {liveSettingsDraft.courtCount + 1}{liveSettingsDraft.courtCount + 1 < s.courts.length ? `–${s.courts.length}` : ""} will close. Finish or clear their matches first. Scores and history stay.
+                      </p>
+                    )}
                     <div className="live-settings-courts">
                       {Array.from({ length: liveSettingsDraft.courtCount }, (_, index) => {
                         const courtNumber = index + 1;
@@ -1676,22 +1700,6 @@ export default function LiveSession({
                           >
                             <option value={SessionPairingMode.OPEN}>Open pairs</option>
                             <option value={SessionPairingMode.MIXED}>Mixed pairs</option>
-                          </select>
-                        </label>
-                        <label className="live-settings-field">
-                          Courts
-                          <select
-                            aria-label="Court count"
-                            className="live-settings-select"
-                            value={liveSettingsDraft.courtCount}
-                            onChange={(event) => setLiveSettingsDraft((current) => current ? {
-                              ...current,
-                              courtCount: Number(event.target.value),
-                            } : current)}
-                          >
-                            {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
-                              <option value={count} key={count}>{count}</option>
-                            ))}
                           </select>
                         </label>
                         <div className="live-settings-row live-settings-group-toggle">

@@ -328,7 +328,7 @@ describe("queued player-group lifecycle", () => {
       where: { id: "session-1" }, select: { autoQueueEnabled: true },
     });
     expect(tx.court.findFirst).toHaveBeenCalledWith({
-      where: { sessionId: "session-1", currentMatchId: null }, select: { id: true },
+      where: { sessionId: "session-1", isActive: true, currentMatchId: null }, select: { id: true },
     });
     expect(tx.queuedMatch.create).toHaveBeenCalledTimes(1);
   });
@@ -341,7 +341,7 @@ describe("queued player-group lifecycle", () => {
 
     expect(await tryRebuildQueuedMatchForSessionId("session-1")).toBeNull();
     expect(tx.court.findFirst).toHaveBeenCalledWith({
-      where: { sessionId: "session-1", currentMatchId: null }, select: { id: true },
+      where: { sessionId: "session-1", isActive: true, currentMatchId: null }, select: { id: true },
     });
     expect(tx.queuedMatch.create).not.toHaveBeenCalled();
   });

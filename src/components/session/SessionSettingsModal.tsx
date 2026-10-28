@@ -33,6 +33,7 @@ interface SessionSettingsModalProps {
   autoQueueEnabled: boolean;
   autoQueueDraft: boolean;
   canEditGameplay: boolean;
+  canEditCourtCount?: boolean;
   collabFormat: SessionCollabFormat;
   matchmakingStyleDraft: SessionMatchmakingStyle;
   balanceMetricDraft: SessionBalanceMetric;
@@ -75,6 +76,7 @@ export function SessionSettingsModal({
   autoQueueEnabled,
   autoQueueDraft,
   canEditGameplay,
+  canEditCourtCount = canEditGameplay,
   collabFormat,
   matchmakingStyleDraft,
   balanceMetricDraft,
@@ -223,14 +225,10 @@ export function SessionSettingsModal({
           </div>
           {canEditGameplay ? (
             <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50/70 p-3 sm:p-4">
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+              <div>
                 <MatchmakingStyleControl
                   value={matchmakingStyleDraft}
                   onChange={onMatchmakingStyleChange}
-                />
-                <CourtCountControl
-                  value={courtCountDraft}
-                  onChange={onCourtCountChange}
                 />
               </div>
               <PairingModeControl
@@ -340,16 +338,19 @@ export function SessionSettingsModal({
 
         <section className="space-y-3">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Court labels</h3>
+            <h3 className="text-sm font-semibold text-gray-900">Courts</h3>
             <p className="mt-1 text-sm text-gray-500">
               Leave a label blank to keep the default court name.
             </p>
           </div>
-
+          {canEditCourtCount ? <CourtCountControl value={courtCountDraft} onChange={onCourtCountChange} /> : null}
+          {canEditCourtCount && courtCountDraft < courts.length ? (
+            <p className="text-sm text-gray-600">Finish or clear matches on the courts being closed. Scores and history stay.</p>
+          ) : null}
           <div className="space-y-2">
             {Array.from(
               {
-                length: canEditGameplay ? courtCountDraft : courts.length,
+                length: canEditCourtCount ? courtCountDraft : courts.length,
               },
               (_, index) => index + 1
             ).map((courtNumber) => {

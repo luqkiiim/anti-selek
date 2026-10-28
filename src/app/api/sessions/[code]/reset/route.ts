@@ -150,6 +150,7 @@ export async function POST(
         },
         include: {
           courts: {
+            where: { isActive: true },
             include: {
               currentMatch: {
                 select: {
