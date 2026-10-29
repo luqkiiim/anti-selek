@@ -81,20 +81,6 @@ test("new club overview and direct profile avoid empty insight panels", async ({
   await expect(page.getByText("To connect a different profile", { exact: false })).toHaveCount(0);
 });
 
-test("view-only entry stays read-only on direct session links", async ({ page }) => {
-  await page.goto("/signin");
-  await page.getByRole("button", { name: "View-only access", exact: true }).click();
-  await page.getByLabel("Club name", { exact: true }).fill("E2E Score Club");
-  await page.getByLabel("Your player name", { exact: true }).fill("Score Viewer");
-  await page.getByRole("button", { name: "Enter club", exact: true }).click();
-  await expect(page).toHaveURL(/\/club\/community-score-e2e/);
-  await page.goto(`/session/${scoreSessionCode}`);
-  await expect(page.locator(".court-card")).toBeVisible();
-  await expect(page.getByLabel("Team 1 score")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Save score", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Manage players", exact: true })).toHaveCount(0);
-});
-
 test("a global club viewer has no operator controls", async ({ page }) => {
   await login(page, { email: "global-viewer-e2e@example.com", password: "Password123!" });
   await page.goto("/club/community-score-e2e?view=global");

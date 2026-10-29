@@ -80,45 +80,6 @@
   line-height: 1.5;
 }
 
-.modeSwitch {
-  display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: 4px;
-  margin: 0 0 20px;
-  padding: 4px;
-  border: 1px solid #eee7e5;
-  border-radius: 15px;
-  background: #f7f2f8;
-}
-
-.modeButton {
-  min-width: 0;
-  min-height: 44px;
-  padding: 9px 8px;
-  border: 1px solid transparent;
-  border-radius: 11px;
-  background: transparent;
-  color: #80718b;
-  cursor: pointer;
-  font: 700 14px/1.2 "Nunito Sans", sans-serif;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.modeButton:hover {
-  color: #472567;
-}
-
-.modeButtonSelected {
-  border-color: #eee7e5;
-  background: #fffdfb;
-  color: #291440;
-  box-shadow: 0 1px 3px rgb(41 20 64 / 7%);
-}
-
-.modeButton:focus-visible,
 .primaryButton:focus-visible,
 .link:focus-visible {
   outline: 3px solid #aa83ed;
@@ -251,29 +212,6 @@
   cursor: default;
 }
 
-.quickAccess {
-  display: grid;
-  gap: 12px;
-}
-
-.quickNote {
-  margin: -4px 0 0;
-  padding: 12px 13px;
-  border: 1px solid #eee2d7;
-  border-radius: 13px;
-  background: #fbf4eb;
-  color: #765d47;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.quickInstructions {
-  margin: 0 0 2px;
-  color: #80718b;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
 .footer {
   display: flex;
   min-height: 44px;
@@ -303,14 +241,9 @@
   .panel {
     padding: 22px 20px;
   }
-
-  .modeButton {
-    font-size: 13px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .modeButton,
   .field,
   .primaryButton {
     transition: none;
