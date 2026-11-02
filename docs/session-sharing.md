@@ -12,7 +12,9 @@ Optional session details are entered during creation, or through Session details
 in settings or the share sheet. Only active host-club organisers and global
 admins can save them, while the session is waiting or active. Saved booking
 timestamps are UTC, interpreted and displayed in the session's chosen timezone
-(default Asia/Kuala_Lumpur). End dates explicitly support overnight bookings.
+(default Asia/Kuala_Lumpur). Enter a start date/time and duration in hours;
+the end time is calculated automatically, including overnight bookings. Existing
+bookings populate their duration when edited. Duration is omitted from the message.
 The session time applies to every court.
 Inactive courts retain their bookings but are omitted from the message.
 

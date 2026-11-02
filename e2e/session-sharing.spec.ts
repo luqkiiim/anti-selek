@@ -1,5 +1,46 @@
 import { expect, test } from "@playwright/test";
-import { signInAsAdmin } from "./helpers";
+import { hostClubId, signInAsAdmin } from "./helpers";
+
+test("expanded session details keep every input within the setup form", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await signInAsAdmin(page);
+  await page.goto(`/club/${hostClubId}?tab=setup`);
+  const details = page.locator(".session-setup details").filter({ has: page.locator("summary", { hasText: /^Session details$/ }) });
+  await details.locator("summary").click();
+  await page.getByLabel("Starts", { exact: true }).fill("2026-11-04T23:00");
+  await page.getByLabel("Duration (hours)", { exact: true }).fill("1.5");
+  for (const width of [320, 375, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    const sizes = await details.locator("input, select, textarea").evaluateAll(elements => elements.map(element => {
+      const rect = element.getBoundingClientRect();
+      return { label: element.closest("label")?.textContent?.slice(0, 20), width: rect.width, left: rect.left, right: rect.right };
+    }));
+    for (const size of sizes) {
+      expect(size, `${size.label} at ${width}px`).toMatchObject({ left: sizes[0].left, width: sizes[0].width });
+      expect(size.right, `${size.label} at ${width}px`).toBeLessThanOrEqual(width);
+    }
+    expect(await details.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  }
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.getByLabel("Session name", { exact: true }).fill("Duration setup check");
+  await page.screenshot({ path: "test-results/session-setup-details-mobile.png", fullPage: true });
+  await page.locator(".setup-roster-summary").click();
+  const roster = page.getByRole("dialog", { name: "Who’s playing?", exact: true });
+  await roster.getByRole("checkbox").nth(0).check();
+  await roster.getByRole("checkbox").nth(1).check();
+  await roster.getByRole("button", { name: "Done · 2 players", exact: true }).click();
+  const creation = page.waitForResponse(response => new URL(response.url()).pathname === "/api/sessions" && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Prepare session", exact: true }).click();
+  const response = await creation;
+  expect(response.ok()).toBe(true);
+  const created = await response.json();
+  const snapshot = await (await page.request.get(`/api/sessions/${created.code}`)).json();
+  expect(snapshot.details).toMatchObject({ startsAt: "2026-11-04T15:00:00.000Z", endsAt: "2026-11-04T16:30:00.000Z" });
+  await page.getByRole("button", { name: "Share session", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Session message" })).toHaveValue(/11:00 pm–Thu, 5 Nov 2026, 0:30 am|11:00 pm–Thu, 5 Nov 2026, 12:30 am/);
+  await expect(page.getByRole("textbox", { name: "Session message" })).not.toHaveValue(/\nDuration:|1\.5 hours/);
+});
 
 test("host saves booking details and copies an editable session message on mobile", async ({ page, context }) => {
   test.setTimeout(150_000);
@@ -25,7 +66,8 @@ test("host saves booking details and copies an editable session message on mobil
   await page.getByLabel("Venue", { exact: true }).fill("Community Badminton Hall");
   await page.getByLabel("Map link", { exact: true }).fill("https://maps.google.com/?q=badminton");
   await page.getByLabel("Starts", { exact: true }).fill("2026-11-04T23:00");
-  await page.getByLabel("Ends", { exact: true }).fill("2026-11-05T01:00");
+  await page.getByLabel("Duration (hours)", { exact: true }).fill("2");
+  await expect(page.getByLabel("Ends", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Individual court times", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Court 1 starts", { exact: true })).toHaveCount(0);
   await page.getByLabel("Fee", { exact: true }).fill("RM20 per person");
@@ -38,7 +80,7 @@ test("host saves booking details and copies an editable session message on mobil
   await expect(message).toHaveValue(/Venue: Community Badminton Hall/);
   await expect(message).toHaveValue(/5 Nov 2026/);
   await expect(message).toHaveValue(/\nWed, 4 Nov 2026, 11:00 pm–Thu, 5 Nov 2026, 1:00 am\n/);
-  await expect(message).not.toHaveValue(/When:|Asia\/Kuala_Lumpur|Court 1:/);
+  await expect(message).not.toHaveValue(/When:|Asia\/Kuala_Lumpur|Court 1:|\nDuration:|2 hours/);
   await expect(message).toHaveValue(/Fee: RM20 per person/);
   const snapshot = await (await page.request.get(endpoint)).json();
   expect(snapshot.details).toMatchObject({ startsAt: "2026-11-04T15:00:00.000Z", endsAt: "2026-11-04T17:00:00.000Z", timeZone: "Asia/Kuala_Lumpur", venue: "Community Badminton Hall" });
@@ -54,6 +96,10 @@ test("host saves booking details and copies an editable session message on mobil
   await expect(page.getByRole("link", { name: "Community Badminton Hall" })).toBeVisible();
   await page.getByRole("button", { name: "Share session", exact: true }).click();
   await expect(message).toHaveValue(original);
+  await page.getByRole("button", { name: "Edit details", exact: true }).click();
+  await expect(page.getByLabel("Starts", { exact: true })).toHaveValue("2026-11-04T23:00");
+  await expect(page.getByLabel("Duration (hours)", { exact: true })).toHaveValue("2");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Start session", exact: true }).click();
   await expect(page.getByRole("navigation", { name: "Session navigation" })).toBeVisible();

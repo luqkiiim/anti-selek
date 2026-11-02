@@ -55,13 +55,15 @@ it("selects the editable message when clipboard permission is denied", async () 
 
 it("saves only logistics, keeps customised text, and resets to the latest saved details", async () => {
   const courtBookings = [{ courtNumber: 1, startsAt: "2026-11-04T11:00:00.000Z", endsAt: "2026-11-04T14:00:00.000Z" }];
-  const details = { ...emptySessionDetails(), venue: "New hall", courtBookings };
+  const booking = { startsAt: "2026-11-04T15:00:00.000Z", endsAt: "2026-11-04T17:00:00.000Z", courtBookings };
+  const details = { ...emptySessionDetails(), venue: "New hall", ...booking };
   mocks.api.mockResolvedValue({ details });
-  await act(async () => render({ ...session, details: { ...emptySessionDetails(), courtBookings } }));
+  await act(async () => render({ ...session, details: { ...emptySessionDetails(), ...booking } }));
   await act(async () => fill(container.querySelector("textarea")!, "Custom announcement"));
   await act(async () => button("Edit details").click());
   expect(container.textContent).not.toContain("Individual court times");
-  expect(container.querySelectorAll('input[type="datetime-local"]')).toHaveLength(2);
+  expect(container.querySelectorAll('input[type="datetime-local"]')).toHaveLength(1);
+  expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe("2");
   const venue = [...container.querySelectorAll("label")].find(label => label.textContent === "Venue")!.querySelector("input")!;
   await act(async () => fill(venue, "New hall"));
   await act(async () => button("Save details").click());
