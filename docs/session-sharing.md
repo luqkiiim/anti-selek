@@ -4,14 +4,16 @@ Share session opens an editable plain-text message for copying into any chat app
 It is available below the waiting-session court summary and in the session options
 menu. The preview includes the current roster, guests and paused players, court
 labels, saved logistics and the session link. Preview edits are temporary; Reset
-message rebuilds from current data. Existing session access rules still apply.
+message rebuilds from current data. Shared links use `https://antiselek.com`.
+The message shows the date and time without a timezone label and lists players
+without a total count. Existing session access rules still apply.
 
 Optional session details are entered during creation, or through Session details
 in settings or the share sheet. Only active host-club organisers and global
 admins can save them, while the session is waiting or active. Saved booking
 timestamps are UTC, interpreted and displayed in the session's chosen timezone
 (default Asia/Kuala_Lumpur). End dates explicitly support overnight bookings.
-Individual court times override the session range. Blank court times inherit it.
+The session time applies to every court.
 Inactive courts retain their bookings but are omitted from the message.
 
 ## Database release

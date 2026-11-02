@@ -62,7 +62,7 @@ export function SessionShareSheet({ session, sessionUrl, initialEditing = false,
       {copied ? <Check size={20} aria-hidden="true" /> : <Copy size={20} aria-hidden="true" />}{copied ? "Copied" : "Copy message"}
     </button>}>
     {error && <p className={styles.error} role="alert">{error}</p>}
-    {editing ? <SessionDetailsForm value={draft} onChange={setDraft} courts={session.courts} collapsible={false} /> : <div className={styles.preview}>
+    {editing ? <SessionDetailsForm value={draft} onChange={setDraft} collapsible={false} /> : <div className={styles.preview}>
       <div className={styles.previewHeading}><span><ShareNetwork size={18} aria-hidden="true" />Message</span>
         {canEdit && <button type="button" className="text-button" onClick={() => { setDraft(sessionDetailsDraft(session.details)); setEditing(true); setError(""); }}>Edit details</button>}
       </div>

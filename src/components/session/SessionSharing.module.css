@@ -1,14 +1,11 @@
 .details { border-block: 1px solid #e8ddef; margin-block: 1rem; }
-.details > summary, .courtTimes > summary { min-height: 44px; padding-block: .75rem; cursor: pointer; font-size: .875rem; font-weight: 750; color: #5a466e; }
+.details > summary { min-height: 44px; padding-block: .75rem; cursor: pointer; font-size: .875rem; font-weight: 750; color: #5a466e; }
 .fields { display: grid; min-width: 0; gap: .875rem; padding-block: .5rem 1rem; }
 .field { display: grid; min-width: 0; gap: .4rem; font-size: .8125rem; font-weight: 700; color: #51435d; }
 .field input, .field select, .field textarea, .message { display: block; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 48px; border: 1px solid #e1d7e8; border-radius: 12px; padding: .75rem; background: #fffdfb; color: #291440; font: inherit; font-size: 16px; font-weight: 400; }
 .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible, .message:focus-visible { outline: 2px solid #9a7bb7; outline-offset: 2px; }
 .field textarea, .message { resize: vertical; }
 .timeFields { display: grid; min-width: 0; gap: .875rem; }
-.courtTimes { min-width: 0; }
-.courtTime { min-width: 0; margin: .75rem 0; border: 1px solid #e8ddef; border-radius: 12px; padding: .75rem; }
-.courtTime legend { font-size: .8125rem; font-weight: 700; }
 .hint { color: #80718b; font-size: .75rem; font-weight: 400; }
 .editorTitle { display: none; }
 .summary { display: grid; gap: .375rem; margin-block: .875rem; font-size: .8125rem; line-height: 1.6; color: #62556c; overflow-wrap: anywhere; }
