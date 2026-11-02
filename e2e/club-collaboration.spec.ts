@@ -100,6 +100,7 @@ test("two clubs prepare, agree, select their own lineup, and finish a BO3 on mob
     .getByLabel("Session name", { exact: true })
     .fill("Club collaboration mobile");
   await page.getByRole("button", { name: "More courts", exact: true }).click();
+  await page.getByText("Invite a club", { exact: true }).click();
   await page
     .getByLabel("Find a partner club", { exact: true })
     .fill("E2E Score");
@@ -281,6 +282,7 @@ test("club vs club free play defaults to one unrated game and retains host match
   await page
     .getByLabel("Session name", { exact: true })
     .fill("Collaboration free play");
+  await page.getByText("Invite a club", { exact: true }).click();
   await page
     .getByLabel("Find a partner club", { exact: true })
     .fill("E2E Score");
