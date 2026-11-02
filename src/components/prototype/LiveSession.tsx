@@ -1015,7 +1015,7 @@ export default function LiveSession({
       {saveRecapOpen && shareImage.images && s && <SessionRecapSavePanel
         images={shareImage.images} fileName={`${s.name}-standings`} onClose={() => setSaveRecapOpen(false)} />}
       {shareMode && s && <SessionShareSheet session={s} initialEditing={shareMode === "details"}
-        sessionUrl={new URL(sessionHref(s.code, globalClubId), window.location.origin).href}
+        sessionUrl={new URL(sessionHref(s.code), window.location.origin).href}
         onSaved={details => resource.update(current => ({ ...current, details }))}
         onClose={() => setShareMode(null)} />}
       <header className="pc-header">

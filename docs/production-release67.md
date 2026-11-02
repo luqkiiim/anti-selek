@@ -42,8 +42,8 @@ and the affected writer differences from release66.
    `apply`, then `verify`, using `--release-commit <reviewed-sha>`, a fresh
    `--attempt <name>` and `--confirm-endpoint-sha256 <pin above>`. Apply additionally
    requires `--approved-production-release`. Backup/rehearsal must be under 15
-   minutes old. Reuse the completed offline evidence when only a fresh backup is
-   needed by the existing writer.
+   minutes old. Reuse passing application checks and unchanged writer tests;
+   refresh backup/rehearsal when required by the existing freshness checks.
 4. Apply checks current schema/history and all non-transient data under one
    normal reserved write transaction. It executes the nine ALTER statements,
    proves existing rows unchanged and new fields NULL, then appends the ledger

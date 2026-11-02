@@ -33,6 +33,7 @@ export const REVIEW_FILES=[
  "src/app/api/sessions/createSessionService.ts",
  "src/app/api/sessions/sessionRouteShared.ts",
  "src/components/prototype/LiveSession.tsx",
+ "src/components/prototype/LiveSession.test.tsx",
  "src/components/prototype/SessionSetup.tsx",
  "src/components/prototype/SessionStandbyView.tsx",
  "src/components/prototype/SessionStandbyView.module.css",

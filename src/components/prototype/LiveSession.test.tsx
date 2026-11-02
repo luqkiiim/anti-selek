@@ -1147,6 +1147,21 @@ describe("LiveSession score and player controls", () => {
     expect(mocks.api).not.toHaveBeenCalled();
   });
 
+  it("shares the regular session URL when the viewer is browsing globally", async () => {
+    const session = sessionWithCourts([{ id: "court", courtNumber: 1, currentMatch: null }]);
+    session.viewerCanManage = false;
+    setup(session);
+    await act(async () => root.render(<LiveSession globalClubId="club with spaces" code="TEST01" onBack={vi.fn()} onEnded={vi.fn()} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')!.click());
+    const share = [...container.querySelectorAll("button")].find(button => button.textContent === "Share session")!;
+    await act(async () => share.click());
+    const message = container.querySelector<HTMLTextAreaElement>('[aria-label="Session message"]')!.value;
+    const url = new URL(message.split("\n").find(line => line.startsWith("Session: "))!.slice(9));
+    expect(url.pathname).toBe("/session/TEST01");
+    expect(url.searchParams.has("view")).toBe(false);
+    expect(url.searchParams.has("clubId")).toBe(false);
+  });
+
   it("allows a participating account to submit its own match without host controls", async () => {
     const currentMatch = match("participant-match", 1);
     const session = sessionWithCourts([{ id: "court", courtNumber: 1, currentMatch }]);
