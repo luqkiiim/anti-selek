@@ -55,6 +55,7 @@ import { SessionRouteError } from "../sessionRouteShared";
 import { getAccountClubContext } from "@/lib/playerIdentity";
 import { setSessionCourtCount } from "@/lib/sessionCourts";
 import { serializeSessionDetails } from "@/lib/sessionDetails";
+import { courtAvailabilityReady } from "@/lib/courtAvailabilityRollout";
 
 export const dynamic = "force-dynamic";
 
@@ -489,6 +490,8 @@ async function getSessionRoute(
     viewerIsQuickAccess: isQuickAccess,
     viewerCanManage:
       !globalView && !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
+    viewerCanChangeCourtCount:
+      !globalView && !isQuickAccess && (session.user.isAdmin || !!operatorMembership) && courtAvailabilityReady(),
     viewerCanRename:
       !globalView && !isQuickAccess && sessionData.status === SessionStatus.WAITING &&
       (session.user.isAdmin || hostClubContext?.canOperate === true),

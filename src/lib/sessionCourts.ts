@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { SessionRouteError } from "@/app/api/sessions/sessionRouteShared";
+import { courtAvailabilityReady } from "./courtAvailabilityRollout";
 
 /** Called after reserving the session writer, alongside match assignment writers. */
 export async function setSessionCourtCount(
@@ -14,6 +15,7 @@ export async function setSessionCourtCount(
       courts: {
         select: {
           courtNumber: true,
+          isActive: true,
           currentMatchId: true,
           matches: {
             where: { status: { in: ["PENDING", "IN_PROGRESS", "PENDING_APPROVAL"] } },
@@ -26,6 +28,9 @@ export async function setSessionCourtCount(
   });
   if (!session || !["WAITING", "ACTIVE"].includes(session.status)) {
     throw new SessionRouteError("Court count can only change before or during a session", 409);
+  }
+  if (!courtAvailabilityReady() && session.courts.some(court => court.isActive !== false && court.courtNumber > courtCount)) {
+    throw new SessionRouteError("Court reductions are not available yet", 409);
   }
   const busyCourt = session.courts.find(
     court => court.courtNumber > courtCount && (court.currentMatchId || court.matches.length > 0),

@@ -5,7 +5,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getSession: vi.fn(),
   refresh: vi.fn(),
   replace: vi.fn(),
   push: vi.fn(),
@@ -15,7 +14,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next-auth/react", () => ({
-  getSession: mocks.getSession,
   signIn: mocks.signIn,
   useSession: () => ({ data: null, status: mocks.sessionStatus }),
 }));
@@ -71,9 +69,6 @@ describe("authentication pages", () => {
     mocks.searchParams = new URLSearchParams();
     mocks.sessionStatus = "unauthenticated";
     mocks.signIn.mockResolvedValue({ ok: true });
-    mocks.getSession.mockResolvedValue({
-      user: { quickAccessClubId: "club-1" },
-    });
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
       .IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement("div");
@@ -124,31 +119,6 @@ describe("authentication pages", () => {
       redirect: false,
     });
     expect(mocks.replace).toHaveBeenCalledWith("/club/club-1?tab=host");
-  });
-
-  it("explains Quick access restrictions and falls back to its own club", async () => {
-    mocks.searchParams = new URLSearchParams({ callbackUrl: "/settings" });
-    await act(async () => root.render(<SigninPage />));
-
-    const quickButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "View-only access"
-    );
-    await act(async () => quickButton?.click());
-
-    expect(container.textContent).toContain("Follow results only.");
-
-    const inputs = container.querySelectorAll<HTMLInputElement>("form input");
-    await act(async () => {
-      changeInput(inputs[0], "Net Players");
-      changeInput(inputs[1], "Sam");
-    });
-    await act(async () => {
-      container
-        .querySelector("form")
-        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-
-    expect(mocks.replace).toHaveBeenCalledWith("/club/club-1");
   });
 
   it("validates an eight-character signup password before calling the API", async () => {

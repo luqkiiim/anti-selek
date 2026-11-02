@@ -70,7 +70,7 @@ function SignupForm() {
 
   const validate = (): SignupError | null => {
     if (!name.trim()) {
-      return { message: "Enter your name", field: "name" };
+      return { message: "Enter your display name", field: "name" };
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return { message: "Enter a valid email address", field: "email" };
@@ -172,7 +172,7 @@ function SignupForm() {
               className="mt-6 space-y-4"
             >
               <label className="block space-y-2 text-sm font-medium text-gray-900">
-                <span>Name</span>
+                <span>Display name</span>
                 <input
                   ref={nameRef}
                   type="text"
@@ -182,7 +182,7 @@ function SignupForm() {
                     clearErrorFor("name");
                   }}
                   className="field"
-                  autoComplete="name"
+                  autoComplete="nickname"
                   disabled={loading}
                   aria-invalid={error?.field === "name" || undefined}
                   aria-describedby={error?.field === "name" ? "signup-error" : undefined}

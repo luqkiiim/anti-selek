@@ -8,12 +8,12 @@ In Session settings, Available courts can change from 1–10 before or during pl
 
 Prepared and verified locally; production migration and deployment remain held. Pushing this change does not apply the migration. Hosted builds perform only a read-only Court schema check and fail before building if the column is absent, leaving the existing deployment in place.
 
-Production activation requires the repository's separately reviewed, explicitly approved database writer and coordinated write freeze. Before approving activation:
+Production activation uses the separately reviewed, explicitly approved online writer and staged activation in `docs/production-release66.md`. The user requires no downtime: stop if an outage or write freeze becomes necessary. Before activation:
 
 1. Pin the application commit, migration SQL hash and current production migration chain; confirm this is the only pending migration, or separately review every other pending migration.
 2. Review the writer for the verified production target and normal migration ledger, using separate writer/reader credentials. This feature does not introduce or authorize a production writer.
-3. During the approved freeze, take a fresh backup, apply the pinned additive SQL with its ledger entry, and verify every existing court retains its ID, number, label and match references, with `isActive = true`. Check foreign keys and integrity.
-4. Deploy the matching commit, exercise settings → increase/decrease/reopen and match/queue assignment, and inspect fresh runtime logs for missing-column/table errors and 500s before reopening writes.
+3. Take a fresh consistent backup, apply the pinned additive SQL with its ledger entry in the reviewed ordinary transaction, and verify every existing court retains its ID, number, label and match references, with `isActive = true`. Check foreign keys and integrity. Keep normal traffic running.
+4. Deploy matching code with reductions held by `COURT_AVAILABILITY_ENABLED`, verify normal flows and retire incompatible older writers without an outage, then enable reductions. Exercise settings → increase/decrease/reopen and match/queue assignment, and inspect fresh runtime logs for missing-column/table errors and 500s.
 
 After any court has been closed, older application code is incompatible because it does not filter unavailable courts. Prefer a forward repair; an application rollback needs a reviewed plan for all inactive courts.
 
