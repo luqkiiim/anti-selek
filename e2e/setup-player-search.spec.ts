@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { hostClubId, signInAsAdmin } from "./helpers";
 
 for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 }]) {
-  test(`player selection clears search and keeps the picked player visible at ${viewport.width}px`, async ({ page }) => {
+  test(`player selection keeps search unfocused and the picked player visible at ${viewport.width}px`, async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.setViewportSize(viewport);
     await signInAsAdmin(page);
@@ -14,16 +14,25 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 
     const panel = roster.locator(".sheet-panel");
     const rowFor = (name: string) => roster.locator(".setup-roster-list .setup-person").filter({ has: page.getByText(name, { exact: true }) });
 
+    await expect(search).not.toBeFocused();
+    const unfilteredPlayer = rowFor("Host Player 6").getByRole("checkbox");
+    await unfilteredPlayer.check();
+    await expect(unfilteredPlayer).toBeChecked();
+    await expect(search).not.toBeFocused();
+    await unfilteredPlayer.uncheck();
+    await expect(search).not.toBeFocused();
+    await expect(roster.locator(".setup-roster-tools")).toHaveText("0 selected");
+
     for (const [index, name] of ["Host Player 7", "Host Player 2"].entries()) {
-      // Type without clicking the search again after the first selection.
-      if (index === 0) await search.fill(name);
-      else await page.keyboard.type(name);
+      await search.click();
+      await expect(search).toBeFocused();
+      await page.keyboard.type(name);
       await expect(search).toHaveValue(name);
       await expect(roster.locator(".setup-roster-list .setup-person")).toHaveCount(1);
       await rowFor(name).getByRole("checkbox").check();
 
       await expect(search).toHaveValue("");
-      await expect(search).toBeFocused();
+      await expect(search).not.toBeFocused();
       await expect(roster.locator(".setup-roster-list .setup-person")).toHaveCount(8);
       await expect(rowFor(name).getByRole("checkbox")).toBeChecked();
       await expect(roster.locator(".setup-roster-tools")).toHaveText(`${index + 1} selected`);
@@ -37,9 +46,11 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 900 
     }
 
     await expect(rowFor("Host Player 7").getByRole("checkbox")).toBeChecked();
+    await search.click();
     await page.keyboard.type("Host Player 2");
     await rowFor("Host Player 2").getByRole("checkbox").uncheck();
     await expect(search).toHaveValue("Host Player 2");
+    await expect(search).not.toBeFocused();
     await expect(roster.locator(".setup-roster-tools")).toHaveText("1 selected");
   });
 }

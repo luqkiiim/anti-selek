@@ -120,7 +120,6 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
     if (!isSelected) {
       if (search) pendingScrollPlayerId.current = id;
       setSearch("");
-      searchInput.current?.focus({ preventScroll: true });
     }
   }
   function addGuest() {
