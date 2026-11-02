@@ -1,0 +1,9 @@
+ALTER TABLE "Session" ADD COLUMN "venue" TEXT;
+ALTER TABLE "Session" ADD COLUMN "venueMapUrl" TEXT;
+ALTER TABLE "Session" ADD COLUMN "scheduledStartAt" DATETIME;
+ALTER TABLE "Session" ADD COLUMN "scheduledEndAt" DATETIME;
+ALTER TABLE "Session" ADD COLUMN "timeZone" TEXT;
+ALTER TABLE "Session" ADD COLUMN "feeText" TEXT;
+ALTER TABLE "Session" ADD COLUMN "notes" TEXT;
+ALTER TABLE "Court" ADD COLUMN "bookingStartAt" DATETIME;
+ALTER TABLE "Court" ADD COLUMN "bookingEndAt" DATETIME;

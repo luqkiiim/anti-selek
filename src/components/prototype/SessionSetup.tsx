@@ -9,6 +9,7 @@ import { MixedSide, PlayerGender } from "@/types/enums";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 import { api, useAction } from "./api";
 import "./session-setup.css";
+import { SessionDetailsForm, sessionDetailsDraft, sessionDetailsFromDraft } from "@/components/session/SessionDetailsForm";
 
 type Gender = "MALE" | "FEMALE" | "UNSPECIFIED";
 type Pool = "A" | "B";
@@ -51,6 +52,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
   }, [clubId, partnerSearch, partner]);
   const [name, setName] = useState("");
   const [courts, setCourts] = useState(2);
+  const [details, setDetails] = useState(sessionDetailsDraft);
   const [selected, setSelected] = useState<string[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [style, setStyle] = useState<(typeof formats)[number]["id"]>("BALANCED");
@@ -140,6 +142,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
       if ((!partner || collabFormat === "FREE_PLAY") && mixed && guests.some(g => g.gender === "UNSPECIFIED")) throw new Error("Set a gender for each guest in the player list before using mixed pairs.");
       if ((!partner || collabFormat === "FREE_PLAY") && groups && (competitive < 2 || count - competitive < 2)) throw new Error("Open the player list and assign at least two players to each group.");
       const created = await api<{ code: string }>("/api/sessions", "POST", {
+        details: sessionDetailsFromDraft(details, Array.from({ length: courts }, (_, index) => index + 1)),
         name: name.trim(), clubId, courtCount: courts, scoringType: "POINTS", matchmakingStyle: style,
         balanceMetric: metric, pairingMode: partner && collabFormat === "INTERCLUB" ? "OPEN" : mixed ? "MIXED" : "OPEN", collabFormat: partner ? collabFormat : "FREE_PLAY",
         ...(partner ? { partnerClubId: partner.id, collaborationVersion: 2, schedulingMode: collabFormat === "INTERCLUB" ? schedulingMode : "FREE_PLAY", scoringFormat: collabFormat === "INTERCLUB" ? scoringFormat : "SINGLE_GAME", ratingMode: collabFormat === "INTERCLUB" ? ratingMode : "RATED" } : {}),
@@ -160,6 +163,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
           <div className="setup-courts"><span><strong>Courts</strong></span><div className="setup-stepper"><button type="button" aria-label="Fewer courts" disabled={courts === 1} onClick={() => setCourts(n => n - 1)}><Minus size={18} /></button><output aria-label="Court count" aria-live="polite">{courts}</output><button type="button" aria-label="More courts" disabled={courts === 10} onClick={() => setCourts(n => n + 1)}><Plus size={18} /></button></div></div>
         </section>
 
+        <SessionDetailsForm value={details} onChange={setDetails} courts={Array.from({ length: courts }, (_, index) => ({ courtNumber: index + 1 }))} />
         <section className="setup-section" aria-label="Partner club"><h2>Invite a club</h2>
           {partner ? <div className="setup-partner-selected"><strong>{partner.name}</strong><button type="button" className="text-button" onClick={() => { setPartner(null); setPartnerSearch(""); setCandidates([]); }}>Remove</button></div> : <><label className="field-label">Find a partner club<input type="search" value={partnerSearch} onChange={e => { setPartnerSearch(e.target.value); setCandidates([]); }} placeholder="Club name" /></label>{partnerSearch.trim().length >= 2 && <div className="setup-partner-results">{candidates.map(club => <button type="button" className="secondary full" key={club.id} onClick={() => { setPartner(club); setCandidates([]); }}><strong>{club.name}</strong><span>{club.membersCount} members</span></button>)}</div>}<ErrorText error={partnerError} /></>}
           {partner && <><fieldset className="setup-metric"><legend>Play style</legend><div className="setup-segments">{[{id:"FREE_PLAY",name:"Play together"},{id:"INTERCLUB",name:"Club vs club"}].map(option => <label key={option.id}><input type="radio" name="collab-format" checked={collabFormat === option.id} onChange={() => setCollabFormat(option.id)} /><span>{option.name}</span></label>)}</div></fieldset>

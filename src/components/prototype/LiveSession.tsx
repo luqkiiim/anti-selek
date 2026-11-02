@@ -15,6 +15,7 @@ import {
   GearSix,
   SignOut,
   Trash,
+  ShareNetwork,
 } from "@phosphor-icons/react";
 import type {
   SessionData,
@@ -74,6 +75,9 @@ import { ClubCollaboration, useClubCollaboration } from "./ClubCollaboration";
 import { SeriesScoreEditor } from "./SeriesScoreEditor";
 import { CourtPairingDetails } from "./CourtPairingDetails";
 import { useSessionPolling } from "@/components/session/useSessionPolling";
+import { SessionShareSheet } from "@/components/session/SessionShareSheet";
+import { SessionDetailsSummary } from "@/components/session/SessionDetailsSummary";
+import { sessionHref } from "@/lib/appNavigation";
 type LiveSettingsDraft = {
   name: string;
   autoQueueEnabled: boolean;
@@ -228,6 +232,7 @@ export default function LiveSession({
   const [saveRecapOpen, setSaveRecapOpen] = useState(false);
   const [celebrateFinish, setCelebrateFinish] = useState(false);
   const [shareError, setShareError] = useState("");
+  const [shareMode, setShareMode] = useState<"message" | "details" | null>(null);
   const [liveSettingsDraft, setLiveSettingsDraft] = useState<LiveSettingsDraft | null>(null);
   const [confirmAutoQueueOff, setConfirmAutoQueueOff] = useState(false);
   const [confirmedQueueId, setConfirmedQueueId] = useState<string | null>(null);
@@ -1009,6 +1014,10 @@ export default function LiveSession({
     <div className={`pc-app${s?.status === "WAITING" ? " session-standby" : ""}`}>
       {saveRecapOpen && shareImage.images && s && <SessionRecapSavePanel
         images={shareImage.images} fileName={`${s.name}-standings`} onClose={() => setSaveRecapOpen(false)} />}
+      {shareMode && s && <SessionShareSheet session={s} initialEditing={shareMode === "details"}
+        sessionUrl={new URL(sessionHref(s.code, globalClubId), window.location.origin).href}
+        onSaved={details => resource.update(current => ({ ...current, details }))}
+        onClose={() => setShareMode(null)} />}
       <header className="pc-header">
         <button className="icon-button" aria-label="Back" onClick={onBack}>
           <ArrowLeft size={23} />
@@ -1017,7 +1026,7 @@ export default function LiveSession({
           <strong>{s?.name || "Session"}</strong>
           <small>{s?.clubs?.find((c) => c.role === "HOST")?.name}</small>
         </div>
-        {s && (s.status !== "WAITING" || s.viewerCanDelete) ? (
+        {s ? (
           <button
             className="icon-button"
             aria-label="More options"
@@ -1035,6 +1044,7 @@ export default function LiveSession({
           />
           {!s && !resource.error && <p role="status">Loading session…</p>}
           {resource.error && !s && <button className="secondary" onClick={resource.retry}>Try again</button>}
+          {s && s.status !== "WAITING" && (tab === "Courts" || ended) && <SessionDetailsSummary session={s} />}
           {canJoin && s && (tab === "Players" || s.status === "WAITING") && <SessionJoinProfilePanel code={code} sessionStatus={s.status} eligibleProfiles={s.eligibleProfiles ?? []} selectedSelf={s.selectedSelf ?? null} isInterclub={s.collabFormat === "INTERCLUB"} onJoined={profile => {
             resource.update(current => ({ ...current, viewerPlayerId: profile.playerId, selectedSelf: { playerId: profile.playerId, profileClubId: profile.profileClubId } }));
             void resource.refresh().catch(() => {});
@@ -1078,6 +1088,7 @@ export default function LiveSession({
               startBlocked={!!isCollaboration && (!collaboration.data || collaboration.data.clubs.filter(club=>club.status === "ACCEPTED").length !== 2 || !collaboration.data.clubs.filter(club=>club.status === "ACCEPTED").every(club=>club.rulesConfirmedRevision === collaboration.data?.rulesRevision))}
               busy={action.busy}
               onSettings={openLiveSettings}
+              onShare={() => setShareMode("message")}
               onManagePlayers={() => setManagePlayersOpen(true)}
               onStart={() => void action.run(
                 () => api(endpoint + "/start", "POST"),
@@ -1507,6 +1518,7 @@ export default function LiveSession({
             </>
           ) : sheet === "menu" ? (
             <>
+              <Row title="Share session" icon={ShareNetwork} onClick={() => { setSheet(""); setShareMode("message"); }} />
               {canJoin && <Row title="Join session" icon={UsersThree} onClick={() => { setSheet(""); setTab("Players"); }} />}
               {canManage && (s?.isTest || s?.isTutorialClub) && onPracticeTools && <Row title="Practice tools" icon={GearSix} onClick={onPracticeTools} />}
               <Row title="Match history" icon={ClockCounterClockwise} onClick={() => { setSheet(""); openHistory(); }} />
@@ -1525,6 +1537,11 @@ export default function LiveSession({
             <>
               {s && liveSettingsDraft ? (
                 <div className="live-settings">
+                  <details className="live-settings-section">
+                    <summary>Session details</summary>
+                    <SessionDetailsSummary session={s} />
+                    {s.viewerCanEditDetails && <button type="button" className="secondary full" onClick={() => { setSheet(""); setShareMode("details"); }}>Edit session details</button>}
+                  </details>
                   {canRename ? (
                     <section className="live-settings-section">
                       <label className="live-settings-field">

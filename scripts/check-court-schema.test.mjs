@@ -3,6 +3,7 @@ import test from "node:test";
 import { assertDeployedCourtSchema } from "./check-court-schema.mjs";
 
 const production = { VERCEL: "1", VERCEL_ENV: "production", TURSO_DATABASE_URL: "libsql://fixture.turso.io", TURSO_AUTH_TOKEN: "fixture" };
+const columns = ["isActive", "bookingStartAt", "bookingEndAt", "venue", "venueMapUrl", "scheduledStartAt", "scheduledEndAt", "timeZone", "feeText", "notes"].map(name => ({ name }));
 
 test("holds deployment on an old schema and closes the read-only connection", async () => {
   let closed = false;
@@ -12,17 +13,23 @@ test("holds deployment on an old schema and closes the read-only connection", as
 });
 
 test("accepts the migrated schema without writing", async () => {
-  await assertDeployedCourtSchema(production, () => ({ execute: async sql => { assert.match(sql, /^PRAGMA table_info/); return { rows: [{ name: "isActive" }] }; }, close() {} }));
+  await assertDeployedCourtSchema(production, () => ({ execute: async sql => { assert.match(sql, /^PRAGMA table_info/); return { rows: columns }; }, close() {} }));
 });
 
 test("uses isolated Preview credentials", async () => {
   const preview = { ...production, VERCEL_ENV: "preview", PREVIEW_TURSO_DATABASE_URL: "libsql://preview.turso.io", PREVIEW_TURSO_AUTH_TOKEN: "preview-fixture" };
   await assertDeployedCourtSchema(preview, config => {
     assert.deepEqual(config, { url: preview.PREVIEW_TURSO_DATABASE_URL, authToken: preview.PREVIEW_TURSO_AUTH_TOKEN });
-    return { execute: async () => ({ rows: [{ name: "isActive" }] }), close() {} };
+    return { execute: async () => ({ rows: columns }), close() {} };
   });
 });
 
 test("local builds make no database connection", async () => {
   await assertDeployedCourtSchema({}, () => { throw new Error("Unexpected connection"); });
+});
+
+test("holds deployment when only part of the session details migration is present", async () => {
+  for (const missing of ["bookingEndAt", "venue", "timeZone"]) {
+    await assert.rejects(assertDeployedCourtSchema(production, () => ({ execute: async () => ({ rows: columns.filter(column => column.name !== missing) }), close() {} })), /Deployment held/);
+  }
 });

@@ -237,6 +237,13 @@ model Session {
   code                       String    @unique
   clubId                     String?   @map("communityId")
   name                       String
+  venue                      String?
+  venueMapUrl                String?
+  scheduledStartAt           DateTime?
+  scheduledEndAt             DateTime?
+  timeZone                   String?
+  feeText                    String?
+  notes                      String?
   type                       String    @default("POINTS") // POINTS or ELO
   mode                       String    @default("MEXICANO") // MEXICANO or MIXICANO
   collabFormat               String    @default("FREE_PLAY") // FREE_PLAY or INTERCLUB
@@ -314,6 +321,8 @@ model Court {
   courtNumber    Int // 1, 2, or 3
   isActive       Boolean @default(true)
   label          String?
+  bookingStartAt DateTime?
+  bookingEndAt   DateTime?
   currentMatchId String? @unique
 
   session      Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)

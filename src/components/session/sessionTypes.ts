@@ -124,6 +124,8 @@ export interface ClubUser {
 }
 
 export interface SessionData {
+  details?: import("@/lib/sessionDetails").SessionDetails;
+  viewerCanEditDetails?: boolean;
   id: string;
   code: string;
   viewerUserId?: string | null;

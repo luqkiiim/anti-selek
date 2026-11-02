@@ -54,6 +54,7 @@ import { isValidSessionCrossoverFrequency } from "@/lib/sessionPools";
 import { SessionRouteError } from "../sessionRouteShared";
 import { getAccountClubContext } from "@/lib/playerIdentity";
 import { setSessionCourtCount } from "@/lib/sessionCourts";
+import { serializeSessionDetails } from "@/lib/sessionDetails";
 
 export const dynamic = "force-dynamic";
 
@@ -472,6 +473,7 @@ async function getSessionRoute(
 
   return sportingJson(withLegacyClubAliases({
     ...sessionData,
+    details: serializeSessionDetails(sessionData),
     courts,
     matches: sessionData.matches.map(match => withMatchLocalClaimLabels(match, participantOwners)),
     players: serializedPlayers,
@@ -489,6 +491,9 @@ async function getSessionRoute(
       !globalView && !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
     viewerCanRename:
       !globalView && !isQuickAccess && sessionData.status === SessionStatus.WAITING &&
+      (session.user.isAdmin || hostClubContext?.canOperate === true),
+    viewerCanEditDetails:
+      !globalView && !isQuickAccess && sessionData.status !== SessionStatus.COMPLETED &&
       (session.user.isAdmin || hostClubContext?.canOperate === true),
     viewerCanUseAdminSessionControls:
       !globalView && !isQuickAccess && (session.user.isAdmin || !!adminMembership),

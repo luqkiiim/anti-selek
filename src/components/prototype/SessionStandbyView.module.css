@@ -6,6 +6,10 @@
   padding: 0.25rem 0 1.5rem;
 }
 
+.shareButton { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; min-height: 44px; margin-top: 1rem; padding: .6rem 1rem; border: 1px solid #ded5e7; border-radius: .8rem; background: #fffdf8; color: #5a466e; font-size: .875rem; font-weight: 700; cursor: pointer; }
+.shareButton:hover { background: #f8f3fb; }
+.shareButton:focus-visible { outline: 3px solid #9a7bb7; outline-offset: 2px; }
+
 .setupCard,
 .rosterCard {
   min-width: 0;

@@ -16,8 +16,15 @@ export async function assertDeployedCourtSchema(env = process.env, connect = cre
     if (!schema.rows.some(column => column.name === "isActive")) {
       throw new Error("Court availability migration is pending");
     }
+    if (!["bookingStartAt", "bookingEndAt"].every(name => schema.rows.some(column => column.name === name))) {
+      throw new Error("Court booking migration is pending");
+    }
+    const sessionSchema = await client.execute('PRAGMA table_info("Session")');
+    if (!["venue", "venueMapUrl", "scheduledStartAt", "scheduledEndAt", "timeZone", "feeText", "notes"].every(name => sessionSchema.rows.some(column => column.name === name))) {
+      throw new Error("Session details migration is pending");
+    }
   } catch {
-    throw new Error("Deployment held: verify the court availability migration through the separately approved database release procedure. Builds never apply migrations.");
+    throw new Error("Deployment held: verify the court availability and session details migrations through the separately approved database release procedure. Builds never apply migrations.");
   } finally {
     client?.close();
   }

@@ -53,6 +53,7 @@ export interface NormalizedGuestConfig {
 }
 
 export interface ParsedCreateSessionRequest {
+  details?: import("@/lib/sessionDetails").SessionDetails;
   collaborationVersion: number;
   schedulingMode: "FREE_PLAY" | "LINEUP";
   scoringFormat: "SINGLE_GAME" | "BEST_OF_THREE";

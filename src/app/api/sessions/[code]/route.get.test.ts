@@ -229,11 +229,11 @@ describe("session route GET", () => {
   });
 
   it.each([
-    { status: "WAITING", role: "STAFF", canRename: true },
-    { status: "WAITING", role: "MEMBER", canRename: false },
-    { status: "ACTIVE", role: "ADMIN", canRename: false },
-    { status: "COMPLETED", role: "ADMIN", canRename: false },
-  ])("exposes rename permission for $role during $status: $canRename", async ({ status, role, canRename }) => {
+    { status: "WAITING", role: "STAFF", canRename: true, canEditDetails: true },
+    { status: "WAITING", role: "MEMBER", canRename: false, canEditDetails: false },
+    { status: "ACTIVE", role: "ADMIN", canRename: false, canEditDetails: true },
+    { status: "COMPLETED", role: "ADMIN", canRename: false, canEditDetails: false },
+  ])("exposes rename and details permissions for $role during $status", async ({ status, role, canRename, canEditDetails }) => {
     const session = await mocks.sessionFindUnique();
     mocks.sessionFindUnique.mockResolvedValue({ ...session, status });
     mocks.clubAccessFindUnique.mockResolvedValue({ status: "ACTIVE", role });
@@ -241,7 +241,7 @@ describe("session route GET", () => {
       params: Promise.resolve({ code: "ABC123" }),
     });
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ viewerCanRename: canRename });
+    expect(await response.json()).toMatchObject({ viewerCanRename: canRename, viewerCanEditDetails: canEditDetails });
   });
 
   it("includes avatarUrl in players, live match participants, and queued match participants", async () => {

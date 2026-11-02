@@ -11,6 +11,8 @@ import {
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import type { SessionData } from "@/components/session/sessionTypes";
 import styles from "./SessionStandbyView.module.css";
+import { SessionDetailsSummary } from "@/components/session/SessionDetailsSummary";
+import { Share2 } from "lucide-react";
 
 export interface SessionStandbyViewProps {
   session: SessionData;
@@ -19,6 +21,7 @@ export interface SessionStandbyViewProps {
   startBlocked?: boolean;
   busy: boolean;
   onSettings: () => void;
+  onShare?: () => void;
   onManagePlayers: () => void;
   onStart: () => void;
   onOpenMember?: (memberId: string) => void;
@@ -40,6 +43,7 @@ export function SessionStandbyView({
   startBlocked = false,
   busy,
   onSettings,
+  onShare,
   onManagePlayers,
   onStart,
   onOpenMember,
@@ -104,6 +108,8 @@ export function SessionStandbyView({
             </ul>
           ) : null}
         </div>
+        <SessionDetailsSummary session={session} />
+        {onShare && <button type="button" className={styles.shareButton} onClick={onShare}><Share2 size={17} aria-hidden="true" />Share session</button>}
       </section>
 
       <section className={styles.rosterCard} aria-labelledby="standby-players-title">

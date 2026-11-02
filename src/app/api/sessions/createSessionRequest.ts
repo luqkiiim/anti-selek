@@ -1,3 +1,4 @@
+import { parseSessionDetails, SessionDetailsError } from "@/lib/sessionDetails";
 import {
   defaultPartnerPreferenceForGender,
   getLegacyMixedSideOverride,
@@ -46,6 +47,7 @@ import {
 } from "@/lib/clubContractAliases";
 
 interface CreateSessionBody {
+  details?: unknown;
   collaborationVersion?: unknown;
   schedulingMode?: unknown;
   scoringFormat?: unknown;
@@ -433,7 +435,16 @@ export function parseCreateSessionRequest(
       : getLegacySessionTypeForSettings(settings);
   const legacyMode = getLegacySessionModeForSettings(settings);
 
+  let details;
+  if (bodyRecord.details !== undefined) {
+    try { details = parseSessionDetails(bodyRecord.details, Array.from({ length: courtCount as number }, (_, index) => index + 1)); }
+    catch (error) {
+      if (error instanceof SessionDetailsError) throw new SessionRouteError(error.message, 400);
+      throw error;
+    }
+  }
   return {
+    ...(details ? { details } : {}),
     collaborationVersion,
     schedulingMode: schedulingMode as "FREE_PLAY" | "LINEUP",
     scoringFormat: scoringFormat as "SINGLE_GAME" | "BEST_OF_THREE",

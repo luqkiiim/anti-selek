@@ -6,6 +6,7 @@ import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import { isClubOperatorRole } from "@/lib/clubRoles";
 import { getOwnedClubPlayer } from "@/lib/playerIdentity";
 import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
+import { sessionDetailsData } from "@/lib/sessionDetails";
 import {
   getPlayerClubBadges,
   withPlayerClubBadges,
@@ -363,6 +364,7 @@ export async function createSessionForUser({
         code: sessionId,
         clubId: input.clubId,
         name: input.name,
+        ...(input.details ? sessionDetailsData(input.details) : {}),
         type: input.type,
         mode: input.mode,
         collabFormat: input.collabFormat,
@@ -389,6 +391,8 @@ export async function createSessionForUser({
         courts: {
           create: Array.from({ length: input.courtCount }, (_, index) => ({
             courtNumber: index + 1,
+            bookingStartAt: input.details?.courtBookings.find(court => court.courtNumber === index + 1)?.startsAt ?? null,
+            bookingEndAt: input.details?.courtBookings.find(court => court.courtNumber === index + 1)?.endsAt ?? null,
           })),
         },
         sessionClubs: {
