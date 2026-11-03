@@ -4,7 +4,6 @@ import { useId, useState, type Dispatch, type SetStateAction } from "react";
 import type { SessionDetails } from "@/lib/sessionDetails";
 import { emptySessionDetails, localDateTime, parseSessionDetails, SessionDetailsError, utcDateTime } from "@/lib/sessionDetails";
 import styles from "./SessionSharing.module.css";
-import { LocationField } from "./LocationField";
 
 type SessionDetailsDraft = Omit<SessionDetails, "endsAt"> & { durationHours: string };
 
@@ -40,10 +39,9 @@ export function sessionDetailsFromDraft(draft: SessionDetailsDraft, courtNumbers
   }, courtNumbers);
 }
 
-export function SessionDetailsForm({ value, onChange, clubId, courtNumbers = [], collapsible = true }: {
+export function SessionDetailsForm({ value, onChange, courtNumbers = [], collapsible = true }: {
   value: SessionDetailsDraft;
   onChange: Dispatch<SetStateAction<SessionDetailsDraft>>;
-  clubId?: string | null;
   courtNumbers?: number[];
   collapsible?: boolean;
 }) {
@@ -53,7 +51,8 @@ export function SessionDetailsForm({ value, onChange, clubId, courtNumbers = [],
     onChange(current => ({ ...current, [key]: text }));
   }
   const fields = <div className={styles.fields}>
-    <LocationField venue={value.venue} venueMapUrl={value.venueMapUrl} clubId={clubId} onChange={location => onChange(current => ({ ...current, ...location }))} />
+    <label className={styles.field}>Location<input value={value.venue ?? ""} maxLength={160} onChange={e => field("venue", e.target.value)} autoComplete="off" /></label>
+    <label className={styles.field}>Map link<input type="url" value={value.venueMapUrl ?? ""} maxLength={1000} onChange={e => field("venueMapUrl", e.target.value)} placeholder="https://" /></label>
     {courtNumbers.length > 0 && <fieldset className={styles.courtLabels}>
       <legend>Court labels</legend>
       {courtNumbers.map(courtNumber => <label className={styles.field} key={courtNumber}>Court {courtNumber}

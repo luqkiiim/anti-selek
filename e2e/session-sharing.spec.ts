@@ -1,22 +1,15 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { hostClubId, signInAsAdmin } from "./helpers";
 
 const selectedLocation = { venue: "Community Badminton Hall", venueMapUrl: "https://www.google.com/maps/search/?api=1&query=3.107%2C101.6" };
-const suggestions = { suggestions: [{ placeId: "geoapify-hall", name: selectedLocation.venue, address: "Petaling Jaya, Selangor", mapUrl: selectedLocation.venueMapUrl }] };
-async function mockLocationSearch(page: Page) {
-  await page.route("**/api/clubs/*/locations", route => route.fulfill({ json: suggestions }));
-}
-
 test("expanded session details keep every input within the setup form", async ({ page }) => {
-  await mockLocationSearch(page);
   await page.setViewportSize({ width: 320, height: 844 });
   await signInAsAdmin(page);
   await page.goto(`/club/${hostClubId}?tab=setup`);
   const details = page.locator(".session-setup details").filter({ has: page.locator("summary", { hasText: /^Session details$/ }) });
   await details.locator("summary").click();
-  await page.getByRole("combobox", { name: "Location", exact: true }).fill("Community");
-  await page.getByRole("option", { name: /Community Badminton Hall/ }).click();
-  await expect(page.getByRole("link", { name: "Open in Google Maps" })).toHaveAttribute("href", selectedLocation.venueMapUrl);
+  await page.getByRole("textbox", { name: "Location", exact: true }).fill(selectedLocation.venue);
+  await page.getByLabel("Map link", { exact: true }).fill(selectedLocation.venueMapUrl);
   await page.getByLabel("Court 1 label", { exact: true }).fill("Court 5");
   await page.getByLabel("Court 2 label", { exact: true }).fill("Court 8");
   await page.getByRole("button", { name: "More courts", exact: true }).click();
@@ -62,7 +55,6 @@ test("expanded session details keep every input within the setup form", async ({
 });
 
 test("host saves booking details and copies an editable session message on mobile", async ({ page, context }) => {
-  await mockLocationSearch(page);
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 320, height: 844 });
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -83,10 +75,7 @@ test("host saves booking details and copies an editable session message on mobil
   await expect(message).not.toHaveValue(/Players \(|anti-selek\.vercel\.app/);
   await expect(message).not.toHaveValue(/undefined|null|Fee:/);
   await page.getByRole("button", { name: "Edit details", exact: true }).click();
-  await page.getByRole("combobox", { name: "Location", exact: true }).fill("Community");
-  await page.getByRole("option", { name: /Community Badminton Hall/ }).click();
-  await expect(page.getByRole("combobox", { name: "Location", exact: true })).toHaveValue(selectedLocation.venue);
-  await page.getByRole("button", { name: "Edit map link", exact: true }).click();
+  await page.getByRole("textbox", { name: "Location", exact: true }).fill(selectedLocation.venue);
   await page.getByLabel("Map link", { exact: true }).fill("https://maps.google.com/?q=badminton");
   await page.getByLabel("Court 1 label", { exact: true }).fill("Centre");
   await page.getByLabel("Starts", { exact: true }).fill("2026-11-04T23:00");
@@ -108,7 +97,7 @@ test("host saves booking details and copies an editable session message on mobil
   await expect(message).not.toHaveValue(/When:|Asia\/Kuala_Lumpur|Court 1:|\nDuration:|2 hours/);
   await expect(message).toHaveValue(/Fee: RM20 per person/);
   const snapshot = await (await page.request.get(endpoint)).json();
-  expect(snapshot.details).toMatchObject({ startsAt: "2026-11-04T15:00:00.000Z", endsAt: "2026-11-04T17:00:00.000Z", timeZone: "Asia/Kuala_Lumpur", venue: "Community Badminton Hall" });
+  expect(snapshot.details).toMatchObject({ startsAt: "2026-11-04T15:00:00.000Z", endsAt: "2026-11-04T17:00:00.000Z", timeZone: "Asia/Kuala_Lumpur", venue: "Community Badminton Hall", venueMapUrl: "https://maps.google.com/?q=badminton" });
   expect(snapshot.details.courtBookings).toEqual([oldCourtBooking]);
   expect(snapshot.courts.find((court: { courtNumber: number }) => court.courtNumber === 1).label).toBe("Centre");
   const original = await message.inputValue();
@@ -136,86 +125,4 @@ test("host saves booking details and copies an editable session message on mobil
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: "test-results/session-share-1100.png", fullPage: true });
   expect(errors).toEqual([]);
-});
-
-test("location lookups preserve other edits, ignore stale responses and select without another request", async ({ page }) => {
-  let oldSearch: Route | undefined;
-  let laterSearch: Route | undefined;
-  const requests: Array<{ query?: string; placeId?: string }> = [];
-  await page.route("**/api/clubs/*/locations", async route => {
-    const body = route.request().postDataJSON();
-    requests.push(body);
-    if (body.query === "Old hall") oldSearch = route;
-    else if (body.query === "Manual hall") laterSearch = route;
-    else await route.fulfill({ json: suggestions });
-  });
-  await signInAsAdmin(page);
-  await page.goto(`/club/${hostClubId}?tab=setup`);
-  await page.locator(".session-setup summary").filter({ hasText: /^Session details$/ }).click();
-  await page.getByLabel("Court 1 label", { exact: true }).fill("East");
-  await page.getByLabel("Notes", { exact: true }).fill("Keep these edits");
-  const location = page.getByRole("combobox", { name: "Location", exact: true });
-  await location.fill("Old hall");
-  await expect.poll(() => !!oldSearch).toBe(true);
-  await location.fill("Community");
-  const option = page.getByRole("option", { name: /Community Badminton Hall/ });
-  await expect(option).toBeVisible();
-  await oldSearch!.fulfill({ json: { suggestions: [{ placeId: "geoapify-old", name: "Old hall", address: "Wrong result", mapUrl: selectedLocation.venueMapUrl }] } });
-  await expect(option).toBeVisible();
-  await expect(page.getByRole("link", { name: "Powered by Geoapify", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "© OpenStreetMap contributors", exact: true })).toBeVisible();
-  await location.press("ArrowDown");
-  await location.press("Enter");
-  await expect(location).toHaveValue(selectedLocation.venue);
-  await expect(page.getByRole("link", { name: "Open in Google Maps" })).toHaveAttribute("href", selectedLocation.venueMapUrl);
-  expect(requests).toEqual([{ query: "Old hall" }, { query: "Community" }]);
-  await expect(page.getByLabel("Court 1 label", { exact: true })).toHaveValue("East");
-  await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue("Keep these edits");
-
-  await location.fill("Manual hall");
-  await expect.poll(() => !!laterSearch).toBe(true);
-  await location.fill("");
-  await laterSearch!.fulfill({ json: suggestions });
-  await expect(location).toHaveValue("");
-  await expect(option).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Open in Google Maps" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Add map link", exact: true }).click();
-  await page.getByLabel("Map link", { exact: true }).fill("https://maps.google.com/?q=manual");
-  await expect(location).toHaveValue("");
-});
-
-test("a slow location lookup shows progress and keeps its results after the field loses focus", async ({ page }) => {
-  let pending: Route | undefined;
-  let lookups = 0;
-  await page.route("**/api/clubs/*/locations", route => { pending = route; lookups += 1; });
-  await signInAsAdmin(page);
-  await page.goto(`/club/${hostClubId}?tab=setup`);
-  await page.locator(".session-setup summary").filter({ hasText: /^Session details$/ }).click();
-  const location = page.getByRole("combobox", { name: "Location", exact: true });
-  await location.fill("sk arena");
-  await expect.poll(() => !!pending).toBe(true);
-  await expect(page.getByRole("status").filter({ hasText: "Searching" })).toBeVisible({ timeout: 2_000 });
-  await page.getByLabel("Court 1 label", { exact: true }).fill("East");
-  await pending!.fulfill({ json: suggestions });
-  await location.click();
-  await expect(page.getByRole("option", { name: /Community Badminton Hall/ })).toBeVisible();
-  expect(lookups).toBe(1);
-});
-
-test("a failed location lookup can be retried without changing the search text", async ({ page }) => {
-  let lookups = 0;
-  await page.route("**/api/clubs/*/locations", route => {
-    lookups += 1;
-    return route.fulfill(lookups === 1
-      ? { status: 504, json: { error: "Location search timed out. Try again." } }
-      : { json: suggestions });
-  });
-  await signInAsAdmin(page);
-  await page.goto(`/club/${hostClubId}?tab=setup`);
-  await page.locator(".session-setup summary").filter({ hasText: /^Session details$/ }).click();
-  await page.getByRole("combobox", { name: "Location", exact: true }).fill("sk arena");
-  await expect(page.getByRole("status").filter({ hasText: "timed out" })).toBeVisible();
-  await page.getByRole("button", { name: "Try again", exact: true }).click();
-  await expect(page.getByRole("option", { name: /Community Badminton Hall/ })).toBeVisible();
-  expect(lookups).toBe(2);
 });
