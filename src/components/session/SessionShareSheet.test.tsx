@@ -23,56 +23,58 @@ function fill(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   vi.clearAllMocks();
+  saved.mockReset();
   mocks.copy.mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: mocks.copy } });
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
-it("preserves an edited message through polling, resets from current data, and copies exactly the preview", async () => {
+it("copies the current preview and refreshes it when session data changes", async () => {
   await act(async () => render());
-  const message = container.querySelector("textarea")!;
-  await act(async () => fill(message, "Custom announcement"));
-  await act(async () => render({ ...session, players: [...session.players, { userId: "p2", user: { name: "Zoe" } } as SessionData["players"][number]] }));
-  expect(message.value).toBe("Custom announcement");
+  const message = container.querySelector('[aria-label="Session message"]')!;
+  expect(container.querySelector('textarea, [contenteditable="true"]')).toBeNull();
   await act(async () => button("Copy message").click());
-  expect(mocks.copy).toHaveBeenCalledWith("Custom announcement");
+  expect(mocks.copy).toHaveBeenLastCalledWith(message.textContent);
   expect(button("Copied")).toBeDefined();
-  await act(async () => button("Reset message").click());
-  expect(message.value).toContain("2. Zoe");
+  await act(async () => render({ ...session, players: [...session.players, { userId: "p2", user: { name: "Zoe" } } as SessionData["players"][number]] }));
+  expect(message.textContent).toContain("2. Zoe");
+  expect(button("Copied")).toBeUndefined();
+  await act(async () => button("Copy message").click());
+  expect(mocks.copy).toHaveBeenLastCalledWith(message.textContent);
+  expect(button("Copied")).toBeDefined();
 });
 
-it("selects the editable message when clipboard permission is denied", async () => {
+it("selects the message when clipboard permission is denied", async () => {
   mocks.copy.mockRejectedValue(new Error("Blocked"));
   await act(async () => render());
   await act(async () => button("Copy message").click());
-  const message = container.querySelector("textarea")!;
+  const message = container.querySelector('[aria-label="Session message"]')!;
   expect(document.activeElement).toBe(message);
-  expect(message.selectionEnd).toBe(message.value.length);
+  expect(window.getSelection()?.toString()).toBe(message.textContent);
   expect(container.querySelector('[role="alert"]')?.textContent).toContain("Select and copy");
   expect(button("Copied")).toBeUndefined();
 });
 
-it("saves only logistics, keeps customised text, and resets to the latest saved details", async () => {
+it("saves logistics and displays the latest saved details", async () => {
   const courtBookings = [{ courtNumber: 1, startsAt: "2026-11-04T11:00:00.000Z", endsAt: "2026-11-04T14:00:00.000Z" }];
   const booking = { startsAt: "2026-11-04T15:00:00.000Z", endsAt: "2026-11-04T17:00:00.000Z", courtBookings };
   const details = { ...emptySessionDetails(), venue: "New hall", ...booking };
   mocks.api.mockResolvedValue({ details });
+  saved.mockImplementation(details => render({ ...session, details }));
   await act(async () => render({ ...session, details: { ...emptySessionDetails(), ...booking } }));
-  await act(async () => fill(container.querySelector("textarea")!, "Custom announcement"));
   await act(async () => button("Edit details").click());
   expect(container.textContent).not.toContain("Individual court times");
   expect(container.querySelectorAll('input[type="datetime-local"]')).toHaveLength(1);
   expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe("2");
-  const venue = container.querySelector<HTMLInputElement>('[role="combobox"]')!;
+  const venue = [...container.querySelectorAll("label")].find(label => label.textContent === "Location")!.querySelector("input")!;
   await act(async () => fill(venue, "New hall"));
   await act(async () => button("Save details").click());
   expect(mocks.api).toHaveBeenCalledWith("/api/sessions/ABC/details", "PATCH", { details });
   expect(saved).toHaveBeenCalledWith(details);
-  expect(container.querySelector("textarea")!.value).toBe("Custom announcement");
+  expect(container.querySelector('[aria-label="Session message"]')!.textContent).toContain("Venue: New hall");
   await act(async () => render({ ...session, details: { ...details, venue: "Latest hall" } }));
-  await act(async () => button("Reset message").click());
-  expect(container.querySelector("textarea")!.value).toContain("Venue: Latest hall");
+  expect(container.querySelector('[aria-label="Session message"]')!.textContent).toContain("Venue: Latest hall");
 });
 
 it("shows copy controls without a details editor for viewers and completed sessions", async () => {

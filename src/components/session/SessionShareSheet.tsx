@@ -19,18 +19,14 @@ export function SessionShareSheet({ session, sessionUrl, initialEditing = false,
 }) {
   const [editing, setEditing] = useState(initialEditing);
   const [draft, setDraft] = useState(() => sessionDetailsDraft(session.details));
-  const [message, setMessage] = useState(() => buildSessionShareMessage(session, sessionUrl));
-  const [customised, setCustomised] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const messageRef = useRef<HTMLDivElement>(null);
   const saving = useRef(false);
+  const message = buildSessionShareMessage(session, sessionUrl);
+  const copied = copiedMessage === message;
   const canEdit = session.viewerCanEditDetails === true && session.status !== "COMPLETED";
-  function resetMessage() {
-    setMessage(buildSessionShareMessage(session, sessionUrl));
-    setCustomised(false); setCopied(false); setError("");
-  }
   async function saveDetails() {
     if (saving.current || !canEdit) return;
     saving.current = true; setBusy(true); setError("");
@@ -39,21 +35,23 @@ export function SessionShareSheet({ session, sessionUrl, initialEditing = false,
       const saved = await api<{ details: SessionDetails }>(`/api/sessions/${encodeURIComponent(session.code)}/details`, "PATCH", { details });
       setDraft(sessionDetailsDraft(saved.details));
       onSaved(saved.details);
-      if (!customised) setMessage(buildSessionShareMessage({ ...session, details: saved.details, courts: session.courts.map(court => {
-        const savedLabel = saved.details.courtLabels?.find(item => item.courtNumber === court.courtNumber);
-        return savedLabel ? { ...court, label: savedLabel.label } : court;
-      }) }, sessionUrl));
-      setCopied(false); setEditing(false);
+      setCopiedMessage(null); setEditing(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save details."); }
     finally { saving.current = false; setBusy(false); }
   }
   async function copyMessage() {
-    setCopied(false); setError("");
+    setCopiedMessage(null); setError("");
     try {
       await navigator.clipboard.writeText(message);
-      if (messageRef.current?.value === message) setCopied(true);
+      setCopiedMessage(message);
     } catch {
-      messageRef.current?.focus(); messageRef.current?.select();
+      if (messageRef.current) {
+        messageRef.current.focus({ preventScroll: true });
+        const range = document.createRange();
+        range.selectNodeContents(messageRef.current);
+        const selection = window.getSelection();
+        selection?.removeAllRanges(); selection?.addRange(range);
+      }
       setError("Copying is unavailable. Select and copy the message below.");
     }
   }
@@ -69,8 +67,7 @@ export function SessionShareSheet({ session, sessionUrl, initialEditing = false,
       <div className={styles.previewHeading}><span><ShareNetwork size={18} aria-hidden="true" />Message</span>
         {canEdit && <button type="button" className="text-button" onClick={() => { setDraft(sessionDetailsDraft(session.details)); setEditing(true); setError(""); }}>Edit details</button>}
       </div>
-      <textarea ref={messageRef} className={styles.message} aria-label="Session message" value={message} onChange={e => { setMessage(e.target.value); setCustomised(true); setCopied(false); setError(""); }} spellCheck={false} />
-      <button type="button" className="text-button" onClick={resetMessage}>Reset message</button>
+      <div ref={messageRef} className={styles.message} role="region" aria-label="Session message" tabIndex={-1}>{message}</div>
       <span className={styles.srOnly} role="status">{copied ? "Message copied to clipboard" : ""}</span>
     </div>}
   </Sheet>;

@@ -1155,7 +1155,7 @@ describe("LiveSession score and player controls", () => {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')!.click());
     const share = [...container.querySelectorAll("button")].find(button => button.textContent === "Share session")!;
     await act(async () => share.click());
-    const message = container.querySelector<HTMLTextAreaElement>('[aria-label="Session message"]')!.value;
+    const message = container.querySelector('[aria-label="Session message"]')!.textContent!;
     const url = new URL(message.split("\n").find(line => line.startsWith("Session: "))!.slice(9));
     expect(url.pathname).toBe("/session/TEST01");
     expect(url.searchParams.has("view")).toBe(false);

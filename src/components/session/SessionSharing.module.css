@@ -7,7 +7,7 @@
 .field input[type="datetime-local"] { appearance: none; overflow: hidden; }
 .field input::-webkit-date-and-time-value { min-width: 0; text-align: left; }
 .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible, .message:focus-visible { outline: 2px solid #9a7bb7; outline-offset: 2px; }
-.field textarea, .message { resize: vertical; }
+.field textarea { resize: vertical; }
 .courtLabels { display: grid; gap: .875rem; margin: 0; padding: 0; min-width: 0; border: 0; }
 .courtLabels legend { margin-bottom: .5rem; color: #51435d; font-size: .8125rem; font-weight: 750; }
 .hint { color: #80718b; font-size: .75rem; font-weight: 400; }
@@ -20,7 +20,7 @@
 .preview { display: grid; gap: .75rem; }
 .previewHeading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem; }
 .previewHeading > span { display: inline-flex; align-items: center; gap: .5rem; color: #62556c; font-size: .8125rem; font-weight: 700; }
-.message { min-height: min(48dvh, 24rem); line-height: 1.65; }
+.message { line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .actions { display: flex; gap: .75rem; }
 .actions button { flex: 1; min-width: 0; }
 .error { margin: 0 0 .75rem; color: #b42318; font-size: .8125rem; }
