@@ -183,3 +183,39 @@ test("location lookups preserve other edits, ignore stale responses and select w
   await page.getByLabel("Map link", { exact: true }).fill("https://maps.google.com/?q=manual");
   await expect(location).toHaveValue("");
 });
+
+test("a slow location lookup shows progress and keeps its results after the field loses focus", async ({ page }) => {
+  let pending: Route | undefined;
+  let lookups = 0;
+  await page.route("**/api/clubs/*/locations", route => { pending = route; lookups += 1; });
+  await signInAsAdmin(page);
+  await page.goto(`/club/${hostClubId}?tab=setup`);
+  await page.locator(".session-setup summary").filter({ hasText: /^Session details$/ }).click();
+  const location = page.getByRole("combobox", { name: "Location", exact: true });
+  await location.fill("sk arena");
+  await expect.poll(() => !!pending).toBe(true);
+  await expect(page.getByRole("status").filter({ hasText: "Searching" })).toBeVisible({ timeout: 2_000 });
+  await page.getByLabel("Court 1 label", { exact: true }).fill("East");
+  await pending!.fulfill({ json: suggestions });
+  await location.click();
+  await expect(page.getByRole("option", { name: /Community Badminton Hall/ })).toBeVisible();
+  expect(lookups).toBe(1);
+});
+
+test("a failed location lookup can be retried without changing the search text", async ({ page }) => {
+  let lookups = 0;
+  await page.route("**/api/clubs/*/locations", route => {
+    lookups += 1;
+    return route.fulfill(lookups === 1
+      ? { status: 504, json: { error: "Location search timed out. Try again." } }
+      : { json: suggestions });
+  });
+  await signInAsAdmin(page);
+  await page.goto(`/club/${hostClubId}?tab=setup`);
+  await page.locator(".session-setup summary").filter({ hasText: /^Session details$/ }).click();
+  await page.getByRole("combobox", { name: "Location", exact: true }).fill("sk arena");
+  await expect(page.getByRole("status").filter({ hasText: "timed out" })).toBeVisible();
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect(page.getByRole("option", { name: /Community Badminton Hall/ })).toBeVisible();
+  expect(lookups).toBe(2);
+});

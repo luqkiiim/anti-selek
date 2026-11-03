@@ -6,8 +6,8 @@ vi.mock("@/lib/prisma", () => ({ prisma: { club: { findUnique: mocks.club }, clu
 vi.mock("@/lib/rateLimit", () => ({ rateLimit: mocks.rateLimit, invalidTargetResponse: () => Response.json({ error: "Unavailable" }, { status: 403 }) }));
 import { POST } from "./route";
 
-const request = (body: unknown = { query: "Badminton" }) => POST(new Request("http://localhost/api/clubs/home/locations", {
-  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+const request = (body: unknown = { query: "Badminton" }, country?: string) => POST(new Request("http://localhost/api/clubs/home/locations", {
+  method: "POST", headers: { "Content-Type": "application/json", ...(country ? { "x-vercel-ip-country": country } : {}) }, body: JSON.stringify(body),
 }), { params: Promise.resolve({ id: "home" }) });
 
 beforeEach(() => {
@@ -64,11 +64,11 @@ it.each([
   expect(mocks.fetch).not.toHaveBeenCalled();
 });
 
-it("returns place names, addresses and coordinate map links without exposing its key or making a second lookup", async () => {
+it("prefers the user's country and returns place names and map links without exposing its key or making a second lookup", async () => {
   mocks.fetch.mockResolvedValue(Response.json({ results: [
     { place_id: "geoapify-hall", name: "Community Hall", address_line2: "Petaling Jaya", lat: 3.107, lon: 101.6 },
   ] }));
-  const response = await request();
+  const response = await request({ query: "Badminton" }, "SG");
   expect(response.status).toBe(200);
   expect(response.headers.get("cache-control")).toBe("no-store");
   const result = await response.json();
@@ -79,7 +79,7 @@ it("returns place names, addresses and coordinate map links without exposing its
   expect(url.origin + url.pathname).toBe("https://api.geoapify.com/v1/geocode/autocomplete");
   expect(url.searchParams.get("apiKey")).toBe("test-only-geoapify-key");
   expect(url.searchParams.get("text")).toBe("Badminton");
-  expect(url.searchParams.get("bias")).toBe("countrycode:my");
+  expect(url.searchParams.get("bias")).toBe("countrycode:sg");
   expect(url.searchParams.has("filter")).toBe(false);
   expect(options.cache).toBe("no-store");
 });
@@ -102,5 +102,7 @@ it("handles provider rejection and timeouts without leaking provider responses o
   expect(rejected.status).toBe(502);
   expect(JSON.stringify(await rejected.json())).not.toMatch(/sensitive|test-only-geoapify-key/);
   mocks.fetch.mockRejectedValueOnce(new DOMException("provider timeout", "TimeoutError"));
-  expect((await request()).status).toBe(503);
+  const timedOut = await request();
+  expect(timedOut.status).toBe(504);
+  expect(await timedOut.json()).toEqual({ error: "Location search timed out. Try again." });
 });

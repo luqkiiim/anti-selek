@@ -40,11 +40,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const key = process.env.GEOAPIFY_API_KEY;
     if (!key) return json({ error: unavailable }, 503);
 
+    const detectedCountry = request.headers.get("x-vercel-ip-country")?.trim().toLowerCase() ?? "";
+    const country = /^[a-z]{2}$/.test(detectedCountry) && !["xx", "zz"].includes(detectedCountry) ? detectedCountry : "my";
     const url = new URL("https://api.geoapify.com/v1/geocode/autocomplete");
-    url.search = new URLSearchParams({ text: query, format: "json", limit: "5", lang: "en", bias: "countrycode:my", apiKey: key }).toString();
+    url.search = new URLSearchParams({ text: query, format: "json", limit: "5", lang: "en", bias: `countrycode:${country}`, apiKey: key }).toString();
     const response = await fetch(url, {
       cache: "no-store",
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(5_000)]),
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(12_000)]),
     });
     if (!response.ok) {
       logError("Geoapify location search", { status: response.status });
@@ -70,6 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return json({ suggestions });
   } catch (error) {
     if (!request.signal.aborted) logError("Location search", { name: error instanceof Error ? error.name : "Unknown error" });
+    if (error instanceof Error && error.name === "TimeoutError") return json({ error: "Location search timed out. Try again." }, 504);
     return json({ error: unavailable }, 503);
   }
 }

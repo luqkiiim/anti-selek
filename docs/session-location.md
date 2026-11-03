@@ -26,8 +26,13 @@ No database migration is needed: labels use the existing Court.label column.
 access to that club (or global admins) can call Geoapify. Quick access is excluded.
 Requests are limited to 40 per minute per account/source. Queries are debounced,
 stale requests are aborted, and a selection uses its existing name and coordinates
-without a second provider request. Results prefer Malaysia without excluding other
-countries. Geoapify responses are not cached.
+without a second provider request. Results prefer the user's country from Vercel's
+country header, falling back to Malaysia when unavailable, without excluding other
+countries. No GPS permission is required. Geoapify responses are not cached.
+The field shows progress while searching and offers a retry after failure. Moving
+focus to another field hides the dropdown without cancelling the current search;
+returning to Location shows its completed results. Provider calls have a 12-second
+timeout, with an explicit timeout response instead of an empty-looking field.
 The browser receives names, addresses and the selected link, never the API key.
 The suggestions include Geoapify and OpenStreetMap attribution. Google Maps links
 do not use a paid Google API or require a Google API key.

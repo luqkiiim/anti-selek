@@ -22,6 +22,7 @@
 .locationLinks { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem; font-size: .75rem; }
 .locationLinks a { color: #7040bc; text-underline-offset: 3px; }
 .location p { margin: 0; }
+.locationStatus { display: grid; justify-items: start; gap: .25rem; }
 .hint { color: #80718b; font-size: .75rem; font-weight: 400; }
 .editorTitle { display: none; }
 .summary { display: grid; gap: .375rem; margin-block: .875rem; font-size: .8125rem; line-height: 1.6; color: #62556c; overflow-wrap: anywhere; }
