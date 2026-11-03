@@ -1,10 +1,10 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { hostClubId, signInAsAdmin } from "./helpers";
 
-const selectedLocation = { venue: "Community Badminton Hall", venueMapUrl: "https://maps.google.com/?cid=123" };
-const suggestions = { suggestions: [{ placeId: "ChIJ-hall", name: selectedLocation.venue, address: "Petaling Jaya, Selangor" }] };
+const selectedLocation = { venue: "Community Badminton Hall", venueMapUrl: "https://www.google.com/maps/search/?api=1&query=3.107%2C101.6" };
+const suggestions = { suggestions: [{ placeId: "geoapify-hall", name: selectedLocation.venue, address: "Petaling Jaya, Selangor", mapUrl: selectedLocation.venueMapUrl }] };
 async function mockLocationSearch(page: Page) {
-  await page.route("**/api/clubs/*/locations", route => route.fulfill({ json: route.request().postDataJSON().placeId ? selectedLocation : suggestions }));
+  await page.route("**/api/clubs/*/locations", route => route.fulfill({ json: suggestions }));
 }
 
 test("expanded session details keep every input within the setup form", async ({ page }) => {
@@ -138,45 +138,48 @@ test("host saves booking details and copies an editable session message on mobil
   expect(errors).toEqual([]);
 });
 
-test("location lookups preserve other edits and ignore stale search and selection responses", async ({ page }) => {
+test("location lookups preserve other edits, ignore stale responses and select without another request", async ({ page }) => {
   let oldSearch: Route | undefined;
-  let selection: Route | undefined;
+  let laterSearch: Route | undefined;
+  const requests: Array<{ query?: string; placeId?: string }> = [];
   await page.route("**/api/clubs/*/locations", async route => {
     const body = route.request().postDataJSON();
+    requests.push(body);
     if (body.query === "Old hall") oldSearch = route;
-    else if (body.placeId) selection = route;
+    else if (body.query === "Manual hall") laterSearch = route;
     else await route.fulfill({ json: suggestions });
   });
   await signInAsAdmin(page);
   await page.goto(`/club/${hostClubId}?tab=setup`);
   await page.locator(".session-setup summary").filter({ hasText: /^Session details$/ }).click();
+  await page.getByLabel("Court 1 label", { exact: true }).fill("East");
+  await page.getByLabel("Notes", { exact: true }).fill("Keep these edits");
   const location = page.getByRole("combobox", { name: "Location", exact: true });
   await location.fill("Old hall");
   await expect.poll(() => !!oldSearch).toBe(true);
   await location.fill("Community");
   const option = page.getByRole("option", { name: /Community Badminton Hall/ });
   await expect(option).toBeVisible();
-  await oldSearch!.fulfill({ json: { suggestions: [{ placeId: "ChIJ-old", name: "Old hall", address: "Wrong result" }] } });
+  await oldSearch!.fulfill({ json: { suggestions: [{ placeId: "geoapify-old", name: "Old hall", address: "Wrong result", mapUrl: selectedLocation.venueMapUrl }] } });
   await expect(option).toBeVisible();
+  await expect(page.getByRole("link", { name: "Powered by Geoapify", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "© OpenStreetMap contributors", exact: true })).toBeVisible();
   await location.press("ArrowDown");
   await location.press("Enter");
-  await expect.poll(() => !!selection).toBe(true);
-  await page.getByLabel("Court 1 label", { exact: true }).fill("East");
-  await page.getByLabel("Notes", { exact: true }).fill("Keep these edits");
-  await selection!.fulfill({ json: selectedLocation });
   await expect(location).toHaveValue(selectedLocation.venue);
+  await expect(page.getByRole("link", { name: "Open in Google Maps" })).toHaveAttribute("href", selectedLocation.venueMapUrl);
+  expect(requests).toEqual([{ query: "Old hall" }, { query: "Community" }]);
   await expect(page.getByLabel("Court 1 label", { exact: true })).toHaveValue("East");
   await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue("Keep these edits");
 
-  selection = undefined;
-  await location.fill("Another hall");
-  await option.click();
-  await expect.poll(() => !!selection).toBe(true);
   await location.fill("Manual hall");
-  await selection!.fulfill({ json: selectedLocation });
-  await expect(location).toHaveValue("Manual hall");
+  await expect.poll(() => !!laterSearch).toBe(true);
+  await location.fill("");
+  await laterSearch!.fulfill({ json: suggestions });
+  await expect(location).toHaveValue("");
+  await expect(option).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Open in Google Maps" })).toHaveCount(0);
   await page.getByRole("button", { name: "Add map link", exact: true }).click();
   await page.getByLabel("Map link", { exact: true }).fill("https://maps.google.com/?q=manual");
-  await expect(location).toHaveValue("Manual hall");
+  await expect(location).toHaveValue("");
 });

@@ -1,7 +1,7 @@
 # Session location and court labels
 
-Session details contains a Location field with Google Places suggestions. Choosing
-a result fills the venue name and its Google Maps link. Hosts can also enter a
+Session details contains a Location field with Geoapify suggestions. Choosing
+a result fills the venue name and a Google Maps link to its coordinates. Hosts can also enter a
 location manually and use Add map link for an unlisted venue or another map
 provider. Editing the location clears its previous map link.
 
@@ -13,30 +13,34 @@ the existing host permission check, and waiting/active session restrictions.
 Omitting labels leaves existing labels alone. Inactive courts retain their data.
 No database migration is needed: labels use the existing Court.label column.
 
-## Google setup
+## Geoapify setup
 
-1. Enable billing and **Places API (New)** in a Google Cloud project.
-2. Create a server API key restricted to Places API (New).
-3. Add `GOOGLE_MAPS_API_KEY` as a Vercel Secret for the environments that need
+1. Create a free account at https://myprojects.geoapify.com/; no card is required.
+2. Create an anti-selek project and open its API Keys section.
+3. Add `GEOAPIFY_API_KEY` as a Vercel Secret for the environments that need
    location search. For local development, set it in the ignored `.env.local`.
    Keep this variable server-only; do not use a `NEXT_PUBLIC_` prefix.
 4. Deploy after adding the variable. Existing deployments do not gain new values.
 
-`POST /api/clubs/[id]/locations` accepts either a query or a selected place ID,
-plus the autocomplete session token. Only authenticated operators with active
-access to that club (or global admins) can call Google. Quick access is excluded.
+`POST /api/clubs/[id]/locations` accepts a search query. Only authenticated operators with active
+access to that club (or global admins) can call Geoapify. Quick access is excluded.
 Requests are limited to 40 per minute per account/source. Queries are debounced,
-stale requests are aborted, and each selection ends its autocomplete billing
-session with a minimal Place Details request. Google responses are not cached.
+stale requests are aborted, and a selection uses its existing name and coordinates
+without a second provider request. Results prefer Malaysia without excluding other
+countries. Geoapify responses are not cached.
 The browser receives names, addresses and the selected link, never the API key.
+The suggestions include Geoapify and OpenStreetMap attribution. Google Maps links
+do not use a paid Google API or require a Google API key.
 
 If the key is absent or the provider fails, the field offers manual entry and a
 map link. Live autocomplete verification requires a configured key; browser
 fixtures exercise selection, editing, sharing and stale-response handling without
-calling the paid provider.
+calling the external provider. The free plan allows 3,000 credits per day; each
+autocomplete request uses one credit. This is a request allowance, not a count of
+venues or sessions, because typing can issue multiple debounced requests.
 
 Provider references:
 
-- [Autocomplete (New)](https://developers.google.com/maps/documentation/places/web-service/place-autocomplete)
-- [Place Details (New)](https://developers.google.com/maps/documentation/places/web-service/place-details)
-- [Usage and billing](https://developers.google.com/maps/documentation/places/web-service/usage-and-billing)
+- [Geoapify autocomplete](https://apidocs.geoapify.com/docs/geocoding/address-autocomplete/)
+- [Geoapify free plan](https://www.geoapify.com/pricing/)
+- [Google Maps URLs](https://developers.google.com/maps/documentation/urls/get-started)

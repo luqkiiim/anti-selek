@@ -34,51 +34,37 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const body = await request.json().catch(() => null);
     const query = typeof body?.query === "string" ? body.query.trim() : null;
-    const placeId = typeof body?.placeId === "string" ? body.placeId : null;
-    if (!body || typeof body.sessionToken !== "string" || !/^[a-zA-Z0-9_-]{1,36}$/.test(body.sessionToken) ||
-      (query !== null) === (placeId !== null) ||
-      (query !== null && (query.length < 2 || query.length > 160)) ||
-      (placeId !== null && !/^[a-zA-Z0-9_-]{1,255}$/.test(placeId))) {
+    if (!query || query.length < 2 || query.length > 160) {
       return json({ error: "Invalid location search." }, 400);
     }
-    const key = process.env.GOOGLE_MAPS_API_KEY;
+    const key = process.env.GEOAPIFY_API_KEY;
     if (!key) return json({ error: unavailable }, 503);
 
-    const url = placeId
-      ? `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?sessionToken=${encodeURIComponent(body.sessionToken)}`
-      : "https://places.googleapis.com/v1/places:autocomplete";
+    const url = new URL("https://api.geoapify.com/v1/geocode/autocomplete");
+    url.search = new URLSearchParams({ text: query, format: "json", limit: "5", lang: "en", bias: "countrycode:my", apiKey: key }).toString();
     const response = await fetch(url, {
-      method: placeId ? "GET" : "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": placeId ? "displayName,googleMapsUri" : "suggestions.placePrediction.placeId,suggestions.placePrediction.structuredFormat",
-      },
-      ...(!placeId ? { body: JSON.stringify({ input: query, sessionToken: body.sessionToken, languageCode: "en", regionCode: "MY" }) } : {}),
       cache: "no-store",
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(5_000)]),
     });
     if (!response.ok) {
-      logError("Google location search", { status: response.status });
+      logError("Geoapify location search", { status: response.status });
       return json({ error: unavailable }, 502);
     }
     const data = await response.json();
-    if (placeId) {
-      const venue = data.displayName?.text;
-      const mapUrl = typeof data.googleMapsUri === "string" ? new URL(data.googleMapsUri) : null;
-      if (typeof venue !== "string" || !venue.trim() || venue.length > 160 || !mapUrl || mapUrl.protocol !== "https:" || mapUrl.href.length > 1000) {
-        return json({ error: "Unable to select this location. Enter it manually." }, 502);
-      }
-      return json({ venue: venue.trim(), venueMapUrl: mapUrl.href });
-    }
+    if (!Array.isArray(data.results)) return json({ error: unavailable }, 502);
     const suggestions: LocationSuggestion[] = [];
-    for (const item of data.suggestions ?? []) {
-      const place = item.placePrediction;
-      const name = place?.structuredFormat?.mainText?.text;
-      const address = place?.structuredFormat?.secondaryText?.text;
-      if (typeof place?.placeId === "string" && typeof name === "string") {
-        suggestions.push({ placeId: place.placeId, name, address: typeof address === "string" ? address : "" });
-      }
+    for (const place of data.results) {
+      if (!place || typeof place.lat !== "number" || !Number.isFinite(place.lat) || Math.abs(place.lat) > 90 ||
+        typeof place.lon !== "number" || !Number.isFinite(place.lon) || Math.abs(place.lon) > 180) continue;
+      const name = [place.name, place.address_line1, place.formatted].find(value => typeof value === "string" && value.trim());
+      if (typeof name !== "string" || name.trim().length > 160) continue;
+      const address = place.address_line2 ?? place.formatted;
+      const mapUrl = new URL("https://www.google.com/maps/search/");
+      mapUrl.search = new URLSearchParams({ api: "1", query: `${place.lat},${place.lon}` }).toString();
+      suggestions.push({
+        placeId: typeof place.place_id === "string" ? place.place_id : `${place.lat},${place.lon}`,
+        name: name.trim(), address: typeof address === "string" ? address : "", mapUrl: mapUrl.href,
+      });
       if (suggestions.length === 5) break;
     }
     return json({ suggestions });

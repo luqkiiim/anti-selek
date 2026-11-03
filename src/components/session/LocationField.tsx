@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useState, type KeyboardEvent } from "react";
 import type { LocationSelection, LocationSuggestion } from "@/types/location";
 import styles from "./SessionSharing.module.css";
 
@@ -15,20 +15,15 @@ export function LocationField({ venue, venueMapUrl, clubId, onChange }: Location
   const [activeIndex, setActiveIndex] = useState(-1);
   const [message, setMessage] = useState("");
   const [editingMap, setEditingMap] = useState(false);
-  const token = useRef<string | null>(null);
-  const selection = useRef<AbortController | null>(null);
   const endpoint = clubId ? `/api/clubs/${encodeURIComponent(clubId)}/locations` : null;
-
-  useEffect(() => () => selection.current?.abort(), []);
 
   useEffect(() => {
     if (!open || query.trim().length < 2 || !endpoint) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      token.current ??= crypto.randomUUID();
       void fetch(endpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, sessionToken: token.current }), signal: controller.signal,
+        body: JSON.stringify({ query }), signal: controller.signal,
       }).then(async response => {
         const data = await response.json();
         if (controller.signal.aborted) return;
@@ -43,27 +38,9 @@ export function LocationField({ venue, venueMapUrl, clubId, onChange }: Location
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query, open, endpoint]);
 
-  async function choose(place: LocationSuggestion) {
-    if (!endpoint) return;
-    selection.current?.abort();
-    const controller = new AbortController();
-    selection.current = controller;
-    setSuggestions([]); setOpen(false); setQuery(""); setMessage("Selecting location…");
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ placeId: place.placeId, sessionToken: token.current }), signal: controller.signal,
-      });
-      const data = await response.json();
-      if (controller.signal.aborted) return;
-      if (!response.ok) throw new Error(data.error || "Unable to select this location.");
-      onChange({ venue: data.venue, venueMapUrl: data.venueMapUrl });
-      setMessage(""); setEditingMap(false);
-    } catch (error) {
-      if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : "Unable to select this location.");
-    } finally {
-      if (selection.current === controller) token.current = null;
-    }
+  function choose(place: LocationSuggestion) {
+    onChange({ venue: place.name, venueMapUrl: place.mapUrl });
+    setSuggestions([]); setOpen(false); setQuery(""); setMessage(""); setEditingMap(false);
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -74,7 +51,7 @@ export function LocationField({ venue, venueMapUrl, clubId, onChange }: Location
       event.preventDefault();
       setActiveIndex(index => event.key === "ArrowDown" ? (index + 1) % suggestions.length : (index <= 0 ? suggestions.length : index) - 1);
     } else if (event.key === "Enter" && suggestions.length) {
-      event.preventDefault(); void choose(suggestions[Math.max(0, activeIndex)]);
+      event.preventDefault(); choose(suggestions[Math.max(0, activeIndex)]);
     }
   }
 
@@ -85,17 +62,19 @@ export function LocationField({ venue, venueMapUrl, clubId, onChange }: Location
         aria-controls={`${id}-results`} aria-activedescendant={activeIndex >= 0 && open && suggestions[activeIndex] ? `${id}-option-${activeIndex}` : undefined}
         aria-describedby={message ? `${id}-status` : undefined} value={venue ?? ""} maxLength={160} placeholder="Search for a venue" autoComplete="off"
         onChange={event => {
-          if (selection.current) { selection.current.abort(); selection.current = null; token.current = null; }
           setQuery(event.target.value); setOpen(true); setSuggestions([]); setActiveIndex(-1); setMessage("");
           onChange({ venue: event.target.value || null, venueMapUrl: null });
         }} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={handleKeyDown} />
       {open && suggestions.length > 0 && <div className={styles.locationResults}>
         <div id={`${id}-results`} role="listbox" aria-label="Locations">{suggestions.map((place, index) => <button
           type="button" role="option" id={`${id}-option-${index}`} key={place.placeId} tabIndex={-1} aria-selected={index === activeIndex}
-          className={styles.locationOption} onPointerDown={event => event.preventDefault()} onClick={() => void choose(place)}>
+          className={styles.locationOption} onPointerDown={event => event.preventDefault()} onClick={() => choose(place)}>
           <strong>{place.name}</strong>{place.address && <span>{place.address}</span>}
         </button>)}</div>
-        <span className={styles.googleAttribution} translate="no">Google Maps</span>
+        <div className={styles.locationAttribution}>
+          <a href="https://www.geoapify.com/" target="_blank" rel="noopener noreferrer">Powered by Geoapify</a>
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>
+        </div>
       </div>}
     </div>
     {message && <p id={`${id}-status`} className={styles.hint} role="status">{message}</p>}

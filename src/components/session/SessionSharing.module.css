@@ -17,7 +17,8 @@
 .locationOption:hover, .locationOption[aria-selected="true"] { background: #f4edf9; }
 .locationOption strong { font-size: .875rem; }
 .locationOption span { font-size: .75rem; color: #62556c; }
-.googleAttribution { display: block; padding: .5rem .75rem; font: normal 400 12px/1.5 sans-serif; letter-spacing: normal; color: #5e5e5e; white-space: nowrap; }
+.locationAttribution { display: flex; flex-wrap: wrap; gap: .25rem .75rem; padding: .5rem .75rem; font-size: .75rem; line-height: 1.5; }
+.locationAttribution a { color: #62556c; text-underline-offset: 2px; }
 .locationLinks { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem; font-size: .75rem; }
 .locationLinks a { color: #7040bc; text-underline-offset: 3px; }
 .location p { margin: 0; }
