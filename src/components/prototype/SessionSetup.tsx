@@ -162,7 +162,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
           <div className="setup-courts"><span><strong>Courts</strong></span><div className="setup-stepper"><button type="button" aria-label="Fewer courts" disabled={courts === 1} onClick={() => setCourts(n => n - 1)}><Minus size={18} /></button><output aria-label="Court count" aria-live="polite">{courts}</output><button type="button" aria-label="More courts" disabled={courts === 10} onClick={() => setCourts(n => n + 1)}><Plus size={18} /></button></div></div>
         </section>
 
-        <SessionDetailsForm value={details} onChange={setDetails} />
+        <SessionDetailsForm value={details} onChange={setDetails} clubId={clubId} courtNumbers={Array.from({ length: courts }, (_, index) => index + 1)} />
         <section className="setup-section" aria-labelledby="setup-players"><h2 id="setup-players">Who’s playing?</h2>
           <button type="button" className="setup-roster-summary" onClick={() => setRosterOpen(true)} aria-haspopup="dialog">
             <span className="setup-roster-faces" aria-hidden="true">{players.slice(0, 3).map(p => <Avatar key={p.id} name={p.name} url={p.avatarUrl} />)}{!players.length && <UsersThree size={28} />}</span>

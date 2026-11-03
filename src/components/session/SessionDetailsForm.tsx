@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type Dispatch, type SetStateAction } from "react";
 import type { SessionDetails } from "@/lib/sessionDetails";
 import { emptySessionDetails, localDateTime, parseSessionDetails, SessionDetailsError, utcDateTime } from "@/lib/sessionDetails";
 import styles from "./SessionSharing.module.css";
+import { LocationField } from "./LocationField";
 
 type SessionDetailsDraft = Omit<SessionDetails, "endsAt"> & { durationHours: string };
 
@@ -33,24 +34,35 @@ export function sessionDetailsFromDraft(draft: SessionDetailsDraft, courtNumbers
   }
   return parseSessionDetails({
     ...details, startsAt, endsAt,
+    ...(draft.courtLabels ? { courtLabels: draft.courtLabels.filter(court => courtNumbers.includes(court.courtNumber)) } : {}),
     // Keep previously saved court bookings untouched; this editor uses the session range.
     courtBookings: draft.courtBookings.filter(court => courtNumbers.includes(court.courtNumber)),
   }, courtNumbers);
 }
 
-export function SessionDetailsForm({ value, onChange, collapsible = true }: {
+export function SessionDetailsForm({ value, onChange, clubId, courtNumbers = [], collapsible = true }: {
   value: SessionDetailsDraft;
-  onChange: (value: SessionDetailsDraft) => void;
+  onChange: Dispatch<SetStateAction<SessionDetailsDraft>>;
+  clubId?: string | null;
+  courtNumbers?: number[];
   collapsible?: boolean;
 }) {
   const id = useId();
   const [timeZones] = useState(() => Array.from(new Set(["Asia/Kuala_Lumpur", "UTC", ...Intl.supportedValuesOf("timeZone")])).sort());
   function field(key: keyof Pick<SessionDetailsDraft, "venue" | "venueMapUrl" | "startsAt" | "durationHours" | "fee" | "notes" | "timeZone">, text: string) {
-    onChange({ ...value, [key]: text });
+    onChange(current => ({ ...current, [key]: text }));
   }
   const fields = <div className={styles.fields}>
-    <label className={styles.field}>Venue<input value={value.venue ?? ""} maxLength={160} onChange={e => field("venue", e.target.value)} autoComplete="off" /></label>
-    <label className={styles.field}>Map link<input type="url" value={value.venueMapUrl ?? ""} maxLength={1000} onChange={e => field("venueMapUrl", e.target.value)} placeholder="https://" /></label>
+    <LocationField venue={value.venue} venueMapUrl={value.venueMapUrl} clubId={clubId} onChange={location => onChange(current => ({ ...current, ...location }))} />
+    {courtNumbers.length > 0 && <fieldset className={styles.courtLabels}>
+      <legend>Court labels</legend>
+      {courtNumbers.map(courtNumber => <label className={styles.field} key={courtNumber}>Court {courtNumber}
+        <input aria-label={`Court ${courtNumber} label`} value={value.courtLabels?.find(court => court.courtNumber === courtNumber)?.label ?? ""} maxLength={24} placeholder={`Court ${courtNumber}`} onChange={e => {
+          const label = e.target.value;
+          onChange(current => ({ ...current, courtLabels: [...(current.courtLabels ?? []).filter(court => court.courtNumber !== courtNumber), { courtNumber, label }] }));
+        }} />
+      </label>)}
+    </fieldset>}
     <label className={styles.field}>Starts<input type="datetime-local" value={value.startsAt ?? ""} onChange={e => field("startsAt", e.target.value)} /></label>
     <label className={styles.field}>Duration (hours)<input type="number" inputMode="decimal" min="0" step="any" value={value.durationHours} onChange={e => field("durationHours", e.target.value)} /></label>
     <label className={styles.field}>Time zone<select value={value.timeZone} onChange={e => field("timeZone", e.target.value)}>{timeZones.map(zone => <option value={zone} key={zone}>{zone.replaceAll("_", " ")}</option>)}</select></label>

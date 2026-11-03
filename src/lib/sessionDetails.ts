@@ -15,6 +15,7 @@ export interface SessionDetails {
   fee: string | null;
   notes: string | null;
   courtBookings: CourtBooking[];
+  courtLabels?: Array<{ courtNumber: number; label: string | null }>;
 }
 
 export class SessionDetailsError extends Error {}
@@ -76,7 +77,20 @@ export function parseSessionDetails(value: unknown, courtNumbers: readonly numbe
     seen.add(booking.courtNumber);
     return { courtNumber: booking.courtNumber, ...timeRange(booking.startsAt, booking.endsAt) };
   });
+  let courtLabels: SessionDetails["courtLabels"];
+  if (input.courtLabels !== undefined) {
+    if (!Array.isArray(input.courtLabels) || input.courtLabels.length > courtNumbers.length) throw new SessionDetailsError("Invalid court labels.");
+    const labelledCourts = new Set<number>();
+    courtLabels = input.courtLabels.map(court => {
+      if (!court || !Number.isInteger(court.courtNumber) || !courtNumbers.includes(court.courtNumber) || labelledCourts.has(court.courtNumber) || (typeof court.label !== "string" && court.label !== null)) {
+        throw new SessionDetailsError("Court labels must refer to different available courts.");
+      }
+      labelledCourts.add(court.courtNumber);
+      return { courtNumber: court.courtNumber, label: optionalText(court.label, "Court label", 24) };
+    });
+  }
   return {
+    ...(courtLabels !== undefined ? { courtLabels } : {}),
     venue: optionalText(input.venue, "Venue", 160), venueMapUrl,
     ...timeRange(input.startsAt, input.endsAt), timeZone,
     fee: optionalText(input.fee, "Fee", 160), notes: optionalText(input.notes, "Notes", 2000, true), courtBookings,
@@ -94,12 +108,13 @@ export function sessionDetailsData(details: SessionDetails) {
 
 type StoredDetails = Partial<Omit<ReturnType<typeof sessionDetailsData>, "timeZone">> & {
   timeZone?: string | null;
-  courts?: Array<{ courtNumber: number; bookingStartAt?: Date | string | null; bookingEndAt?: Date | string | null }>;
+  courts?: Array<{ courtNumber: number; label?: string | null; bookingStartAt?: Date | string | null; bookingEndAt?: Date | string | null }>;
 };
 function iso(value: Date | string | null | undefined) { return value ? new Date(value).toISOString() : null; }
 
 export function serializeSessionDetails(session: StoredDetails): SessionDetails {
   return {
+    ...(session.courts ? { courtLabels: session.courts.map(court => ({ courtNumber: court.courtNumber, label: court.label ?? null })) } : {}),
     venue: session.venue ?? null, venueMapUrl: session.venueMapUrl ?? null,
     startsAt: iso(session.scheduledStartAt), endsAt: iso(session.scheduledEndAt),
     timeZone: session.timeZone ?? DEFAULT_SESSION_TIME_ZONE, fee: session.feeText ?? null, notes: session.notes ?? null,

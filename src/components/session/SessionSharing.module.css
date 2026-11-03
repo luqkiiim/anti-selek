@@ -3,11 +3,24 @@
 .details > summary { min-height: 44px; padding-block: .75rem; cursor: pointer; font-size: .875rem; font-weight: 750; color: #5a466e; }
 .fields { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: .875rem; padding-block: .5rem 1rem; }
 .field { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: .4rem; font-size: .8125rem; font-weight: 700; color: #51435d; }
-.field input, .field select, .field textarea, .message { display: block; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 48px; border: 1px solid #e1d7e8; border-radius: 12px; padding: .75rem; background: #fffdfb; color: #291440; font: inherit; font-size: 16px; font-weight: 400; }
+.field input, .field select, .field textarea, .locationSearch > input, .message { display: block; box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 48px; border: 1px solid #e1d7e8; border-radius: 12px; padding: .75rem; background: #fffdfb; color: #291440; font: inherit; font-size: 16px; font-weight: 400; }
 .field input[type="datetime-local"] { appearance: none; overflow: hidden; }
 .field input::-webkit-date-and-time-value { min-width: 0; text-align: left; }
-.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible, .message:focus-visible { outline: 2px solid #9a7bb7; outline-offset: 2px; }
+.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible, .locationSearch > input:focus-visible, .message:focus-visible { outline: 2px solid #9a7bb7; outline-offset: 2px; }
 .field textarea, .message { resize: vertical; }
+.courtLabels { display: grid; gap: .875rem; margin: 0; padding: 0; min-width: 0; border: 0; }
+.courtLabels legend { margin-bottom: .5rem; color: #51435d; font-size: .8125rem; font-weight: 750; }
+.location { display: grid; min-width: 0; gap: .4rem; }
+.locationSearch { position: relative; min-width: 0; }
+.locationResults { position: absolute; z-index: 5; top: calc(100% + .25rem); inset-inline: 0; overflow: hidden; border: 1px solid #e1d7e8; border-radius: 12px; background: #fffdfb; box-shadow: 0 8px 24px #2914401a; }
+.locationOption { display: grid; width: 100%; min-height: 48px; gap: .2rem; padding: .75rem; border: 0; border-bottom: 1px solid #eee7f3; background: transparent; color: #291440; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.locationOption:hover, .locationOption[aria-selected="true"] { background: #f4edf9; }
+.locationOption strong { font-size: .875rem; }
+.locationOption span { font-size: .75rem; color: #62556c; }
+.googleAttribution { display: block; padding: .5rem .75rem; font: normal 400 12px/1.5 sans-serif; letter-spacing: normal; color: #5e5e5e; white-space: nowrap; }
+.locationLinks { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem; font-size: .75rem; }
+.locationLinks a { color: #7040bc; text-underline-offset: 3px; }
+.location p { margin: 0; }
 .hint { color: #80718b; font-size: .75rem; font-weight: 400; }
 .editorTitle { display: none; }
 .summary { display: grid; gap: .375rem; margin-block: .875rem; font-size: .8125rem; line-height: 1.6; color: #62556c; overflow-wrap: anywhere; }

@@ -45,7 +45,7 @@ it("persists optional details and court times when creating a session", async ()
   const { parseCreateSessionRequest } = await import("../../createSessionRequest");
   const { createSessionForUser } = await import("../../createSessionService");
   const input = parseCreateSessionRequest({ name: "New friendly", clubId: f.home.id, partnerClubId: f.away.id, collabFormat: "INTERCLUB", courtCount: 2,
-    details: { ...emptySessionDetails(), venue: "New hall", startsAt: "2026-11-04T12:00:00.000Z", endsAt: "2026-11-04T14:00:00.000Z", courtBookings: [{ courtNumber: 2, startsAt: "2026-11-04T13:00:00.000Z", endsAt: "2026-11-04T14:00:00.000Z" }] },
+    details: { ...emptySessionDetails(), venue: "New hall", courtLabels: [{ courtNumber: 1, label: "  Court 5  " }, { courtNumber: 2, label: "West" }], startsAt: "2026-11-04T12:00:00.000Z", endsAt: "2026-11-04T14:00:00.000Z", courtBookings: [{ courtNumber: 2, startsAt: "2026-11-04T13:00:00.000Z", endsAt: "2026-11-04T14:00:00.000Z" }] },
   });
   const created = await createSessionForUser({ requesterId: "host", requesterIsAdmin: false, input });
   const saved = await db.session.findUniqueOrThrow({ where: { code: created.code }, include: { courts: { orderBy: { courtNumber: "asc" } } } });
@@ -53,6 +53,28 @@ it("persists optional details and court times when creating a session", async ()
   expect(saved.scheduledStartAt?.toISOString()).toBe(input.details?.startsAt);
   expect(saved.courts[0].bookingStartAt).toBeNull();
   expect(saved.courts[1].bookingStartAt?.toISOString()).toBe("2026-11-04T13:00:00.000Z");
+  expect(saved.courts.map(court => court.label)).toEqual(["Court 5", "West"]);
+});
+
+it("saves and clears court labels atomically, preserves omitted labels and rejects unavailable or duplicate courts", async () => {
+  const f = await fixture();
+  const details = { ...emptySessionDetails(), venue: "Main hall", courtLabels: [{ courtNumber: 1, label: "  Court 7  " }] };
+  const response = await f.request(details);
+  expect(response.status).toBe(200);
+  expect((await response.json()).details.courtLabels).toEqual([{ courtNumber: 1, label: "Court 7" }]);
+  for (const courtLabels of [
+    [{ courtNumber: 2, label: "Unavailable" }],
+    [{ courtNumber: 1, label: "First" }, { courtNumber: 1, label: "Duplicate" }],
+    [{ courtNumber: 1, label: "x".repeat(25) }],
+  ]) {
+    expect((await f.request({ ...details, venue: "Must not save", courtLabels })).status).toBe(400);
+    expect((await db.session.findUniqueOrThrow({ where: { id: f.session.id } })).venue).toBe("Main hall");
+    expect((await db.court.findFirstOrThrow({ where: { sessionId: f.session.id, courtNumber: 1 } })).label).toBe("Court 7");
+  }
+  expect((await f.request(emptySessionDetails())).status).toBe(200);
+  expect((await db.court.findFirstOrThrow({ where: { sessionId: f.session.id, courtNumber: 1 } })).label).toBe("Court 7");
+  expect((await f.request({ ...emptySessionDetails(), courtLabels: [{ courtNumber: 1, label: "" }] })).status).toBe(200);
+  expect((await db.court.findFirstOrThrow({ where: { sessionId: f.session.id, courtNumber: 1 } })).label).toBeNull();
 });
 
 it("saves logistics and court overrides atomically while preserving queue, rules, scores and inactive courts", async () => {

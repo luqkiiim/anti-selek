@@ -1,12 +1,28 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 import { hostClubId, signInAsAdmin } from "./helpers";
 
+const selectedLocation = { venue: "Community Badminton Hall", venueMapUrl: "https://maps.google.com/?cid=123" };
+const suggestions = { suggestions: [{ placeId: "ChIJ-hall", name: selectedLocation.venue, address: "Petaling Jaya, Selangor" }] };
+async function mockLocationSearch(page: Page) {
+  await page.route("**/api/clubs/*/locations", route => route.fulfill({ json: route.request().postDataJSON().placeId ? selectedLocation : suggestions }));
+}
+
 test("expanded session details keep every input within the setup form", async ({ page }) => {
+  await mockLocationSearch(page);
   await page.setViewportSize({ width: 320, height: 844 });
   await signInAsAdmin(page);
   await page.goto(`/club/${hostClubId}?tab=setup`);
   const details = page.locator(".session-setup details").filter({ has: page.locator("summary", { hasText: /^Session details$/ }) });
   await details.locator("summary").click();
+  await page.getByRole("combobox", { name: "Location", exact: true }).fill("Community");
+  await page.getByRole("option", { name: /Community Badminton Hall/ }).click();
+  await expect(page.getByRole("link", { name: "Open in Google Maps" })).toHaveAttribute("href", selectedLocation.venueMapUrl);
+  await page.getByLabel("Court 1 label", { exact: true }).fill("Court 5");
+  await page.getByLabel("Court 2 label", { exact: true }).fill("Court 8");
+  await page.getByRole("button", { name: "More courts", exact: true }).click();
+  await page.getByLabel("Court 3 label", { exact: true }).fill("Removed court");
+  await page.getByRole("button", { name: "Fewer courts", exact: true }).click();
+  await expect(page.getByLabel("Court 3 label", { exact: true })).toHaveCount(0);
   await page.getByLabel("Starts", { exact: true }).fill("2026-11-04T23:00");
   await page.getByLabel("Duration (hours)", { exact: true }).fill("1.5");
   for (const width of [320, 375, 390, 768]) {
@@ -37,12 +53,16 @@ test("expanded session details keep every input within the setup form", async ({
   const created = await response.json();
   const snapshot = await (await page.request.get(`/api/sessions/${created.code}`)).json();
   expect(snapshot.details).toMatchObject({ startsAt: "2026-11-04T15:00:00.000Z", endsAt: "2026-11-04T16:30:00.000Z" });
+  expect(snapshot.details).toMatchObject(selectedLocation);
+  expect(snapshot.courts.map((court: { label: string }) => court.label)).toEqual(["Court 5", "Court 8"]);
   await page.getByRole("button", { name: "Share session", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Session message" })).toHaveValue(/11:00 pm–Thu, 5 Nov 2026, 0:30 am|11:00 pm–Thu, 5 Nov 2026, 12:30 am/);
   await expect(page.getByRole("textbox", { name: "Session message" })).not.toHaveValue(/\nDuration:|1\.5 hours/);
+  await expect(page.getByRole("textbox", { name: "Session message" })).toHaveValue(/Courts: Court 5, Court 8/);
 });
 
 test("host saves booking details and copies an editable session message on mobile", async ({ page, context }) => {
+  await mockLocationSearch(page);
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 320, height: 844 });
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
@@ -63,8 +83,12 @@ test("host saves booking details and copies an editable session message on mobil
   await expect(message).not.toHaveValue(/Players \(|anti-selek\.vercel\.app/);
   await expect(message).not.toHaveValue(/undefined|null|Fee:/);
   await page.getByRole("button", { name: "Edit details", exact: true }).click();
-  await page.getByLabel("Venue", { exact: true }).fill("Community Badminton Hall");
+  await page.getByRole("combobox", { name: "Location", exact: true }).fill("Community");
+  await page.getByRole("option", { name: /Community Badminton Hall/ }).click();
+  await expect(page.getByRole("combobox", { name: "Location", exact: true })).toHaveValue(selectedLocation.venue);
+  await page.getByRole("button", { name: "Edit map link", exact: true }).click();
   await page.getByLabel("Map link", { exact: true }).fill("https://maps.google.com/?q=badminton");
+  await page.getByLabel("Court 1 label", { exact: true }).fill("Centre");
   await page.getByLabel("Starts", { exact: true }).fill("2026-11-04T23:00");
   await page.getByLabel("Duration (hours)", { exact: true }).fill("2");
   await expect(page.getByLabel("Ends", { exact: true })).toHaveCount(0);
@@ -78,6 +102,7 @@ test("host saves booking details and copies an editable session message on mobil
   await page.getByRole("button", { name: "Save details", exact: true }).click();
   expect((await saveResponse).ok()).toBe(true);
   await expect(message).toHaveValue(/Venue: Community Badminton Hall/);
+  await expect(message).toHaveValue(/Courts: Centre/);
   await expect(message).toHaveValue(/5 Nov 2026/);
   await expect(message).toHaveValue(/\nWed, 4 Nov 2026, 11:00 pm–Thu, 5 Nov 2026, 1:00 am\n/);
   await expect(message).not.toHaveValue(/When:|Asia\/Kuala_Lumpur|Court 1:|\nDuration:|2 hours/);
@@ -85,6 +110,7 @@ test("host saves booking details and copies an editable session message on mobil
   const snapshot = await (await page.request.get(endpoint)).json();
   expect(snapshot.details).toMatchObject({ startsAt: "2026-11-04T15:00:00.000Z", endsAt: "2026-11-04T17:00:00.000Z", timeZone: "Asia/Kuala_Lumpur", venue: "Community Badminton Hall" });
   expect(snapshot.details.courtBookings).toEqual([oldCourtBooking]);
+  expect(snapshot.courts.find((court: { courtNumber: number }) => court.courtNumber === 1).label).toBe("Centre");
   const original = await message.inputValue();
   await message.fill(original + "\nSee you there!");
   await page.getByRole("button", { name: "Copy message", exact: true }).click();
@@ -110,4 +136,47 @@ test("host saves booking details and copies an editable session message on mobil
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: "test-results/session-share-1100.png", fullPage: true });
   expect(errors).toEqual([]);
+});
+
+test("location lookups preserve other edits and ignore stale search and selection responses", async ({ page }) => {
+  let oldSearch: Route | undefined;
+  let selection: Route | undefined;
+  await page.route("**/api/clubs/*/locations", async route => {
+    const body = route.request().postDataJSON();
+    if (body.query === "Old hall") oldSearch = route;
+    else if (body.placeId) selection = route;
+    else await route.fulfill({ json: suggestions });
+  });
+  await signInAsAdmin(page);
+  await page.goto(`/club/${hostClubId}?tab=setup`);
+  await page.locator(".session-setup summary").filter({ hasText: /^Session details$/ }).click();
+  const location = page.getByRole("combobox", { name: "Location", exact: true });
+  await location.fill("Old hall");
+  await expect.poll(() => !!oldSearch).toBe(true);
+  await location.fill("Community");
+  const option = page.getByRole("option", { name: /Community Badminton Hall/ });
+  await expect(option).toBeVisible();
+  await oldSearch!.fulfill({ json: { suggestions: [{ placeId: "ChIJ-old", name: "Old hall", address: "Wrong result" }] } });
+  await expect(option).toBeVisible();
+  await location.press("ArrowDown");
+  await location.press("Enter");
+  await expect.poll(() => !!selection).toBe(true);
+  await page.getByLabel("Court 1 label", { exact: true }).fill("East");
+  await page.getByLabel("Notes", { exact: true }).fill("Keep these edits");
+  await selection!.fulfill({ json: selectedLocation });
+  await expect(location).toHaveValue(selectedLocation.venue);
+  await expect(page.getByLabel("Court 1 label", { exact: true })).toHaveValue("East");
+  await expect(page.getByRole("textbox", { name: "Notes", exact: true })).toHaveValue("Keep these edits");
+
+  selection = undefined;
+  await location.fill("Another hall");
+  await option.click();
+  await expect.poll(() => !!selection).toBe(true);
+  await location.fill("Manual hall");
+  await selection!.fulfill({ json: selectedLocation });
+  await expect(location).toHaveValue("Manual hall");
+  await expect(page.getByRole("link", { name: "Open in Google Maps" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Add map link", exact: true }).click();
+  await page.getByLabel("Map link", { exact: true }).fill("https://maps.google.com/?q=manual");
+  await expect(location).toHaveValue("Manual hall");
 });

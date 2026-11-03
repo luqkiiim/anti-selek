@@ -39,7 +39,10 @@ export function SessionShareSheet({ session, sessionUrl, initialEditing = false,
       const saved = await api<{ details: SessionDetails }>(`/api/sessions/${encodeURIComponent(session.code)}/details`, "PATCH", { details });
       setDraft(sessionDetailsDraft(saved.details));
       onSaved(saved.details);
-      if (!customised) setMessage(buildSessionShareMessage({ ...session, details: saved.details }, sessionUrl));
+      if (!customised) setMessage(buildSessionShareMessage({ ...session, details: saved.details, courts: session.courts.map(court => {
+        const savedLabel = saved.details.courtLabels?.find(item => item.courtNumber === court.courtNumber);
+        return savedLabel ? { ...court, label: savedLabel.label } : court;
+      }) }, sessionUrl));
       setCopied(false); setEditing(false);
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save details."); }
     finally { saving.current = false; setBusy(false); }
@@ -62,7 +65,7 @@ export function SessionShareSheet({ session, sessionUrl, initialEditing = false,
       {copied ? <Check size={20} aria-hidden="true" /> : <Copy size={20} aria-hidden="true" />}{copied ? "Copied" : "Copy message"}
     </button>}>
     {error && <p className={styles.error} role="alert">{error}</p>}
-    {editing ? <SessionDetailsForm value={draft} onChange={setDraft} collapsible={false} /> : <div className={styles.preview}>
+    {editing ? <SessionDetailsForm value={draft} onChange={setDraft} clubId={session.clubId} courtNumbers={session.courts.map(court => court.courtNumber)} collapsible={false} /> : <div className={styles.preview}>
       <div className={styles.previewHeading}><span><ShareNetwork size={18} aria-hidden="true" />Message</span>
         {canEdit && <button type="button" className="text-button" onClick={() => { setDraft(sessionDetailsDraft(session.details)); setEditing(true); setError(""); }}>Edit details</button>}
       </div>

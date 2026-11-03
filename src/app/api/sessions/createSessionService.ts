@@ -391,6 +391,7 @@ export async function createSessionForUser({
         courts: {
           create: Array.from({ length: input.courtCount }, (_, index) => ({
             courtNumber: index + 1,
+            label: input.details?.courtLabels?.find(court => court.courtNumber === index + 1)?.label ?? null,
             bookingStartAt: input.details?.courtBookings.find(court => court.courtNumber === index + 1)?.startsAt ?? null,
             bookingEndAt: input.details?.courtBookings.find(court => court.courtNumber === index + 1)?.endsAt ?? null,
           })),

@@ -64,7 +64,7 @@ it("saves only logistics, keeps customised text, and resets to the latest saved 
   expect(container.textContent).not.toContain("Individual court times");
   expect(container.querySelectorAll('input[type="datetime-local"]')).toHaveLength(1);
   expect(container.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe("2");
-  const venue = [...container.querySelectorAll("label")].find(label => label.textContent === "Venue")!.querySelector("input")!;
+  const venue = container.querySelector<HTMLInputElement>('[role="combobox"]')!;
   await act(async () => fill(venue, "New hall"));
   await act(async () => button("Save details").click());
   expect(mocks.api).toHaveBeenCalledWith("/api/sessions/ABC/details", "PATCH", { details });

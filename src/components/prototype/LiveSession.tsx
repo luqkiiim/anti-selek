@@ -1016,7 +1016,10 @@ export default function LiveSession({
         images={shareImage.images} fileName={`${s.name}-standings`} onClose={() => setSaveRecapOpen(false)} />}
       {shareMode && s && <SessionShareSheet session={s} initialEditing={shareMode === "details"}
         sessionUrl={new URL(sessionHref(s.code), "https://antiselek.com").href}
-        onSaved={details => resource.update(current => ({ ...current, details }))}
+        onSaved={details => resource.update(current => ({ ...current, details, courts: current.courts.map(court => {
+          const savedLabel = details.courtLabels?.find(item => item.courtNumber === court.courtNumber);
+          return savedLabel ? { ...court, label: savedLabel.label } : court;
+        }) }))}
         onClose={() => setShareMode(null)} />}
       <header className="pc-header">
         <button className="icon-button" aria-label="Back" onClick={onBack}>

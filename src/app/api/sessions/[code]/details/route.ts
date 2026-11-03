@@ -32,14 +32,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
       await tx.session.update({ where: { id: session.id }, data: sessionDetailsData(details) });
       for (const court of session.courts) {
         const booking = details.courtBookings.find(item => item.courtNumber === court.courtNumber);
+        const courtLabel = details.courtLabels?.find(item => item.courtNumber === court.courtNumber);
         await tx.court.update({ where: { id: court.id }, data: {
+          ...(courtLabel ? { label: courtLabel.label } : {}),
           bookingStartAt: booking?.startsAt ? new Date(booking.startsAt) : null,
           bookingEndAt: booking?.endsAt ? new Date(booking.endsAt) : null,
         } });
       }
       return { details: serializeSessionDetails({ ...sessionDetailsData(details), courts: session.courts.map(court => {
         const booking = details.courtBookings.find(item => item.courtNumber === court.courtNumber);
-        return { courtNumber: court.courtNumber, bookingStartAt: booking?.startsAt, bookingEndAt: booking?.endsAt };
+        const courtLabel = details.courtLabels?.find(item => item.courtNumber === court.courtNumber);
+        return { courtNumber: court.courtNumber, label: courtLabel ? courtLabel.label : court.label, bookingStartAt: booking?.startsAt, bookingEndAt: booking?.endsAt };
       }) }) };
     });
     return saved ? sportingJson(saved) : invalidTargetResponse(request, "api:sessions:details");
