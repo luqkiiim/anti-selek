@@ -5,6 +5,7 @@ import { Suspense, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { GoogleSignInButton } from "@/components/GoogleSignIn";
 import { FlashMessage } from "@/components/ui/chrome";
 import { getSafeCallbackUrl, withCallbackUrl } from "@/lib/authCallback";
 import "@fontsource/nunito-sans/400.css";
@@ -13,6 +14,12 @@ import "@fontsource/nunito-sans/700.css";
 import "@fontsource/nunito-sans/800.css";
 import "@fontsource/nunito-sans/900.css";
 import styles from "./signin.module.css";
+
+const googleErrors = new Map([
+  ["password-only", "Use your Anti Selek password to sign in."],
+  ["paused", "New Google signups and connections are paused. Sign in with your password or create an account with email."],
+  ["failed", "Google sign-in couldn’t finish. Try again."],
+]);
 
 function SigninForm() {
   const { status: sessionStatus } = useSession();
@@ -24,6 +31,8 @@ function SigninForm() {
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
   const passwordReset = searchParams.get("passwordReset");
+  const googleError = googleErrors.get(searchParams.get("google") ?? "")
+    || (searchParams.has("error") ? "Sign-in couldn’t finish. Try again." : "");
   const callbackUrl = getSafeCallbackUrl(
     searchParams.get("callbackUrl"),
     ""
@@ -73,7 +82,7 @@ function SigninForm() {
             </h1>
           </header>
 
-          {registered || passwordReset || error ? (
+          {registered || passwordReset || error || googleError ? (
             <div className={styles.messages}>
               {registered ? (
                 <FlashMessage tone="success">
@@ -85,9 +94,9 @@ function SigninForm() {
                   Password updated. Sign in with your new password.
                 </FlashMessage>
               ) : null}
-              {error ? (
+              {error || googleError ? (
                 <FlashMessage id="signin-error" tone="error">
-                  {error}
+                  {error || googleError}
                 </FlashMessage>
               ) : null}
             </div>
@@ -143,6 +152,7 @@ function SigninForm() {
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
+            <GoogleSignInButton callbackUrl={callbackUrl} disabled={loading || sessionStatus === "loading"} />
           </form>
 
           <p className={styles.footer}>

@@ -1,3 +1,4 @@
+import { GOOGLE_ONLY_PASSWORD } from "@/lib/accountPassword";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -85,6 +86,7 @@ describe("reset password route", () => {
         email: "player@example.com",
         name: "Player One",
         isActive: true,
+        passwordHash: "existing-password-hash",
       },
     });
 
@@ -110,6 +112,7 @@ describe("reset password route", () => {
         email: "player@example.com",
         name: "Player One",
         isActive: true,
+        passwordHash: "existing-password-hash",
       },
     });
 
@@ -134,6 +137,7 @@ describe("reset password route", () => {
         email: "player@example.com",
         name: "Player One",
         isActive: true,
+        passwordHash: "existing-password-hash",
       },
     });
 
@@ -175,6 +179,24 @@ describe("reset password route", () => {
     });
   });
 
+  it("does not set a password on a Google-only account even with a valid token", async () => {
+    mocks.passwordResetTokenFindUnique.mockResolvedValue({
+      id: "token-1",
+      expiresAt: new Date("2099-05-19T18:00:00.000Z"),
+      usedAt: null,
+      user: {
+        id: "google-user",
+        email: "google@example.com",
+        isActive: true,
+        passwordHash: GOOGLE_ONLY_PASSWORD,
+      },
+    });
+
+    const response = await postResetPassword({ token: "plain-token", password: "password123" });
+    expect(response.status).toBe(400);
+    expect(mocks.txUserUpdate).not.toHaveBeenCalled();
+  });
+
   it("rejects a token when a concurrent request already consumed it", async () => {
     mocks.passwordResetTokenFindUnique.mockResolvedValue({
       id: "token-1",
@@ -186,6 +208,7 @@ describe("reset password route", () => {
         email: "player@example.com",
         name: "Player One",
         isActive: true,
+        passwordHash: "existing-password-hash",
       },
     });
     mocks.txPasswordResetTokenUpdateMany.mockReset();

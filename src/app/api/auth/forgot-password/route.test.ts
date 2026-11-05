@@ -1,3 +1,4 @@
+import { GOOGLE_ONLY_PASSWORD } from "@/lib/accountPassword";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -99,6 +100,7 @@ describe("forgot password route", () => {
       email: "player@example.com",
       name: "Player One",
       isActive: true,
+      passwordHash: "existing-password-hash",
     });
 
     const response = await postForgotPassword({ email: "player@example.com" });
@@ -131,6 +133,21 @@ describe("forgot password route", () => {
       name: "Player One",
       resetUrl: "https://antiselek.com/reset-password?token=plain-token",
     });
+  });
+
+  it("does not create a password reset for Google-only accounts", async () => {
+    mocks.userFindUnique.mockResolvedValue({
+      id: "google-user",
+      email: "google@example.com",
+      name: "Google User",
+      isActive: true,
+      passwordHash: GOOGLE_ONLY_PASSWORD,
+    });
+
+    const response = await postForgotPassword({ email: "google@example.com" });
+    expect(response.status).toBe(200);
+    expect(mocks.txCreate).not.toHaveBeenCalled();
+    expect(mocks.sendPasswordResetEmail).not.toHaveBeenCalled();
   });
 
   it("returns generic success for unknown emails without creating tokens", async () => {

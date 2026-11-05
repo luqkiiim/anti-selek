@@ -23,6 +23,7 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  googleIdentity                GoogleIdentity?
   players                       Player[]
   clubAccess                    ClubAccess[]
   rosterOwnership               ClubMember[]                 @relation("RosterOwner")
@@ -60,6 +61,12 @@ model User {
   clubDeletions                  ClubDeletionReceipt[]
 
   @@map("Account")
+}
+
+model GoogleIdentity {
+  userId  String @id
+  subject String @unique
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Player {

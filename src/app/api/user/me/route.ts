@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { hasAccountPassword } from "@/lib/accountPassword";
+import { isGoogleEnrollmentOpen, isGoogleSignInConfigured } from "@/lib/googleAuthConfig";
+import { isPasswordOnlyEmail } from "@/lib/googleAccounts";
 import { prisma } from "@/lib/prisma";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { rateLimit } from "@/lib/rateLimit";
@@ -30,7 +33,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ user: { ...serializeAvatarEntity({ name, avatarKey, gender, isActive }), id: session!.user.id, playerId, email: null, isClaimed: false, isQuickAccess: true, quickAccessClubId: clubId, quickAccessCommunityId: clubId, isAdmin: false, canRenameName: false, canChangeGender: false }, players: [], clubProfiles: [] });
     }
     const [user, memberships] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId }, select: accountSelect }),
+      prisma.user.findUnique({ where: { id: userId }, select: { ...accountSelect, passwordHash: true } }),
       prisma.clubMember.findMany({ where: { ownerUserId: userId, retiredByAdmissionEventId: null, player: nonretiredPlayer }, include: { player: true, club: { select: { name: true } } } }),
     ]);
     if (!user?.isActive) return NextResponse.json({ error: "Account not found" }, { status: 404 });
@@ -40,7 +43,14 @@ export async function GET(request: Request) {
       return serializeAvatarEntity({ id: playerId, name, avatarKey, gender, clubMemberships: owned.map(member => ({ clubId: member.clubId, club: member.club })) });
     });
     const clubProfiles = memberships.map(member => serializeAvatarEntity({ memberId: member.id, clubId: member.clubId, clubName: member.club.name, playerId: member.playerId, name: member.player.name, avatarKey: member.player.avatarKey, status: member.status, gender: member.player.gender, ...deriveClubPairingPreferences(member) }));
-    return NextResponse.json({ user: accountPayload(user, !!session?.user.isAdmin), players, clubProfiles });
+    const { passwordHash, ...publicAccount } = user;
+    let googleConnection: "connected" | "available" | undefined;
+    if (isGoogleSignInConfigured() && !isPasswordOnlyEmail(user.email)) {
+      const googleIdentity = await prisma.googleIdentity.findUnique({ where: { userId }, select: { userId: true } });
+      if (googleIdentity) googleConnection = "connected";
+      else if (isGoogleEnrollmentOpen() && hasAccountPassword(passwordHash)) googleConnection = "available";
+    }
+    return NextResponse.json({ user: { ...accountPayload(publicAccount, !!session?.user.isAdmin), googleConnection }, players, clubProfiles });
   } catch (error) { logError("Load account", error); return safeErrorResponse(); }
 }
 export async function PATCH(request: Request) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { hasAccountPassword } from "@/lib/accountPassword";
 import { checkRateLimit, rateLimit } from "@/lib/rateLimit";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -100,10 +101,11 @@ export async function POST(request: Request) {
         email: true,
         name: true,
         isActive: true,
+        passwordHash: true,
       },
     });
 
-    if (!user?.isActive || !user.email) {
+    if (!user?.isActive || !user.email || !hasAccountPassword(user.passwordHash)) {
       logAuditEvent({
         action: "auth.forgot_password",
         actor: {

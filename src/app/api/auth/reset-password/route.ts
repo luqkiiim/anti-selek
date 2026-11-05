@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { hasAccountPassword } from "@/lib/accountPassword";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { isPasswordResetTokenExpired, PASSWORD_RESET_MIN_LENGTH, hashPasswordResetToken } from "@/lib/passwordReset";
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
             email: true,
             name: true,
             isActive: true,
+            passwordHash: true,
           },
         },
       },
@@ -61,7 +63,8 @@ export async function POST(request: Request) {
       resetToken.usedAt !== null ||
       isPasswordResetTokenExpired(resetToken.expiresAt) ||
       !resetToken.user.isActive ||
-      !resetToken.user.email
+      !resetToken.user.email ||
+      !hasAccountPassword(resetToken.user.passwordHash)
     ) {
       return NextResponse.json({ error: INVALID_TOKEN_ERROR }, { status: 400 });
     }

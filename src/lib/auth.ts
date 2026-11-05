@@ -1,11 +1,18 @@
-import NextAuth from "next-auth";
+import NextAuth, { type NextAuthConfig, type User } from "next-auth";
 import { isGlobalClubViewerEmail } from "@/lib/globalClubViewer";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail, normalizeAuthEmail } from "@/lib/globalAdmin";
 import { areRateLimitsDisabled, checkRateLimit } from "@/lib/rateLimit";
-import { normalizeNameLookupKey } from "@/lib/quickAccess";
+import { getSessionAccountId, normalizeNameLookupKey } from "@/lib/quickAccess";
+import { hasAccountPassword } from "@/lib/accountPassword";
+import { getSafeCallbackUrl, withCallbackUrl } from "@/lib/authCallback";
+import { isGoogleEnrollmentOpen, isGoogleSignInConfigured } from "@/lib/googleAuthConfig";
+import { clearGoogleCompletion, consumeGoogleIntent, readGoogleCompletion, writeGoogleCompletion } from "@/lib/googleAuthCookies";
+import { checkGooglePasswordRateLimit, connectGoogleAccount, createGoogleAccount, findGoogleAccount, getVerifiedGoogleIdentity, googleAccountSelect, isPasswordOnlyEmail } from "@/lib/googleAccounts";
 import { logAuditEvent } from "@/lib/serverAudit";
 
 const SIGN_IN_MAX_ATTEMPTS = 10;
@@ -79,7 +86,12 @@ async function findQuickAccessProfile({
   };
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const googleProfileSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  gender: z.enum(["MALE", "FEMALE"]),
+});
+
+const authConfig = {
   providers: [
     Credentials({
       name: "credentials",
@@ -259,7 +271,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             where: { email: normalizedEmail },
           });
 
-          if (!user || !user.passwordHash || !user.isActive) {
+          if (!user || !hasAccountPassword(user.passwordHash) || !user.isActive) {
             logAuditEvent({
               action: "auth.sign_in",
               actor: {
@@ -363,6 +375,47 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       },
     }),
+    ...(isGoogleSignInConfigured() ? [
+      Google({ checks: ["pkce", "state", "nonce"] }),
+      Credentials({
+        id: "google-complete",
+        credentials: { name: {}, gender: {}, password: {} },
+        async authorize(credentials, request) {
+          if (!isGoogleEnrollmentOpen()) return null;
+          const pending = await readGoogleCompletion(request);
+          if (!pending) return null;
+
+          let account;
+          if (pending.link) {
+            const password = getCredentialString(credentials.password);
+            if (!password || !(await checkGooglePasswordRateLimit(request, pending.link.accountId)).allowed) return null;
+            account = await connectGoogleAccount(pending, pending.link, password);
+          } else {
+            const profile = googleProfileSchema.safeParse(credentials);
+            if (!profile.success) return null;
+            account = await createGoogleAccount(pending, profile.data);
+          }
+          if (!account) return null;
+          await clearGoogleCompletion(request);
+
+          logAuditEvent({
+            action: pending.link ? "auth.google_connect" : "auth.google_sign_up",
+            actor: { userId: account.id },
+            outcome: "success",
+            request,
+            target: { id: account.id, type: "account" },
+          });
+          return {
+            id: account.id,
+            name: account.name,
+            email: account.email,
+            sessionVersion: account.sessionVersion,
+            isAdmin: false,
+            googleSubject: pending.subject,
+          };
+        },
+      }),
+    ] : []),
   ],
   callbacks: {
     async jwt({ token, user, trigger, session }) {
@@ -372,6 +425,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id ?? "";
         token.name = user.name;
         token.email = user.email;
+        token.googleSubject = user.googleSubject;
         token.isQuickAccess = !!user.isQuickAccess;
         token.guestPlayerId = user.guestPlayerId ?? null;
         token.quickAccessClubId = user.quickAccessClubId ?? null;
@@ -391,7 +445,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       } else {
         if (typeof token.id !== "string") return null;
         const account = await prisma.user.findUnique({ where: { id: token.id } });
-        if (!account?.isActive || !account.passwordHash || token.sessionVersion !== account.sessionVersion) return null;
+        if (!account?.isActive || token.sessionVersion !== account.sessionVersion) return null;
+        if (token.googleSubject) {
+          if (!isGoogleSignInConfigured() || isPasswordOnlyEmail(account.email)) return null;
+          const identity = await prisma.googleIdentity.findUnique({ where: { userId: account.id }, select: { subject: true } });
+          if (identity?.subject !== token.googleSubject) return null;
+        } else if (!hasAccountPassword(account.passwordHash)) {
+          return null;
+        }
         token.email = account.email;
         token.name = account.name;
         token.isAdmin = isGlobalAdminEmail(account.email);
@@ -426,10 +487,86 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: "/signin",
+    error: "/signin",
   },
   session: {
     strategy: "jwt",
   },
   trustHost: true,
   secret: process.env.AUTH_SECRET,
+} satisfies NextAuthConfig;
+
+export const { handlers, auth, signIn, signOut } = NextAuth((request) => {
+  if (!request || !request.nextUrl.pathname.endsWith("/callback/google")) return authConfig;
+
+  // Auth.js verifies Google and its OAuth checks before signIn. Carry the
+  // resolved local identity to jwt only within this callback request.
+  let localUser: User | undefined;
+  return {
+    ...authConfig,
+    callbacks: {
+      ...authConfig.callbacks,
+      async signIn({ account, profile }) {
+        if (account?.provider !== "google") return false;
+
+        const intent = await consumeGoogleIntent(request);
+        if (!intent) return "/signin?google=failed";
+
+        const identity = getVerifiedGoogleIdentity(account, profile);
+        if (intent.link) {
+          const userId = getSessionAccountId(await auth());
+          const linked = identity && isGoogleEnrollmentOpen() && userId === intent.link.accountId
+            && await connectGoogleAccount(identity, intent.link);
+          if (linked) {
+            logAuditEvent({
+              action: "auth.google_connect",
+              actor: { userId },
+              outcome: "success",
+              request,
+              target: { id: userId, type: "account" },
+            });
+          }
+          return linked ? "/settings?google=connected" : "/settings?google=failed";
+        }
+
+        const callbackUrl = getSafeCallbackUrl(intent.callbackUrl);
+        const signInError = (reason: string) => withCallbackUrl(`/signin?google=${reason}`, callbackUrl);
+        if (!identity) return signInError("failed");
+        if (isPasswordOnlyEmail(identity.email)) return signInError("password-only");
+
+        const existing = await findGoogleAccount(identity.subject);
+        if (existing) {
+          if (!existing.isActive || isPasswordOnlyEmail(existing.email)) return signInError("failed");
+          localUser = {
+            id: existing.id,
+            name: existing.name,
+            email: existing.email,
+            sessionVersion: existing.sessionVersion,
+            isAdmin: false,
+            googleSubject: identity.subject,
+          };
+          return true;
+        }
+
+        if (!isGoogleEnrollmentOpen()) return signInError("paused");
+        const passwordAccount = await prisma.user.findUnique({ where: { email: identity.email }, select: googleAccountSelect });
+        if (passwordAccount && (!passwordAccount.isActive || passwordAccount.googleIdentity || !hasAccountPassword(passwordAccount.passwordHash))) {
+          return signInError("failed");
+        }
+        const link = passwordAccount ? { accountId: passwordAccount.id, sessionVersion: passwordAccount.sessionVersion } : undefined;
+        await writeGoogleCompletion(request, identity, callbackUrl, link);
+        return "/complete-google-profile";
+      },
+      jwt(args) {
+        if (args.account?.provider !== "google") return authConfig.callbacks.jwt(args);
+        if (!localUser) return null;
+        // Keep the Auth.js token's subject and picture independent of the provider.
+        return authConfig.callbacks.jwt({
+          ...args,
+          user: localUser,
+          token: { ...args.token, sub: localUser.id, picture: undefined },
+        });
+      },
+    },
+  };
 });

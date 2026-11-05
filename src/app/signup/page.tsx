@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { UserPlus } from "lucide-react";
 
 import { FlashMessage } from "@/components/ui/chrome";
+import { GoogleSignInButton } from "@/components/GoogleSignIn";
 import { getSafeCallbackUrl, withCallbackUrl } from "@/lib/authCallback";
 import { PlayerGender } from "@/types/enums";
 
@@ -301,6 +302,10 @@ function SignupForm() {
                 {loading ? "Creating account..." : "Create account"}
               </button>
             </form>
+
+            <div className="mt-4 empty:hidden">
+              <GoogleSignInButton callbackUrl={callbackUrl} disabled={loading} />
+            </div>
 
             <details className="signup-profile-help"><summary>Already in a club?</summary><p>After signing up, join your club and request your existing player profile. Admin approval keeps its ratings and results connected to you.</p></details>
             <p className="mt-6 text-sm text-gray-600">

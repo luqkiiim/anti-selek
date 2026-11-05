@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { hasAccountPassword } from "@/lib/accountPassword";
 import { prisma } from "@/lib/prisma";
 import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 import { logAuditEvent } from "@/lib/serverAudit";
@@ -71,7 +72,7 @@ export async function POST(
           select: {
             id: true,
             name: true,
-            ownerUser: { select: { id: true, name: true, email: true } },
+            ownerUser: { select: { id: true, name: true, email: true, passwordHash: true } },
           },
         },
       },
@@ -85,9 +86,9 @@ export async function POST(
       return invalidTargetResponse(request, "api:communities:id:members:userId:password");
     }
 
-    if (!membership.player.ownerUser) {
+    if (!membership.player.ownerUser || !hasAccountPassword(membership.player.ownerUser.passwordHash)) {
       return NextResponse.json(
-        { error: "Only claimed members with an email can have passwords reset" },
+        { error: "Only accounts with an existing password can have passwords reset" },
         { status: 400 }
       );
     }

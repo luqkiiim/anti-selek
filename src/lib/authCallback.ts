@@ -3,6 +3,7 @@ const AUTH_ENTRY_PATHS = [
   "/signup",
   "/forgot-password",
   "/reset-password",
+  "/complete-google-profile",
 ];
 
 const BLOCKED_PATH_PREFIXES = ["/api", "/_next"];

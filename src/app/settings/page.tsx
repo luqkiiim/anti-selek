@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
+import { GoogleConnection } from "@/components/GoogleSignIn";
 import { FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
 import { deleteAccountAvatar, uploadAccountAvatar } from "@/lib/avatarClient";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
@@ -22,6 +23,7 @@ interface CurrentUserSettingsPayload {
     selfNameChangedAt: string | null;
     canRenameName: boolean;
     gender: PlayerGender;
+    googleConnection?: "available" | "connected";
   };
 }
 
@@ -180,7 +182,8 @@ export default function SettingsPage() {
         throw new Error(getResponseError(payload, "Failed to update account name"));
       }
 
-      setUser(payload.user);
+      const updatedUser = payload.user;
+      setUser((current) => ({ ...updatedUser, googleConnection: current?.googleConnection }));
       setDraftName(payload.user.name);
       setSuccessMessage("Account name updated.");
 
@@ -238,7 +241,8 @@ export default function SettingsPage() {
         throw new Error(getResponseError(payload, "Failed to update gender"));
       }
 
-      setUser(payload.user);
+      const updatedUser = payload.user;
+      setUser((current) => ({ ...updatedUser, googleConnection: current?.googleConnection }));
       setSuccessMessage("Account gender updated.");
       router.refresh();
     } catch (error) {
@@ -451,6 +455,12 @@ export default function SettingsPage() {
                 </button>
               </form>
             </SectionCard>
+
+            {user.googleConnection ? (
+              <SectionCard title="Sign-in methods">
+                <GoogleConnection connected={user.googleConnection === "connected"} />
+              </SectionCard>
+            ) : null}
 
             <SectionCard
               eyebrow="Avatar"

@@ -2,6 +2,7 @@ import "server-only";
 import type { Session } from "next-auth";
 import { normalizeAuthEmail } from "@/lib/globalAdmin";
 import { prisma } from "@/lib/prisma";
+import { hasAccountPassword } from "@/lib/accountPassword";
 
 /** Read permission only; never use this capability to authorize mutations. */
 export function isGlobalClubViewerEmail(email?: string | null): boolean {
@@ -24,7 +25,7 @@ export async function canBrowseAllClubs(session: Session | null | undefined): Pr
     where: { id: session.user.id },
     select: { email: true, isActive: true, passwordHash: true },
   });
-  return !!account?.isActive && !!account.passwordHash && isGlobalClubViewerEmail(account.email);
+  return !!account?.isActive && hasAccountPassword(account.passwordHash) && isGlobalClubViewerEmail(account.email);
 }
 
 export async function canReadClubGlobally(session: Session | null | undefined, clubId: string): Promise<boolean> {

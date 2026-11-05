@@ -47,6 +47,12 @@ DATABASE_URL="file:C:/path/to/project/prisma/dev.db"
 # Auth
 AUTH_SECRET="replace-with-a-strong-secret"
 
+# Optional Google sign-in (server only)
+AUTH_GOOGLE_ID=""
+AUTH_GOOGLE_SECRET=""
+# Set to "paused" to stop new Google signups and connections.
+# AUTH_GOOGLE_ENROLLMENT="paused"
+
 # Optional platform admin allowlist (comma-separated emails)
 ADMIN_EMAILS="you@example.com"
 
@@ -86,6 +92,23 @@ Runtime database selection:
 - Prisma schema and `prisma migrate dev` still use the SQLite datasource from `DATABASE_URL`
 - Profile photos use Vercel Blob and require `BLOB_READ_WRITE_TOKEN`
 - Password reset emails use Resend and require `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `APP_BASE_URL`
+
+### Google sign-in
+
+Create a web OAuth client in [Google Auth Platform](https://console.cloud.google.com/auth/clients)
+with the basic `openid`, `email`, and `profile` scopes. Register each exact callback
+URL with its own environment's client, such as
+`http://localhost:3000/api/auth/callback/google` for local development,
+`https://<stable-preview-host>/api/auth/callback/google` for isolated Preview, and
+`https://antiselek.com/api/auth/callback/google` for Production. Scope the Google
+client ID and secret to the matching Vercel environment.
+
+Apply the additive Google sign-in migration before setting the Google credentials
+in that environment. With the credentials unset, password sign-in works before
+the migration. Use the [database release policy](docs/database-release-policy.md)
+for Production. The build never applies migrations. After Google accounts have been created, use
+a Google-capable deployment for app rollback so those users can still sign in.
+Pausing enrollment keeps existing Google connections usable.
 
 ## Local Setup
 

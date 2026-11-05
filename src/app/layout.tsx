@@ -5,6 +5,7 @@ import "@fontsource/nunito-sans/700.css";
 import "@fontsource/nunito-sans/800.css";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
+import { isGoogleSignInConfigured } from "@/lib/googleAuthConfig";
 
 export const metadata: Metadata = {
   title: "Anti-Selek",
@@ -32,7 +33,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
         <div className="app-root-shell">
-          <Providers>{children}</Providers>
+          <Providers googleSignIn={isGoogleSignInConfigured()}>{children}</Providers>
         </div>
       </body>
     </html>

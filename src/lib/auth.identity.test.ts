@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next-auth", () => ({
   default: (config: unknown) => {
-    mocks.config = config;
+    mocks.config = typeof config === "function" ? config() : config;
     return { handlers: {}, auth: vi.fn(), signIn: vi.fn(), signOut: vi.fn() };
   },
 }));

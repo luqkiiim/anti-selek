@@ -8,7 +8,11 @@ const { GET: nextAuthGET, POST: nextAuthPOST } = handlers;
 
 export async function GET(...args: Parameters<typeof nextAuthGET>) {
   try {
-    const rateLimitResponse = await rateLimit(args[0], "api:auth:nextauth:get", { limit: 10, windowMs: 60_000 });
+    const request = args[0];
+    const scope = request.nextUrl.pathname === "/api/auth/callback/google"
+      ? "api:auth:google:callback"
+      : "api:auth:nextauth:get";
+    const rateLimitResponse = await rateLimit(request, scope, { limit: 10, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
 
     return await nextAuthGET(...args);

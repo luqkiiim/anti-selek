@@ -17,6 +17,7 @@ declare module "next-auth" {
 
   interface User {
     sessionVersion?: number;
+    googleSubject?: string;
     guestPlayerId?: string | null;
     isAdmin: boolean;
     canBrowseAllClubs?: boolean;
@@ -29,6 +30,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     sessionVersion?: number;
+    googleSubject?: string;
     identityVersion?: number;
     guestPlayerId?: string | null;
     id: string;

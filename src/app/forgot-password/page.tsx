@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
                 Reset your account password by email.
               </h1>
               <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Claimed accounts use one global password across every club.
+                If you signed up with Google, use Google to sign in.
                 Enter your email and we&apos;ll send a recovery link if the
                 account exists.
               </p>
