@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        // Google only accepts the callback on the public production domain.
+        source: "/:path*",
+        has: [{ type: "host", value: "anti-selek\\.vercel\\.app" }],
+        destination: "https://antiselek.com/:path*",
+        permanent: false,
+      },
+    ];
+  },
   images: {
     qualities: [75, 90],
   },
