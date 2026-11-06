@@ -1,15 +1,13 @@
 "use client";
-import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import Club from "@/components/prototype/Club";
+import Club from "@/components/product/Club";
 import { AppShell, useAppLocation } from "./AppShell";
-import { backInApp, clubHref, navigateApp } from "@/lib/appNavigation";
+import { backInApp, navigateApp } from "@/lib/appNavigation";
 import { withCallbackUrl } from "@/lib/authCallback";
 import { useClubIdentity } from "./ClubDataProvider";
-const LegacyClubPage = dynamic(() => import("@/features/club-page/ClubPage"));
-const LegacyClubAdminPage = dynamic(() => import("@/features/club-admin-page/ClubAdminPage"));
+import { normalizeProductHref } from "@/lib/productNavigation";
 
 export default function ClubRoute({ admin = false }: { admin?: boolean }) {
   const { id } = useParams<{ id: string }>();
@@ -17,14 +15,13 @@ export default function ClubRoute({ admin = false }: { admin?: boolean }) {
   const { data: auth, status } = useSession();
   const identity = useClubIdentity(id);
   const href = useAppLocation();
-  const params = new URL(href, "https://anti-selek.local").searchParams;
+  const normalizedHref = normalizeProductHref(href);
+  useEffect(() => { if (normalizedHref !== href) navigateApp(router, normalizedHref, true); }, [href, normalizedHref, router]);
+  const params = new URL(normalizedHref, "https://anti-selek.local").searchParams;
   useEffect(() => {
     if (status === "unauthenticated") router.replace(withCallbackUrl("/signin", href));
   }, [status, router, href]);
   if (status === "unauthenticated" || !auth?.user?.id) return <AppShell><div className="pc-app"><p role="status" className="route-loading">Loading club…</p></div></AppShell>;
-  if (!params.getAll("view").includes("global") && (params.get("tools") === "advanced" || params.get("tools") === "practice")) {
-    return <AppShell specialist><a className="specialist-back" href={clubHref(id)}>Back to club</a>{admin ? <LegacyClubAdminPage /> : <LegacyClubPage />}</AppShell>;
-  }
   return <AppShell><Club
     key={`${id}:${params.getAll("view").includes("global")}`}
     club={{ id, name: identity?.name ?? "", avatarUrl: identity?.avatarUrl, membersCount: 0, sessionsCount: 0, isPasswordProtected: false }}

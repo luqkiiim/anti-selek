@@ -1,84 +1,12 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildAdminOnboardingProgress,
-  getHostSessionOnboardingOverride,
-} from "./adminOnboarding";
-
-describe("getHostSessionOnboardingOverride", () => {
-  it("points to the tournament name before the create button can be used", () => {
-    expect(
-      getHostSessionOnboardingOverride({
-        newSessionName: "",
-        selectedPlayerCount: 0,
-        guestCount: 0,
-      })
-    ).toMatchObject({
-      stepId: "host-session",
-      targetId: "admin-onboarding-session-name",
-      actionLabel: "Name tournament",
-    });
-  });
-
-  it("points to player selection after a tournament name exists", () => {
-    expect(
-      getHostSessionOnboardingOverride({
-        newSessionName: "Tutorial Test",
-        selectedPlayerCount: 0,
-        guestCount: 0,
-      })
-    ).toMatchObject({
-      stepId: "host-session",
-      targetId: "admin-onboarding-host-players",
-      actionLabel: "Choose players",
-    });
-  });
-
-  it("points to tournament creation only after setup has a name and roster", () => {
-    expect(
-      getHostSessionOnboardingOverride({
-        newSessionName: "Tutorial Test",
-        selectedPlayerCount: 4,
-        guestCount: 0,
-      })
-    ).toMatchObject({
-      stepId: "host-session",
-      targetId: "admin-onboarding-create-session",
-      actionLabel: "Create practice tournament",
-    });
-  });
-});
-
-describe("buildAdminOnboardingProgress", () => {
-  it("uses specific action labels for tutorial destinations", () => {
-    const progress = buildAdminOnboardingProgress({
-      completedStepIds: [],
-      dismissedAt: null,
-      primaryClubId: "community-1",
-      primarySessionCode: "SESSION1",
-      hasAdminClub: true,
-      hasScoredMatch: false,
-      hasCompletedSession: false,
-    });
-
-    expect(progress.steps.map((step) => step.actionLabel)).toEqual([
-      "Open tutorial playground",
-      "Open players",
-      "Open host setup",
-      "Open live tournament",
-      "Open scoring",
-      "Open tournament settings",
-      "Reset playground",
-    ]);
-    expect(progress.steps.find((step) => step.id === "end-session")?.href)
-      .toBe("/session/SESSION1#settings");
-    expect(progress.steps.map((step) => step.title)).toEqual([
-      "Open playground",
-      "Review practice players",
-      "Create a practice tournament",
-      "Explore a live practice tournament",
-      "Score a practice match",
-      "End the practice tournament",
-      "Reset playground",
-    ]);
+import { buildAdminOnboardingProgress } from "./adminOnboarding";
+describe("current practice destinations", () => {
+  it("retains persisted step identifiers and progress with current destinations", () => {
+    const progress = buildAdminOnboardingProgress({ completedStepIds: ["players", "host-session"], dismissedAt: "2026-01-01", primaryClubId: "club-1", primarySessionCode: "SESSION1", hasAdminClub: true, hasScoredMatch: true, hasCompletedSession: false });
+    expect(progress.dismissed).toBe(true);
+    expect(progress.completedStepIds).toEqual(["admin-community", "players", "host-session", "score-match"]);
+    expect(progress.steps.find(step => step.id === "host-session")?.href).toBe("/club/club-1?tab=setup");
+    expect(progress.steps.find(step => step.id === "end-session")?.href).toBe("/session/SESSION1?tab=courts");
+    expect(progress.steps.find(step => step.id === "reset-cleanup")?.href).toBe("/club/club-1/admin?tab=settings");
   });
 });

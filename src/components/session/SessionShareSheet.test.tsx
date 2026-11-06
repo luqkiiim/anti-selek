@@ -5,8 +5,8 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { emptySessionDetails } from "@/lib/sessionDetails";
 import type { SessionData } from "./sessionTypes";
 const mocks = vi.hoisted(() => ({ api: vi.fn(), copy: vi.fn() }));
-vi.mock("@/components/prototype/api", () => ({ api: mocks.api }));
-vi.mock("@/components/prototype/Primitives", () => ({ Sheet: ({ title, children, footer }: { title: string; children: ReactNode; footer: ReactNode }) => <div role="dialog" aria-label={title}>{children}{footer}</div> }));
+vi.mock("@/components/product/api", () => ({ api: mocks.api }));
+vi.mock("@/components/product/Primitives", () => ({ Sheet: ({ title, children, footer }: { title: string; children: ReactNode; footer: ReactNode }) => <div role="dialog" aria-label={title}>{children}{footer}</div> }));
 import { SessionShareSheet } from "./SessionShareSheet";
 
 let root: Root;

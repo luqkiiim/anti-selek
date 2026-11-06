@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
 import { profileConnectionMatches, type ProfileConnectionSelection } from "@/lib/profileConnectionHistory";
-import { Sheet } from "@/components/prototype/Primitives";
+import { Sheet } from "@/components/product/Primitives";
 import styles from "./ProfileMatchList.module.css";
 
 type Props = {

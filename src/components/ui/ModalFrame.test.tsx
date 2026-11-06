@@ -4,7 +4,6 @@ import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ModalFrame } from "./ModalFrame";
-import { PlayerPickerSheet } from "./PlayerPickerSheet";
 
 function dispatchKey(key: string, shiftKey = false) {
   document.dispatchEvent(
@@ -122,8 +121,7 @@ describe("dialog focus management", () => {
               <button type="button" onClick={() => setChildOpen(true)}>
                 Open child
               </button>
-              <PlayerPickerSheet
-                open={childOpen}
+              {childOpen && <ModalFrame
                 title="Child"
                 onClose={() => {
                   childClose();
@@ -131,7 +129,7 @@ describe("dialog focus management", () => {
                 }}
               >
                 <button type="button">Child action</button>
-              </PlayerPickerSheet>
+              </ModalFrame>}
             </ModalFrame>
           ) : null}
         </>

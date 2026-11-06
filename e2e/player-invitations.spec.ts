@@ -51,7 +51,7 @@ function captureInvitationAuditApiFailures(page: Page, pathPart: string, include
 async function assertClaim(page: Page, invited: Awaited<ReturnType<typeof fixture>>) {
   await page.getByRole("button", { name: "Claim my profile" }).click();
   await expect(page).toHaveURL(/\/$/);
-  const profile = page.locator(".prototype-root .player-profile");
+  const profile = page.locator(".product-root .player-profile");
   await expect(profile).toBeVisible();
   await expect(profile.getByRole("button", { name: "Account settings", exact: true })).toBeVisible();
   await expect(profile.locator(".profile-activity-totals")).toHaveText("1 sessions · 1 matches");

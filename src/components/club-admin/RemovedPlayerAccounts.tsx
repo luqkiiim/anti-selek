@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { api, useAction, useResource } from "@/components/prototype/api";
+import { api, useAction, useResource } from "@/components/product/api";
 export function RemovedPlayerAccounts({ clubId, onChanged }: { clubId: string; onChanged: () => Promise<unknown> }) {
   const [open, setOpen] = useState(false);
   const endpoint = `/api/clubs/${encodeURIComponent(clubId)}`;

@@ -117,7 +117,7 @@ for (const layout of ["desktop", "mobile"] as const) {
       expect((await before.json()).user.avatarUrl).toBeNull();
       await page.getByRole("button", { name: "Claim my profile", exact: true }).click();
       await expect(page).toHaveURL(/\/$/);
-      await expect(page.locator(".prototype-root .player-profile")).toBeVisible();
+      await expect(page.locator(".product-root .player-profile")).toBeVisible();
       await assertImage(page.getByRole("button", { name: "Account settings", exact: true }).locator("img"));
       await testInfo.attach(`adopted-invitation-${layout}`, { body: await page.screenshot(), contentType: "image/png" });
       await page.goto("/");

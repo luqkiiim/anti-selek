@@ -1,4 +1,4 @@
-import { ApiError } from "@/components/prototype/api";
+import { ApiError } from "@/components/product/api";
 
 export type ClubIdentity = { id: string; name: string; avatarUrl?: string | null };
 export const CLUB_CACHE_MS = 60_000;

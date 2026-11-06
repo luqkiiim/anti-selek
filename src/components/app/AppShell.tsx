@@ -7,9 +7,9 @@ import "@fontsource/nunito-sans/600.css";
 import "@fontsource/nunito-sans/700.css";
 import "@fontsource/nunito-sans/800.css";
 import "@fontsource/nunito-sans/900.css";
-import "@/components/prototype/prototype.css";
-import "@/components/prototype/browser.css";
-import "@/components/prototype/tablet.css";
+import "@/components/product/product.css";
+import "@/components/product/browser.css";
+import "@/components/product/tablet.css";
 import "./refinement.css";
 
 function subscribe(listener: () => void) {
@@ -20,12 +20,12 @@ function subscribe(listener: () => void) {
 export function useAppLocation() {
   return useSyncExternalStore(subscribe, currentAppHref, () => "/");
 }
-export function AppShell({ children, specialist = false, ready = false }: { children: ReactNode; specialist?: boolean; ready?: boolean }) {
+export function AppShell({ children, ready = false }: { children: ReactNode; ready?: boolean }) {
   const href = useAppLocation();
   const starting = useAppStarting();
-  useAppReady(ready || specialist);
+  useAppReady(ready);
   useEffect(() => { registerAppDestination(); }, [href]);
-  return <div className={specialist ? "specialist-app" : "prototype-root"}>
+  return <div className="product-root">
     <div className="app-launch-content" inert={starting} aria-hidden={starting || undefined}>{children}</div>
     {starting && <AppLoading />}
   </div>;

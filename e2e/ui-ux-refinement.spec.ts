@@ -40,13 +40,13 @@ test("club entry and direct session links use the same screen and preserve sessi
   await page.goto("/club/community-score-e2e?tab=sessions");
   await page.getByRole("button", { name: "Continue hosting", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/session/${scoreSessionCode}\\?tab=courts`));
-  await expect(page.locator(".prototype-root .court-card")).toBeVisible();
+  await expect(page.locator(".product-root .court-card")).toBeVisible();
   await expect(page.getByLabel("Team 1 score")).toBeVisible();
   await sessionNav(page).getByRole("button", { name: "Standings", exact: true }).click();
   await page.reload();
   await expect(sessionNav(page).getByRole("button", { name: "Standings", exact: true })).toHaveAttribute("aria-current", "page");
   await page.goto(`/session/${scoreSessionCode}`);
-  await expect(page.locator(".prototype-root .court-card")).toBeVisible();
+  await expect(page.locator(".product-root .court-card")).toBeVisible();
   await expect(page.getByLabel("Team 1 score")).toBeVisible();
   await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("button", { name: "Match history", exact: true }).click();
@@ -198,7 +198,7 @@ test('staff retains session controls and has no club administration access', asy
   await expect(page.getByRole('button', { name: 'Delete session', exact: true })).toHaveCount(0);
   expect((await page.request.patch(`/api/clubs/${hostClubId}/members/user-host-2-e2e`, { data: { elo: 1200 } })).status()).toBe(403);
   await page.goto(`/club/${hostClubId}/admin`);
-  await expect(page.locator('.prototype-root [role=alert]')).toHaveText('You do not have access to manage this club.');
+  await expect(page.locator('.product-root [role=alert]')).toHaveText('You do not have access to manage this club.');
 });
 
 test('a player joins using the exact owned club profile', async ({ page }) => {
@@ -259,7 +259,7 @@ test('cold links retain authentication callbacks and legacy destination aliases'
 test('incomplete global links remain read-only even for a host account', async ({ page }) => {
   await login(page);
   await page.goto(`/session/${scoreSessionCode}?view=global`);
-  await expect(page.locator('.prototype-root [role=alert]')).toHaveText('This read-only session link needs a valid club.');
+  await expect(page.locator('.product-root [role=alert]')).toHaveText('This read-only session link needs a valid club.');
   await expect(page.getByRole('button', { name: 'More options' })).toHaveCount(0);
 });
 

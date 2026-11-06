@@ -1,0 +1,252 @@
+/* Keep dashboard groups in the original phone reading order. */
+.product-root .club-dashboard-grid,
+.product-root .club-dashboard-intro,
+.product-root .club-dashboard-session-cards,
+.product-root .club-dashboard-progress {
+  display: contents;
+}
+
+@media (min-width: 768px) {
+  .product-root .pc-app {
+    max-width: 1200px;
+  }
+
+  .product-root .pc-header {
+    padding-inline: 30px;
+  }
+
+  .product-root .pc-content {
+    width: min(100%, 1120px);
+    margin-inline: auto;
+    padding-inline: 32px;
+    gap: 20px;
+  }
+
+  .product-root .bottom-nav {
+    left: 50%;
+    right: auto;
+    width: min(100%, 760px);
+    transform: translateX(-50%);
+    border-inline: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    padding-inline: 18px;
+  }
+
+  .product-root .local-tabs {
+    left: 50%;
+    right: auto;
+    width: min(calc(100% - 64px), 1056px);
+    transform: translateX(-50%);
+  }
+
+  /* Club chooser: intro and actions span the grid; choices fill in order. */
+  .product-root .pc-content.chooser {
+    width: min(100%, 1050px);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    align-items: stretch;
+  }
+
+  .product-root .chooser-intro,
+  .product-root .pc-content.chooser > .product-error,
+  .product-root .pc-content.chooser > [role="status"],
+  .product-root .chooser-actions {
+    grid-column: 1 / -1;
+  }
+
+  .product-root .club-choice {
+    min-height: 132px;
+  }
+
+  /* Order the dashboard by related panels rather than fixed left/right stacks. */
+  .product-root .club-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    column-gap: 20px;
+    row-gap: 20px;
+  }
+
+  .product-root .club-dashboard-intro,
+  .product-root .club-dashboard-session-cards,
+  .product-root .club-dashboard-progress,
+  .product-root .club-dashboard-grid > .club-rules {
+    grid-column: 1 / -1;
+  }
+
+  .product-root .club-dashboard-intro {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+    align-items: center;
+    gap: 24px;
+  }
+
+  .product-root .club-dashboard-session-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .product-root .club-dashboard-session-cards:empty {
+    display: none;
+  }
+
+  .product-root .club-dashboard-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .product-root .club-dashboard-grid > * {
+    min-width: 0;
+  }
+
+  .product-root .club-dashboard-session-cards > *,
+  .product-root .club-dashboard-grid > .club-highlights,
+  .product-root .club-dashboard-grid > .monthly-climbers-section,
+  .product-root .club-dashboard-grid > .club-dashboard-progress,
+  .product-root .club-dashboard-grid > .club-rules {
+    min-width: 0;
+    margin-block: 0;
+  }
+
+  .product-root .club-dashboard-progress .section-heading {
+    margin: 0;
+  }
+
+  .product-root .club-dashboard-grid > .club-highlights .section-heading,
+  .product-root .club-dashboard-grid > .monthly-climbers-section .section-heading {
+    margin-top: 0;
+  }
+
+  .product-root .club-dashboard-grid > .club-highlights,
+  .product-root .club-dashboard-grid > .monthly-climbers-section,
+  .product-root .club-dashboard-grid > .chemistry-section,
+  .product-root .club-dashboard-grid > .rivalries-section {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-height: 0;
+  }
+
+  .product-root .club-dashboard-grid > .club-highlights,
+  .product-root .club-dashboard-grid > .chemistry-section,
+  .product-root .club-dashboard-grid > .rivalries-section {
+    margin-block: 0;
+  }
+
+  .product-root .club-dashboard-grid > .club-highlights .highlights-list,
+  .product-root .club-dashboard-grid > .club-highlights .highlights-empty,
+  .product-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list,
+  .product-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-empty,
+  .product-root .club-dashboard-grid > .chemistry-section .chemistry-card,
+  .product-root .club-dashboard-grid > .chemistry-section .chemistry-empty,
+  .product-root .club-dashboard-grid > .rivalries-section .rivalry-empty,
+  .product-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card {
+    flex: 1;
+  }
+
+  .product-root .club-dashboard-grid > .club-highlights .highlights-list,
+  .product-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list,
+  .product-root .club-dashboard-grid > .chemistry-section .chemistry-card,
+  .product-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .product-root .club-dashboard-grid > .club-highlights .highlights-list > li,
+  .product-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list > li,
+  .product-root .club-dashboard-grid > .chemistry-section .chemistry-card > li,
+  .product-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card > li {
+    flex: 1;
+  }
+
+  .product-root .pc-content--sessions > .past-sessions {
+    grid-column: 1 / -1;
+  }
+
+  .product-root .pc-content--sessions .past-sessions-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Only court cards take a grid cell; session controls and alerts span the row. */
+  .product-root .pc-content:has(> .court-card) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    align-items: start;
+    gap: 16px;
+  }
+
+  .product-root .pc-content:has(> .court-card) > :not(.court-card) {
+    grid-column: 1 / -1;
+  }
+
+  .product-root .court-card {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .product-root .court-card > .primary {
+    margin-block-start: auto;
+  }
+
+  .product-root .rankings-page {
+    width: min(100%, 880px);
+    margin-inline: auto;
+  }
+
+  .product-root .player-profile {
+    width: min(100%, 900px);
+    margin-inline: auto;
+  }
+
+  .product-root .manage-club .pc-content {
+    width: min(100%, 1080px);
+  }
+
+  .product-root .session-setup {
+    width: min(100%, 900px);
+    margin-inline: auto;
+  }
+
+  /* Dialogs and bottom sheets stay centered in the usable landscape height. */
+  .product-root .member-profile-dialog {
+    width: min(calc(100% - 64px), 1080px);
+    max-width: 1080px;
+    height: min(92dvh, 900px);
+    max-height: 92dvh;
+    border-radius: 22px;
+    overflow: hidden;
+  }
+
+  .product-root .member-profile-dialog .pc-app {
+    max-width: none;
+  }
+
+  .product-sheet .sheet-panel {
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    width: min(calc(100% - 64px), 720px);
+    max-height: min(84dvh, 760px);
+    border-radius: 24px;
+    padding-bottom: 20px;
+  }
+}
+
+/* iPad court cards use twice the phone-sized player labels and avatars. */
+@media (min-width: 700px) and (max-width: 1376px) and (min-height: 600px) and (any-pointer: coarse) {
+  .product-root .court-card .match-player .avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 28px;
+  }
+
+  .product-root .court-card .match-player strong {
+    font-size: 34px;
+  }
+}

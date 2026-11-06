@@ -9,16 +9,16 @@ const player = {
   status: "CORE", preferredPool: "B", elo: 1100, wins: 3, losses: 2,
   matchesPlayed: 5, isClaimed: false, isOwner: false, role: "MEMBER",
 };
-async function mockAdmin(page: Page, claimed = false, advanced = false) {
+async function mockAdmin(page: Page, claimed = false, advanced = false, globalAdmin = false) {
   const state = { players: [{ ...player, isClaimed: claimed, ownerUserId: claimed ? "other-account" : null }], failRefresh: false, unknownWrite: false, ratingConflict: false, rating: player.elo, writes: [] as Array<{ path: string; body: Record<string, unknown> }>, unrelatedReads: [] as string[] };
   await page.route("**/api/**", async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-    if (path === "/api/auth/session") return json({ user: { id: "admin-account", name: "Admin", email: "admin@example.test", isAdmin: false }, expires: "2099-01-01T00:00:00.000Z" });
+    if (path === "/api/auth/session") return json({ user: { id: "admin-account", name: "Admin", email: "admin@example.test", isAdmin: globalAdmin }, expires: "2099-01-01T00:00:00.000Z" });
     if (path === `/api/clubs/${clubId}`) {
       if (state.failRefresh) return json({ error: "Snapshot unavailable" }, 503);
-      return json({ viewer: { id: "admin-account", playerId: null, name: "Admin", email: "admin@example.test", elo: 1000, gender: "MALE", partnerPreference: "OPEN" }, club: { id: clubId, name: "Recovery Club", role: "ADMIN", viewerIsOwner: true, isPasswordProtected: false, isTutorial: false, membersCount: state.players.length, sessionsCount: 0 }, clubMembers: state.players, sessions: [], claimRequests: [] });
+      return json({ viewer: { id: "admin-account", playerId: null, name: "Admin", isAdmin: globalAdmin, email: "admin@example.test", elo: 1000, gender: "MALE", partnerPreference: "OPEN" }, club: { id: clubId, name: "Recovery Club", role: "ADMIN", viewerIsOwner: true, isPasswordProtected: false, isTutorial: false, membersCount: state.players.length, sessionsCount: 0 }, clubMembers: state.players, sessions: [], claimRequests: [] });
     }
     if (path === `/api/clubs/${clubId}/join-requests`) return json({ allowJoinRequests: true, requests: [], candidates: [], warnings: [{ code: "HISTORY_UNAVAILABLE", message: "Some Player history is unavailable." }] });
     if (path === `/api/clubs/${clubId}/members` && request.method() === "GET") return json(state.players);
@@ -47,6 +47,7 @@ async function mockAdmin(page: Page, claimed = false, advanced = false) {
       state.failRefresh = true;
       return json(state.players[0]);
     }
+    if (path.endsWith("/password") && request.method() === "POST") { state.writes.push({ path, body: { password: "[redacted]" } }); return json({ success: true }); }
     if (path.endsWith("/invitations")) return json({ invitation: null });
     if (path.includes("/stats") || path.endsWith("/achievements")) state.unrelatedReads.push(path);
     return json({});
@@ -77,19 +78,20 @@ test("confirmed creation closes before refresh failure and a refresh retry never
   expect(state.unrelatedReads).toEqual([]);
 });
 
-test("another account's member can save club membership without sending personal pairing fields", async ({ page }) => {
+test("another account's member has club pairing preferences without personal identity edits", async ({ page }) => {
   const state = await mockAdmin(page, true);
   await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
   await expect(editor).toBeVisible();
-  await expect(editor.getByLabel("Mixed-pairing level", { exact: true })).toHaveCount(0);
+  await editor.getByText("Advanced pairing", { exact: true }).click();
+  await editor.getByLabel("Mixed-pairing level", { exact: true }).selectOption("LOWER");
   await expect(editor.getByLabel("Rating", { exact: true })).toHaveCount(0);
   await editor.getByRole("combobox", { name: /^Membership/ }).selectOption("OCCASIONAL");
   await editor.getByLabel("Preferred game group", { exact: true }).selectOption("A");
   await editor.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(editor).not.toBeVisible();
   await expect(page.getByText("Saved. Couldn’t refresh the latest details.", { exact: true })).toBeVisible();
-  expect(state.writes).toEqual([{ path: `/api/clubs/${clubId}/members/local-player`, body: { status: "OCCASIONAL", preferredPool: "A" } }]);
+  expect(state.writes).toEqual([{ path: `/api/clubs/${clubId}/members/local-player`, body: { status: "OCCASIONAL", preferredPool: "A", mixedSideOverride: "LOWER", partnerPreference: "OPEN" } }]);
 });
 
 test("a lost write response preserves the editor and offers a read-only recovery", async ({ page }) => {
@@ -124,31 +126,23 @@ test("promotion confirms the new role and its sheet stays closable after refresh
   expect(state.writes).toEqual([{ path: `/api/clubs/${clubId}/members/local-player`, body: { role: "ADMIN" } }]);
 });
 
-test("advanced promotion closes its confirmation and preserves the committed role when refresh fails", async ({ page }) => {
-  const state = await mockAdmin(page, true, true);
+test("old admin bookmarks replace the URL and stay in the current interface", async ({ page }) => {
+  await mockAdmin(page, true, true);
+  await expect(page).toHaveURL(`/club/${clubId}/admin?tab=players`);
+  await expect(page.locator(".product-root")).toBeVisible();
+  await expect(page.locator(".specialist-app")).toHaveCount(0);
   await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
-  await page.getByRole("button", { name: "Promote to admin", exact: true }).click();
-  const confirmation = page.getByRole("dialog", { name: "Promote Alex Local?", exact: true });
-  await confirmation.getByRole("button", { name: "Promote to Admin", exact: true }).click();
-  await expect(confirmation).not.toBeVisible();
-  await expect(page.getByText("Saved. Couldn’t refresh the latest details.", { exact: true })).toBeVisible();
-  expect(state.writes).toEqual([{ path: `/api/clubs/${clubId}/members/local-player`, body: { role: "ADMIN" } }]);
-  const editor = page.getByRole("dialog", { name: "Alex Local", exact: true });
-  await expect(editor.getByLabel("Close", { exact: true })).toBeEnabled();
-  await editor.getByLabel("Close", { exact: true }).click();
-  await expect(editor).not.toBeVisible();
-  state.failRefresh = false;
-  await page.getByRole("button", { name: "Refresh details", exact: true }).click();
-  await expect(page.getByText("Saved. Couldn’t refresh the latest details.", { exact: true })).not.toBeVisible();
-  expect(state.writes).toHaveLength(1);
+  await expect(page.getByRole("dialog", { name: "Edit Alex Local", exact: true }).getByText("Advanced pairing", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Emergency password reset", exact: true })).toHaveCount(0);
 });
 
-test("advanced creation closes after commit and keeps the new player during a failed refresh", async ({ page }) => {
+test("old creation bookmark uses the current editor after commit and keeps the new player during a failed refresh", async ({ page }) => {
   const state = await mockAdmin(page, false, true);
   await page.getByRole("button", { name: "Add player", exact: true }).click();
-  const editor = page.getByRole("dialog", { name: "Create player profile", exact: true });
-  await editor.getByLabel("Player name", { exact: true }).fill("Advanced Player");
-  await editor.getByRole("button", { name: "Create profile", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Add player", exact: true });
+  await editor.getByLabel("Name", { exact: true }).fill("Advanced Player");
+  await editor.getByLabel("Gender", { exact: true }).selectOption("MALE");
+  await editor.getByRole("button", { name: "Add player", exact: true }).click();
   await expect(editor).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Edit Advanced Player", exact: true })).toBeVisible();
   await expect(page.getByText("Saved. Couldn’t refresh the latest details.", { exact: true })).toBeVisible();
@@ -165,7 +159,6 @@ test("rating conflict keeps the draft and reopening uses the latest expected rat
   state.ratingConflict = true;
   await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
-  await editor.getByText("Rating history", { exact: true }).click();
   await editor.getByRole("button", { name: "Adjust rating", exact: true }).click();
   const adjustment = page.getByRole("dialog", { name: "Adjust rating", exact: true });
   await expect(adjustment.getByText("Current rating: 1100", { exact: true })).toBeVisible();
@@ -192,4 +185,20 @@ test("rating conflict keeps the draft and reopening uses the latest expected rat
     { rating: 1300, expectedRating: 1100, reason: "Correct initial rating" },
     { rating: 1300, expectedRating: 1175, reason: "Reviewed current rating" },
   ]);
+});
+
+
+test("global admin recovery stays in the current player editor", async ({ page }) => {
+  const state = await mockAdmin(page, true, false, true);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
+  await page.getByRole("button", { name: "Emergency password reset", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Emergency password reset", exact: true });
+  await sheet.getByLabel("New password", { exact: true }).fill("FixtureOnly123!");
+  await sheet.getByLabel("Confirm password", { exact: true }).fill("FixtureOnly123!");
+  await sheet.screenshot({ path: "test-results-admin/current-interface/emergency-recovery-390.png" });
+  await sheet.getByRole("button", { name: "Set emergency password", exact: true }).click();
+  await expect(sheet).not.toBeVisible();
+  await expect(page.getByText("Emergency password set.", { exact: true })).toBeVisible();
+  expect(state.writes).toHaveLength(1);
 });

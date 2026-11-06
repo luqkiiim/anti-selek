@@ -42,12 +42,12 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("@/components/prototype/Primitives", () => ({
+vi.mock("@/components/product/Primitives", () => ({
   ErrorText: ({ error }: { error: string }) => error ? <p role="alert">{error}</p> : null,
   Sheet: ({ open = true, title, children, onClose }: { open?: boolean; title: string; children: React.ReactNode; onClose: () => void }) => open ? <div role="dialog" aria-label={title}><h2>{title}</h2>{children}<button onClick={onClose}>Keep Result</button></div> : null,
 }));
 
-import SessionMatchHistory from "@/components/prototype/SessionMatchHistory";
+import SessionMatchHistory from "@/components/product/SessionMatchHistory";
 function SessionHistoryPage() { return <SessionMatchHistory code="ABC123" />; }
 
 function createJsonResponse(body: unknown, status = 200) {

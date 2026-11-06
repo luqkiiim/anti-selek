@@ -8,7 +8,7 @@ The main app and direct links now share the cream-and-purple screens. Navigation
 2. **Copy, overview, and profiles** (`ee0aeb1`): concise authentication and setup forms, session-first overview, one initial empty state, connected-player progress, compact account status, and populated profile insights.
 3. **Visual and responsive polish:** Nunito Sans, consistent cream-and-purple tokens, lighter names, a compact activity strip, all standings columns, tablet layouts from 768px, and screenshot verification.
 
-Advanced hosting and practice tools remain available contextually. Invitation correction, access restoration, removed-account recovery, and rating history remain in administration. Guest, retired, and unscoped aggregate profiles retain their specialist view.
+This is a historical delivery record. The remaining specialist screens were subsequently consolidated into the product UI; use [Current interface](current-interface.md) for maintained routes and capabilities.
 
 ## Verification
 

@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 
-vi.mock("@/components/prototype/api", () => ({
+vi.mock("@/components/product/api", () => ({
   api: mocks.api,
   useResource: (key: string | null) => ({
     data: key ? { players: [{ id: "local-player", name: "Alex Local" }] } : null,

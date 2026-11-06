@@ -1,0 +1,38 @@
+.new-player-form { display: grid; gap: 16px; margin: 16px 0; }
+.new-player-form > fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 16px; }
+.new-player-form h3, .new-player-form p { margin: 0; }
+.new-player-scope { display: flex; padding: 4px; border-radius: 14px; background: var(--surface-soft, #f1eaf8); gap: 4px; }
+.new-player-scope button { flex: 1; border: 0; border-radius: 10px; padding: 12px 8px; background: transparent; color: inherit; font: inherit; font-weight: 700; }
+.new-player-scope button[aria-pressed="true"] { background: var(--surface, #fffdf9); box-shadow: 0 1px 4px #26143b15; }
+.new-player-scope button:disabled { opacity: .5; }
+.new-player-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.new-player-actions > button { flex: 1; white-space: normal; }
+.pairing-options { padding: 12px 0; }
+.pairing-options > summary { cursor: pointer; font-weight: 700; }
+.pairing-options .field-label { margin-top: 14px; }
+.pairing-help { font-size: 13px; line-height: 1.5; margin: 10px 0 0; }
+.session-finish-toolbar { padding: 4px 20px 12px; display: flex; justify-content: flex-end; }
+.session-finish-toolbar button { min-height: 40px; }
+.product-root .session-finish-toolbar { position: absolute; top: calc(72px + env(safe-area-inset-top, 0px)); left: 0; right: 0; height: 56px; }
+.product-root .has-finish-action > .page-pager { top: calc(128px + env(safe-area-inset-top, 0px)); }
+.roster-pause-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto; max-width: 116px; min-height: 44px; border: 1px solid #e6daf5; border-radius: 12px; background: transparent; color: inherit; font: inherit; font-size: 12px; font-weight: 700; padding: 8px; }
+.roster-pause-action svg { flex-shrink: 0; }
+.roster-pause-action span { white-space: normal; line-height: 1.3; }
+.session-action-notice { font-size: 13px; }
+.finish-game-list { padding-left: 20px; line-height: 1.7; }
+.guest-save-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; }
+.guest-save-row > span { min-width: 0; overflow-wrap: anywhere; }
+.guest-save-row button { flex-shrink: 0; }
+.first-session-actions { display: grid; gap: 10px; }
+
+.pm-roster-picker:not([hidden]) { display: grid; gap: 14px; }
+@media (max-width: 440px) {
+  .roster .person:has(.roster-pause-action) { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 8px 12px; }
+  .roster .person:has(.roster-pause-action) > .avatar { grid-column: 1; grid-row: 1; }
+  .roster .person:has(.roster-pause-action) > .person-info { grid-column: 2 / -1; grid-row: 1; }
+  .roster .person > .roster-pause-action { grid-column: 2; grid-row: 2; max-width: none; justify-self: start; }
+  .roster .person:has(.roster-pause-action) > .icon-button { grid-column: 3; grid-row: 2; }
+}
+
+.pairing-options summary { display: flex; justify-content: space-between; gap: 12px; }
+.pairing-options summary small { font-weight: 400; }

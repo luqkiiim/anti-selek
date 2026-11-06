@@ -2,8 +2,8 @@
 
 import { useRef, useState } from "react";
 import { Copy, Check, ShareNetwork } from "@phosphor-icons/react";
-import { Sheet } from "@/components/prototype/Primitives";
-import { api } from "@/components/prototype/api";
+import { Sheet } from "@/components/product/Primitives";
+import { api } from "@/components/product/api";
 import { buildSessionShareMessage } from "@/lib/sessionShareMessage";
 import type { SessionDetails } from "@/lib/sessionDetails";
 import type { SessionData } from "./sessionTypes";

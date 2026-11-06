@@ -77,6 +77,7 @@ describe("club emergency password reset route", () => {
           id: "account-target",
           name: "Account One",
           email: "player@example.com",
+          passwordHash: "$2b$10$fixture-existing-password",
         },
       },
     });

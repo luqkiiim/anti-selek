@@ -1,4 +1,4 @@
-import PrototypeApp from "@/components/prototype/PrototypeApp";
+import HomeScreen from "@/components/product/HomeScreen";
 export default function Page() {
-  return <PrototypeApp />;
+  return <HomeScreen />;
 }

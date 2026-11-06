@@ -49,7 +49,7 @@ export async function PATCH(request: Request, { params }: Context) {
     // Legacy rest toggles stay ignored; this identity refactor does not change queue behavior.
     if (body.isActive !== undefined && typeof body.isActive !== "boolean") return NextResponse.json({ error: "Invalid player status" }, { status: 400 });
     if (body.role !== undefined && (!isValidClubRole(body.role) || body.role === "OWNER")) return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
-    const mixedChanged = ["gender", "partnerPreference", "mixedSideOverride"].some(field => body[field] !== undefined);
+    const pairingChanged = body.partnerPreference !== undefined || body.mixedSideOverride !== undefined;
     if (body.role !== undefined) {
       if (!member.ownerUserId) return NextResponse.json({ error: "Only a registered account can receive club permissions." }, { status: 400 });
       if (member.ownerUserId === session.user.id || member.ownerUserId === access?.createdById) return NextResponse.json({ error: "Cannot change your own or the club owner's role." }, { status: 400 });
@@ -63,7 +63,7 @@ export async function PATCH(request: Request, { params }: Context) {
       if (!currentAccess?.canAdmin && !currentSelf && !currentStaffGroupOnly) throw new ClubAdmissionError("Not authorized", 403);
       if (!currentAccess?.isGlobalAdmin && !currentAccess?.membershipRole) throw new ClubAdmissionError("Active club access required", 403);
       if (!currentAccess?.canAdmin && !currentStaffGroupOnly && ["role", "status", "preferredPool", "isActive"].some(field => body[field] !== undefined)) throw new ClubAdmissionError("Club admin access required", 403);
-      const personalChanged = body.name !== undefined || mixedChanged;
+      const personalChanged = body.name !== undefined || body.gender !== undefined;
       const connected = await tx.clubMember.findFirst({ where: { playerId, ownerUserId: { not: null }, retiredByAdmissionEventId: null }, select: { id: true } });
       if (personalChanged && connected && !currentSelf) throw new ClubAdmissionError("The account owner manages their personal profile.", 403);
       if (connected && body.isActive !== undefined && body.isActive !== current.player.isActive) throw new ClubAdmissionError("Remove club membership to disconnect a player from this club.", 403);
@@ -74,11 +74,10 @@ export async function PATCH(request: Request, { params }: Context) {
         if (["ADMIN", "OWNER"].includes(grant.role) && !currentAccess?.isOwner && !currentAccess?.isGlobalAdmin) throw new ClubAdmissionError("Only the club owner can demote admins.", 403);
         await tx.clubAccess.update({ where: { id: grant.id }, data: { role: body.role } });
       }
-      const pairingChanged = body.partnerPreference !== undefined || body.mixedSideOverride !== undefined;
-      if (personalChanged && currentSelf) {
+      if ((personalChanged || pairingChanged) && currentSelf) {
         const preference = pairingChanged ? resolveMixedSideState({ gender: body.gender ?? current.player.gender, mixedSideOverride: body.mixedSideOverride !== undefined ? body.mixedSideOverride : null, partnerPreference: body.mixedSideOverride !== undefined ? undefined : body.partnerPreference }) : null;
         await syncAccountProfile(tx, { userId: session.user.id, changes: { ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.gender !== undefined ? { gender: body.gender } : {}) }, ...(preference ? { clubPreferences: { clubId, playerId, mixedSideOverride: preference.mixedSideOverride } } : {}) });
-      } else if (personalChanged) {
+      } else if (personalChanged || pairingChanged) {
         if (body.name !== undefined || body.gender !== undefined) await tx.player.update({ where: { id: playerId }, data: { ...(body.name !== undefined ? { name: body.name.trim() } : {}), ...(body.gender !== undefined ? { gender: body.gender } : {}) } });
         if (body.gender !== undefined) await normalizeClubMembershipPreferencesForGender(tx, [playerId], body.gender);
         if (pairingChanged) {

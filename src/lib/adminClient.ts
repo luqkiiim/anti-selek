@@ -1,4 +1,4 @@
-import { ApiError } from "@/components/prototype/api";
+import { ApiError } from "@/components/product/api";
 
 export const ADMIN_READ_TIMEOUT_MS = 10_000;
 export const ADMIN_SAVE_TIMEOUT_MS = 30_000;

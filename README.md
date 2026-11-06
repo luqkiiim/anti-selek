@@ -347,3 +347,7 @@ Shared constraints:
 - Club reset is destructive: it deletes that club's tournaments and related session data, and resets member ratings
 - Tournament rollback is intended for the latest completed tournament only
 - Admin actions are permission-checked against club role or platform admin status
+
+## Application interface
+
+See [Current interface](docs/current-interface.md) for production routes, screen ownership, practice tools, profile contexts, and compatibility bookmarks.

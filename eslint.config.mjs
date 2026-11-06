@@ -13,8 +13,6 @@ const eslintConfig = defineConfig([
     "build/**",
     // Ignored operator snapshots, credentials and local rehearsal scratch files.
     "private/**",
-    // Standalone Vite sandbox; src/components/prototype remains linted.
-    "prototype/**",
     "prototypes/**/dist/**",
     "next-env.d.ts",
   ]),

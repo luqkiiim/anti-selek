@@ -35,49 +35,6 @@ export interface AdminOnboardingProgressPayload {
   steps: AdminOnboardingStep[];
 }
 
-export interface AdminOnboardingStepOverride {
-  stepId: AdminOnboardingStepId;
-  targetId?: string;
-  coachmark?: string;
-  href?: string;
-  actionLabel?: string;
-}
-
-export function getHostSessionOnboardingOverride({
-  newSessionName,
-  selectedPlayerCount,
-  guestCount,
-}: {
-  newSessionName: string;
-  selectedPlayerCount: number;
-  guestCount: number;
-}): AdminOnboardingStepOverride {
-  if (!newSessionName.trim()) {
-    return {
-      stepId: "host-session",
-      targetId: "admin-onboarding-session-name",
-      coachmark: "First, type a simple tournament name so the create button can unlock.",
-      actionLabel: "Name tournament",
-    };
-  }
-
-  if (selectedPlayerCount + guestCount === 0) {
-    return {
-      stepId: "host-session",
-      targetId: "admin-onboarding-host-players",
-      coachmark: "Next, press Add players and select who will play in this practice tournament.",
-      actionLabel: "Choose players",
-    };
-  }
-
-  return {
-    stepId: "host-session",
-    targetId: "admin-onboarding-create-session",
-    coachmark: "Now the setup is ready. Press Create Tournament to open the live tournament.",
-    actionLabel: "Create practice tournament",
-  };
-}
-
 export function parseAdminOnboardingStepIds(value: string | null | undefined) {
   if (!value) return [];
 
@@ -132,7 +89,7 @@ export function buildAdminOnboardingProgress({
     ? `/club/${primaryClubId}/admin?tab=settings`
     : "/";
   const hostHref = primaryClubId
-    ? `/club/${primaryClubId}?tab=host`
+    ? `/club/${primaryClubId}?tab=setup`
     : "/";
   const sessionHref = primarySessionCode
     ? `/session/${primarySessionCode}`
@@ -178,26 +135,26 @@ export function buildAdminOnboardingProgress({
     },
     {
       id: "host-session",
-      title: "Create a practice tournament",
-      detail: "Use the Host flow to create your own practice tournament inside the playground.",
-      actionLabel: "Open host setup",
+      title: "Create a practice session",
+      detail: "Use session setup to create your own practice session inside the playground.",
+      actionLabel: "Open session setup",
       href: hostHref,
       targetId: "admin-onboarding-create-session",
-      coachmark: "Name a practice tournament, choose players, then create it.",
+      coachmark: "Name a practice session, choose players, then create it.",
       manual: false,
     },
     {
       id: "session-workflow",
-      title: "Explore a live practice tournament",
-      detail: "Open a live playground tournament and get familiar with the tournament controls.",
-      actionLabel: primarySessionCode ? "Open live tournament" : "Open host setup",
+      title: "Explore a live practice session",
+      detail: "Open a live playground session and get familiar with the session controls.",
+      actionLabel: primarySessionCode ? "Open live session" : "Open session setup",
       href: sessionHref,
       targetId: primarySessionCode
         ? "admin-onboarding-session-panel"
         : "admin-onboarding-host-players",
       coachmark: primarySessionCode
-        ? "Review the live practice tournament, player count, active courts, and settings."
-        : "Press Choose to select players for the tournament.",
+        ? "Review the live practice session, player count, active courts, and settings."
+        : "Press Add players to select players for the session.",
       manual: false,
     },
     {
@@ -212,12 +169,12 @@ export function buildAdminOnboardingProgress({
     },
     {
       id: "end-session",
-      title: "End the practice tournament",
-      detail: "Close the practice tournament once scoring is done to see final standings.",
-      actionLabel: "Open tournament settings",
-      href: primarySessionCode ? `${sessionHref}#settings` : hostHref,
+      title: "Finish the practice session",
+      detail: "Close the practice session once scoring is done to see final standings.",
+      actionLabel: "Open session",
+      href: primarySessionCode ? `${sessionHref}?tab=courts` : hostHref,
       targetId: "admin-onboarding-end-session",
-      coachmark: "Open tournament settings and press End Tournament when practice is complete.",
+      coachmark: "Open session and press Finish session when practice is complete.",
       manual: false,
     },
     {

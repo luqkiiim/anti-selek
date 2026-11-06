@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { withCallbackUrl } from "@/lib/authCallback";
-import { api } from "@/components/prototype/api";
+import { api } from "@/components/product/api";
 import type {
   AuthorizedInvitationContext,
   GenericInvitationContext,

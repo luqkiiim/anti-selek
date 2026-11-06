@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adminApi, AdminSaveOutcomeUnknownError } from "./adminClient";
-import { ApiError } from "@/components/prototype/api";
+import { ApiError } from "@/components/product/api";
 
 describe("bounded admin requests", () => {
   beforeEach(() => { vi.useFakeTimers(); vi.stubGlobal("fetch", vi.fn()); });

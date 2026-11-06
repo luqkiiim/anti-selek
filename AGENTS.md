@@ -22,6 +22,8 @@
 
 ## UI/UX Direction
 
+- Production UI lives in `src/components/product/`. Before UI changes, read `docs/current-interface.md` for the canonical route-to-screen map, and verify changes through those real application routes.
+
 - Aim for an aesthetic, intuitive, and minimalist feeling throughout the app.
 - Keep interface copy concise. Do not add explanatory subtext unless it is necessary to understand an action, make a decision, or avoid an error. Prefer clear labels and intuitive controls over extra explanation.
 

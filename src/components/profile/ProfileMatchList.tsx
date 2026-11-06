@@ -2,8 +2,8 @@
 
 import type { ReactNode } from "react";
 import type { PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
-import { Sheet } from "@/components/prototype/Primitives";
-import { formatProfileDate } from "@/components/prototype/profileDate";
+import { Sheet } from "@/components/product/Primitives";
+import { formatProfileDate } from "@/components/product/profileDate";
 import styles from "./ProfileMatchList.module.css";
 
 type Match = PlayerProfileMatchHistoryEntry;

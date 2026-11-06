@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { api, useAction, useResource } from "@/components/prototype/api";
+import { api, useAction, useResource } from "@/components/product/api";
 import { playerInvitationQr } from "@/lib/playerInvitationQr";
 
 type InvitationSummary = { id: string; purpose?: string; status: string; createdAt: string; expiresAt: string };

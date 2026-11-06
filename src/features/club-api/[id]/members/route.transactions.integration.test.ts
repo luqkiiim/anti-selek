@@ -65,7 +65,8 @@ async function snapshot() {
 }
 async function sessionFixture(id: string, protection: "automatic" | "manual" | "playing" | "completed") {
   await db.session.create({ data: { id, code: id.toUpperCase(), name: id, clubId: "club-1", poolsEnabled: true, autoQueueEnabled: protection === "automatic", status: protection === "completed" ? "COMPLETED" : "ACTIVE", ratingPolicyVersion: 2 } });
-  await db.sessionPlayer.create({ data: { id: `${id}-seat`, sessionId: id, playerId: "player-1", profileClubId: "club-1", pool: "B" } });
+  const owner = await db.clubMember.findUniqueOrThrow({ where: { id: "member-1" } });
+  await db.sessionPlayer.create({ data: { id: `${id}-seat`, sessionId: id, playerId: "player-1", profileClubId: "club-1", participantAccountId: owner.ownerUserId, pool: "B" } });
   const teams = { team1Player1Id: "player-1", team1Player2Id: "player-2", team2Player1Id: "player-3", team2Player2Id: "player-4" };
   if (protection === "automatic" || protection === "manual") {
     await db.queuedMatch.create({ data: { id: `${id}-queue`, sessionId: id, ...teams, isAutomatic: protection === "automatic" } });
@@ -103,6 +104,30 @@ describe.each(["sqlite", "file-libsql"] as const)("club member atomic writes on 
     await db.clubAccess.create({ data: { clubId: "club-1", userId: "admin", role: "OWNER" } });
     await db.player.createMany({ data: ["player-1", "player-2", "player-3", "player-4"].map(id => ({ id, name: id, gender: "MALE" })) });
     await db.clubMember.create({ data: { id: "member-1", clubId: "club-1", playerId: "player-1", elo: 1432, preferredPool: "B" } });
+  });
+
+
+  it.each(["admin", "account"])("keeps a linked player's pairing change local when saved by %s", async actor => {
+    await db.clubAccess.create({ data: { clubId: "club-1", userId: "account", role: "MEMBER" } });
+    await clubOwnershipTransaction(db, tx => claimClubPlayer(tx, { clubId: "club-1", playerId: "player-1", userId: "account", actorUserId: "admin" }));
+    await db.club.create({ data: { id: "club-2", name: "Other Club", createdById: "account" } });
+    await db.clubMember.create({ data: { id: "member-2", clubId: "club-2", playerId: "player-1", elo: 1170, mixedSideOverride: null } });
+    await seedSessions();
+    const before = await snapshot();
+    const accountBefore = await db.user.findUniqueOrThrow({ where: { id: "account" } });
+    mocks.auth.mockResolvedValue({ user: { id: actor } });
+    const response = await edit({ mixedSideOverride: "LOWER" });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ mixedSideOverride: "LOWER", elo: 1432, ownerUserId: "account" });
+    const after = await snapshot();
+    expect(after.players).toEqual(before.players);
+    expect(after.seats).toEqual(before.seats);
+    expect(after.queues).toEqual(before.queues);
+    expect(after.audits).toEqual(before.audits);
+    expect(after.access).toEqual(before.access);
+    expect(after.members.find(member => member.id === "member-2")).toEqual(before.members.find(member => member.id === "member-2"));
+    expect(await db.user.findUniqueOrThrow({ where: { id: "account" } })).toEqual(accountBefore);
+    expect(mocks.rebuildQueue).not.toHaveBeenCalled();
   });
 
   it("creates the member and initial-rating audit together with the full roster response", async () => {

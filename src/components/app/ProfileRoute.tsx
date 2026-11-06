@@ -3,12 +3,12 @@ import { useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft } from "@phosphor-icons/react";
-import { PlayerProfilePage, MemberProfileOverlay, type MemberProfileResponse } from "@/components/prototype/PlayerProfilePage";
-import { PlayerProfileView } from "@/components/profile/PlayerProfileView";
-import { ErrorText } from "@/components/prototype/Primitives";
+import { PlayerProfilePage, MemberProfileOverlay, type MemberProfileResponse } from "@/components/product/PlayerProfilePage";
+import { PlayerHistoryProfile } from "@/components/product/PlayerHistoryProfile";
+import { ErrorText } from "@/components/product/Primitives";
 import { useClubResource } from "./ClubDataProvider";
 import { clubProfileUrl } from "./clubReadStore";
-import type { Snapshot } from "@/components/prototype/Club";
+import type { Snapshot } from "@/components/product/Club";
 import { AppShell, useAppLocation } from "./AppShell";
 import { backInApp, clubHref, navigateApp, sessionHref } from "@/lib/appNavigation";
 import { withCallbackUrl } from "@/lib/authCallback";
@@ -37,7 +37,7 @@ function ScopedProfile({ playerId, clubId, globalView = false, onBack, onOpenMem
     canEdit={snapshot.validated} canInvite={snapshot.validated && !globalView && (data.club.role === "ADMIN" || !!data.viewer.isAdmin)}
     onOpenSession={code => navigateApp(router, sessionHref(code, globalView ? clubId : undefined))}
     onOpenMember={id => onOpenMember(id, clubId)} onAccountSaved={snapshot.refresh}
-  /></> : !clubId || data ? <div className="profile-specialist"><PlayerProfileView key={`${clubId}:${playerId}`} playerId={playerId} clubId={clubId} mode="embedded" readOnly={globalView} onBack={onBack} /></div>
+  /></> : !clubId || data ? <PlayerHistoryProfile key={`${clubId}:${playerId}`} playerId={playerId} clubId={clubId} readOnly={globalView} />
     : <><ErrorText error={snapshot.error} />{snapshot.error ? <button className="secondary" disabled={snapshot.loading || snapshot.retryAt > 0} onClick={() => void snapshot.refresh().catch(() => {})}>Try again</button> : <p role="status">Loading profile…</p>}</>;
   if (overlay && member && data) return <MemberProfileOverlay member={member} clubId={clubId} clubName={data.club.name} onBack={onBack} onNavigate={navigate} readOnly={globalView}>{content}</MemberProfileOverlay>;
   return <div className="pc-app"><header className="pc-header"><button className="icon-button" aria-label="Back" onClick={onBack}><ArrowLeft size={23} /></button><strong>Player profile</strong><span /></header><div ref={scrollRef} className="pc-scroll"><main className="pc-content">{content}</main></div></div>;

@@ -1,6 +1,6 @@
 "use client";
 import { CaretLeft, GearSix } from "@phosphor-icons/react";
-import { Avatar } from "@/components/prototype/Primitives";
+import { Avatar } from "@/components/product/Primitives";
 import type { ClubIdentity } from "./clubReadStore";
 
 export function ClubHeader({ identity, globalView = false, onSwitch, onManage }: {

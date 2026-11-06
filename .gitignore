@@ -62,10 +62,6 @@ next-env.d.ts
 .vercel
 .env*.local
 
-/prototype/node_modules/
-/prototype/dist/
-/prototype/test-results/
-/prototype/playwright-report/
 
 # Benchmark raw outputs; reviewed summaries and frozen fixture allowlist only.
 /benchmarks/**/*.json

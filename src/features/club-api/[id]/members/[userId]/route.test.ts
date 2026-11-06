@@ -164,4 +164,22 @@ describe("club member transaction responses", () => {
     expect((await edit({ preferredPool: "A" })).status).toBe(403);
     expect(mocks.clubMemberUpdate).not.toHaveBeenCalled();
   });
+  it.each([false, true])("lets admins edit only the linked player's targeted club preference (global=%s)", async global => {
+    mocks.auth.mockResolvedValue({ user: { id: "admin-account", isAdmin: global } });
+    mocks.getClubAdminAccess.mockResolvedValue({ canAdmin: true, membershipRole: global ? null : "ADMIN", isGlobalAdmin: global });
+    mocks.clubMemberFindFirst.mockResolvedValue({ id: "connected-membership" });
+    expect((await edit({ mixedSideOverride: "LOWER" })).status).toBe(200);
+    expect(mocks.clubMemberUpdate).toHaveBeenCalledExactlyOnceWith({ where: { id: "membership-1" }, data: { mixedSideOverride: "LOWER" } });
+    expect(mocks.playerUpdate).not.toHaveBeenCalled();
+    expect(mocks.clubMemberUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.propagate).not.toHaveBeenCalled();
+  });
+  it("denies staff and revoked admins when saving club pairing preferences", async () => {
+    mocks.getClubAdminAccess.mockResolvedValue({ canAdmin: false, membershipRole: "STAFF" });
+    expect((await edit({ mixedSideOverride: "LOWER" })).status).toBe(403);
+    mocks.getClubAdminAccess.mockResolvedValueOnce({ canAdmin: true, membershipRole: "ADMIN" }).mockResolvedValue({ canAdmin: false, membershipRole: "MEMBER" });
+    expect((await edit({ mixedSideOverride: "LOWER" })).status).toBe(403);
+    expect(mocks.clubMemberUpdate).not.toHaveBeenCalled();
+  });
+
 });
