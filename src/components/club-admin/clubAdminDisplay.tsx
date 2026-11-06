@@ -2,21 +2,17 @@
 
 import type { ClubAdminPlayer } from "./clubAdminTypes";
 import { getClubRoleLabel } from "@/lib/clubRoles";
-import { getMixedSideDisplayLabel } from "@/lib/mixedSide";
-import { ClubPlayerStatus, PlayerGender } from "@/types/enums";
+import { normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
+import { ClubPlayerStatus, MixedSide, PlayerGender } from "@/types/enums";
 
 export function getClubAdminGenderPillLabel(
   player: ClubAdminPlayer
 ) {
   if (player.gender === PlayerGender.FEMALE || player.gender === PlayerGender.MALE) {
-    const mixedSideLabel = getMixedSideDisplayLabel({
-      gender: player.gender,
-      mixedSideOverride: player.mixedSideOverride,
-      partnerPreference: player.partnerPreference,
-    });
+    const mixedSide = normalizeMixedSideOverrideForGender(player.gender, player.mixedSideOverride, player.partnerPreference);
 
-    if (mixedSideLabel !== "Default") {
-      return `${player.gender === PlayerGender.FEMALE ? "Female" : "Male"}/${mixedSideLabel === "Upper Side" ? "High" : "Low"}`;
+    if (mixedSide) {
+      return `${player.gender === PlayerGender.FEMALE ? "Female" : "Male"} · ${mixedSide === MixedSide.UPPER ? "Higher level" : "Lower level"}`;
     }
 
     return player.gender === PlayerGender.FEMALE ? "Female" : "Male";

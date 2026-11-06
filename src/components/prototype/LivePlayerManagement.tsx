@@ -17,12 +17,15 @@ import {
   MixedSide,
 } from "@/types/enums";
 import {
-  getDefaultMixedSideForGender,
   getMixedSideOverrideOptionForGender,
   normalizeMixedSideOverrideForGender,
 } from "@/lib/mixedSide";
 import type { Player, SessionData } from "@/components/session/sessionTypes";
 import { api } from "./api";
+import { adminApi, AdminSaveOutcomeUnknownError } from "@/lib/adminClient";
+import { normalizeNameLookupKey } from "@/lib/quickAccess";
+import { NewSessionPlayerForm } from "./NewSessionPlayerForm";
+import { MixedPairingControl } from "./MixedPairingControl";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
 import "./live-player-management.css";
 
@@ -48,6 +51,7 @@ export interface LivePlayerManagementProps {
   onClose: () => void;
   onChanged: () => Promise<unknown> | unknown;
   manageableClubIds?: string[];
+  initialScreen?: ListScreen;
 }
 
 function messageFor(error: unknown, fallback: string) {
@@ -58,22 +62,13 @@ function fieldClass() {
   return "pm-field";
 }
 
-function defaultMixedSideLabel(gender: PlayerGender) {
-  const defaultSide = getDefaultMixedSideForGender(gender);
-  return defaultSide === MixedSide.UPPER
-    ? "Upper Side (default)"
-    : defaultSide === MixedSide.LOWER
-      ? "Lower Side (default)"
-      : "Default";
-}
-
 function mixedSideSummary(player: Player) {
   const side = normalizeMixedSideOverrideForGender(
     player.gender,
     player.mixedSideOverride,
     player.partnerPreference,
   );
-  return side ? ` · ${side === MixedSide.UPPER ? "Upper side" : "Lower side"}` : "";
+  return side ? ` · ${side === MixedSide.UPPER ? "Higher level" : "Lower level"}` : "";
 }
 
 export function LivePlayerManagement({
@@ -83,6 +78,7 @@ export function LivePlayerManagement({
   onClose,
   onChanged,
   manageableClubIds,
+  initialScreen = "players",
 }: LivePlayerManagementProps) {
   const [listScreen, setListScreen] = useState<ListScreen>("players");
   const [optionsScreen, setOptionsScreen] = useState<PlayerOptionsScreen | null>(null);
@@ -96,15 +92,12 @@ export function LivePlayerManagement({
   const [error, setError] = useState("");
   const [rosterError, setRosterError] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
-  const [guestName, setGuestName] = useState("");
-  const [guestRating, setGuestRating] = useState("1000");
-  const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.UNSPECIFIED);
-  const [guestMixedSideOverride, setGuestMixedSideOverride] = useState<MixedSide | null>(null);
-  const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [savingPlayer, setSavingPlayer] = useState(false);
 
   const canManage = Boolean(!session.viewerIsQuickAccess && (manageableClubIds ? manageableClubIds.length > 0 : session.viewerCanManage));
   const ownPlayer = (player: Player) => !manageableClubIds || manageableClubIds.includes(player.representingClubId ?? player.profileClubId ?? session.clubId ?? "");
-  const managedClubs = (session.clubs ?? []).filter(club => club.status === "ACCEPTED" && (!manageableClubIds || manageableClubIds.includes(club.id)));
+  const managedClubs = (session.clubs?.length ? session.clubs : session.clubId ? [{ id: session.clubId, name: "This club", status: "ACCEPTED", role: "HOST" }] : []).filter(club => club.status === "ACCEPTED" && (!manageableClubIds || manageableClubIds.includes(club.id)));
   const isMixicano = session.mode === SessionMode.MIXICANO;
   const isInterclub = session.collabFormat === SessionCollabFormat.INTERCLUB;
   const hasAcceptedCollabRoster = new Set(
@@ -146,7 +139,8 @@ export function LivePlayerManagement({
 
   useEffect(() => {
     if (open) {
-      setListScreen("players");
+      setListScreen(initialScreen);
+      if (initialScreen === "roster") void openRoster();
       setOptionsScreen(null);
       setSelectedPlayerId(null);
       setSearch("");
@@ -154,7 +148,9 @@ export function LivePlayerManagement({
       setRosterError("");
       setAddingGuest(false);
     }
-  }, [code, open]);
+    // Opening starts a new picker; polling must not reset an in-progress selection.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, open, initialScreen]);
 
   async function runAction(
     operation: () => Promise<unknown>,
@@ -211,41 +207,10 @@ export function LivePlayerManagement({
     }
   }
 
-  function openGuestForm(prefill = "") {
-    setGuestName(prefill);
-    setGuestRating("1000");
-    setGuestGender(PlayerGender.UNSPECIFIED);
-    setGuestMixedSideOverride(null);
-    setGuestRepresentingClubId(managedClubs.length === 1 ? managedClubs[0].id : "");
+  function openPlayerForm(prefill = "") {
+    setNewPlayerName(prefill);
     setError("");
     setAddingGuest(true);
-  }
-
-  function addGuest() {
-    const name = guestName.trim();
-    const rating = Number(guestRating);
-    if (name.length < 2) return setError("Guest name must be at least 2 characters.");
-    if (session.players.some((player) => player.user.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase()) || roster.some((member) => member.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
-      return setError("That name is already in the session or club roster.");
-    }
-    if (![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGender)) return setError("Choose Male or Female for this guest.");
-    if (!guestRating.trim() || !Number.isInteger(rating) || rating < 0 || rating > 5000) return setError("Enter a whole-number rating from 0 to 5000.");
-    const representingClubId = isInterclub || manageableClubIds ? guestRepresentingClubId : undefined;
-    if (isInterclub && !(session.clubs ?? []).some((club) => club.status === "ACCEPTED" && club.id === representingClubId)) return setError("Choose a club before adding an interclub guest.");
-    return runAction(
-      () => api(`/api/sessions/${code}/guests`, "POST", {
-        name,
-        initialElo: rating,
-        gender: guestGender,
-        mixedSideOverride: guestMixedSideOverride,
-        pool: SessionPool.A,
-        ...(representingClubId ? { representingClubId } : {}),
-      }),
-      () => {
-        setAddingGuest(false);
-        setListScreen("players");
-      },
-    );
   }
 
   function openPreferences(player: Player) {
@@ -258,25 +223,23 @@ export function LivePlayerManagement({
     return `${member.id}:${member.representingClubId ?? ""}`;
   }
 
-  function addMember(member: SessionRosterMember) {
+  async function admitMember(member: SessionRosterMember, selectedClubId?: string) {
     const pool = poolByRosterEntry[rosterEntryKey(member)] ?? member.preferredPool;
-    const profileClubId = member.profileClubId ?? member.representingClubId ?? session.clubId;
-    return runAction(
-      async () => {
-        if (!profileClubId) throw new Error("Choose a club profile for this player.");
-        const result = await api<{ players?: Array<{ playerId?: string; userId?: string; profileClubId?: string | null }> }>(`/api/sessions/${code}/join`, "POST", {
-          playerId: member.id,
-          profileClubId,
-          pool: session.poolsEnabled ? pool : SessionPool.A,
-          ...(isInterclub ? { representingClubId: profileClubId } : {}),
-        });
-        const added = Array.isArray(result?.players) && result.players.some(player =>
-          (player.playerId ?? player.userId) === member.id && player.profileClubId === profileClubId,
-        );
-        if (!added) throw new Error(`${member.name} wasn’t added. Try again.`);
-      },
-      () => { setSearch(""); setListScreen("players"); },
-    );
+    const profileClubId = selectedClubId ?? member.profileClubId ?? member.representingClubId ?? session.clubId;
+    if (!profileClubId) throw new Error("Choose a club profile for this player.");
+    const latest = await adminApi<SessionData>(`/api/sessions/${code}`);
+    if (latest.status === "COMPLETED") throw new Error("This session has finished. The player is still saved to the club.");
+    if (latest.players.some(player => player.userId === member.id && player.profileClubId === profileClubId)) return;
+    const result = await adminApi<{ players?: Array<{ playerId?: string; userId?: string; profileClubId?: string | null }> }>(`/api/sessions/${code}/join`, "POST", {
+      playerId: member.id, profileClubId, pool: session.poolsEnabled ? pool : SessionPool.A,
+      ...(isInterclub ? { representingClubId: profileClubId } : {}),
+    });
+    if (!result.players?.some(player => (player.playerId ?? player.userId) === member.id && player.profileClubId === profileClubId)) {
+      throw new Error(`${member.name} wasn’t added. Try again.`);
+    }
+  }
+  function addMember(member: SessionRosterMember) {
+    return runAction(() => admitMember(member), () => { setSearch(""); setListScreen("players"); });
   }
 
   function toggleSkipNext(player: Player) {
@@ -328,7 +291,7 @@ export function LivePlayerManagement({
     );
   }
 
-  const title = listScreen === "players" ? "Players" : "Add club members";
+  const title = listScreen === "players" ? "Players" : "Add players";
   const optionsTitle = optionsScreen === "preferences"
     ? selectedPlayer?.user.name ?? "Player settings"
     : optionsScreen === "rename"
@@ -338,9 +301,9 @@ export function LivePlayerManagement({
   if (!open) return null;
 
   return (
-    <Sheet title={title} onClose={onClose} open={open} busy={busy}>
+    <Sheet title={title} onClose={onClose} open={open} busy={busy || savingPlayer}>
       <div className="live-player-management">
-        {listScreen === "roster" ? (
+        {listScreen === "roster" && !addingGuest ? (
           <button
             type="button"
             className="pm-back"
@@ -366,7 +329,7 @@ export function LivePlayerManagement({
             {canManage && session.clubId ? (
               <button type="button" className="pm-primary" onClick={() => void openRoster()} disabled={busy}>
                 <UserPlus size={19} aria-hidden="true" />
-                Add club members
+                Add players
               </button>
             ) : null}
             {session.players.length > 5 ? (
@@ -421,10 +384,10 @@ export function LivePlayerManagement({
                     const prefill = search.trim();
                     void openRoster(prefill).then((members) => {
                       if (members && !members.some((member) => member.name.trim().toLocaleLowerCase() === prefill.toLocaleLowerCase())) {
-                        openGuestForm(prefill);
+                        openPlayerForm(prefill);
                       }
                     });
-                  }}><Plus size={18} aria-hidden="true" />Add “{search.trim()}” as a guest</button>
+                  }}><Plus size={18} aria-hidden="true" />Add “{search.trim()}” </button>
                 ) : null}
               </div>
             )}
@@ -433,6 +396,7 @@ export function LivePlayerManagement({
 
         {listScreen === "roster" ? (
           <>
+            <div className="pm-roster-picker" hidden={addingGuest}>
             <label className="pm-search">
               <MagnifyingGlass size={18} aria-hidden="true" />
               <span className="sr-only">Search club members</span>
@@ -452,8 +416,8 @@ export function LivePlayerManagement({
                 {!addingGuest && canManage && normalizedSearch.length >= 2 &&
                   !session.players.some((player) => player.user.name.trim().toLocaleLowerCase() === normalizedSearch) &&
                   !roster.some((member) => member.name.trim().toLocaleLowerCase() === normalizedSearch) ? (
-                    <button type="button" className="pm-secondary" disabled={busy} onClick={() => openGuestForm(search.trim())}>
-                      <Plus size={18} aria-hidden="true" /> Add “{search.trim()}” as a guest
+                    <button type="button" className="pm-secondary" disabled={busy} onClick={() => openPlayerForm(search.trim())}>
+                      <Plus size={18} aria-hidden="true" /> Add “{search.trim()}”
                     </button>
                   ) : null}
               </div>
@@ -495,22 +459,30 @@ export function LivePlayerManagement({
                 );
               })}
             </div>
-            {addingGuest ? (
-              <form className="pm-form" onSubmit={(event) => { event.preventDefault(); void addGuest(); }}>
-                <h3>Add a guest</h3>
-                <label className="pm-label"><span>Guest name</span><input className={fieldClass()} value={guestName} onChange={(event) => setGuestName(event.target.value)} /></label>
-                <label className="pm-label"><span>Starting rating</span><input className={fieldClass()} type="number" min={0} max={5000} step={1} value={guestRating} onChange={(event) => setGuestRating(event.target.value)} /></label>
-                <label className="pm-label"><span>Gender</span><select className={fieldClass()} value={guestGender} onChange={(event) => { setGuestGender(event.target.value as PlayerGender); setGuestMixedSideOverride(null); }}><option value={PlayerGender.UNSPECIFIED}>Choose gender</option><option value={PlayerGender.MALE}>Male</option><option value={PlayerGender.FEMALE}>Female</option></select></label>
-                {guestGender !== PlayerGender.UNSPECIFIED ? (
-                  <label className="pm-label"><span>Mixed side</span><select className={fieldClass()} value={guestMixedSideOverride ?? ""} onChange={(event) => setGuestMixedSideOverride(event.target.value ? event.target.value as MixedSide : null)}><option value="">{defaultMixedSideLabel(guestGender)}</option>{(() => { const option = getMixedSideOverrideOptionForGender(guestGender); return option ? <option value={option.value}>{option.label}</option> : null; })()}</select></label>
-                ) : null}
-                {(isInterclub || manageableClubIds) ? (
-                  <label className="pm-label"><span>Represents</span><select className={fieldClass()} value={guestRepresentingClubId} onChange={(event) => setGuestRepresentingClubId(event.target.value)}><option value="">Choose club</option>{managedClubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
-                ) : null}
-                <button type="button" className="pm-secondary" disabled={busy} onClick={() => { setAddingGuest(false); setError(""); }}>Cancel</button>
-                <button type="submit" className="pm-primary" disabled={busy || guestGender === PlayerGender.UNSPECIFIED}>{busy ? "Adding…" : "Add guest"}</button>
-              </form>
-            ) : null}
+            </div>
+            {canManage && (addingGuest ? <NewSessionPlayerForm
+              clubs={managedClubs.map(club => ({ ...club, canSave: !!session.viewerAdminClubIds?.includes(club.id) }))}
+              mode="live" initialName={newPlayerName} mixed={isMixicano}
+              onBusyChange={setSavingPlayer} onCancel={() => setAddingGuest(false)}
+              onSaved={async (member, clubId) => {
+                await admitMember(member, clubId);
+                await onChanged();
+                setAddingGuest(false); setSearch(""); setListScreen("players");
+              }}
+              onGuest={async guest => {
+                if (session.players.some(player => normalizeNameLookupKey(player.user.name) === normalizeNameLookupKey(guest.name))) throw new Error("That player is already in the session.");
+                await adminApi(`/api/sessions/${code}/guests`, "POST", { ...guest, pool: SessionPool.A });
+                try { await onChanged(); } catch { throw new AdminSaveOutcomeUnknownError(); }
+                setAddingGuest(false); setSearch(""); setListScreen("players");
+              }}
+              onCheckGuest={async (name, clubId) => {
+                const latest = await adminApi<SessionData>(`/api/sessions/${code}`);
+                const found = latest.players.some(player => player.isGuest && normalizeNameLookupKey(player.user.name) === normalizeNameLookupKey(name) && (player.representingClubId ?? latest.clubId ?? "") === clubId);
+                if (found) { await onChanged(); setAddingGuest(false); setSearch(""); setListScreen("players"); }
+                return found;
+              }}
+            /> : <button type="button" className="pm-secondary" disabled={busy || loadingRoster || !!rosterError} onClick={() => openPlayerForm(search.trim())}><Plus size={18} />Add new player</button>)}
+
           </>
         ) : null}
 
@@ -565,26 +537,10 @@ export function LivePlayerManagement({
                 </select>
               </label>
             ) : null}
-            {isMixicano && selectedPlayerMixedSideOption ? (
-              <label className="pm-label">
-                <span>Mixed side</span>
-                <select
-                  className={fieldClass()}
-                  value={selectedPlayerMixedSideOverride ?? ""}
-                  disabled={busy}
-                  onChange={(event) => void updatePreference(selectedPlayer, {
-                    mixedSideOverride: event.target.value
-                      ? event.target.value as MixedSide
-                      : null,
-                  })}
-                >
-                  <option value="">{defaultMixedSideLabel(selectedPlayer.gender)}</option>
-                  <option value={selectedPlayerMixedSideOption.value}>
-                    {selectedPlayerMixedSideOption.label}
-                  </option>
-                </select>
-              </label>
-            ) : null}
+            {isMixicano && selectedPlayerMixedSideOption ? <MixedPairingControl
+              gender={selectedPlayer.gender} value={selectedPlayerMixedSideOverride} disabled={busy}
+              onChange={mixedSideOverride => void updatePreference(selectedPlayer, { mixedSideOverride })}
+            /> : null}
             {session.poolsEnabled ? (
               <label className="pm-label">
                 <span>Game group</span>

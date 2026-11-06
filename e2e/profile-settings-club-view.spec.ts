@@ -9,7 +9,8 @@ async function accountSheet(page: Page) {
   await expect(page.locator(".player-profile").filter({ visible: true }).getByRole("heading", { name: "Player preferences" })).toHaveCount(0);
   await page.getByRole("button", { name: "Account settings", exact: true }).filter({ visible: true }).click();
   const sheet = page.getByRole("dialog", { name: "Your account", exact: true });
-  await expect(sheet.getByLabel("Player level", { exact: true })).toBeVisible();
+  await sheet.getByText("Advanced pairing", { exact: true }).click();
+  await expect(sheet.getByLabel("Mixed-pairing level", { exact: true })).toBeVisible();
   return sheet;
 }
 async function closeAccount(page: Page) {
@@ -40,8 +41,8 @@ test("two club preferences remain separate; identity cancellation writes nothing
   await expect(page.getByRole("button", { name: "Browse clubs", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: new RegExp(`QA ${project} Alpha`) }).click();
   let sheet = await accountSheet(page);
-  const level = sheet.getByLabel("Player level", { exact: true });
-  await expect(level.locator("option")).toHaveText(["Default", "Upper Side"]);
+  const level = sheet.getByLabel("Mixed-pairing level", { exact: true });
+  await expect(level.locator("option")).toHaveText(["Standard", "Higher level"]);
   await expect(sheet.locator(".account-field-note")).toHaveCount(0);
   await level.selectOption("UPPER");
   sheet = await saveAccount(page);
@@ -50,18 +51,18 @@ test("two club preferences remain separate; identity cancellation writes nothing
   await page.getByRole("button", { name: /Switch club/ }).click();
   await page.getByRole("button", { name: new RegExp(`QA ${project} Beta`) }).click();
   sheet = await accountSheet(page);
-  await expect(sheet.getByLabel("Player level", { exact: true })).toHaveValue("");
-  await expect(sheet.getByLabel("Player level", { exact: true }).locator("option")).toHaveText(["Default", "Lower Side"]);
-  await sheet.getByLabel("Player level", { exact: true }).selectOption("LOWER");
+  await expect(sheet.getByLabel("Mixed-pairing level", { exact: true })).toHaveValue("");
+  await expect(sheet.getByLabel("Mixed-pairing level", { exact: true }).locator("option")).toHaveText(["Standard", "Lower level"]);
+  await sheet.getByLabel("Mixed-pairing level", { exact: true }).selectOption("LOWER");
   sheet = await saveAccount(page);
   await closeAccount(page);
   await page.getByRole("button", { name: /Switch club/ }).click();
   await page.getByRole("button", { name: new RegExp(`QA ${project} Alpha`) }).click();
   sheet = await accountSheet(page);
-  await expect(sheet.getByLabel("Player level", { exact: true })).toHaveValue("UPPER");
+  await expect(sheet.getByLabel("Mixed-pairing level", { exact: true })).toHaveValue("UPPER");
   await sheet.getByLabel("Account name", { exact: true }).fill(`Updated ${project}`);
   await sheet.getByLabel("Account gender", { exact: true }).selectOption("FEMALE");
-  await expect(sheet.getByLabel("Player level", { exact: true })).toHaveValue("");
+  await expect(sheet.getByLabel("Mixed-pairing level", { exact: true })).toHaveValue("");
   await sheet.getByRole("button", { name: "Save changes", exact: true }).click();
   const confirm = page.getByRole("dialog", { name: "Confirm account changes", exact: true });
   await expect(confirm).toContainText(`Browser ${project}`);
@@ -86,13 +87,13 @@ test("two club preferences remain separate; identity cancellation writes nothing
   expect(patches[2]).toEqual({ name: `Updated ${project}`, gender: "FEMALE", clubPreferences: { clubId: `ui-${project}-alpha`, playerId: `ui-${project}-alpha-player`, mixedSideOverride: null } });
   await expect(sheet.getByLabel("Account name", { exact: true })).toBeDisabled();
   await expect(sheet.getByLabel("Account gender", { exact: true })).toBeDisabled();
-  await sheet.getByLabel("Player level", { exact: true }).selectOption("UPPER");
+  await sheet.getByLabel("Mixed-pairing level", { exact: true }).selectOption("UPPER");
   await expect(sheet.getByRole("button", { name: "Save changes", exact: true })).toBeEnabled();
   sheet = await saveAccount(page);
   await expect(sheet.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
   expect(patches).toHaveLength(4);
   await assertNoOverflow(page);
-  await sheet.getByLabel("Player level", { exact: true }).click({ trial: true });
+  await sheet.getByLabel("Mixed-pairing level", { exact: true }).click({ trial: true });
   await page.screenshot({ path: testInfo.outputPath("club-preferences.png"), fullPage: true });
 });
 

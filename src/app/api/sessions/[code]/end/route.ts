@@ -18,6 +18,13 @@ import {
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { acknowledgesUnfinishedMatches, type UnfinishedMatchReview } from "@/lib/sessionFinish";
+
+class UnfinishedMatchesError extends Error {
+  constructor(readonly matches: UnfinishedMatchReview[]) {
+    super("Review the unfinished games before finishing this session.");
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +86,17 @@ export async function POST(
         await tx.sessionLineupRow.updateMany({where:{sessionId:current.id,matchId:null,cancelled:false},data:{cancelled:true,revision:{increment:1},hostConfirmedRevision:null,partnerConfirmedRevision:null}});
         await collaborationEvent(tx,current.id,session.user.id,"SESSION_END",{unplayedRows:remaining});
       }
+      const unfinished = await tx.match.findMany({
+        where: { sessionId: sessionData.id, status: { in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS, MatchStatus.PENDING_APPROVAL] } },
+        select: { id: true, status: true, scoreRevision: true, court: { select: { courtNumber: true, label: true } } },
+      });
+      const reviewed = unfinished.map(match => ({
+        id: match.id, status: match.status, scoreRevision: match.scoreRevision,
+        courtNumber: match.court?.courtNumber, courtLabel: match.court?.label,
+      }));
+      if (unfinished.length && !acknowledgesUnfinishedMatches(endBody?.discardUnfinishedMatches, reviewed)) {
+        throw new UnfinishedMatchesError(reviewed);
+      }
       await tx.queuedMatch.deleteMany({
         where: { sessionId: sessionData.id },
       });
@@ -91,6 +109,7 @@ export async function POST(
       await tx.match.deleteMany({
         where: {
           sessionId: sessionData.id,
+          id: { in: unfinished.map(match => match.id) },
           status: {
             in: [
               MatchStatus.PENDING,
@@ -158,6 +177,9 @@ export async function POST(
       queuedMatch: null,
     });
   } catch (error) {
+    if (error instanceof UnfinishedMatchesError) return sportingJson({
+      error: error.message, code: "UNFINISHED_MATCHES", unfinishedMatches: error.matches,
+    }, { status: 409 });
     if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     logError("End session error", error);
     return safeErrorResponse();

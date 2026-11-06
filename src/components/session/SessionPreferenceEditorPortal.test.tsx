@@ -163,12 +163,12 @@ describe("SessionPreferenceEditorPortal", () => {
     await renderPortal({ isMixicano: true });
 
     let mixedSideSelect = Array.from(document.querySelectorAll("select")).find(
-      (select) => select.parentElement?.textContent?.includes("Mixed side")
+      (select) => select.parentElement?.textContent?.includes("Mixed-pairing level")
     ) ?? null;
-    expect(mixedSideSelect?.parentElement?.textContent).toContain("Mixed side");
+    expect(mixedSideSelect?.parentElement?.textContent).toContain("Mixed-pairing level");
     expect(Array.from(mixedSideSelect?.options ?? []).map((option) => option.textContent?.trim())).toEqual([
-      "Upper Side (default)",
-      "Lower Side",
+      "Standard",
+      "Lower level",
     ]);
 
     await renderPortal({
@@ -181,11 +181,11 @@ describe("SessionPreferenceEditorPortal", () => {
     });
 
     mixedSideSelect = Array.from(document.querySelectorAll("select")).find(
-      (select) => select.parentElement?.textContent?.includes("Mixed side")
+      (select) => select.parentElement?.textContent?.includes("Mixed-pairing level")
     ) ?? null;
     expect(Array.from(mixedSideSelect?.options ?? []).map((option) => option.textContent?.trim())).toEqual([
-      "Lower Side (default)",
-      "Upper Side",
+      "Standard",
+      "Higher level",
     ]);
     expect(mixedSideSelect?.value).toBe(MixedSide.UPPER);
     expect(document.body.textContent).not.toContain("Female Flex");

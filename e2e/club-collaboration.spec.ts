@@ -56,12 +56,8 @@ async function addPlayer(page: Page, name: string) {
     .getByRole("button", { name: "Manage my club’s players", exact: true })
     .first()
     .click();
-  const sheet = page.getByRole("dialog", { name: "Players", exact: true });
-  await sheet
-    .getByRole("button", { name: "Add club members", exact: true })
-    .click();
   const roster = page.getByRole("dialog", {
-    name: "Add club members",
+    name: "Add players",
     exact: true,
   });
   await roster
@@ -69,6 +65,7 @@ async function addPlayer(page: Page, name: string) {
     .filter({ has: page.getByText(name, { exact: true }) })
     .getByRole("button", { name: "Add to session", exact: true })
     .click();
+  const sheet = page.getByRole("dialog", { name: "Players", exact: true });
   await expect(sheet.getByText(name, { exact: true })).toBeVisible();
   await sheet.getByRole("button", { name: "Close", exact: true }).click();
 }
@@ -241,11 +238,11 @@ test("two clubs prepare, agree, select their own lineup, and finish a BO3 on mob
       .getByRole("button", { name: "More options", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "End session", exact: true })
+      .getByRole("dialog").getByRole("button", { name: "Finish session", exact: true })
       .click();
     await page
       .getByRole("dialog")
-      .getByRole("button", { name: "End session", exact: true })
+      .getByRole("button", { name: "Finish & show results", exact: true })
       .click();
     await expect(
       page.getByText("Session complete", { exact: true }),

@@ -92,14 +92,14 @@ test("a global club viewer has no operator controls", async ({ page }) => {
   await expect(page.locator(".court-card")).toBeVisible();
   await expect(page.getByLabel("Team 1 score")).toHaveCount(0);
   await sessionNav(page).getByRole("button", { name: "Players", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Manage players", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add players", exact: true })).toHaveCount(0);
 });
 
 test("setup prepares a session and the shared standby screen starts play", async ({ page }) => {
   await login(page);
   await page.goto(`/club/${hostClubId}?tab=setup`);
   await page.getByLabel("Session name", { exact: true }).fill("UI refinement setup");
-  await page.getByRole("button", { name: /0 players/ }).click();
+  await page.getByRole("button", { name: /Add players/ }).click();
   const roster = page.getByRole("dialog", { name: "Who’s playing?", exact: true });
   for (let index = 0; index < 4; index++) await roster.getByRole("checkbox").nth(index).check();
   await roster.getByRole("button", { name: "Done · 4 players", exact: true }).click();
@@ -152,8 +152,8 @@ test("participant submission, opponent approval, results, and score correction s
     await login(page);
     await page.goto(`/session/${scoreSessionCode}`);
     await page.getByRole("button", { name: "More options", exact: true }).click();
-    await page.getByRole("button", { name: "End session", exact: true }).click();
-    await page.getByRole("dialog", { name: "End this session?", exact: true }).getByRole("button", { name: "End session", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Finish session", exact: true }).click();
+    await page.getByRole("dialog", { name: "Finish this session?", exact: true }).getByRole("button", { name: "Finish & show results", exact: true }).click();
     await expect(page.locator('[aria-labelledby="session-finish-title"]')).toBeVisible();
     await page.getByRole("button", { name: "Match history", exact: true }).click();
     await page.getByLabel("Open actions for Court 1", { exact: true }).click();
@@ -194,7 +194,7 @@ test('staff retains session controls and has no club administration access', asy
   await page.goto(`/session/${code}`);
   await page.getByRole('button', { name: 'More options' }).click();
   await expect(page.getByRole('button', { name: 'Session settings', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'End session', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Finish session', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Delete session', exact: true })).toHaveCount(0);
   expect((await page.request.patch(`/api/clubs/${hostClubId}/members/user-host-2-e2e`, { data: { elo: 1200 } })).status()).toBe(403);
   await page.goto(`/club/${hostClubId}/admin`);
@@ -219,7 +219,7 @@ test('a player joins using the exact owned club profile', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Rest options', exact: true })).toHaveCount(0);
   const updated = await (await page.request.get(`/api/sessions/${code}`)).json();
   expect(updated.players.find((player: { userId: string }) => player.userId === 'user-host-4-e2e').skipNextMatchAt).toBeTruthy();
-  await expect(page.getByRole('button', { name: 'Manage players', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add players', exact: true })).toHaveCount(0);
 });
 
 test('administration scroll survives overlays, cross-route navigation, and Back', async ({ page }) => {

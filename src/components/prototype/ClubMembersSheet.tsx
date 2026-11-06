@@ -7,17 +7,20 @@ export function ClubMembersSheet({
   members,
   open,
   onClose,
+  onAdd,
 }: {
   members: Pick<ClubPageMember, "id" | "name" | "avatarUrl">[];
   open: boolean;
   onClose: () => void;
+  onAdd?: () => void;
 }) {
   const sortedMembers = [...members].sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
   );
 
   return (
-    <Sheet open={open} title="Members" onClose={onClose}>
+    <Sheet open={open} title="Players" onClose={onClose}>
+      {onAdd && <button className="primary full" type="button" onClick={onAdd}>Add players</button>}
       {sortedMembers.length ? (
         <ul className="club-members-list">
           {sortedMembers.map((member) => (
@@ -28,7 +31,7 @@ export function ClubMembersSheet({
           ))}
         </ul>
       ) : (
-        <p className="muted">No members yet.</p>
+        <p className="muted">No players yet.</p>
       )}
     </Sheet>
   );

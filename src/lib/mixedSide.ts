@@ -177,14 +177,14 @@ export function getMixedSideOverrideOptionForGender(gender: PlayerGender) {
   if (gender === PlayerGender.FEMALE) {
     return {
       value: MixedSide.UPPER,
-      label: "Upper Side",
+      label: "Higher level",
     };
   }
 
   if (gender === PlayerGender.MALE) {
     return {
       value: MixedSide.LOWER,
-      label: "Lower Side",
+      label: "Lower level",
     };
   }
 
@@ -207,12 +207,12 @@ export function getMixedSideDisplayLabel({
   );
 
   if (resolvedMixedSideOverride === MixedSide.UPPER) {
-    return "Upper Side";
+    return "Higher level";
   }
 
   if (resolvedMixedSideOverride === MixedSide.LOWER) {
-    return "Lower Side";
+    return "Lower level";
   }
 
-  return "Default";
+  return "Standard";
 }

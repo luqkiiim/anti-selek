@@ -164,6 +164,7 @@ export interface SessionData {
   crossoverFrequency: SessionCrossoverFrequency;
   viewerCanManage?: boolean;
   viewerCanChangeCourtCount?: boolean;
+  viewerAdminClubIds?: string[];
   viewerCanRename?: boolean;
   viewerCanUseAdminSessionControls?: boolean;
   viewerCanDelete?: boolean;

@@ -2,7 +2,7 @@
 
 import type { FormEvent } from "react";
 import { ModalFrame } from "@/components/ui/chrome";
-import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { MixedPairingControl } from "@/components/prototype/MixedPairingControl";
 import {
   ClubPlayerStatus,
   MixedSide,
@@ -45,7 +45,6 @@ export function CreateClubPlayerModal({
 }: CreateClubPlayerModalProps) {
   if (!open) return null;
 
-  const mixedSideOption = getMixedSideOverrideOptionForGender(newPlayerGender);
 
   return (
     <ModalFrame
@@ -113,25 +112,7 @@ export function CreateClubPlayerModal({
           </select>
         </label>
 
-        {mixedSideOption ? (
-          <label className="block space-y-2 text-sm font-medium text-gray-900">
-            <span>Mixed side</span>
-            <select
-              value={newPlayerMixedSideOverride ?? ""}
-              onChange={(event) =>
-                onNewPlayerMixedSideOverrideChange(
-                  event.target.value
-                    ? (event.target.value as MixedSide)
-                    : null
-                )
-              }
-              className="field"
-            >
-              <option value="">Default</option>
-              <option value={mixedSideOption.value}>{mixedSideOption.label}</option>
-            </select>
-          </label>
-        ) : null}
+        <MixedPairingControl gender={newPlayerGender} value={newPlayerMixedSideOverride} onChange={onNewPlayerMixedSideOverrideChange} />
 
         <label className="block space-y-2 text-sm font-medium text-gray-900">
           <span>Roster status</span>

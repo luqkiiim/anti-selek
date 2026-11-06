@@ -1,4 +1,5 @@
 "use client";
+import { MixedPairingControl } from "@/components/prototype/MixedPairingControl";
 
 import {
   useEffect,
@@ -10,10 +11,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import {
-  getDefaultMixedSideForGender,
-  getMixedSideOverrideOptionForGender,
-} from "@/lib/mixedSide";
 import { getSessionPoolOptions } from "@/lib/sessionPools";
 import { useDialogFocusManagement } from "@/components/ui/useDialogFocusManagement";
 import { MixedSide, PlayerGender, SessionPool } from "@/types/enums";
@@ -233,12 +230,6 @@ export function SessionPreferenceEditorPortal({
     return null;
   }
 
-  const mixedSideOption = getMixedSideOverrideOptionForGender(
-    activePreferencePlayer.gender
-  );
-  const defaultMixedSide = getDefaultMixedSideForGender(
-    activePreferencePlayer.gender
-  );
   const poolOptions = getSessionPoolOptions({ poolsEnabled });
   const hasSkipNext = Boolean(activePreferencePlayer.skipNextMatchAt);
   const actionButtonClassName = cx(
@@ -271,38 +262,10 @@ export function SessionPreferenceEditorPortal({
             </select>
           </label>
 
-          <label className="block space-y-1.5">
-            <span className={labelClassName()}>Mixed side</span>
-            {mixedSideOption ? (
-              <select
-                value={activePreferencePlayer.mixedSideOverride ?? ""}
-                onChange={async (event) => {
-                  onClose();
-                  await onUpdatePreference(
-                    activePreferencePlayer.userId,
-                    activePreferencePlayer.gender,
-                    event.target.value ? (event.target.value as MixedSide) : null,
-                    activePreferencePlayer.pool,
-                    activePreferencePlayer.representingClubId ?? null
-                  );
-                }}
-                className={selectClassName()}
-              >
-                <option value="">
-                  {defaultMixedSide === MixedSide.UPPER
-                    ? "Upper Side (default)"
-                    : "Lower Side (default)"}
-                </option>
-                <option value={mixedSideOption.value}>
-                  {mixedSideOption.label}
-                </option>
-              </select>
-            ) : (
-              <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
-                Default
-              </p>
-            )}
-          </label>
+          <MixedPairingControl gender={activePreferencePlayer.gender} value={activePreferencePlayer.mixedSideOverride ?? null} onChange={async mixedSideOverride => {
+            onClose();
+            await onUpdatePreference(activePreferencePlayer.userId, activePreferencePlayer.gender, mixedSideOverride, activePreferencePlayer.pool, activePreferencePlayer.representingClubId ?? null);
+          }} />
         </>
       ) : null}
 

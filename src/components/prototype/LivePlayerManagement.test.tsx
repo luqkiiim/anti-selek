@@ -8,7 +8,8 @@ import type { SessionData } from "@/components/session/sessionTypes";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
 
-vi.mock("./api", () => ({ api: mocks.api }));
+vi.mock("./api", async importOriginal => ({ ...await importOriginal<typeof import("./api")>(), api: mocks.api }));
+vi.mock("@/lib/adminClient", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/adminClient")>(), adminApi: (url: string, ...args: unknown[]) => url === "/api/sessions/LIVE01" ? Promise.resolve({ status: "ACTIVE", players: [] }) : mocks.api(url, ...args) }));
 vi.mock("./Primitives", () => ({
   Avatar: ({ name }: { name: string }) => <span role="img" aria-label={name}>{name.slice(0, 1)}</span>,
   ErrorText: ({ error }: { error: string }) => error ? <p role="alert">{error}</p> : null,
@@ -181,16 +182,16 @@ describe("LivePlayerManagement", () => {
       label: "male",
       gender: PlayerGender.MALE,
       partnerPreference: PartnerPreference.OPEN,
-      defaultLabel: "Upper Side (default)",
-      alternateLabel: "Lower Side",
+      defaultLabel: "Standard",
+      alternateLabel: "Lower level",
       alternateSide: MixedSide.LOWER,
     },
     {
       label: "female",
       gender: PlayerGender.FEMALE,
       partnerPreference: PartnerPreference.FEMALE_FLEX,
-      defaultLabel: "Lower Side (default)",
-      alternateLabel: "Upper Side",
+      defaultLabel: "Standard",
+      alternateLabel: "Higher level",
       alternateSide: MixedSide.UPPER,
     },
   ])("offers mixed sides for a $label player and saves the override", async ({
@@ -208,8 +209,8 @@ describe("LivePlayerManagement", () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Options for Ari Player"]')?.click();
     });
 
-    const mixedSide = [...container.querySelectorAll("label.pm-label")]
-      .find((label) => label.textContent?.includes("Mixed side"))
+    const mixedSide = [...container.querySelectorAll("label")]
+      .find((label) => label.textContent?.includes("Mixed-pairing level"))
       ?.querySelector("select");
     expect(Array.from(mixedSide?.options ?? []).map((option) => option.textContent?.trim()))
       .toEqual([defaultLabel, alternateLabel]);
@@ -248,8 +249,8 @@ describe("LivePlayerManagement", () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Options for Ari Player"]')?.click();
     });
 
-    const mixedSide = [...container.querySelectorAll("label.pm-label")]
-      .find((label) => label.textContent?.includes("Mixed side"))
+    const mixedSide = [...container.querySelectorAll("label")]
+      .find((label) => label.textContent?.includes("Mixed-pairing level"))
       ?.querySelector("select");
     expect(mixedSide?.value).toBe(MixedSide.UPPER);
 
@@ -288,7 +289,7 @@ describe("LivePlayerManagement", () => {
     await render(session);
 
     await act(async () => {
-      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add club members"))?.click();
+      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add players"))?.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(container.textContent).toContain("Bea Member");
@@ -299,7 +300,7 @@ describe("LivePlayerManagement", () => {
     expect(container.textContent).toContain("Ari Player");
 
     await act(async () => {
-      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add club members"))?.click();
+      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add players"))?.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
@@ -316,10 +317,10 @@ describe("LivePlayerManagement", () => {
   });
 
   it("prefills a missing roster search as a guest and submits gender, side, and rating", async () => {
-    mocks.api.mockResolvedValueOnce([]).mockResolvedValueOnce({});
+    mocks.api.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce({});
     await render();
     await act(async () => {
-      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add club members"))?.click();
+      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add players"))?.click();
     });
     const search = container.querySelector<HTMLInputElement>('[aria-label="Search club members"]');
     await act(async () => {
@@ -329,25 +330,24 @@ describe("LivePlayerManagement", () => {
         search.dispatchEvent(new Event("input", { bubbles: true }));
       }
     });
-    const addAsGuest = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add “New Guest” as a guest"));
+    const addAsGuest = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add “New Guest”"));
     expect(addAsGuest).toBeDefined();
     await act(async () => addAsGuest?.click());
-    const guestName = container.querySelector<HTMLInputElement>('.pm-form input');
+    const guestName = container.querySelector<HTMLInputElement>('.new-player-form input');
     expect(guestName?.value).toBe("New Guest");
     expect(container.querySelector('[aria-label="Starting rating"]')).toBeNull();
-    const rating = container.querySelector<HTMLInputElement>('.pm-form input[type="number"]');
+    const rating = container.querySelector<HTMLInputElement>('.new-player-form input[type="number"]');
     expect(rating?.value).toBe("1000");
-    const selects = container.querySelectorAll<HTMLSelectElement>(".pm-form select");
+    const selects = container.querySelectorAll<HTMLSelectElement>(".new-player-form select");
     expect(selects[0]?.value).toBe(PlayerGender.UNSPECIFIED);
     await act(async () => {
       selects[0].value = PlayerGender.FEMALE;
       selects[0].dispatchEvent(new Event("change", { bubbles: true }));
     });
-    const guestMixedSide = [...container.querySelectorAll<HTMLSelectElement>(".pm-form select")]
-      .find((select) => select.parentElement?.textContent?.includes("Mixed side"));
-    expect(Array.from(guestMixedSide?.options ?? []).map((option) => option.textContent?.trim()))
-      .toEqual(["Lower Side (default)", "Upper Side"]);
-    const form = container.querySelector<HTMLFormElement>(".pm-form");
+    const guestMixedSide = [...container.querySelectorAll<HTMLSelectElement>(".new-player-form select")]
+      .find((select) => select.parentElement?.textContent?.includes("Mixed-pairing level"));
+    expect(guestMixedSide).toBeUndefined(); // Open pairing does not expose mixed-level overrides.
+    const form = container.querySelector<HTMLFormElement>(".new-player-form");
     await act(async () => form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/LIVE01/guests", "POST", {
@@ -356,6 +356,7 @@ describe("LivePlayerManagement", () => {
       gender: PlayerGender.FEMALE,
       mixedSideOverride: null,
       pool: SessionPool.A,
+      representingClubId: "club-1",
     });
     expect(changed).toHaveBeenCalledOnce();
   });
@@ -384,7 +385,7 @@ describe("LivePlayerManagement", () => {
     await render(session);
 
     await act(async () => {
-      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add club members"))?.click();
+      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add players"))?.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await act(async () => {
@@ -414,10 +415,10 @@ describe("LivePlayerManagement", () => {
   ])("keeps the picker open when a success response contains $label, and allows retry", async ({ result }) => {
     mocks.api.mockResolvedValueOnce([memberToAdd]).mockResolvedValueOnce(result);
     await render();
-    await click("Add club members");
+    await click("Add players");
     await click("Add to session");
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("Bea Member wasn’t added. Try again.");
-    expect(container.querySelector('[aria-label="Add club members"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Add players"]')).not.toBeNull();
     expect(changed).not.toHaveBeenCalled();
 
     mocks.api.mockResolvedValueOnce({ players: [{ playerId: "member-2", profileClubId: "club-1" }] });
@@ -430,7 +431,7 @@ describe("LivePlayerManagement", () => {
   it("preserves the chosen group and clears the roster search after confirmed addition", async () => {
     mocks.api.mockResolvedValueOnce([memberToAdd]).mockResolvedValueOnce({ players: [{ playerId: "member-2", profileClubId: "club-1" }] });
     await render();
-    await click("Add club members");
+    await click("Add players");
     const search = container.querySelector<HTMLInputElement>('[aria-label="Search club members"]')!;
     const group = container.querySelector<HTMLSelectElement>(".pm-pool-choice select")!;
     await act(async () => {
@@ -455,7 +456,7 @@ describe("LivePlayerManagement", () => {
       { id: "club-2", name: "Club Two", role: "PARTNER", status: "ACCEPTED" },
     ];
     await render(session);
-    await click("Add club members");
+    await click("Add players");
     await click("Add to session");
     expect(mocks.api).toHaveBeenLastCalledWith("/api/sessions/LIVE01/join", "POST", { playerId: "member-2", profileClubId: "club-2", pool: SessionPool.B });
     expect(changed).toHaveBeenCalledOnce();
@@ -464,10 +465,10 @@ describe("LivePlayerManagement", () => {
   it("shows an authorization failure without implying that the member was added", async () => {
     mocks.api.mockResolvedValueOnce([memberToAdd]).mockRejectedValueOnce(new Error("Your club access changed."));
     await render();
-    await click("Add club members");
+    await click("Add players");
     await click("Add to session");
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("Your club access changed.");
-    expect(container.querySelector('[aria-label="Add club members"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Add players"]')).not.toBeNull();
     expect(changed).not.toHaveBeenCalled();
   });
 });

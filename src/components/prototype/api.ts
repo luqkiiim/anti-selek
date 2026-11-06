@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly code?: string) { super(message); this.name = "ApiError"; }
+  constructor(message: string, readonly status: number, readonly code?: string, readonly details?: unknown) { super(message); this.name = "ApiError"; }
 }
 
 export async function api<T>(
@@ -19,7 +19,7 @@ export async function api<T>(
   });
   const data = await response.json().catch(() => null);
   if (!response.ok)
-    throw new ApiError(data?.error || `Request failed (${response.status})`, response.status, data?.code);
+    throw new ApiError(data?.error || `Request failed (${response.status})`, response.status, data?.code, data);
   return data as T;
 }
 export function useResource<T>(url: string | null, { enabled = true, refreshKey }: { enabled?: boolean; refreshKey?: string } = {}) {

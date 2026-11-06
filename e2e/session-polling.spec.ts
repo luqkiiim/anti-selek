@@ -59,8 +59,8 @@ test("two viewers receive scores and final standings with one session timer", as
     await expect(viewerPoints).toHaveText("3", { timeout: 12_000 });
 
     await page.getByRole("button", { name: "More options" }).click();
-    await page.getByRole("button", { name: "End session", exact: true }).click();
-    await page.getByRole("dialog", { name: "End this session?" }).getByRole("button", { name: "End session", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Finish session", exact: true }).click();
+    await page.getByRole("dialog", { name: "Finish this session?" }).getByRole("button", { name: "Finish & show results", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Session complete" })).toBeVisible();
     await expect(viewer.getByRole("heading", { name: "Session complete" })).toBeVisible();
     await expect(viewerPoints).toHaveText("3");

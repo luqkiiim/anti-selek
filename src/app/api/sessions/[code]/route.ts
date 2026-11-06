@@ -56,6 +56,7 @@ import { getAccountClubContext } from "@/lib/playerIdentity";
 import { setSessionCourtCount } from "@/lib/sessionCourts";
 import { serializeSessionDetails } from "@/lib/sessionDetails";
 import { courtAvailabilityReady } from "@/lib/courtAvailabilityRollout";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 
 export const dynamic = "force-dynamic";
 
@@ -315,6 +316,12 @@ async function getSessionRoute(
     ? sessionData.players.some((player) => player.playerId === quickPlayerId)
     : await isAccountSessionPlayer(prisma, sessionData.id, session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
+  const viewerAdminClubIds = globalView || isQuickAccess ? [] : (await Promise.all(
+    (await getAcceptedSessionClubIds(prisma, sessionData)).map(async clubId => {
+      const access = await getClubAdminAccess(prisma, { clubId, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin });
+      return access?.canAdmin ? clubId : null;
+    }),
+  )).filter((id): id is string => id !== null);
   const participantOwners = await getSessionParticipantOwners(prisma, sessionData);
   const viewerOwnedPlayers = globalView || isQuickAccess
     ? []
@@ -483,6 +490,7 @@ async function getSessionRoute(
     viewerCanParticipate: !globalView && !isQuickAccess,
     viewerCanScore: !globalView && !isQuickAccess,
     viewerClubRole: clubRole,
+    viewerAdminClubIds,
     viewerUserId,
     viewerPlayerId,
     eligibleProfiles,

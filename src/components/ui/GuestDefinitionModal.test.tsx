@@ -92,15 +92,15 @@ describe("GuestDefinitionModal", () => {
       document.body.querySelector('select[aria-label="Guest gender"]')
     ).not.toBeNull();
     expect(
-      document.body.querySelector('select[aria-label="Guest mixed doubles side"]')
+      document.body.querySelector('select[aria-label="Mixed-pairing level"]')
     ).not.toBeNull();
     expect(
       Array.from(
         document.body.querySelectorAll(
-          'select[aria-label="Guest mixed doubles side"] option'
+          'select[aria-label="Mixed-pairing level"] option'
         )
       ).map((option) => option.textContent?.trim())
-    ).toEqual(["Lower Side (default)", "Upper Side"]);
+    ).toEqual(["Standard", "Higher level"]);
     expect(
       document.body.querySelector('select[aria-label="Guest game group"]')
     ).not.toBeNull();

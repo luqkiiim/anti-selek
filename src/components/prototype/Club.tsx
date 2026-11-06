@@ -34,11 +34,12 @@ import type {
 } from "@/lib/profileStats";
 import { api, useAction } from "./api";
 import {
-  ErrorText,
+  ErrorText, Sheet,
 } from "./Primitives";
 import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
+import { NewSessionPlayerForm } from "./NewSessionPlayerForm";
 import { ClubMembersSheet } from "./ClubMembersSheet";
 import { MonthlyClimbers } from "./MonthlyClimbers";
 import { UpcomingSessions } from "./UpcomingSessions";
@@ -100,6 +101,9 @@ export default function Club({
   const route = new URL(href, "https://anti-selek.local");
   const [localMemberStack, setMemberStack] = useState<string[]>([]);
   const [membersOpen, setMembersOpen] = useState(false);
+  const [addingPlayer, setAddingPlayer] = useState(false);
+  const [savingPlayer, setSavingPlayer] = useState(false);
+  const [playerNotice, setPlayerNotice] = useState("");
   const memberStack = onRoute ? route.searchParams.getAll("member") : localMemberStack;
   const [localPage, setPage] = useState<string>(globalView ? "club" : initialPage),
     [sessionCode, setSessionCode] = useState(""),
@@ -136,6 +140,12 @@ export default function Club({
   function updateAdminSnapshot(updater: (current: Snapshot) => Snapshot) {
     resource.update(updater);
     if (store) void store.refreshClub(club.id, snapshotUrl).catch(() => {});
+  }
+  function savedPlayer(member: ClubPageMember) {
+    resource.update(current => ({ ...current, clubMembers: [...current.clubMembers.filter(player => player.id !== member.id), member] }));
+    // The creation response is authoritative for this roster. Revalidating this
+    // snapshot would temporarily revoke canManage and unmount the setup draft.
+    void store?.refreshClub(club.id, snapshotUrl).catch(() => {});
   }
   async function refresh() {
     await Promise.all(store
@@ -348,7 +358,13 @@ export default function Club({
                 <UpcomingSessions sessions={upcoming} clubId={club.id} busy={action.busy} onReview={canAdmin ? (code, status) => void action.run(() => api(`/api/sessions/${encodeURIComponent(code)}/collab`, "PATCH", { status })) : undefined} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
                 {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); if (onRoute) onRoute(changeAppQuery(clubHref(club.id, "recap", readOnly), { session: recent.code })); else go("recap"); }} />}
               </div>
-              {canManage && !live.length && !upcoming.length && <div className="club-start-session"><button className="primary" onClick={() => go("setup")}><Plus size={18} />New session</button></div>}
+              {canManage && !live.length && !upcoming.length && <div className="club-start-session first-session-actions">
+                {canAdmin && !(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length) && data.clubMembers.length < 4 ? <>
+                  <button className="primary" onClick={() => setAddingPlayer(true)}><Plus size={18} />Add your players</button>
+                  <button className="secondary" onClick={() => go("setup")}>Create a session</button>
+                </> : <button className="primary" onClick={() => go("setup")}><Plus size={18} />New session</button>}
+                {playerNotice && <p role="status">{playerNotice}</p>}
+              </div>}
                 <section className="club-activity-totals" aria-label="Club activity">
                   <button type="button" onClick={() => go("sessions")} aria-label={`${(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()} Sessions, view sessions`}>
                     <CalendarBlank size={19} aria-hidden="true" />
@@ -501,12 +517,17 @@ export default function Club({
               </button>
             </>
           )}
-          {data && page === "setup" && canManage && <SessionSetup clubId={club.id} members={data.clubMembers} onCreated={openSession} onAdvanced={onRoute ? () => onRoute(changeAppQuery(clubHref(club.id, "host"), { tools: "advanced" })) : undefined} />}
+          {data && page === "setup" && canManage && <SessionSetup clubId={club.id} members={data.clubMembers} canSavePlayers={canAdmin} onMemberSaved={savedPlayer} onCreated={openSession} onAdvanced={onRoute ? () => onRoute(changeAppQuery(clubHref(club.id, "host"), { tools: "advanced" })) : undefined} />}
       </>}</Pager>
       {!["setup", "recap"].includes(page) && (
         <MainNav active={page} onNavigate={go} readOnly={readOnly} />
       )}
-      {data && <ClubMembersSheet members={data.clubMembers} open={membersOpen} onClose={() => setMembersOpen(false)} />}
+      {data && <ClubMembersSheet members={data.clubMembers} onAdd={canAdmin ? () => { setMembersOpen(false); setAddingPlayer(true); } : undefined} open={membersOpen} onClose={() => setMembersOpen(false)} />}
+      {canAdmin && <Sheet open={addingPlayer} title="Add players" busy={savingPlayer} onClose={() => setAddingPlayer(false)}>
+        <NewSessionPlayerForm clubs={[{ id: club.id, name: data?.club.name ?? club.name, canSave: true }]} mode="club" onBusyChange={setSavingPlayer} onCancel={() => setAddingPlayer(false)} onSaved={member => {
+          savedPlayer(member); setPlayerNotice(`${member.name} is saved to the club.`); setAddingPlayer(false);
+        }} />
+      </Sheet>}
       {memberOverlay}
     </div>
   );

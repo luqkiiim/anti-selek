@@ -1,4 +1,6 @@
 "use client";
+import { MixedPairingControl } from "./MixedPairingControl";
+import "./first-session.css";
 import { useRef, useState } from "react";
 import { useAppLocation } from "@/components/app/AppShell";
 import { useAppReady } from "@/components/app/AppStartup";
@@ -16,6 +18,7 @@ import {
 import type { ClubPageMember } from "@/components/club/clubTypes";
 import { getClubRoleLabel } from "@/lib/clubRoles";
 import { getMixedSideOverrideOptionForGender, getStoredPartnerPreference, normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
+import type { MixedSide } from "@/types/enums";
 import type { Snapshot } from "./Club";
 import { adminApi } from "@/lib/adminClient";
 import { useAdminAction } from "@/components/club-admin/useAdminAction";
@@ -374,8 +377,7 @@ export default function Admin({
                 </select>
               </label>
               {edit && <div className="manage-player-preferences">
-                {canEditPreferences && <><label className="field-label">Player level<select aria-label="Player level" value={playerLevel} onChange={e => setPlayerLevel(e.target.value)} disabled={!levelOption}><option value="">Default</option>{levelOption && <option value={levelOption.value}>{edit.gender === "FEMALE" ? "High level" : "Low level"}</option>}</select></label>
-                <p className="manage-preference-hint">Used when forming mixed pairs.</p></>}
+                {canEditPreferences && <MixedPairingControl gender={edit.gender} value={playerLevel as MixedSide || null} onChange={value => setPlayerLevel(value ?? "")} />}
                 <label className="field-label">Preferred game group<select aria-label="Preferred game group" value={preferredGroup} onChange={e => setPreferredGroup(e.target.value)}><option value="A">Competitive</option><option value="B">Social</option></select></label>
               </div>}
               <button

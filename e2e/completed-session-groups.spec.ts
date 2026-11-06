@@ -55,8 +55,8 @@ test("category standings survive ending and reopening a grouped session", async 
   expect(categoryRows[1].join()).toContain("Host Player 4");
 
   await page.getByRole("button", { name: "More options" }).click();
-  await page.getByRole("button", { name: "End session", exact: true }).click();
-  await page.getByRole("dialog", { name: "End this session?" }).getByRole("button", { name: "End session", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Finish session", exact: true }).click();
+  await page.getByRole("dialog", { name: "Finish this session?" }).getByRole("button", { name: "Finish & show results", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Session complete" })).toBeVisible();
 
   for (const reopen of [false, true]) {

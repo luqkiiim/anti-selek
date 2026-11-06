@@ -8,7 +8,8 @@ import { createCroppedAvatarFile } from "@/lib/avatarCrop";
 import { uploadAccountAvatar, deleteAccountAvatar } from "@/lib/avatarClient";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
 import { api, useAction, useResource } from "./api";
-import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { MixedPairingControl } from "./MixedPairingControl";
+import "./first-session.css";
 import { MixedSide, PlayerGender } from "@/types/enums";
 import "./account-settings.css";
 
@@ -47,7 +48,6 @@ function AccountForm({ initial, onSaved, clubContext, disabled }: { initial: Acc
   const editable = user.isClaimed && !user.isQuickAccess;
   const nameChanged = user.canRenameName && name.trim() !== user.name;
   const genderChanged = user.canChangeGender && gender !== user.gender;
-  const levelOption = getMixedSideOverrideOptionForGender((genderChanged ? gender : clubGender ?? gender) as PlayerGender);
   const preferencesChanged = !!clubContext && playerLevel !== savedLevel;
   async function saveChanges() {
     if (disabled) return;
@@ -97,7 +97,7 @@ function AccountForm({ initial, onSaved, clubContext, disabled }: { initial: Acc
         <form onSubmit={e => { e.preventDefault(); if (action.busy) return; action.setError(""); if (nameChanged || genderChanged) setConfirmOpen(true); else void saveChanges(); }}>
           <label className="field-label">Account name<input value={name} onChange={e => setName(e.target.value)} disabled={!user.canRenameName} required /></label>
           <label className="field-label">Account gender<select aria-label="Account gender" value={gender} onChange={e => { setGender(e.target.value); setPlayerLevel(""); }} disabled={!user.canChangeGender} required><option value="UNSPECIFIED" disabled>Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>
-          {clubContext && <label className="field-label">Player level · {clubContext.clubName}<select aria-label="Player level" value={playerLevel} onChange={e => setPlayerLevel(e.target.value)} disabled={!levelOption}><option value="">Default</option>{levelOption && <option value={levelOption.value}>{levelOption.label}</option>}</select></label>}
+          {clubContext && <MixedPairingControl gender={(genderChanged ? gender : clubGender ?? gender) as PlayerGender} value={playerLevel as MixedSide || null} onChange={value => setPlayerLevel(value ?? "")} />}
           {(user.canRenameName || user.canChangeGender || clubContext) && <button type="submit" className="primary full" disabled={action.busy || (!nameChanged && !genderChanged && !preferencesChanged) || !name.trim()}>{action.busy ? "Saving…" : "Save changes"}</button>}
         </form>
         <button type="button" className="text-button account-signout" onClick={() => void signOut({ callbackUrl: "/signin" })}>Sign out</button>

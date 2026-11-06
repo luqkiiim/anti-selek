@@ -7,6 +7,16 @@ test.beforeEach(() => { createdCodes.length = 0; });
 test.afterEach(async ({ page }) => {
   // Do not leave live sessions that alter other suites' club overview fixtures.
   for (const code of createdCodes) {
+    const session = await (await page.request.get(`/api/sessions/${code}`)).json();
+    if (session.collaborationVersion >= 2 && session.status === "ACTIVE") {
+      const collaboration = await (await page.request.get(`/api/sessions/${code}/collaboration`)).json();
+      for (const club of collaboration.clubs) {
+        const approval = await page.request.patch(`/api/sessions/${code}/collaboration`, { data: { action: "confirmReset", clubId: club.id, revision: collaboration.resultsRevision } });
+        expect(approval.ok(), await approval.text()).toBe(true);
+      }
+      const reset = await page.request.post(`/api/sessions/${code}/reset`);
+      expect(reset.ok(), await reset.text()).toBe(true);
+    }
     const response = await page.request.delete(`/api/sessions/${code}/delete`);
     expect(response.ok(), await response.text()).toBe(true);
   }
@@ -27,7 +37,7 @@ async function read(page: Page, code: string): Promise<Snapshot> {
 async function setupAndStart(page: Page, includeHost = true) {
   await page.goto(`/club/${hostClubId}?tab=setup`);
   await page.getByLabel("Session name", { exact: true }).fill("Live member addition regression");
-  await page.getByRole("button", { name: /0 players/ }).click();
+  await page.getByRole("button", { name: /Add players/ }).click();
   const roster = page.getByRole("dialog", { name: "Who’s playing?", exact: true });
   const names = includeHost ? ["Admin E2E", "Host Player 1", "Host Player 2", "Host Player 3"] : ["Host Player 1", "Host Player 2", "Host Player 3", "Host Player 4"];
   for (const name of names) await roster.locator(".setup-person").filter({ has: page.getByText(name, { exact: true }) }).getByRole("checkbox").check();
@@ -42,9 +52,8 @@ async function setupAndStart(page: Page, includeHost = true) {
   return code;
 }
 async function openPicker(page: Page) {
-  await page.getByRole("button", { name: "Manage players", exact: true }).click();
-  await page.getByRole("button", { name: "Add club members", exact: true }).click();
-  return page.getByRole("dialog", { name: "Add club members", exact: true });
+  await page.getByRole("button", { name: "Add players", exact: true }).click();
+  return page.getByRole("dialog", { name: "Add players", exact: true });
 }
 
 for (const includeHost of [true, false]) {
@@ -72,9 +81,10 @@ for (const includeHost of [true, false]) {
     if (includeHost) {
       const guestPicker = await openPicker(page);
       await guestPicker.getByLabel("Search club members", { exact: true }).fill("Live regression guest");
-      await guestPicker.getByRole("button", { name: "Add “Live regression guest” as a guest", exact: true }).click();
-      await guestPicker.locator(".pm-form select").first().selectOption("FEMALE");
-      await guestPicker.getByRole("button", { name: "Add guest", exact: true }).click();
+      await guestPicker.getByRole("button", { name: "Add “Live regression guest”", exact: true }).click();
+      await guestPicker.getByRole("button", { name: "This session only" }).click();
+      await guestPicker.locator(".new-player-form select").first().selectOption("FEMALE");
+      await guestPicker.getByRole("button", { name: "Add to session", exact: true }).click();
       await expect(page.getByRole("dialog", { name: "Players", exact: true }).getByText("Live regression guest", { exact: true })).toBeVisible();
       const withGuest = await read(page, code);
       expect(withGuest.players).toHaveLength(6);
@@ -110,12 +120,21 @@ for (const collabFormat of ["FREE_PLAY", "INTERCLUB"]) {
       name: "Live partner member addition", clubId: hostClubId, partnerClubId, collabFormat, courtCount: 1,
       scoringType: "POINTS", matchmakingStyle: "BALANCED", balanceMetric: "RATING", pairingMode: "OPEN",
       autoQueueEnabled: false, respectPlayerRest: true, poolsEnabled: false, crossoverFrequency: "BALANCED",
-      playerIds: ids, playerConfigs: ids.map((playerId, index) => ({ playerId, profileClubId: index < 2 ? hostClubId : partnerClubId, representingClubId: index < 2 ? hostClubId : partnerClubId, pool: "A" })),
+      playerIds: ids.slice(0, 2), playerConfigs: ids.slice(0, 2).map(playerId => ({ playerId, profileClubId: hostClubId, representingClubId: hostClubId, pool: "A" })),
     } });
     expect(prepared.ok(), await prepared.text()).toBe(true);
     const code = (await prepared.json()).code as string;
     createdCodes.push(code);
     expect((await page.request.patch(`/api/sessions/${code}/collab`, { data: { status: "ACCEPTED" } })).ok()).toBe(true);
+    for (const playerId of ids.slice(2)) {
+      const admission = await page.request.post(`/api/sessions/${code}/join`, { data: { playerId, profileClubId: partnerClubId, representingClubId: partnerClubId, pool: "A" } });
+      expect(admission.ok(), await admission.text()).toBe(true);
+    }
+    const rules = await (await page.request.get(`/api/sessions/${code}/collaboration`)).json();
+    for (const clubId of [hostClubId, partnerClubId]) {
+      const confirmation = await page.request.patch(`/api/sessions/${code}/collaboration`, { data: { action: "confirmRules", revision: rules.rulesRevision, clubId } });
+      expect(confirmation.ok(), await confirmation.text()).toBe(true);
+    }
     expect((await page.request.post(`/api/sessions/${code}/start`)).ok()).toBe(true);
     await page.goto(`/session/${code}?tab=players`);
     const picker = await openPicker(page);

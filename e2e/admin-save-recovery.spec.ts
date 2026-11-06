@@ -82,7 +82,7 @@ test("another account's member can save club membership without sending personal
   await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
   await expect(editor).toBeVisible();
-  await expect(editor.getByLabel("Player level", { exact: true })).toHaveCount(0);
+  await expect(editor.getByLabel("Mixed-pairing level", { exact: true })).toHaveCount(0);
   await expect(editor.getByLabel("Rating", { exact: true })).toHaveCount(0);
   await editor.getByRole("combobox", { name: /^Membership/ }).selectOption("OCCASIONAL");
   await editor.getByLabel("Preferred game group", { exact: true }).selectOption("A");

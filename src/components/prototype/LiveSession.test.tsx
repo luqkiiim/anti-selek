@@ -35,6 +35,7 @@ vi.mock("./api", async (importOriginal) => ({
   useResource: mocks.useResource,
   useAction: mocks.useAction,
 }));
+vi.mock("@/lib/adminClient", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/adminClient")>(), adminApi: (...args: unknown[]) => mocks.api(...args) }));
 vi.mock("./Pager", () => ({
   Pager: ({
     children,
@@ -403,14 +404,14 @@ describe("LiveSession score and player controls", () => {
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("nav[aria-label='Session tabs'] button")).find((button) => button.textContent === "Players")?.click());
 
-    const pause = container.querySelector<HTMLButtonElement>('button[aria-label="Pause Score Player 1A"]');
+    const pause = container.querySelector<HTMLButtonElement>('button[aria-label="Pause after game Score Player 1A"]');
     expect(pause).toBeTruthy();
     await act(async () => pause?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/pause-player", "POST", { playerId: active.userId, isPaused: true });
 
     active.isPaused = true;
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
-    expect(container.textContent).toContain("Pausing after game");
+    expect(container.textContent).toContain("Break after this game");
 
     const resume = container.querySelector<HTMLButtonElement>('button[aria-label="Resume Paused Waiting"]');
     expect(resume).toBeTruthy();
@@ -622,7 +623,8 @@ describe("LiveSession score and player controls", () => {
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Player actions for Score Player 1A"]')?.click());
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause player")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause & clear game")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause & clear game")?.click());
 
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/pause-player", "POST", {
       playerId: "match-1-a",
@@ -646,7 +648,8 @@ describe("LiveSession score and player controls", () => {
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Player actions for Score Player 1A"]')?.click());
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause player")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause & clear game")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause & clear game")?.click());
 
     expect(mocks.api.mock.calls.slice(-2)).toEqual([
       ["/api/sessions/TEST01/pause-player", "POST", {
@@ -855,7 +858,7 @@ describe("LiveSession score and player controls", () => {
     });
     expect(container.textContent).toContain("Not started");
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
-    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Add players")).toBe(true);
   });
 
   it("saves a trimmed session name before starting and rejects a blank draft", async () => {
@@ -919,7 +922,7 @@ describe("LiveSession score and player controls", () => {
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/reset", "POST");
     expect(container.textContent).toContain("Not started");
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.getAttribute("aria-label") === "Review session settings")).toBe(true);
-    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Add players")).toBe(true);
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
   });
 
@@ -992,13 +995,47 @@ describe("LiveSession score and player controls", () => {
     });
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={onEnded} />));
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "End session")?.click());
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "End session")?.click());
-    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/end", "POST");
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Finish session")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Finish & show results")?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/end", "POST", { discardUnfinishedMatches: [] });
     expect(onEnded).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Session complete");
     expect(container.textContent).toContain("Share recap");
     expect(container.textContent).toContain("No completed games yet.");
+  });
+
+  it("requires a second deliberate finish after the server reports changed unfinished games", async () => {
+    setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }]));
+    const { useAction, ApiError } = await vi.importActual<typeof import("./api")>("./api");
+    mocks.useAction.mockImplementation(useAction);
+    const updatedReview = [{ id: "new-game", status: "PENDING_APPROVAL", scoreRevision: 3, courtNumber: 2 }];
+    mocks.api.mockRejectedValueOnce(new ApiError("Review the unfinished games before finishing this session.", 409, "UNFINISHED_MATCHES", { unfinishedMatches: updatedReview })).mockResolvedValue({});
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn()} />));
+    const click = async (label: string) => act(async () => { Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === label)!.click(); });
+    await click("Finish session");
+    await click("Finish & show results");
+    expect(mocks.api).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Court 2 · awaiting score approval");
+    expect(container.textContent).toContain("Review scores");
+    await click("Finish & discard unfinished games");
+    expect(mocks.api).toHaveBeenLastCalledWith("/api/sessions/TEST01/end", "POST", { discardUnfinishedMatches: updatedReview });
+  });
+
+  it("refreshes after a confirmed finish whose follow-up read failed without sending another finish", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }]);
+    setup(session);
+    const { useAction } = await vi.importActual<typeof import("./api")>("./api");
+    mocks.useAction.mockImplementation(useAction);
+    mocks.sessionResource!.refresh.mockRejectedValueOnce(new Error("Unable to refresh session."));
+    mocks.api.mockResolvedValueOnce({}).mockResolvedValueOnce({ ...session, status: "COMPLETED" });
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn()} />));
+    const click = async (label: string) => act(async () => { Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent === label)!.click(); });
+    await click("Finish session");
+    await click("Finish & show results");
+    expect(container.textContent).toContain("Unable to refresh session.");
+    await click("Refresh to check");
+    expect(mocks.api.mock.calls.filter(call => call[1] === "POST")).toHaveLength(1);
+    expect(mocks.api).toHaveBeenLastCalledWith("/api/sessions/TEST01");
   });
 
   it("opens the native recap share synchronously once the image is prepared", async () => {

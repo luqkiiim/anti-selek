@@ -29,8 +29,6 @@ import {
   SessionCrossoverFrequency,
   SessionType,
   SessionPool,
-  MixedSide,
-  PlayerGender,
 } from "@/types/enums";
 import { api, ApiError, useResource, useAction } from "./api";
 import { useSessionController } from "./useSessionController";
@@ -55,7 +53,10 @@ import { shareSessionStandingsImages } from "@/lib/sessionShareImageClient";
 import { SessionRecapSavePanel } from "@/components/session/SessionRecapSavePanel";
 import { useSessionStandingsImage } from "@/lib/useSessionStandingsImage";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
-import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { adminApi, AdminSaveOutcomeUnknownError } from "@/lib/adminClient";
+import type { UnfinishedMatchReview } from "@/lib/sessionFinish";
+import { SaveSessionGuests } from "./SaveSessionGuests";
+import "./first-session.css";
 import { classifyCourtGroupSnapshot, getCourtGroupTypeLabel } from "@/lib/playerGroups";
 import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
 import {
@@ -219,11 +220,14 @@ export default function LiveSession({
   const scoreRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const confirmingMatchIdsRef = useRef(new Set<string>());
   const savingScoreMatchIdsRef = useRef(new Set<string>());
-  const [name, setName] = useState(""),
-    [rating, setRating] = useState("1000");
-  const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.UNSPECIFIED);
-  const [guestMixedSideOverride, setGuestMixedSideOverride] = useState<MixedSide | null>(null);
-  const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
+  const [finishReview, setFinishReview] = useState<UnfinishedMatchReview[]>([]);
+  const [finishUncertain, setFinishUncertain] = useState(false);
+  const [pauseNotice, setPauseNotice] = useState("");
+  useEffect(() => {
+    if (!pauseNotice) return;
+    const timer = setTimeout(() => setPauseNotice(""), 5000);
+    return () => clearTimeout(timer);
+  }, [pauseNotice]);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const [restPlayerId, setRestPlayerId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -527,10 +531,10 @@ export default function LiveSession({
     const court = playingCourtFor(player.userId);
     if (court) {
       return isRosterPlayerPaused(player)
-        ? "Pausing after game"
+        ? "Break after this game"
         : `Playing on ${court.label || "Court " + court.courtNumber}`;
     }
-    return isRosterPlayerPaused(player) ? "Paused" : "Waiting";
+    return isRosterPlayerPaused(player) ? "On break" : "Waiting";
   }
   const alphabeticalPlayers = [...(s?.players ?? [])].sort((left, right) =>
     left.user.name.localeCompare(right.user.name, undefined, { sensitivity: "base" }),
@@ -553,6 +557,7 @@ export default function LiveSession({
     const previousOverlay = pauseOverlays[userId];
     const isPaused = !currentPaused;
     setPauseError("");
+    setPauseNotice("");
     setPauseOverlays((current) => ({
       ...current,
       [userId]: { isPaused, pending: true, conflictingRefreshes: 0 },
@@ -562,6 +567,8 @@ export default function LiveSession({
         playerId: userId,
         isPaused,
       });
+      const playerName = s?.players.find(player => player.userId === userId)?.user.name ?? "Player";
+      setPauseNotice(isPaused ? playingCourtFor(userId) ? `${playerName} will take a break after this game.` : `${playerName} is on break and won’t be assigned new games.` : `${playerName} is ready to play again.`);
       setPauseOverlays((current) => ({
         ...current,
         [userId]: { isPaused, pending: false, conflictingRefreshes: 0 },
@@ -703,6 +710,36 @@ export default function LiveSession({
         />
       </div>
     );
+  }
+  function reviewCourts(session: SessionData): UnfinishedMatchReview[] {
+    return session.courts.flatMap(court => court.currentMatch ? [{
+      id: court.currentMatch.id, status: court.currentMatch.status, scoreRevision: court.currentMatch.scoreRevision ?? 0,
+      courtNumber: court.courtNumber, courtLabel: court.label,
+    }] : []);
+  }
+  function openFinish() {
+    if (!s) return;
+    action.setError("");
+    setFinishReview(reviewCourts(s));
+    setSheet("end");
+  }
+  async function finishSession() {
+    await resource.cancelDeferredQueueRecovery();
+    try {
+      await adminApi(endpoint + "/end", "POST", {
+        ...(isCollaboration ? { acknowledgeRemainingLineup } : { discardUnfinishedMatches: finishReview }),
+      });
+      // If the following refresh fails, check the saved result before another write.
+      setFinishUncertain(true);
+      setCelebrateFinish(true);
+    } catch (failure) {
+      if (failure instanceof AdminSaveOutcomeUnknownError) setFinishUncertain(true);
+      if (failure instanceof ApiError && failure.code === "UNFINISHED_MATCHES") {
+        const details = failure.details as { unfinishedMatches: UnfinishedMatchReview[] };
+        setFinishReview(details.unfinishedMatches);
+      }
+      throw failure;
+    }
   }
   function closeSheet() {
     setSheet("");
@@ -1011,7 +1048,7 @@ export default function LiveSession({
     );
   }
   return (
-    <div className={`pc-app${s?.status === "WAITING" ? " session-standby" : ""}`}>
+    <div className={`pc-app${s?.status === "WAITING" ? " session-standby" : ""}${s?.status === "ACTIVE" && canManage ? " has-finish-action" : ""}`}>
       {saveRecapOpen && shareImage.images && s && <SessionRecapSavePanel
         images={shareImage.images} fileName={`${s.name}-standings`} onClose={() => setSaveRecapOpen(false)} />}
       {shareMode && s && <SessionShareSheet session={s} initialEditing={shareMode === "details"}
@@ -1041,6 +1078,7 @@ export default function LiveSession({
           <span />
         )}
       </header>
+      {s?.status === "ACTIVE" && canManage && <div className="session-finish-toolbar"><button type="button" className="secondary" onClick={openFinish}><SignOut size={17} />Finish session</button></div>}
       <Pager pages={s?.status !== "ACTIVE" ? [tab] : sessionTabs} active={tab} onChange={navigateTab}>{tab => <>
           <ErrorText
             error={pauseError || resource.error || standings.error || (!sheet ? action.error : "")}
@@ -1075,6 +1113,7 @@ export default function LiveSession({
                   {getInterclubScore(s) ? <InterclubScoreboard session={s} /> : null}
                 </SessionFinishView>
               ) : <p role="status">Loading final results…</p>}
+              <SaveSessionGuests session={s} />
               <ErrorText error={shareError || (shareImage.error ? `${shareImage.error} Tap Try again to prepare the recap.` : "")} />
               <button className="primary" onClick={onBack}>
                 Back to club
@@ -1283,27 +1322,8 @@ export default function LiveSession({
                   {s.players.filter((p) => isRosterPlayerPaused(p)).length} taking a break
                 </small>
               </div>
-              {canManageRoster && (isCollaboration ? <button className="primary full" onClick={() => setManagePlayersOpen(true)}>Manage my club’s players</button> : (
-                <div className="button-pair">
-                  <button
-                    className="primary"
-                    onClick={() => {
-                      setName("");
-                      setRating("1000");
-                      setGuestGender(PlayerGender.UNSPECIFIED);
-                      setGuestMixedSideOverride(null);
-                      setGuestRepresentingClubId("");
-                      setSheet("guest");
-                    }}
-                  >
-                    <Plus size={18} />
-                    Add guest
-                  </button>
-                  <button className="secondary" onClick={() => setManagePlayersOpen(true)}>
-                    Manage players
-                  </button>
-                </div>
-              ))}
+              {pauseNotice && <p role="status" className="session-action-notice">{pauseNotice}</p>}
+              {canManageRoster && <button className="primary full" onClick={() => setManagePlayersOpen(true)}><Plus size={18} />Add players</button>}
               <div className="roster">
                 {activePlayers.map((p) => {
                   const isPaused = isRosterPlayerPaused(p);
@@ -1317,14 +1337,12 @@ export default function LiveSession({
                       {ownsSessionSeat(p) && <button className="icon-button" aria-label={`Rest options for ${p.user.name}`} onClick={() => { setRestPlayerId(p.userId); setSheet("self-rest"); }}><DotsThree size={20} /></button>}
                       {((canManageRoster && mayManagePlayer(p)) || ownsSessionSeat(p)) && (
                         <button
-                          className="icon-button"
-                          aria-label={
-                            (isPaused ? "Resume " : "Pause ") + p.user.name
-                          }
+                          className="roster-pause-action"
+                          aria-label={`${isPaused ? "Resume" : ownsSessionSeat(p) ? playingCourtFor(p.userId) ? "Take a break after game" : "Take a break" : playingCourtFor(p.userId) ? "Pause after game" : "Pause"} ${p.user.name}`}
                           disabled={pauseOverlays[p.userId]?.pending === true}
                           onClick={() => void toggleRosterPlayerPause(p.userId, isPaused)}
                         >
-                          {isPaused ? <Play size={18} /> : <Pause size={18} />}
+                          {isPaused ? <Play size={16} /> : <Pause size={16} />}<span>{isPaused ? "Resume" : ownsSessionSeat(p) ? playingCourtFor(p.userId) ? "Take a break after game" : "Take a break" : playingCourtFor(p.userId) ? "Pause after game" : "Pause"}</span>
                         </button>
                       )}
                     </div>
@@ -1334,7 +1352,7 @@ export default function LiveSession({
               {pausedPlayers.length > 0 && (
                 <section className="paused-players">
                   <div className="section-heading">
-                    <h3>Paused</h3>
+                    <h3>On break</h3>
                     <small>{pausedPlayers.length} player{pausedPlayers.length === 1 ? "" : "s"}</small>
                   </div>
                   <div className="roster">
@@ -1347,12 +1365,12 @@ export default function LiveSession({
                         </span>
                         {((canManageRoster && mayManagePlayer(p)) || ownsSessionSeat(p)) && (
                           <button
-                            className="icon-button"
+                            className="roster-pause-action"
                             aria-label={`Resume ${p.user.name}`}
                             disabled={pauseOverlays[p.userId]?.pending === true}
                             onClick={() => void toggleRosterPlayerPause(p.userId, true)}
                           >
-                            <Play size={18} />
+                            <Play size={16} /><span>Resume</span>
                           </button>
                         )}
                       </div>
@@ -1372,6 +1390,7 @@ export default function LiveSession({
                   scoreLabel={s.type === SessionType.LADDER ? "net wins" : "points"}
                   onOpenMember={openMember}
                 />
+                {canManage && <p className="muted">Finish the session to reveal the podium.</p>}
                 <details>
                   <summary>How standings work</summary>
                   <p>
@@ -1406,13 +1425,13 @@ export default function LiveSession({
             sheet === "self-rest" ? "Rest options" : sheet === "menu"
                 ? "Options"
                 : sheet === "end"
-                  ? "End this session?"
+                  ? "Finish this session?"
                   : sheet === "rollback"
                     ? "Rollback this session?"
                   : sheet === "delete"
                     ? s?.status === "ACTIVE" ? "Cancel this session?" : "Delete this session?"
-                  : sheet === "guest"
-                    ? "Add guest"
+                  : sheet === "pause-court"
+                    ? "Pause & clear game?"
                     : sheet === "settings"
                       ? "Session settings"
                       : sheet === "reset"
@@ -1443,81 +1462,11 @@ export default function LiveSession({
           onClose={closeSheet}
         >
           <ErrorText error={action.error} />
-          {sheet === "guest" ? (
-            <>
-              <label className="field-label">
-                Name
-                <input value={name} onChange={(e) => setName(e.target.value)} />
-              </label>
-              <label className="field-label">
-                Rating
-                <input
-                  type="number"
-                  min="0"
-                  max="5000"
-                  value={rating}
-                  onChange={(e) => setRating(e.target.value)}
-                />
-              </label>
-              <label className="field-label">
-                Gender
-                <select value={guestGender} onChange={(event) => { setGuestGender(event.target.value as PlayerGender); setGuestMixedSideOverride(null); }}>
-                  <option value={PlayerGender.UNSPECIFIED}>Choose gender</option>
-                  <option value={PlayerGender.MALE}>Male</option>
-                  <option value={PlayerGender.FEMALE}>Female</option>
-                </select>
-              </label>
-              {guestGender !== PlayerGender.UNSPECIFIED ? (
-                <label className="field-label">
-                  Mixed doubles side
-                  <select value={guestMixedSideOverride ?? ""} onChange={(event) => setGuestMixedSideOverride(event.target.value ? event.target.value as MixedSide : null)}>
-                    <option value="">Default</option>
-                    {(() => { const option = getMixedSideOverrideOptionForGender(guestGender); return option ? <option value={option.value}>{option.label}</option> : null; })()}
-                  </select>
-                </label>
-              ) : null}
-              {s?.collabFormat === "INTERCLUB" ? (
-                <label className="field-label">
-                  Represents
-                  <select value={guestRepresentingClubId} onChange={(event) => setGuestRepresentingClubId(event.target.value)}>
-                    <option value="">Choose club</option>
-                    {(s.clubs ?? []).filter((club) => club.status === "ACCEPTED").map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}
-                  </select>
-                </label>
-              ) : null}
-              <button
-                className="primary"
-                disabled={
-                  name.trim().length < 2 ||
-                  ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGender) ||
-                  (s?.collabFormat === "INTERCLUB" && !guestRepresentingClubId) ||
-                  !rating.trim() ||
-                  !Number.isInteger(Number(rating)) ||
-                  Number(rating) < 0 ||
-                  Number(rating) > 5000
-                }
-                onClick={() =>
-                  void action.run(
-                    () =>
-                      api(endpoint + "/guests", "POST", {
-                        name: name.trim(),
-                        initialElo: Number(rating),
-                        gender: guestGender,
-                        mixedSideOverride: guestMixedSideOverride,
-                        ...(s?.collabFormat === "INTERCLUB" ? { representingClubId: guestRepresentingClubId } : {}),
-                      }),
-                    () => setSheet(""),
-                  )
-                }
-              >
-                Add player
-              </button>
-            </>
-          ) : sheet === "self-rest" && restPlayer && ownsSessionSeat(restPlayer) ? (
+          {sheet === "self-rest" && restPlayer && ownsSessionSeat(restPlayer) ? (
             <>
               <p>{restPlayer.user.name}</p>
               <button className="primary full" disabled={action.busy || (!restPlayer.skipNextMatchAt && isRosterPlayerPaused(restPlayer))} onClick={() => void action.run(() => api(`${endpoint}/players/${encodeURIComponent(restPlayer.userId)}/skip-next`, "PATCH", { skipNextMatch: !restPlayer.skipNextMatchAt }), () => setSheet(""))}>{restPlayer.skipNextMatchAt ? "Cancel skip" : "Skip next match"}</button>
-              <button className="secondary full" disabled={pauseOverlays[restPlayer.userId]?.pending} onClick={() => { void toggleRosterPlayerPause(restPlayer.userId, isRosterPlayerPaused(restPlayer)); setSheet(""); }}>{isRosterPlayerPaused(restPlayer) ? "Resume playing" : playingCourtFor(restPlayer.userId) ? "Pause after this game" : "Pause playing"}</button>
+              <button className="secondary full" disabled={pauseOverlays[restPlayer.userId]?.pending} onClick={() => { void toggleRosterPlayerPause(restPlayer.userId, isRosterPlayerPaused(restPlayer)); setSheet(""); }}>{isRosterPlayerPaused(restPlayer) ? "Resume playing" : playingCourtFor(restPlayer.userId) ? "Take a break after game" : "Take a break"}</button>
             </>
           ) : sheet === "menu" ? (
             <>
@@ -1527,7 +1476,7 @@ export default function LiveSession({
               <Row title="Match history" icon={ClockCounterClockwise} onClick={() => { setSheet(""); openHistory(); }} />
               {canManage && !ended && <>
                 <Row title="Session settings" icon={GearSix} onClick={openLiveSettings} />
-                <Row title="End session" icon={SignOut} onClick={() => setSheet("end")} />
+                <Row title="Finish session" icon={SignOut} onClick={openFinish} />
               </>}
               {s?.viewerCanDelete && (
                 <Row title={s.status === "ACTIVE" ? "Cancel session" : "Delete session"} icon={Trash} onClick={() => { action.setError(""); setSheet("delete"); }} />
@@ -1822,40 +1771,26 @@ export default function LiveSession({
             </>
           ) : sheet === "end" ? (
             <>
-              <p>
-                Finish {s?.name} and view the results? Everyone will stop
-                playing.
-              </p>
-              {s?.courts.some((c) => c.currentMatch) && (
-                <p className="muted">
-                  There are unsaved court results. Save them first if you want
-                  to keep them.
-                </p>
-              )}
-              {lineupMode && collaboration.data?.lineup.some(row=>!row.cancelled&&!row.matchId) && <label className="setup-toggle"><span>Acknowledge remaining unplayed matches</span><input type="checkbox" checked={acknowledgeRemainingLineup} onChange={e=>setAcknowledgeRemainingLineup(e.target.checked)} /></label>}
-              <button
-                className="primary"
-                disabled={lineupMode && (!acknowledgeRemainingLineup && !!collaboration.data?.lineup.some(row=>!row.cancelled&&!row.matchId) || !!s?.courts.some(court=>court.currentMatch))}
-                onClick={() =>
-                  void action.run(
-                    async () => {
-                      await resource.cancelDeferredQueueRecovery();
-                      if (lineupMode) await api(endpoint + "/end", "POST", {acknowledgeRemainingLineup});
-                      else await api(endpoint + "/end", "POST");
-                      setCelebrateFinish(true);
-                    },
-                    async () => {
-                      setSheet("");
-                      await onEnded();
-                    },
-                  )
-                }
-              >
-                End session
-              </button>
-              <button className="text-button" onClick={() => setSheet("")}>
-                Keep playing
-              </button>
+              <p>Finish {s?.name} and view {s?.matches?.some(match => match.status === MatchStatus.COMPLETED) ? "the final standings and podium" : "the session results"}?</p>
+              {finishReview.length > 0 && <>
+                <p>These games have unfinished results:</p>
+                <ul className="finish-game-list">{finishReview.map(match => <li key={match.id}>{match.courtLabel || `Court ${match.courtNumber ?? ""}`}{match.status === "PENDING_APPROVAL" ? " · awaiting score approval" : " · unsaved game"}</li>)}</ul>
+                <button className="primary full" onClick={() => { closeSheet(); setTab("Courts"); }}>Review scores</button>
+                {isCollaboration && <p className="muted">Complete or clear unfinished games before finishing.</p>}
+              </>}
+              {lineupMode && collaboration.data?.lineup.some(row => !row.cancelled && !row.matchId) && <label className="setup-toggle"><span>Acknowledge remaining unplayed matches</span><input type="checkbox" checked={acknowledgeRemainingLineup} onChange={event => setAcknowledgeRemainingLineup(event.target.checked)} /></label>}
+              {finishUncertain ? <button className="secondary full" onClick={() => void action.run(async () => {
+                const latest = await adminApi<SessionData>(endpoint);
+                await refresh();
+                setFinishUncertain(false);
+                if (latest.status === "COMPLETED") closeSheet();
+                else setFinishReview(reviewCourts(latest));
+              })}>Refresh to check</button> : <button
+                className={finishReview.length ? "secondary full" : "primary full"}
+                disabled={action.busy || (isCollaboration && finishReview.length > 0) || (lineupMode && !acknowledgeRemainingLineup && !!collaboration.data?.lineup.some(row => !row.cancelled && !row.matchId))}
+                onClick={() => void action.run(finishSession, async () => { setFinishUncertain(false); setSheet(""); await onEnded(); })}
+              >{finishReview.length ? "Finish & discard unfinished games" : "Finish & show results"}</button>}
+              <button className="text-button" onClick={closeSheet}>Keep playing</button>
             </>
           ) : sheet === "rollback" ? (
             <>
@@ -1912,11 +1847,17 @@ export default function LiveSession({
                   type="button"
                   className="court-action-row"
                   disabled={action.busy}
-                  onClick={() => runCourtPlayerAction("pause")}
+                  onClick={() => setSheet("pause-court")}
                 >
-                  Pause player
+                  Pause &amp; clear game
                 </button>
               </div>
+            </>
+          ) : sheet === "pause-court" && courtPlayerAction ? (
+            <>
+              <p>Pause {courtPlayerAction.player.name} and clear this unfinished game? Unsaved scores will be discarded. A replacement game will be created if enough players are available.</p>
+              <button className="primary full" onClick={() => runCourtPlayerAction("pause")}>Pause &amp; clear game</button>
+              <button className="text-button" onClick={() => setSheet("court-player")}>Keep playing</button>
             </>
           ) : sheet === "court-details" && s && controlMatch ? (
             <CourtPairingDetails match={controlMatch} session={s} />
@@ -2144,6 +2085,7 @@ export default function LiveSession({
           )}
       </Sheet>
       {s && <LivePlayerManagement
+        initialScreen="roster"
         code={code}
         session={s}
         open={managePlayersOpen && canManageRoster && !ended}

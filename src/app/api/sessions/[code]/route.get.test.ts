@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   getSessionOperatorMembership: vi.fn(),
   getClubEloByUserId: vi.fn(),
   withClubElo: vi.fn(),
-  getAcceptedSessionClubIds: vi.fn(async () => []),
+  getAcceptedSessionClubIds: vi.fn(async (): Promise<string[]> => []),
   getPlayerClubBadges: vi.fn(),
   withPlayerClubBadges: vi.fn(),
   getQueuedMatchUserIds: vi.fn(),
@@ -60,7 +60,7 @@ vi.mock("./queue-match/shared", () => ({
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
-  getAcceptedSessionClubIds: vi.fn(async () => []),
+  getAcceptedSessionClubIds: mocks.getAcceptedSessionClubIds,
   getPlayerClubBadges: mocks.getPlayerClubBadges,
   getSessionAdminMembership: mocks.getSessionAdminMembership,
   getSessionMembership: mocks.getSessionMembership,
@@ -106,6 +106,7 @@ describe("session route GET", () => {
   afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getAcceptedSessionClubIds.mockResolvedValue([]);
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
     mocks.rateLimit.mockResolvedValue(null);
     mocks.tryRebuildQueuedMatchForSessionId.mockResolvedValue(null);
@@ -472,6 +473,7 @@ describe("session route GET", () => {
     expect(response.status).toBe(200);
     expect(body.viewerIsQuickAccess).toBe(true);
     expect(body.viewerCanManage).toBe(false);
+    expect(body.viewerAdminClubIds).toEqual([]);
     expect(body.viewerCanUseAdminSessionControls).toBe(false);
   });
 
@@ -530,6 +532,7 @@ describe("session route GET", () => {
     expect(body.viewerClubRole).toBe("MEMBER");
     expect(body.viewerIsQuickAccess).toBe(true);
     expect(body.viewerCanManage).toBe(false);
+    expect(body.viewerAdminClubIds).toEqual([]);
   });
 
   it("rejects quick-access pending partner club spectators", async () => {
@@ -744,6 +747,23 @@ describe("session route GET", () => {
     expect(response.status).toBe(200);
     expect((await response.json()).viewerCanRollback).toBe(false);
     expect(mocks.sessionFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("limits saved-player capabilities to clubs where the viewer is an admin", async () => {
+    mocks.getAcceptedSessionClubIds.mockResolvedValue(["community-1", "community-2"]);
+    mocks.clubAccessFindUnique.mockImplementation(async ({ where }: { where: { clubId_userId: { clubId: string } } }) => ({
+      status: "ACTIVE", role: where.clubId_userId.clubId === "community-1" ? "ADMIN" : "STAFF",
+    }));
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123"), { params: Promise.resolve({ code: "ABC123" }) });
+    expect(response.status).toBe(200);
+    expect((await response.json()).viewerAdminClubIds).toEqual(["community-1"]);
+  });
+
+  it("does not expose saved-player capabilities after admin access is revoked", async () => {
+    mocks.getAcceptedSessionClubIds.mockResolvedValue(["community-1"]);
+    mocks.clubAccessFindUnique.mockResolvedValue({ role: "ADMIN", status: "REVOKED" });
+    const response = await GET(new Request("http://localhost/api/sessions/ABC123"), { params: Promise.resolve({ code: "ABC123" }) });
+    expect((await response.json()).viewerAdminClubIds).toEqual([]);
   });
 
   it("masks tutorial club names in linked session clubs", async () => {

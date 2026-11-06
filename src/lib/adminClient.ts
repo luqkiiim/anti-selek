@@ -47,7 +47,7 @@ export async function adminApi<T>(
         if (!response.ok) {
           // A gateway/server failure may occur after commit, just like a lost response.
           if (!read && response.status >= 500) throw new AdminSaveOutcomeUnknownError();
-          throw new ApiError(data?.error || `Request failed (${response.status})`, response.status, data?.code);
+          throw new ApiError(data?.error || `Request failed (${response.status})`, response.status, data?.code, data);
         }
         if (data === null) throw new Error("Invalid server response");
         return data as T;

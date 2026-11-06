@@ -128,9 +128,10 @@ test("a request stays pending before review and the claimed Player keeps match h
   await expect(playerProfile.locator(".profile-latest")).toContainText("Admission History Session");
   await expect(playerProfile.locator(".profile-activity-totals")).toContainText("1 sessions · 1 matches");
   await expect(page.getByRole("heading", { name: "Player preferences" })).toHaveCount(0);
-  await expect(page.getByLabel("Player level", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Mixed-pairing level", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Account settings", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Your account" }).getByLabel("Player level", { exact: true })).toBeVisible();
+  await page.getByRole("dialog", { name: "Your account" }).getByText("Advanced pairing", { exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Your account" }).getByLabel("Mixed-pairing level", { exact: true })).toBeVisible();
   await page.getByRole("dialog", { name: "Your account" }).getByRole("button", { name: "Close", exact: true }).click();
 });
 
@@ -250,9 +251,10 @@ test("registration creates only an Account until a new Player request is approve
   await page.getByRole("button", { name: "Profile", exact: true }).click();
   await expect(page.locator(".player-profile")).toContainText("New Admission Account");
   await expect(page.getByRole("heading", { name: "Player preferences" })).toHaveCount(0);
-  await expect(page.getByLabel("Player level", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Mixed-pairing level", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Account settings", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Your account" }).getByLabel("Player level", { exact: true })).toBeVisible();
+  await page.getByRole("dialog", { name: "Your account" }).getByText("Advanced pairing", { exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Your account" }).getByLabel("Mixed-pairing level", { exact: true })).toBeVisible();
   await page.getByRole("dialog", { name: "Your account" }).getByRole("button", { name: "Close", exact: true }).click();
 
   const approvedAccount = await page.evaluate(async () => {

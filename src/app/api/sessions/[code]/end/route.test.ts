@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   queuedMatchDeleteMany: vi.fn(),
   courtUpdateMany: vi.fn(),
   matchDeleteMany: vi.fn(),
+  matchFindMany: vi.fn(),
+  matchCount: vi.fn(),
+  assertCollaborationPermission: vi.fn(),
   sessionPlayerUpdateMany: vi.fn(),
   transaction: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
@@ -54,6 +57,10 @@ vi.mock("@/lib/rateLimit", () => ({
   invalidTargetResponse: mocks.invalidTargetResponse,
 }));
 
+vi.mock("@/lib/sessionCollaboration", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/sessionCollaboration")>(),
+  assertCollaborationPermission: mocks.assertCollaborationPermission,
+}));
 import { POST } from "./route";
 
 describe("session end route", () => {
@@ -114,6 +121,9 @@ describe("session end route", () => {
     mocks.queuedMatchDeleteMany.mockResolvedValue({ count: 1 });
     mocks.courtUpdateMany.mockResolvedValue({ count: 2 });
     mocks.matchDeleteMany.mockResolvedValue({ count: 3 });
+    mocks.matchFindMany.mockResolvedValue([]);
+    mocks.matchCount.mockResolvedValue(0);
+    mocks.assertCollaborationPermission.mockResolvedValue({ session: { id: "session-1", status: "ACTIVE" } });
     mocks.sessionPlayerUpdateMany.mockResolvedValue({ count: 1 });
     mocks.sessionUpdate.mockResolvedValue(updatedSession);
     mocks.transaction.mockImplementation(async (callback) =>
@@ -126,6 +136,8 @@ describe("session end route", () => {
         },
         match: {
           deleteMany: mocks.matchDeleteMany,
+          findMany: mocks.matchFindMany,
+          count: mocks.matchCount,
         },
         sessionPlayer: {
           updateMany: mocks.sessionPlayerUpdateMany,
@@ -155,6 +167,60 @@ describe("session end route", () => {
       data: { pendingPool: null, isPaused: false, pausedAt: null },
     });
   });
+  const game = { id: "unfinished-1", status: "PENDING_APPROVAL", scoreRevision: 3, court: { courtNumber: 2, label: "Blue court" } };
+  const review = { id: game.id, status: game.status, scoreRevision: game.scoreRevision };
+  const finish = (body: unknown = {}) => POST(new Request("http://localhost/api/sessions/ABC123/end", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), { params: Promise.resolve({ code: "ABC123" }) });
+
+  it("requires review before discarding pending-approval scores and leaves all data untouched", async () => {
+    mocks.matchFindMany.mockResolvedValue([game]);
+    const response = await finish();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "UNFINISHED_MATCHES", unfinishedMatches: [{ ...review, courtNumber: 2, courtLabel: "Blue court" }] });
+    expect(mocks.matchDeleteMany).not.toHaveBeenCalled();
+    expect(mocks.queuedMatchDeleteMany).not.toHaveBeenCalled();
+    expect(mocks.courtUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ ...review, scoreRevision: 2 }],
+    [{ ...review, status: "IN_PROGRESS" }],
+    [{ ...review, id: "another-game" }],
+    [review, review],
+  ])("rejects stale or invalid acknowledgement %j", async (...items) => {
+    mocks.matchFindMany.mockResolvedValue([game]);
+    expect((await finish({ discardUnfinishedMatches: items })).status).toBe(409);
+    expect(mocks.matchDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it("requires another review when a new unfinished game appears", async () => {
+    mocks.matchFindMany.mockResolvedValue([game, { ...game, id: "new-game" }]);
+    expect((await finish({ discardUnfinishedMatches: [review] })).status).toBe(409);
+    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
+  });
+
+  it("discards only acknowledged unfinished games, preserving completed matches", async () => {
+    mocks.matchFindMany.mockResolvedValue([game]);
+    expect((await finish({ discardUnfinishedMatches: [review] })).status).toBe(200);
+    expect(mocks.matchDeleteMany).toHaveBeenCalledWith({ where: {
+      sessionId: "session-1", id: { in: [game.id] }, status: { in: ["PENDING", "IN_PROGRESS", "PENDING_APPROVAL"] },
+    } });
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "COMPLETED" }) }));
+  });
+
+  it("does not let a discard acknowledgement bypass collaboration's unfinished-game restriction", async () => {
+    mocks.sessionFindUnique.mockResolvedValue({ id: "session-1", clubId: "community-1", collaborationVersion: 2 });
+    mocks.matchCount.mockResolvedValue(1);
+    expect((await finish({ discardUnfinishedMatches: [review] })).status).toBe(409);
+    expect(mocks.matchDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a viewer who cannot run the session", async () => {
+    mocks.getSessionOperatorMembership.mockResolvedValue(null);
+    expect((await finish({ discardUnfinishedMatches: [review] })).status).toBe(403);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
 });
 
 vi.mock("@/lib/clubAdmissions", async (importOriginal) => {

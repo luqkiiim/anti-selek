@@ -1,11 +1,8 @@
 "use client";
+import { MixedPairingControl } from "@/components/prototype/MixedPairingControl";
 
 import { useRef } from "react";
 import { ModalFrame } from "./ModalFrame";
-import {
-  getDefaultMixedSideForGender,
-  getMixedSideOverrideOptionForGender,
-} from "@/lib/mixedSide";
 import {
   MixedSide,
   PlayerGender,
@@ -63,8 +60,6 @@ export function GuestDefinitionModal({
 
   if (!open) return null;
 
-  const mixedSideOption = getMixedSideOverrideOptionForGender(gender);
-  const defaultMixedSide = getDefaultMixedSideForGender(gender);
 
   return (
     <ModalFrame
@@ -180,32 +175,7 @@ export function GuestDefinitionModal({
                 <option value={PlayerGender.FEMALE}>Female</option>
               </select>
             </label>
-            <label className="block space-y-1.5 text-sm font-medium text-gray-900">
-              <span>Mixed doubles side</span>
-              <select
-                aria-label="Guest mixed doubles side"
-                value={mixedSideOverride ?? ""}
-                onChange={(event) =>
-                  onMixedSideOverrideChange(
-                    event.target.value
-                      ? (event.target.value as MixedSide)
-                      : null
-                  )
-                }
-                className="field"
-              >
-                <option value="">
-                  {defaultMixedSide === MixedSide.UPPER
-                    ? "Upper Side (default)"
-                    : "Lower Side (default)"}
-                </option>
-                {mixedSideOption ? (
-                  <option value={mixedSideOption.value}>
-                    {mixedSideOption.label}
-                  </option>
-                ) : null}
-              </select>
-            </label>
+            <MixedPairingControl gender={gender} value={mixedSideOverride} onChange={onMixedSideOverrideChange} />
           </div>
         ) : null}
 

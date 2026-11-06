@@ -6,7 +6,7 @@ test("setup group assignments follow the chosen players and guests", async ({ pa
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsAdmin(page);
   await page.goto(`/club/${hostClubId}?tab=setup`);
-  await page.locator(".setup-options summary").click();
+  await page.locator(".setup-options summary").filter({ hasText: "More options" }).click();
   await page.locator(".setup-toggle").filter({ hasText: "Player groups" }).getByRole("checkbox").check();
   const groupButton = page.locator(".setup-group-options button");
   const groups = page.getByRole("dialog", { name: "Player groups", exact: true });
@@ -22,10 +22,11 @@ test("setup group assignments follow the chosen players and guests", async ({ pa
   for (const name of ["Host Player 1", "Host Player 2"]) {
     await roster.locator(".setup-person").filter({ has: page.getByText(name, { exact: true }) }).getByRole("checkbox").check();
   }
-  await roster.getByRole("button", { name: "Add guest", exact: true }).click();
-  await roster.getByLabel("Guest name", { exact: true }).fill("Setup Guest");
-  await roster.locator(".setup-add-guest select").first().selectOption("FEMALE");
-  await roster.getByRole("button", { name: "Add guest", exact: true }).click();
+  await roster.getByRole("button", { name: "Add new player", exact: true }).click();
+  await roster.getByRole("button", { name: "This session only" }).click();
+  await roster.getByLabel("Name", { exact: true }).fill("Setup Guest");
+  await roster.locator(".new-player-form select").first().selectOption("FEMALE");
+  await roster.getByRole("button", { name: "Add to session", exact: true }).click();
   await roster.getByLabel("Find a player", { exact: true }).fill("Host Player 7");
   await roster.getByRole("button", { name: "Done · 3 players", exact: true }).click();
   await expect(roster).toHaveCount(0);

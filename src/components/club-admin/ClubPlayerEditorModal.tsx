@@ -5,7 +5,7 @@ import { PlayerInvitationPanel } from "./PlayerInvitationPanel";
 import { AdjustClubRating } from "@/components/profile/AdjustClubRating";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import { ModalFrame } from "@/components/ui/chrome";
-import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { MixedPairingControl } from "@/components/prototype/MixedPairingControl";
 import {
   ClubAdminClaimPill,
   ClubAdminGenderPill,
@@ -89,9 +89,6 @@ export function ClubPlayerEditorModal({
 }: ClubPlayerEditorModalProps) {
   if (!player) return null;
 
-  const mixedSideOption = getMixedSideOverrideOptionForGender(player.gender);
-  const playerLevelOptionLabel =
-    player.gender === PlayerGender.FEMALE ? "High level" : "Low level";
   const canEditName = !player.isClaimed;
   const canEditPairing = !player.isClaimed || player.id === currentPlayerId;
   const isCurrentPlayer = player.id === currentPlayerId;
@@ -237,32 +234,7 @@ export function ClubPlayerEditorModal({
               </select>
             </label>
 
-            <label className="block space-y-2 text-sm font-medium text-gray-900">
-              <span>Player level</span>
-              {mixedSideOption ? (
-                <select
-                  value={player.mixedSideOverride ?? ""}
-                  onChange={async (event) => {
-                    await onUpdatePreferences(player, {
-                      mixedSideOverride: event.target.value
-                        ? (event.target.value as MixedSide)
-                        : null,
-                    });
-                  }}
-                  disabled={savingPreferences || !canEditPairing}
-                  className="field"
-                >
-                  <option value="">Default</option>
-                  <option value={mixedSideOption.value}>
-                    {playerLevelOptionLabel}
-                  </option>
-                </select>
-              ) : (
-                <div className="field flex items-center text-sm text-gray-500">
-                  Default
-                </div>
-              )}
-            </label>
+            <MixedPairingControl gender={player.gender} value={player.mixedSideOverride ?? null} disabled={savingPreferences || !canEditPairing} onChange={mixedSideOverride => void onUpdatePreferences(player, { mixedSideOverride })} />
 
             {savingPreferences ? (
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
