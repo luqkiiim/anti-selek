@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowUp, ArrowDown, CaretRight, ChartLineUp, CalendarBlank }
 import type { ClubPageMember } from "@/components/club/clubTypes";
 import type { PlayerProfileSessionSummary, PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
 import type { MemberProfileData, RecordedSessionSummary } from "@/lib/memberProfile";
+import type { ProfileClubRankWindow } from "@/lib/profileClubRank";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
 import { api } from "./api";
 import { AchievementCabinet, NextMilestone } from "./Achievements";
@@ -26,6 +27,7 @@ const AccountSettings = dynamic(() => import("./AccountSettings").then(module =>
 export type MemberProfileResponse = {
   user: { id: string; name: string; avatarUrl?: string | null; elo: number };
   profile?: MemberProfileData;
+  context?: { rankContext?: ProfileClubRankWindow };
 };
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
 
@@ -41,12 +43,26 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, canEdit = 
   const data = resource.data?.profile;
   const user = resource.data?.user;
   const ownerName = user?.name ?? member.name;
+  const rank = resource.data?.context?.rankContext;
+  const currentRank = rank ? rank.currentRank : member.currentRank;
+  const previousRank = rank ? rank.previousRank : member.previousRank;
+  const rankDelta = rank ? rank.rankDelta : member.rankDelta;
   const [accountOpen, setAccountOpen] = useState(false);
   const [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   const [match, setMatch] = useState<PlayerProfileMatchHistoryEntry | null>(null);
   return <article className="player-profile" aria-label={`${member.name}’s club profile`}>
     <header className="player-profile-identity">{!isSelf && <span className="eyebrow">{clubName}</span>}{isSelf ? <button className="profile-account-button" aria-label="Account settings" disabled={!canEdit} onClick={() => setAccountOpen(true)}><Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /></button> : <Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} />}<h1>{user?.name ?? member.name}</h1>{!isSelf && <span className="player-profile-membership">{member.status === "CORE" ? "Core member" : "Occasional member"}</span>}</header>
-      <div className="player-standing profile-overview-stats"><div><span>Club rating</span><strong>{user?.elo ?? member.elo}</strong></div><div><span>Club rank</span><strong>{member.currentRank ? `#${member.currentRank}` : "—"}</strong>{member.rankDelta != null && member.rankDelta !== 0 && member.previousRank != null && <small className={member.rankDelta > 0 ? "positive" : "negative"}>{member.rankDelta > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{Math.abs(member.rankDelta)} {Math.abs(member.rankDelta) === 1 ? "place" : "places"}</small>}</div><p className="profile-activity-totals">{data ? new Set(data.matchHistory.map(m => m.sessionId)).size : "\u2014"} {data && new Set(data.matchHistory.map(m => m.sessionId)).size === 1 ? "session" : "sessions"} {"\u00b7"} {data?.matchHistory.length ?? "\u2014"} {data?.matchHistory.length === 1 ? "match" : "matches"}</p></div>
+      <div className="player-standing profile-overview-stats">
+        <div><span>Club rating</span><strong>{user?.elo ?? member.elo}</strong></div>
+        <div>
+          <span>Club rank</span><strong>{currentRank ? `#${currentRank}` : "—"}</strong>
+          {currentRank && previousRank ? <small className={rankDelta && rankDelta > 0 ? "positive" : rankDelta && rankDelta < 0 ? "negative" : undefined}>
+            {rankDelta != null && rankDelta !== 0 && (rankDelta > 0 ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />)}
+            from #{previousRank}
+          </small> : !currentRank ? <small>Not ranked yet</small> : null}
+        </div>
+        <p className="profile-activity-totals">{data ? new Set(data.matchHistory.map(m => m.sessionId)).size : "\u2014"} {data && new Set(data.matchHistory.map(m => m.sessionId)).size === 1 ? "session" : "sessions"} {"\u00b7"} {data?.matchHistory.length ?? "\u2014"} {data?.matchHistory.length === 1 ? "match" : "matches"}</p>
+      </div>
       {canInvite && !isSelf && <span className="profile-connection-status">Account {member.isClaimed ? "connected" : "not connected"}</span>}
     {resource.error && <div className="profile-load-error"><ErrorText error={resource.error} /><button className="secondary" disabled={resource.loading || resource.retryAt > 0} onClick={() => void resource.refresh().catch(() => {})}>Try again</button></div>}
     {!data && !resource.error && <div className="profile-loading" role="status">Loading the story so far…</div>}

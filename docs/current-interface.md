@@ -9,6 +9,7 @@ The cream-and-purple product UI is the sole interface. Production components liv
 | `/` | `product/HomeScreen.tsx` — club chooser, join/create |
 | `/club/[id]` | `app/ClubRoute.tsx` → `product/Club.tsx` |
 | `?tab=club`, `sessions`, `rankings`, `profile`, `setup` | Club home, sessions, rankings, self profile, session setup |
+| `/club/[id]?tab=recap&session=[code]` | Latest completed personal session recap |
 | `/club/[id]/admin?tab=players`, `requests`, `settings` | `product/Admin.tsx` — Manage club |
 | `/session/[code]?tab=courts`, `players`, `standings` | `app/SessionRoute.tsx` → `product/LiveSession.tsx` |
 | `/session/[code]/history` | `product/SessionMatchHistory.tsx` |
@@ -16,6 +17,8 @@ The cream-and-purple product UI is the sole interface. Production components liv
 | `/profile/[id]` | `PlayerHistoryProfile` without an invented club membership |
 
 `view=global` retains read-only navigation. Session links require an exact club context; malformed/duplicate scope parameters remain subject to existing validation. Profile participant links preserve their recorded club context, including explicit unscoped identities.
+
+Club home starts with the live session, otherwise the first waiting session, otherwise the viewer's permitted session action. Additional current sessions remain in Sessions. The compact personal recap follows, then club activity, highlights, monthly climbers, partnerships and rivalries. Personal rating/rank progress lives in Profile; partnership and rivalry previews retain their separate View all sheets.
 
 `/community/...` compatibility routes use the same controllers. `normalizeProductHref` replaces older `tools` bookmarks and tab names (`host`, `tournaments`, `leaderboard`, `members`, `claims`) with current destinations. No parameter selects another renderer. Old practice parameters open regular screens. Existing test records stay outside the club’s Sessions list. API aliases remain supported.
 

@@ -1,8 +1,5 @@
-/* Keep dashboard groups in the original phone reading order. */
-.product-root .club-dashboard-grid,
-.product-root .club-dashboard-intro,
-.product-root .club-dashboard-session-cards,
-.product-root .club-dashboard-progress {
+/* Keep the dashboard in reading order at every width. */
+.product-root .club-dashboard-grid {
   display: contents;
 }
 
@@ -68,52 +65,25 @@
     row-gap: 20px;
   }
 
-  .product-root .club-dashboard-intro,
-  .product-root .club-dashboard-session-cards,
-  .product-root .club-dashboard-progress,
+  .product-root .club-dashboard-grid > .club-session-area,
+  .product-root .club-dashboard-grid > .session-update,
+  .product-root .club-dashboard-grid > .club-activity-totals,
+  .product-root .club-dashboard-grid > .club-initial-empty,
   .product-root .club-dashboard-grid > .club-rules {
     grid-column: 1 / -1;
-  }
-
-  .product-root .club-dashboard-intro {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
-    align-items: center;
-    gap: 24px;
-  }
-
-  .product-root .club-dashboard-session-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    align-items: stretch;
-    gap: 16px;
-  }
-
-  .product-root .club-dashboard-session-cards:empty {
-    display: none;
-  }
-
-  .product-root .club-dashboard-progress {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
   }
 
   .product-root .club-dashboard-grid > * {
     min-width: 0;
   }
 
-  .product-root .club-dashboard-session-cards > *,
+  .product-root .club-dashboard-grid > .club-session-area,
+  .product-root .club-session-area > *,
   .product-root .club-dashboard-grid > .club-highlights,
   .product-root .club-dashboard-grid > .monthly-climbers-section,
-  .product-root .club-dashboard-grid > .club-dashboard-progress,
   .product-root .club-dashboard-grid > .club-rules {
     min-width: 0;
     margin-block: 0;
-  }
-
-  .product-root .club-dashboard-progress .section-heading {
-    margin: 0;
   }
 
   .product-root .club-dashboard-grid > .club-highlights .section-heading,

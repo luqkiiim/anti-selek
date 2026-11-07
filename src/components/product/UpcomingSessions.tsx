@@ -2,7 +2,7 @@ import { CalendarBlank, CaretRight } from "@phosphor-icons/react";
 import type { ClubPageSession } from "@/components/club/clubTypes";
 import { Avatar } from "./Primitives";
 
-export function UpcomingSessions({ sessions, canManage, onOpen, onViewAll, clubId, onReview, busy = false }: {
+export function UpcomingSessions({ sessions, canManage, onOpen, onViewAll, clubId, onReview, busy = false, featured = false }: {
   sessions: ClubPageSession[];
   canManage: boolean;
   onOpen: (code: string) => void;
@@ -10,6 +10,7 @@ export function UpcomingSessions({ sessions, canManage, onOpen, onViewAll, clubI
   clubId?: string;
   onReview?: (code: string, status: "ACCEPTED" | "REJECTED") => void;
   busy?: boolean;
+  featured?: boolean;
 }) {
   if (!sessions.length) return null;
   const shown = onViewAll ? sessions.slice(0, 2) : sessions;
@@ -25,8 +26,8 @@ export function UpcomingSessions({ sessions, canManage, onOpen, onViewAll, clubI
         <span>{session.players.length ? `${session.players.length} ${session.players.length === 1 ? "player" : "players"} on the roster` : "No players added yet"}</span>
       </div>
       {pending && <p className="upcoming-collab-status">{canReview ? `Invitation from ${session.clubs?.find(club => club.role === "HOST")?.name ?? "the host club"}` : `Waiting for ${pending.name} to approve`}</p>}
-      {canReview && <div className="upcoming-collab-actions"><button className="primary" disabled={busy} onClick={() => onReview?.(session.code, "ACCEPTED")}>Accept invitation</button><button className="text-button" disabled={busy} onClick={() => onReview?.(session.code, "REJECTED")}>Decline</button></div>}
-      <button className="secondary upcoming-open" onClick={() => onOpen(session.code)}>{canManage ? "Manage session" : "View session"}<CaretRight size={17} /></button>
+      {canReview && <div className="upcoming-collab-actions"><button className={featured ? "secondary" : "primary"} disabled={busy} onClick={() => onReview?.(session.code, "ACCEPTED")}>Accept invitation</button><button className="text-button" disabled={busy} onClick={() => onReview?.(session.code, "REJECTED")}>Decline</button></div>}
+      <button className={`${featured ? "primary" : "secondary"} upcoming-open`} onClick={() => onOpen(session.code)}>{canManage ? "Manage session" : "View session"}<CaretRight size={17} /></button>
     </div>; })}
   </section>;
 }

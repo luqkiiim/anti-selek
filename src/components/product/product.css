@@ -1707,26 +1707,6 @@
 .chooser .pc-content {
   padding-bottom: 35px;
 }
-.club-welcome {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.club-welcome > div {
-  flex: 1;
-}
-.club-welcome h1 {
-  font-size: 27px;
-  margin-top: 8px;
-}
-.club-welcome img {
-  width: 92px;
-  height: 92px;
-  mix-blend-mode: multiply;
-}
-.club-welcome .eyebrow {
-  font-size: 9px;
-}
 .pc-content .section-heading .text-button {
   font-size: 12px;
   padding: 8px;

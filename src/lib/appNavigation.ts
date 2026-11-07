@@ -1,9 +1,9 @@
 import { getSafeCallbackUrl } from "./authCallback";
 
-export type ClubTab = "club" | "sessions" | "rankings" | "profile" | "setup";
+export type ClubTab = "club" | "sessions" | "rankings" | "profile" | "setup" | "recap";
 const clubAliases: Record<string, ClubTab> = { overview: "club", tournaments: "sessions", leaderboard: "rankings", host: "setup" };
 export function getClubTab(value: string | null): ClubTab {
-  return value && ["club", "sessions", "rankings", "profile", "setup"].includes(value)
+  return value && ["club", "sessions", "rankings", "profile", "setup", "recap"].includes(value)
     ? value as ClubTab : clubAliases[value ?? ""] ?? "club";
 }
 export function getSessionTab(value: string | null) {

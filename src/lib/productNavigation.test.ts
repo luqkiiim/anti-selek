@@ -5,6 +5,7 @@ describe("compatibility navigation uses current screens", () => {
   it.each([
     ["/signin?callbackUrl=%2Fsession%2FA1%3Ftab%3Dstandings", "/signin?callbackUrl=%2Fsession%2FA1%3Ftab%3Dstandings"],
     ["/signup?callbackUrl=%2Fclub%2Fc1", "/signup?callbackUrl=%2Fclub%2Fc1"],
+    ["/club/c1?tab=recap&session=DONE", "/club/c1?tab=recap&session=DONE"],
     ["/community/c1?tools=advanced&tab=host", "/club/c1?tab=setup"],
     ["/club/c1?tools=practice", "/club/c1?tab=sessions"],
     ["/club/c1?tab=tournaments&tools=advanced", "/club/c1?tab=sessions"],

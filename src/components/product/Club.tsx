@@ -13,8 +13,6 @@ import {
   CalendarBlank,
   CaretRight,
   ArrowLeft,
-  ArrowUp,
-  ArrowDown,
   ClockCounterClockwise,
   Plus,
   Table,
@@ -119,7 +117,7 @@ export default function Club({
   const viewerPlayerId = readOnly ? null : data?.viewer.playerId ?? null;
   const profile = useClubResource<Profile>(
     viewerPlayerId && page !== "admin"
-      ? clubProfileUrl(club.id, viewerPlayerId, { overview: page !== "profile" })
+      ? clubProfileUrl(club.id, viewerPlayerId, { overview: true })
       : null,
   );
   const achievements = useClubResource<AchievementCollection>(viewerPlayerId && page !== "admin" ? `/api/clubs/${encodeURIComponent(club.id)}/achievements` : null);
@@ -178,10 +176,8 @@ export default function Club({
     );
   const visiblePastSessionCount = pastSessionPagination.visibleCount;
   const recent = profile.data?.recentSessions?.find(r=>sessions.some(s=>s.id===r.id&&s.status==="COMPLETED"));
-  const displayedRecap = onRoute && page === "recap" ? profile.data?.recentSessions?.find(r => r.code === route.searchParams.get("session")) ?? recap : recap;
+  const displayedRecap = onRoute && page === "recap" ? profile.data?.recentSessions?.find(r => r.code === route.searchParams.get("session")) : recap;
   const member = viewerPlayerId ? data?.clubMembers.find((p) => p.id === viewerPlayerId) : undefined;
-  const rating = profile.data?.user.elo ?? member?.elo;
-  const rank = profile.data?.context?.rankContext;
   function openMember(id: string) {
     const next = memberStack.includes(id) ? memberStack.slice(0, memberStack.indexOf(id) + 1) : [...memberStack, id];
     if (onRoute) onRoute(changeAppQuery(href, { member: next }));
@@ -197,7 +193,13 @@ export default function Club({
     if (!found) return undefined;
     const ranked = data!.clubMembers.filter(p => p.status === "CORE" && (p.matchesPlayed ?? 0) > 0).sort((a,b) => b.elo-a.elo || a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
     const index=ranked.findIndex(p => p.id===id);
-    return {...found,currentRank:index<0?null:index+1};
+    const rank = id === viewerPlayerId ? profile.data?.context?.rankContext : undefined;
+    return {
+      ...found,
+      currentRank: rank ? rank.currentRank : index < 0 ? null : index + 1,
+      previousRank: rank ? rank.previousRank : found.previousRank,
+      rankDelta: rank ? rank.rankDelta : found.rankDelta,
+    };
   }
 
 
@@ -211,40 +213,6 @@ export default function Club({
   function openSession(code: string) {
     if (onRoute) onRoute(sessionHref(code, readOnly ? club.id : undefined));
     else { setSessionCode(code); go("session"); }
-  }
-  function renderStats() {
-    return (
-      <div className="stats-card">
-        <div>
-          <small>Club rating</small>
-          <strong className="big-number">{rating ?? "—"}</strong>
-          {recent && (
-            <span
-              className={"gain " + (recent.ratingChange < 0 ? "negative" : "")}
-            >
-              {recent.ratingChange > 0 && <ArrowUp size={14} aria-hidden="true" />}
-              {recent.ratingChange < 0 && <ArrowDown size={14} aria-hidden="true" />}
-              {recent.ratingChange > 0 ? "+" : ""}
-              {recent.ratingChange}
-              <em>last session</em>
-            </span>
-          )}
-        </div>
-        <div>
-          <small>Club rank</small>
-          <strong className="big-number">
-            {rank?.currentRank ? "#" + rank.currentRank : "—"}
-          </strong>
-          <span className="gain">
-            <em>
-              {rank?.previousRank
-                ? "from #" + rank.previousRank
-                : "Not ranked yet"}
-            </em>
-          </span>
-        </div>
-      </div>
-    );
   }
   function renderMilestone() {
     return achievements.data ? <NextMilestone embedded collection={achievements.data} onOpen={id => setAchievementRequest({id,nonce:Date.now()})} /> : null;
@@ -316,7 +284,7 @@ export default function Club({
     );
   return (
     <div className="pc-app">
-      {pages.includes(page) ? <ClubHeader identity={data?.club ?? club} globalView={readOnly} onSwitch={onSwitch} onManage={canAdmin ? () => go("admin") : undefined} /> : <header className="pc-header"><button className="icon-button" aria-label="Back" onClick={() => go("club")}><ArrowLeft size={23} /></button><strong>{page === "setup" ? "New session" : recap?.name}</strong><span /></header>}
+      {pages.includes(page) ? <ClubHeader identity={data?.club ?? club} globalView={readOnly} heading={page === "club"} onSwitch={onSwitch} onManage={canAdmin ? () => go("admin") : undefined} /> : <header className="pc-header"><button className="icon-button" aria-label="Back" onClick={() => go("club")}><ArrowLeft size={23} /></button><strong>{page === "setup" ? "New session" : displayedRecap?.name ?? "Session recap"}</strong><span /></header>}
       <Pager pages={pages.includes(page) ? pages : [page]} active={page} onChange={go}>{page => <>
           <ErrorText error={resource.error || profile.error || achievements.error || action.error} />
           {resource.error && <button className="secondary" disabled={resource.loading || resource.retryAt > 0} onClick={() => void resource.refresh().catch(() => {})}>Try again</button>}
@@ -324,23 +292,7 @@ export default function Club({
           {!data && <p role="status">Loading club…</p>}
           {data && page === "club" && (
             <div className="club-dashboard-grid">
-              <div className="club-dashboard-intro">
-                <div className="club-welcome">
-                  <div>
-                    <span className="eyebrow">
-                      {canManage ? "YOUR CLUB, TOGETHER" : "GOOD TO SEE YOU"}
-                    </span>
-                    <h1>
-                      {canManage
-                        ? "Ready for a rally?"
-                        : readOnly ? data.club.name : `Welcome back, ${data.viewer.name}.`}
-                    </h1>
-                  </div>
-                  <Image src="/spark.png" alt="Friendly spark" width={68} height={68} />
-                </div>
-
-              </div>
-              <div className="club-dashboard-session-cards">
+              <div className="club-session-area">
                 {live.length ? (
                   <div className="session-tile">
                     <span className="eyebrow">LIVE NOW</span>
@@ -354,17 +306,16 @@ export default function Club({
                       <CaretRight size={19} />
                     </button>
                   </div>
-                ) : null}
-                <UpcomingSessions sessions={upcoming} clubId={club.id} busy={action.busy} onReview={canAdmin ? (code, status) => void action.run(() => api(`/api/sessions/${encodeURIComponent(code)}/collab`, "PATCH", { status })) : undefined} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
-                {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); if (onRoute) onRoute(changeAppQuery(clubHref(club.id, "recap", readOnly), { session: recent.code })); else go("recap"); }} />}
-              </div>
-              {canManage && !live.length && !upcoming.length && <div className="club-start-session first-session-actions">
-                {canAdmin && !(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length) && data.clubMembers.length < 4 ? <>
-                  <button className="primary" onClick={() => setAddingPlayer(true)}><Plus size={18} />Add your players</button>
-                  <button className="secondary" onClick={() => go("setup")}>Create a session</button>
-                </> : <button className="primary" onClick={() => go("setup")}><Plus size={18} />New session</button>}
+                ) : upcoming.length ? (
+                  <UpcomingSessions featured sessions={upcoming.slice(0, 1)} clubId={club.id} busy={action.busy} onReview={canAdmin ? (code, status) => void action.run(() => api(`/api/sessions/${encodeURIComponent(code)}/collab`, "PATCH", { status })) : undefined} canManage={!!canManage} onOpen={openSession} />
+                ) : canManage ? <div className="club-start-session first-session-actions">
+                  <button className="primary" onClick={() => go("setup")}><Plus size={18} aria-hidden="true" />New session</button>
+                  {canAdmin && !(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length) && data.clubMembers.length < 4 && <button className="secondary" onClick={() => setAddingPlayer(true)}>Add your players</button>}
+                </div> : <button className="primary" onClick={() => go("sessions")}>View sessions<CaretRight size={19} aria-hidden="true" /></button>}
+                {live.length + upcoming.length > 1 && <button className="text-button club-view-sessions" onClick={() => go("sessions")}>View all sessions<CaretRight size={16} aria-hidden="true" /></button>}
                 {playerNotice && <p role="status">{playerNotice}</p>}
-              </div>}
+              </div>
+              {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); if (onRoute) onRoute(changeAppQuery(clubHref(club.id, "recap", readOnly), { session: recent.code })); else go("recap"); }} />}
                 <section className="club-activity-totals" aria-label="Club activity">
                   <button type="button" onClick={() => go("sessions")} aria-label={`${(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()} Sessions, view sessions`}>
                     <CalendarBlank size={19} aria-hidden="true" />
@@ -390,15 +341,6 @@ export default function Club({
               {!completedSessions.length && <p className="club-initial-empty">Your first completed session will appear here.</p>}
               <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
               {data.clubPulse?.monthlyClimbers && <MonthlyClimbers climbers={data.clubPulse.monthlyClimbers} month={data.clubPulse.monthlyClimbersMonth} onOpenProfile={openMember} />}
-              {!readOnly && viewerPlayerId && <div className="club-dashboard-progress">
-                <div className="section-heading">
-                  <h3>Your progress here</h3>
-                  <button className="text-button" onClick={() => go("profile")}>
-                    View profile
-                  </button>
-                </div>
-                {renderStats()}
-              </div>}
               <PartnerChemistry onOpenProfile={openMember} pairs={data.clubPulse?.partnerships ?? []} />
               <TopRivalries onOpenProfile={openMember} rivalries={data.clubPulse?.rivalries ?? []} />
               {data.club.rules && <details className="club-rules"><summary>Club rules</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{data.club.rules}</p></details>}
@@ -478,6 +420,9 @@ export default function Club({
           {data && page === "rankings" && <Rankings onOpenProfile={openMember} members={data.clubMembers} viewerId={viewerPlayerId ?? ""} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
           {data && page === "profile" && member && viewerPlayerId && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(viewerPlayerId)!} isSelf={!data.viewer.isQuickAccess} canEdit={resource.validated} onOpenMember={openMember} onOpenSession={openSession} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={renderAchievement()} milestone={renderMilestone()} />}
           {data && page === "profile" && !viewerPlayerId && <div className="profile-empty"><h2>Your Player profile will appear here.</h2><p>Join this club with a Player profile to see your sporting history and preferences.</p></div>}
+          {page === "recap" && !displayedRecap && <div className="profile-empty">
+            {viewerPlayerId && !profile.data && !profile.error ? <p role="status">Loading recap…</p> : <><h1>Session recap unavailable</h1><button className="secondary" onClick={() => go("club")}>Back to club</button></>}
+          </div>}
           {page === "recap" && displayedRecap && (
             <>
               <div className="celebration">

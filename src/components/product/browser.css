@@ -447,20 +447,22 @@
 .product-root .past-sessions-list { display: grid; gap: 8px; }
 .product-root .past-sessions-load-more { display: block; margin: 4px auto 0; }
 
+.pc-header .club-header-title { min-width: 0; margin: 0; font: inherit; }
+.club-session-area { display: grid; gap: 10px; min-width: 0; }
+.club-view-sessions { display: flex; align-items: center; gap: 4px; justify-self: end; min-height: 44px; }
 .product-root .session-update {
-  display: grid; gap: 14px; width: 100%; margin: 18px 0;
-  padding: 18px; text-align: left; color: #291440;
-  background: #f2ebff; border: 1px solid #e7daf8; border-radius: 22px;
+  display: grid; gap: 7px; width: 100%; margin: 0;
+  padding: 14px 16px; text-align: left; color: #291440;
+  background: #f2ebff; border: 1px solid #e7daf8; border-radius: 16px;
+  line-height: 1.5; min-height: 80px;
 }
-.session-update-label { color: #7044aa; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
-.session-update-main { display: flex; gap: 12px; align-items: center; }
-.session-update-main > span:last-child { min-width: 0; }
-.session-update-main strong { display: block; font-size: 19px; line-height: 1.3; }
-.session-update-icon { display: grid; place-items: center; flex: 0 0 42px; height: 42px; border-radius: 14px; background: #e5d7fb; color: #7543c5; }
-.session-update-record { display: block; margin-top: 5px; color: #766486; font-size: 13px; }
-.session-update-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #766486; font-size: 12px; }
-.session-update-footer > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-update-footer > span:last-child { display: flex; gap: 3px; align-items: center; flex-shrink: 0; font-weight: 800; color: #7543c5; }
+.session-update-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.session-update-label { min-width: 0; font-size: 13px; font-weight: 800; }
+.session-update-label > span { color: #766486; font-size: 12px; font-weight: 600; }
+.session-update-link { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; font-size: 12px; font-weight: 800; color: #7044aa; }
+.session-update-record { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.session-update-record > span { color: #766486; }
+.product-root .session-update:focus-visible { outline: 3px solid #8a5bc2; outline-offset: 3px; }
 
 .club-highlights { margin: 24px 0; }
 .club-highlights .section-heading { margin-bottom: 4px; }

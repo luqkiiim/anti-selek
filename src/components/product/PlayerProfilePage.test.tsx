@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MemberProfileData } from "@/lib/memberProfile";
 import type { PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
+import type { ProfileClubRankWindow } from "@/lib/profileClubRank";
 import { ClubPlayerStatus, PartnerPreference, PlayerGender, SessionPool } from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({ resource: vi.fn(), onOpenMember: vi.fn() }));
@@ -64,9 +65,9 @@ describe("profile relationship history", () => {
     container.remove();
   });
 
-  async function render(owner = member) {
+  async function render(owner = member, rankContext?: ProfileClubRankWindow) {
     mocks.resource.mockImplementation((url: string | null) => ({
-      data: url?.includes("/stats?") ? { user: owner, profile: data } : null, error: "",
+      data: url?.includes("/stats?") ? { user: owner, profile: data, context: rankContext ? { rankContext } : undefined } : null, error: "",
     }));
     await act(async () => root.render(<PlayerProfilePage clubId="club-a" clubName="Club A" member={owner} isSelf={false} onOpenMember={mocks.onOpenMember} />));
   }
@@ -76,6 +77,22 @@ describe("profile relationship history", () => {
   }
   const dialog = (title: string) => container.querySelector(`[role="dialog"][aria-label="${title}"]`);
   const button = (label: string, scope: ParentNode = container) => scope.querySelector(`button[aria-label="${label}"]`);
+
+  it("uses the selected club's returned ranking context instead of stale roster ranks", async () => {
+    await render({ ...member, currentRank: 1, previousRank: 2 }, { currentRank: 3, previousRank: 1, rankDelta: -2, leaderboardSize: 8 });
+    const standing = container.querySelector(".profile-overview-stats")!;
+    expect(standing.textContent).toContain("Club rank#3");
+    expect(standing.textContent).toContain("from #1");
+    expect(mocks.resource).toHaveBeenCalledWith("/api/users/owner/stats?clubId=club-a&section=profile");
+  });
+
+  it("honors an authoritative unranked result rather than falling back to a stale rank", async () => {
+    await render({ ...member, currentRank: 1, previousRank: 2 }, { currentRank: null, previousRank: null, rankDelta: null, leaderboardSize: 0 });
+    const standing = container.querySelector(".profile-overview-stats")!;
+    expect(standing.textContent).toContain("Not ranked yet");
+    expect(standing.textContent).not.toContain("#1");
+    expect(standing.textContent).not.toContain("from #2");
+  });
 
   it("filters by player ID and role, paginates newest first, and returns from match details", async () => {
     data = profile([
