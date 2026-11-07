@@ -106,7 +106,7 @@
 }
 .product-sheet .sheet-panel {
   position: absolute;
-  bottom: 0;
+  bottom: var(--sheet-panel-bottom, 0px);
   left: 50%;
   transform: translateX(-50%);
   width: min(100%, 480px);
@@ -232,9 +232,17 @@
 .product-sheet .sheet-shade { position: absolute; inset: 0; background: rgba(0,0,0,.34); }
 .product-sheet .sheet-panel {
   left: 0; right: 0; margin-inline: auto; transform: none;
-  max-height: 72dvh; min-height: 260px;
+  max-height: var(--sheet-panel-max-height, 72dvh); min-height: 260px;
   padding-top: 0;
   box-shadow: 0 -16px 48px rgba(0,0,0,.2);
+}
+.product-sheet[data-sheet-viewport-constrained] {
+  inset: var(--sheet-viewport-top) 0 auto;
+  height: var(--sheet-viewport-height);
+}
+.product-sheet[data-sheet-viewport-constrained] .sheet-panel {
+  min-height: 0;
+  max-height: min(var(--sheet-panel-max-height, 72dvh), calc(100% - var(--sheet-panel-bottom, 0px)));
 }
 .product-sheet .sheet-handle-zone { display: grid; height: 30px; place-items: center; touch-action: none; }
 .product-sheet .sheet-handle { width: 42px; height: 5px; border-radius: 999px; background: #c9c9c4; }

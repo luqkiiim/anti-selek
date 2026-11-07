@@ -301,7 +301,7 @@ export function LivePlayerManagement({
   if (!open) return null;
 
   return (
-    <Sheet title={title} onClose={onClose} open={open} busy={busy || savingPlayer}>
+    <Sheet title={title} onClose={onClose} open={open} busy={busy || savingPlayer} fitVisualViewport>
       <div className="live-player-management">
         {listScreen === "roster" && !addingGuest ? (
           <button

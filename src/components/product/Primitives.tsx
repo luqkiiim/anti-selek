@@ -64,11 +64,12 @@ type SheetProps = {
   footer?: ReactNode;
   busy?: boolean;
   open?: boolean;
+  fitVisualViewport?: boolean;
 };
 export function Sheet({ open = true, ...props }: SheetProps) {
   return <AnimatePresence>{open && <SheetDialog {...props} />}</AnimatePresence>;
 }
-function SheetDialog({ title, onClose, children, footer, busy = false }: SheetProps) {
+function SheetDialog({ title, onClose, children, footer, busy = false, fitVisualViewport = false }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const controls = useDragControls();
   const reduced = useReducedMotion();
@@ -85,6 +86,47 @@ function SheetDialog({ title, onClose, children, footer, busy = false }: SheetPr
       }
     };
   }, []);
+  useEffect(() => {
+    const node = ref.current;
+    const viewport = window.visualViewport;
+    if (!fitVisualViewport || !node || !viewport) return;
+
+    let frame: number | null = null;
+    const clearViewport = () => {
+      node.removeAttribute("data-sheet-viewport-constrained");
+      node.style.removeProperty("--sheet-viewport-top");
+      node.style.removeProperty("--sheet-viewport-height");
+    };
+
+    const updateViewport = () => {
+      frame = null;
+      const { height, offsetTop, scale } = viewport;
+      // At normal zoom, the keyboard can shrink the visible area without resizing the layout.
+      if (scale !== 1 || height <= 0 || height >= window.innerHeight - 1) {
+        clearViewport();
+        return;
+      }
+      node.style.setProperty("--sheet-viewport-top", `${Math.max(0, offsetTop)}px`);
+      node.style.setProperty("--sheet-viewport-height", `${height}px`);
+      node.setAttribute("data-sheet-viewport-constrained", "");
+    };
+
+    const scheduleViewportUpdate = () => {
+      if (frame === null) frame = window.requestAnimationFrame(updateViewport);
+    };
+
+    updateViewport();
+    viewport.addEventListener("resize", scheduleViewportUpdate);
+    viewport.addEventListener("scroll", scheduleViewportUpdate, { passive: true });
+    window.addEventListener("resize", scheduleViewportUpdate);
+    return () => {
+      viewport.removeEventListener("resize", scheduleViewportUpdate);
+      viewport.removeEventListener("scroll", scheduleViewportUpdate);
+      window.removeEventListener("resize", scheduleViewportUpdate);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      clearViewport();
+    };
+  }, [fitVisualViewport]);
   const close = () => { if (!busy) onClose(); };
   return (
     <dialog ref={ref} aria-label={title} className="product-sheet"

@@ -121,7 +121,14 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
     const isSelected = selected.includes(id);
     setSelected(ids => ids.includes(id) ? ids.filter(p => p !== id) : [...ids, id]);
     if (!isSelected) {
-      if (search) pendingScrollPlayerId.current = id;
+      if (search) {
+        pendingScrollPlayerId.current = id;
+        const input = searchInput.current;
+        // Keep typing after selection when the on-screen keyboard is already open.
+        if (input?.closest("[data-sheet-viewport-constrained]")) {
+          input.focus({ preventScroll: true });
+        }
+      }
       setSearch("");
     }
   }
@@ -189,7 +196,7 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
       <div className="setup-submit"><ErrorText error={rosterError ? "" : action.error} /><button className="primary full" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : "Prepare session"}<CaretRight size={18} /></button></div>
     </form>
 
-    <Sheet open={rosterOpen} busy={savingPlayer} title="Who’s playing?" onClose={() => { setRosterOpen(false); setAddingGuest(false); }}>
+    <Sheet open={rosterOpen} busy={savingPlayer} title="Who’s playing?" onClose={() => { setRosterOpen(false); setAddingGuest(false); }} fitVisualViewport>
       <div className="setup-roster-sheet"><div hidden={addingGuest}><div ref={rosterHeader} className="setup-roster-header"><div className="setup-roster-tools"><strong>{count} selected</strong></div>
         <div className="setup-search"><MagnifyingGlass size={18} aria-hidden="true" /><input ref={searchInput} aria-label="Find a player" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a player" />{search && <button type="button" className="setup-search-clear" aria-label="Clear player search" onClick={() => { setSearch(""); searchInput.current?.focus(); }}><X size={18} aria-hidden="true" /></button>}</div>
         </div>

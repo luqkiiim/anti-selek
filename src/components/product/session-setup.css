@@ -94,6 +94,7 @@
 .setup-guest-actions { display: flex; gap: 8px; }
 .setup-guest-actions button { flex: 1; min-height: 44px; padding: 10px 8px; font-size: 13px; }
 .setup-roster-done { position: sticky; bottom: -24px; background: #fffaf3; padding: 14px 0 24px; margin-top: 8px; }
+.product-sheet[data-sheet-viewport-constrained] .setup-roster-done { position: static; }
 @media (max-width: 350px) { .setup-roster-faces .avatar:nth-child(n+2) { display: none; } .setup-format { padding: 13px 11px; gap: 9px; } }
 @media (prefers-reduced-motion: reduce) { .setup-options > summary > svg, .setup-switch, .setup-switch::after { transition: none; } }
 
