@@ -1,6 +1,6 @@
 "use client";
 import { useAppReady } from "@/components/app/AppStartup";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   DotsThree,
@@ -32,7 +32,7 @@ import {
 } from "@/types/enums";
 import { api, ApiError, useResource, useAction } from "./api";
 import { useSessionController } from "./useSessionController";
-import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
+import { canApprovePendingSubmission, getTeamNumberForPlayerId } from "@/lib/matchApprovalRules";
 import { SessionJoinProfilePanel } from "@/components/session/SessionJoinProfilePanel";
 import {
   Avatar,
@@ -42,6 +42,7 @@ import {
 } from "./Primitives";
 import { Pager } from "./Pager";
 import SessionMatchHistory from "./SessionMatchHistory";
+import { SessionRefreshControl } from "./SessionRefreshControl";
 import LivePlayerManagement from "./LivePlayerManagement";
 import InterclubScoreboard from "./InterclubScoreboard";
 import { LiveSessionStandings } from "./LiveSessionStandings";
@@ -75,7 +76,7 @@ import { saveScoreWithBackgroundRefresh } from "./scoreSave";
 import { ClubCollaboration, useClubCollaboration } from "./ClubCollaboration";
 import { SeriesScoreEditor } from "./SeriesScoreEditor";
 import { CourtPairingDetails } from "./CourtPairingDetails";
-import { useSessionPolling } from "@/components/session/useSessionPolling";
+import { SHARED_SESSION_REFRESH_MS, useSessionPolling } from "@/components/session/useSessionPolling";
 import { SessionShareSheet } from "@/components/session/SessionShareSheet";
 import { SessionDetailsSummary } from "@/components/session/SessionDetailsSummary";
 import { sessionHref } from "@/lib/appNavigation";
@@ -141,6 +142,14 @@ type QueuedMatchOverlay = {
   expectedId: string | null;
   conflictingRefreshes: number;
 };
+function standingsKey(rawSession: SessionData | null) {
+  return JSON.stringify([
+    rawSession?.status, rawSession?.type, rawSession?.mode, rawSession?.resultsRevision,
+    rawSession?.players.map(player => [player.userId, player.sessionPoints, player.user.name, player.user.elo, player.isGuest, player.joinedAt, player.ladderEntryAt]),
+    rawSession?.matches,
+  ]);
+}
+
 export default function LiveSession({
   code,
   onBack,
@@ -149,9 +158,10 @@ export default function LiveSession({
   onOpenMember,
   profileMemberIds,
   globalClubId,
-  activeTab, onTabChange, onSessionData, onHistory, onOpenProfile,
+  activeTab, onTabChange, onSessionData, onHistory, onOpenProfile, covered = false,
 }: {
   activeTab?: string;
+  covered?: boolean;
   onTabChange?: (tab: string) => void;
   onSessionData?: (session: SessionData) => void;
   onHistory?: () => void;
@@ -169,14 +179,15 @@ export default function LiveSession({
   const [showHistory, setShowHistory] = useState(false);
   const [localTab, setLocalTab] = useState("Courts");
   const tab = activeTab ?? localTab;
-  const resource = useSessionController(code, globalClubId, !showHistory);
+  const resource = useSessionController(code, globalClubId);
   const [pauseOverlays, setPauseOverlays] = useState<Record<string, PlayerPauseOverlay>>({});
   const [pauseError, setPauseError] = useState("");
   const [queuedMatchOverlay, setQueuedMatchOverlay] = useState<QueuedMatchOverlay | null>(null);
   const pauseRequestsRef = useRef(new Set<string>());
   const rawSession = resource.data;
   const isCollaboration = rawSession?.collaborationVersion === 2 && (rawSession.clubs?.length ?? 0) > 1;
-  const collaboration = useClubCollaboration(code, !!isCollaboration && !globalClubId, rawSession?.status, !showHistory);
+  const collaborationEnabled = !!isCollaboration && !globalClubId && !rawSession?.viewerIsQuickAccess;
+  const collaboration = useClubCollaboration(code, collaborationEnabled);
   const lineupMode = !!isCollaboration && rawSession?.schedulingMode === "LINEUP";
   const manageableClubIds = isCollaboration ? collaboration.data?.capabilities.manageClubIds ?? [] : undefined;
   const mayManagePlayer = (player: SessionData["players"][number]) => !isCollaboration || !!manageableClubIds?.includes(player.representingClubId ?? player.profileClubId ?? rawSession?.clubId ?? "");
@@ -189,11 +200,7 @@ export default function LiveSession({
     [rawSession, queuedMatchOverlay],
   );
   const standingsVisible = !!rawSession && !showHistory && (tab === "Standings" || rawSession.status === "COMPLETED");
-  const standingsRevision = useMemo(() => JSON.stringify([
-    rawSession?.status, rawSession?.type, rawSession?.mode, rawSession?.resultsRevision,
-    rawSession?.players.map(player => [player.userId, player.sessionPoints, player.user.name, player.user.elo, player.isGuest, player.joinedAt, player.ladderEntryAt]),
-    rawSession?.matches,
-  ]), [rawSession]);
+  const standingsRevision = useMemo(() => standingsKey(rawSession), [rawSession]);
   const standings = useResource<{
     currentLeaderboard: {
       userId: string;
@@ -202,9 +209,8 @@ export default function LiveSession({
       score?: number;
     }[];
   }>(endpoint + "/leaderboard" + readQuery, { enabled: standingsVisible, refreshKey: standingsRevision });
-  useSessionPolling(standings.refresh, { enabled: standingsVisible, intervalMs: null, refreshOnResume: false });
   useAppReady(!!resource.error || (!!rawSession && (
-    !isCollaboration || !!globalClubId || !!collaboration.data || !!collaboration.error
+    !collaborationEnabled || !!collaboration.data || !!collaboration.error
   ) && (rawSession.status !== "COMPLETED" || !!standings.data || !!standings.error)));
   const [sheet, setSheet] = useState(""),
     [confirmingMatchIds, setConfirmingMatchIds] = useState<Set<string>>(() => new Set()),
@@ -252,8 +258,50 @@ export default function LiveSession({
       setSheet("settings");
     }
   }, [s, globalClubId]);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const manualRefresh = useRef(false);
+  const view = useRef({ standingsVisible, standingsRevision, refreshStandings: standings.refreshForKey });
+  useEffect(() => {
+    view.current = { standingsVisible, standingsRevision, refreshStandings: standings.refreshForKey };
+  }, [standingsVisible, standingsRevision, standings.refreshForKey]);
+  const refreshSession = resource.refresh;
+  const refreshCollaboration = collaboration.refresh;
+  const refreshView = useCallback(async ({ explicit = false, afterMutation = false } = {}) => {
+    const [result, collaborationOk] = await Promise.all([
+      refreshSession(afterMutation),
+      refreshCollaboration(afterMutation),
+    ]);
+    if (!result || result === "retry" || !collaborationOk) return false;
+    const currentView = view.current;
+    if (currentView.standingsVisible) {
+      const key = standingsKey(result.data);
+      try {
+        await currentView.refreshStandings(key, (!explicit && !afterMutation) || key !== currentView.standingsRevision);
+      } catch {
+        return false;
+      }
+    }
+    setCheckedAt(Date.now());
+    setRefreshFailed(false);
+    return true;
+  }, [refreshSession, refreshCollaboration]);
   async function refresh() {
-    await Promise.all([resource.refresh(), standings.refresh(), collaboration.refresh()]);
+    await refreshView({ afterMutation: true });
+  }
+  async function refreshOnDemand() {
+    if (manualRefresh.current) return;
+    manualRefresh.current = true;
+    setRefreshing(true);
+    try {
+      setRefreshFailed(!(await refreshView({ explicit: true })));
+    } catch {
+      setRefreshFailed(true);
+    } finally {
+      manualRefresh.current = false;
+      setRefreshing(false);
+    }
   }
   const action = useAction(refresh);
   async function generateMatch(body: Record<string, unknown>) {
@@ -288,7 +336,6 @@ export default function LiveSession({
     }
     return result;
   }
-  const refreshSession=resource.refresh,refreshStandings=standings.refresh;
   useEffect(() => {
     if (!rawSession) return;
     setPauseOverlays((current) => {
@@ -337,6 +384,33 @@ export default function LiveSession({
       approverIsClaimed: true, scoreSubmittedByUserId: match.scoreSubmittedByUserId, scoreSubmittedByPlayerId: match.scoreSubmittedByPlayerId,
     });
   }
+  const sharedOrganizer = isCollaboration && !!collaboration.data && (
+    collaboration.data.capabilities.manageClubIds.length > 0 ||
+    !!collaboration.data.capabilities.reviewClubIds?.length
+  );
+  const sharedScorer = s?.status === "ACTIVE" && tab === "Courts" && s.courts.some(court => {
+    const match = court.currentMatch;
+    if (!match) return false;
+    if (match.status === MatchStatus.PENDING_APPROVAL) {
+      return mayApproveScore(match) || (!!s.viewerUserId && match.scoreSubmittedByUserId === s.viewerUserId);
+    }
+    if (match.status !== MatchStatus.IN_PROGRESS || !viewerPlayerId) return false;
+    const team = getTeamNumberForPlayerId({
+      team1Player1Id: match.team1User1.id, team1Player2Id: match.team1User2.id,
+      team2Player1Id: match.team2User1.id, team2Player2Id: match.team2User2.id,
+    }, viewerPlayerId);
+    if (team === 1) return !!(match.team2User1.isClaimed || match.team2User2.isClaimed);
+    if (team === 2) return !!(match.team1User1.isClaimed || match.team1User2.isClaimed);
+    return false;
+  });
+  const checkSharedSession = !globalClubId && !s?.viewerIsQuickAccess &&
+    ((sharedOrganizer && (s?.status === "WAITING" || s?.status === "ACTIVE")) || sharedScorer);
+  const lastCheckedAt = checkedAt ?? resource.initialReadAt;
+  useSessionPolling(refreshView, {
+    enabled: !showHistory && !covered,
+    intervalMs: checkSharedSession ? SHARED_SESSION_REFRESH_MS : null,
+    lastCheckedAt,
+  });
   async function pendingScoreAction(match: Match, operation: "approve" | "reopen") {
     if (savingScoreMatchIdsRef.current.has(match.id)) return;
     setMatchSaving(match.id, true);
@@ -580,7 +654,7 @@ export default function LiveSession({
           conflictingRefreshes: 0,
         });
       }
-      void refreshSession().catch(() => {});
+      void refresh().catch(() => {});
     } catch (error) {
       setPauseOverlays((current) => {
         const next = { ...current };
@@ -682,7 +756,7 @@ export default function LiveSession({
           });
           setMatchConfirmation(match.id, false);
         },
-        () => Promise.all([refreshSession(), refreshStandings()]),
+        refresh,
       );
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -705,7 +779,6 @@ export default function LiveSession({
           globalClubId={globalClubId}
           code={code}
           onBack={() => setShowHistory(false)}
-          onMutated={refresh}
         />
       </div>
     );
@@ -1057,22 +1130,25 @@ export default function LiveSession({
           return savedLabel ? { ...court, label: savedLabel.label } : court;
         }) }))}
         onClose={() => setShareMode(null)} />}
-      <header className="pc-header">
+      <header className="pc-header session-header">
         <button className="icon-button" aria-label="Back" onClick={onBack}>
           <ArrowLeft size={23} />
         </button>
-        <div>
+        <div className="session-header-title">
           <strong>{s?.name || "Session"}</strong>
           <small>{s?.clubs?.find((c) => c.role === "HOST")?.name}</small>
         </div>
         {s ? (
-          <button
-            className="icon-button"
-            aria-label="More options"
-            onClick={() => setSheet("menu")}
-          >
-            <DotsThree size={26} />
-          </button>
+          <div className="session-header-actions">
+            <SessionRefreshControl checkedAt={lastCheckedAt} refreshing={refreshing} failed={refreshFailed} onRefresh={refreshOnDemand} />
+            <button
+              className="icon-button"
+              aria-label="More options"
+              onClick={() => setSheet("menu")}
+            >
+              <DotsThree size={26} />
+            </button>
+          </div>
         ) : (
           <span />
         )}
@@ -1087,10 +1163,10 @@ export default function LiveSession({
           {s && s.status !== "WAITING" && (tab === "Courts" || ended) && <SessionDetailsSummary session={s} />}
           {canJoin && s && (tab === "Players" || s.status === "WAITING") && <SessionJoinProfilePanel code={code} sessionStatus={s.status} eligibleProfiles={s.eligibleProfiles ?? []} selectedSelf={s.selectedSelf ?? null} isInterclub={s.collabFormat === "INTERCLUB"} onJoined={profile => {
             resource.update(current => ({ ...current, viewerPlayerId: profile.playerId, selectedSelf: { playerId: profile.playerId, profileClubId: profile.profileClubId } }));
-            void resource.refresh().catch(() => {});
+            void refresh().catch(() => {});
           }} />}
           {canJoin && s?.status === "ACTIVE" && tab === "Courts" && <button className="secondary full" onClick={() => setTab("Players")}>Join session</button>}
-          {s && isCollaboration && !globalClubId && (s.status === "WAITING" || tab === "Courts" || ended) && <ClubCollaboration session={s} data={collaboration.data} error={collaboration.error} onChanged={refresh} onManagePlayers={() => setManagePlayersOpen(true)} onReset={() => setSheet("reset")} />}
+          {s && collaborationEnabled && (s.status === "WAITING" || tab === "Courts" || ended) && <ClubCollaboration session={s} data={collaboration.data} error={collaboration.error} onChanged={refresh} onManagePlayers={() => setManagePlayersOpen(true)} onReset={() => setSheet("reset")} />}
           {s && ended ? (
             <>
               {standings.data ? (

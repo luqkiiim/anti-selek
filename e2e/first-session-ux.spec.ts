@@ -169,7 +169,7 @@ test("first session: saved players, guest, breaks, safe finish, podium and guest
   await form.screenshot({ path: "test-results/first-session-ux/mixed-pairing-390.png" });
 
   await page.goto("/club/community-new-admission-e2e");
-  await expect(page.getByRole("button", { name: "Create a session", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New session", exact: true })).toBeVisible();
   await capture(page, "first-club", 390);
   await page.getByRole("button", { name: "Add your players", exact: true }).click();
   await form.getByLabel("Name", { exact: true }).fill("First Club Player");

@@ -205,12 +205,22 @@ describe("SessionMatchHistory", () => {
     expect(onMutated).toHaveBeenCalledOnce();
   });
 
-  it("posts corrections and refreshes after the API permits score correction", async () => {
+  it("replaces a refresh that started before a score correction", async () => {
     const onMutated = vi.fn();
     await render(
       historyData({ canCorrectCompletedScores: true }),
       { onMutated },
     );
+    let staleRead: AbortSignal | undefined;
+    fetchMock.mockImplementationOnce((_url, options) => new Promise((_resolve, reject) => {
+      staleRead = options?.signal ?? undefined;
+      staleRead?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    }));
+    const refreshButton = Array.from(container.querySelectorAll("button"))
+      .find(button => button.textContent?.trim() === "Refresh");
+    await act(async () => refreshButton?.click());
+    expect(staleRead?.aborted).toBe(false);
+
     const correctionButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Correct score",
     );
@@ -250,6 +260,8 @@ describe("SessionMatchHistory", () => {
       method: "POST",
       body: JSON.stringify({ team1Score: 20, team2Score: 18 }),
     });
+    expect(staleRead?.aborted).toBe(true);
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith("/history"))).toHaveLength(3);
     expect(container.textContent).toContain("Score corrected.");
     expect(onMutated).toHaveBeenCalledOnce();
   });

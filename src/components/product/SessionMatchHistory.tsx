@@ -13,10 +13,12 @@ import {
 } from "@phosphor-icons/react";
 import { parseGameScores, resolveMatchResult, resolveMatchScoreInput } from "@/lib/matchRules";
 import { ErrorText, Sheet } from "./Primitives";
+import { getRetryAfterDelay } from "@/lib/http";
+import { SessionRefreshControl } from "./SessionRefreshControl";
 import styles from "./SessionMatchHistory.module.css";
 import "./club-collaboration.css";
 import { useScrollRestoration } from "@/components/app/useScrollRestoration";
-import { sessionPollInterval, useSessionPolling } from "@/components/session/useSessionPolling";
+import { useSessionPolling } from "@/components/session/useSessionPolling";
 
 type HistoryPlayer = { id: string; name: string };
 
@@ -62,6 +64,7 @@ type SessionHistoryResponse = {
 };
 
 export type SessionMatchHistoryProps = {
+  covered?: boolean;
   /** Session code also works for a completed session recap. */
   globalClubId?: string;
   code: string;
@@ -96,13 +99,11 @@ async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const retryAfter = response.headers?.get("Retry-After");
-    const seconds = retryAfter ? Number(retryAfter) : NaN;
-    const retryAfterMs = Number.isFinite(seconds) ? Math.max(0, seconds * 1000) : retryAfter ? Math.max(0, Date.parse(retryAfter) - Date.now()) : 15_000;
+    const retryAfterMs = getRetryAfterDelay(response.headers?.get("Retry-After") ?? null) || 15_000;
     throw new HistoryRequestError(
       typeof payload?.error === "string"
         ? payload.error
-        : `Request failed (${response.status})`, response.status, Number.isFinite(retryAfterMs) ? retryAfterMs : 15_000,
+        : `Request failed (${response.status})`, response.status, retryAfterMs,
     );
   }
   return payload as T;
@@ -114,6 +115,7 @@ export default function SessionMatchHistory({
   onMutated,
   globalClubId,
   onNavigate,
+  covered = false,
 }: SessionMatchHistoryProps) {
   const requestId = useRef(0);
   const request = useRef<AbortController | null>(null);
@@ -123,6 +125,7 @@ export default function SessionMatchHistory({
   const [response, setResponse] = useState<{
     code: string;
     data: SessionHistoryResponse;
+    checkedAt: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -136,21 +139,21 @@ export default function SessionMatchHistory({
   useAppReady(!!data || !!loadError);
 
   const loadHistory = useCallback(
-    async (showLoading = true) => {
+    async (replacePending = true) => {
       if (!code.trim()) {
         setLoadError("Enter a session code to view match history.");
         setLoading(false);
         return false;
       }
 
-      if (Date.now() < nextRequestAt.current || (!showLoading && request.current)) return false;
+      if (Date.now() < nextRequestAt.current || (!replacePending && request.current)) return false;
       request.current?.abort();
       const controller = new AbortController();
       request.current = controller;
       const thisRequest = ++requestId.current;
       let timedOut = false;
       const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 10_000);
-      if (showLoading) setLoading(true);
+      setLoading(true);
       setLoadError("");
 
       try {
@@ -159,7 +162,7 @@ export default function SessionMatchHistory({
           { signal: controller.signal },
         );
         if (requestId.current === thisRequest) {
-          setResponse({ code, data: next });
+          setResponse({ code, data: next, checkedAt: Date.now() });
         }
         return requestId.current === thisRequest;
       } catch (error) {
@@ -270,7 +273,8 @@ export default function SessionMatchHistory({
       const completedAction = draft.kind;
       setDraft(null);
       setNotice(completedAction === "correct" ? "Score corrected." : completedAction === "approve" ? "Result approved." : "Result undone.");
-      await loadHistory(false);
+      // An earlier read may have started before the score change.
+      await loadHistory(true);
       await Promise.resolve(onMutated?.()).catch(() => undefined);
     } catch (error) {
       setActionError(
@@ -287,11 +291,14 @@ export default function SessionMatchHistory({
     }
   };
 
-  const refreshHistory = useCallback(() => loadHistory(false), [loadHistory]);
+  const refreshHistory = useCallback(() => {
+    if (!saving) return loadHistory(false);
+    return Promise.resolve(false);
+  }, [loadHistory, saving]);
   useSessionPolling(refreshHistory, {
-    enabled: !saving,
-    intervalMs: data ? sessionPollInterval(data.session.status) : null,
-    refreshOnResume: false,
+    enabled: !covered,
+    intervalMs: null,
+    lastCheckedAt: response?.checkedAt,
   });
   function playerLink(player: HistoryPlayer, teamClubId?: string | null) {
     const stored = data?.playerProfiles?.find(p => p.playerId === player.id);
@@ -338,11 +345,14 @@ export default function SessionMatchHistory({
             </span>
           ) : null}
         </div>
-        <p className={styles.summary}>
-          {loading && !data
-            ? "Loading recorded matches…"
-            : `${session?.ratingMode === "UNRATED" ? "Unrated · " : ""}${completedCount} completed ${completedCount === 1 ? "match" : "matches"}${pendingCount ? ` · ${pendingCount} awaiting approval` : ""}`}
-        </p>
+        <div className={styles.summaryRow}>
+          <p className={styles.summary}>
+            {loading && !data
+              ? "Loading recorded matches…"
+              : `${session?.ratingMode === "UNRATED" ? "Unrated · " : ""}${completedCount} completed ${completedCount === 1 ? "match" : "matches"}${pendingCount ? ` · ${pendingCount} awaiting approval` : ""}`}
+          </p>
+          {data && <SessionRefreshControl checkedAt={response?.checkedAt} refreshing={loading || saving} failed={!!loadError} onRefresh={() => void refreshHistory()} />}
+        </div>
       </header>
 
       {notice ? (
@@ -365,19 +375,6 @@ export default function SessionMatchHistory({
             onClick={() => void loadHistory(true)}
           >
             Try again
-          </button>
-        </div>
-      ) : null}
-
-      {loadError && data ? (
-        <div className={styles.loadError}>
-          <ErrorText error={loadError} />
-          <button
-            type="button"
-            className={styles.retryButton}
-            onClick={() => void loadHistory(true)}
-          >
-            Refresh history
           </button>
         </div>
       ) : null}

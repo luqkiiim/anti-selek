@@ -1,0 +1,54 @@
+.session-header {
+  gap: 6px;
+}
+.session-header-title {
+  min-width: 0;
+}
+.session-header-title > strong,
+.session-header-title > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-header-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+.session-refresh {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.session-refresh button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent, #6243a6);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+.session-refresh button:disabled {
+  opacity: 0.55;
+}
+.session-refresh small,
+.product-root .pc-header .session-refresh small {
+  font-size: 10px;
+  color: #756783;
+  white-space: nowrap;
+  margin-top: -4px;
+}
+.session-refresh-error {
+  margin: 0;
+  color: #8b3152;
+  line-height: 1.2;
+  font-size: 11px;
+}

@@ -66,7 +66,18 @@ describe("live score saves with the real session controller", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses one session poller and loads standings only when displayed or their results change", async () => {
+  const advance = async (milliseconds: number) => {
+    await act(async () => { await vi.advanceTimersByTimeAsync(milliseconds); });
+  };
+  const clickRefresh = async () => {
+    await act(async () => Array.from(container.querySelectorAll("button"))
+      .find(button => button.textContent === "Refresh")!.click());
+  };
+  const render = async (activeTab = "Courts") => {
+    await act(async () => root.render(<LiveSession code="SCORE1" activeTab={activeTab} onBack={() => {}} onEnded={async () => {}} />));
+  };
+
+  it("makes no timed requests for an ordinary host and reloads visible standings once per refresh", async () => {
     let snapshot = session();
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith("/leaderboard")) return json({ currentLeaderboard: [] });
@@ -74,28 +85,86 @@ describe("live score saves with the real session controller", () => {
       throw new Error(`Unexpected request: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
-    const render = async (activeTab = "Courts") => {
-      await act(async () => root.render(<LiveSession code="SCORE1" activeTab={activeTab} onBack={() => {}} onEnded={async () => {}} />));
-    };
     const sessionReads = () => fetchMock.mock.calls.filter(([url]) => url === "/api/sessions/SCORE1").length;
     const standingsReads = () => fetchMock.mock.calls.filter(([url]) => url.endsWith("/leaderboard")).length;
     await render();
-    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
-    expect(sessionReads()).toBe(13);
+    await advance(120_000);
+    expect(sessionReads()).toBe(1);
     expect(standingsReads()).toBe(0);
     await render("Standings");
     expect(standingsReads()).toBe(1);
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-    expect(standingsReads()).toBe(1);
-    snapshot = { ...snapshot, players: snapshot.players.map((player, i) => i === 0 ? { ...player, sessionPoints: 3 } : player) };
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-    expect(standingsReads()).toBe(2);
-    await render("Courts");
     snapshot = { ...snapshot, resultsRevision: 2 };
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    await clickRefresh();
+    expect(sessionReads()).toBe(2);
     expect(standingsReads()).toBe(2);
-    await render("Standings");
+    await clickRefresh();
     expect(standingsReads()).toBe(3);
+    await render("Courts");
+    await clickRefresh();
+    expect(standingsReads()).toBe(3);
+  });
+
+  it("checks a shared score every 30 seconds only on visible Courts and coalesces wake events", async () => {
+    const snapshot = session();
+    snapshot.viewerCanManage = false;
+    snapshot.viewerPlayerId = "a";
+    snapshot.courts[0].currentMatch!.team2User1.isClaimed = true;
+    const visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const fetchMock = vi.fn(async () => json(snapshot));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await render();
+      await act(async () => { window.dispatchEvent(new Event("focus")); });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await advance(29_999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await advance(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await advance(30_000);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      visible.mockReturnValue("hidden");
+      await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+      await advance(90_000);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      visible.mockReturnValue("visible");
+      for (const event of ["visibilitychange", "focus", "online"]) {
+        await act(async () => { (event === "visibilitychange" ? document : window).dispatchEvent(new Event(event)); });
+      }
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      await render("Players");
+      await advance(90_000);
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    } finally {
+      visible.mockRestore();
+    }
+  });
+
+  it("keeps the draft and last success on a rate limit, then refreshes the same snapshot after cooldown", async () => {
+    vi.setSystemTime(new Date(2026, 10, 7, 20, 41));
+    const snapshot = session();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json(snapshot))
+      .mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "120" } }))
+      .mockResolvedValueOnce(json(snapshot));
+    vi.stubGlobal("fetch", fetchMock);
+    await render();
+    const input = () => container.querySelector<HTMLInputElement>('input[aria-label="Team 1 score"]')!;
+    await act(async () => enter(input(), "12"));
+    const timestamp = () => container.querySelector(".session-refresh small")?.textContent;
+    const initial = timestamp();
+    expect(initial).toContain("Updated at");
+    await advance(60_000);
+    await clickRefresh();
+    expect(container.textContent).toContain("Couldn’t refresh. Try again.");
+    expect(timestamp()).toBe(initial);
+    expect(input().value).toBe("12");
+    await clickRefresh();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await advance(120_000);
+    await clickRefresh();
+    expect(timestamp()).not.toBe(initial);
+    expect(container.textContent).not.toContain("Couldn’t refresh");
+    expect(input().value).toBe("12");
   });
 
   it("pauses the mounted parent while history is open and refreshes on return", async () => {
@@ -111,7 +180,9 @@ describe("live score saves with the real session controller", () => {
     await act(async () => Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Match history")!.click());
     await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/sessions/SCORE1")).toHaveLength(1);
-    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith("/history"))).toHaveLength(4);
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith("/history"))).toHaveLength(1);
+    await clickRefresh();
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith("/history"))).toHaveLength(2);
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Back to session"]')!.click());
     expect(fetchMock.mock.calls.filter(([url]) => url === "/api/sessions/SCORE1")).toHaveLength(2);
   });
@@ -154,7 +225,7 @@ describe("live score saves with the real session controller", () => {
       }
     }
     expectSaved();
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    await clickRefresh();
     expect(reads).toBe(3);
     expectSaved();
     expect(fetchMock.mock.calls.filter(([url, options]) => url.endsWith("/score") && options?.method === "POST")).toHaveLength(1);
@@ -168,7 +239,7 @@ describe("live score saves with the real session controller", () => {
         scoreRevision: status === "COMPLETED" ? 0 : 2,
       } }],
     };
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    await clickRefresh();
     expect(container.textContent).toContain("Save score");
     expect(Array.from(container.querySelectorAll<HTMLInputElement>('.court-card input[aria-label$="score"]')).map(input => input.value)).toEqual(["", ""]);
   });

@@ -298,7 +298,7 @@ describe("LiveSession score and player controls", () => {
     expect(mocks.sessionResource!.data?.courts[0].currentMatch).toBeNull();
     expect(container.querySelector(".court-card input")).toBeNull();
     expect(mocks.sessionResource!.refresh).toHaveBeenCalledOnce();
-    expect(mocks.standingsResource!.refresh).toHaveBeenCalledOnce();
+    expect(mocks.standingsResource!.refresh).not.toHaveBeenCalled();
 
     await act(async () => {
       pendingSessionRefresh.resolve();

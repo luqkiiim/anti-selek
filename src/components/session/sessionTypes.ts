@@ -52,10 +52,10 @@ export interface Match {
   scoreSubmittedByPlayerId?: string | null;
   team1ClubId?: string | null;
   team2ClubId?: string | null;
-  team1User1: { id: string; name: string; avatarUrl?: string | null };
-  team1User2: { id: string; name: string; avatarUrl?: string | null };
-  team2User1: { id: string; name: string; avatarUrl?: string | null };
-  team2User2: { id: string; name: string; avatarUrl?: string | null };
+  team1User1: { id: string; name: string; avatarUrl?: string | null; isClaimed?: boolean };
+  team1User2: { id: string; name: string; avatarUrl?: string | null; isClaimed?: boolean };
+  team2User1: { id: string; name: string; avatarUrl?: string | null; isClaimed?: boolean };
+  team2User2: { id: string; name: string; avatarUrl?: string | null; isClaimed?: boolean };
   team1Score?: number;
   team2Score?: number;
   completedAt?: string;

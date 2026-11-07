@@ -29,10 +29,11 @@ export default function SessionRoute({ historyView = false }: { historyView?: bo
   }, [status, router, href]);
   if (status === "unauthenticated" || !auth?.user?.id) return <AppShell><div className="pc-app"><p role="status" className="route-loading">Loading session…</p></div></AppShell>;
   if (isGlobal && (params.getAll("view").length !== 1 || globalIds.length !== 1 || !globalClubId || globalClubId.trim() !== globalClubId || globalClubId.length > 100)) return <AppShell ready><div className="pc-app"><main className="pc-content"><p role="alert">This read-only session link needs a valid club.</p><button className="secondary" onClick={() => navigateApp(router, "/?chooser=1")}>Back to clubs</button></main></div></AppShell>;
+  const screenKey = `${code}:${globalClubId ?? ""}`;
   const member = params.get("member");
   const openMember = (id: string, profileClubId: string | null) => navigateApp(router, changeAppQuery(href, { member: id, profileClubId }));
-  return <AppShell>{historyView ? <div className="pc-app"><SessionMatchHistory code={code} globalClubId={globalClubId} onBack={() => backInApp(router, sessionHref(code, globalClubId))} onNavigate={href => navigateApp(router, href)} /></div> : <LiveSession
-    key={code} code={code} globalClubId={globalClubId}
+  return <AppShell>{historyView ? <div className="pc-app"><SessionMatchHistory key={screenKey} code={code} globalClubId={globalClubId} covered={!!member} onBack={() => backInApp(router, sessionHref(code, globalClubId))} onNavigate={href => navigateApp(router, href)} /></div> : <LiveSession
+    key={screenKey} code={code} globalClubId={globalClubId} covered={!!member}
     activeTab={getSessionTab(params.get("tab"))}
     onTabChange={tab => navigateApp(router, changeAppQuery(href, { tab: tab.toLowerCase() }))}
     onSessionData={setSession}

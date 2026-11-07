@@ -606,3 +606,10 @@
     animation-duration: 2.4s;
   }
 }
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}

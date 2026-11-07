@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionData } from "@/components/session/sessionTypes";
-import { sessionPollInterval, useSessionPolling } from "@/components/session/useSessionPolling";
 import { api, ApiError } from "./api";
 import { ErrorText } from "./Primitives";
 import "./club-collaboration.css";
@@ -47,47 +46,59 @@ export type Collaboration = {
   };
   lineup: LineupRow[];
 };
-export function useClubCollaboration(code: string, enabled: boolean, status?: string, pollingEnabled = true) {
+export function useClubCollaboration(code: string, enabled: boolean) {
   const [state, setState] = useState<{
     code: string;
     data: Collaboration;
   } | null>(null);
   const requestVersion = useRef(0);
+  const inFlight = useRef<Promise<boolean> | null>(null);
+  const nextRequestAt = useRef(0);
   const [error, setError] = useState("");
-  const refresh = useCallback(async () => {
-    if (!enabled) return;
-    const version = ++requestVersion.current;
+  const refresh = useCallback(async (afterMutation = false): Promise<boolean> => {
+    if (!enabled) return true;
+    const generation = requestVersion.current;
+    if (afterMutation && inFlight.current) await inFlight.current;
+    if (generation !== requestVersion.current) return false;
+    if (inFlight.current) return inFlight.current;
+    if (Date.now() < nextRequestAt.current) return false;
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
-    try {
-      const next = await api<Collaboration>(
-        `/api/sessions/${code}/collaboration`,
-        "GET", undefined, controller.signal,
-      );
-      if (version === requestVersion.current) {
+    const pending = (async () => {
+      try {
+        const next = await api<Collaboration>(
+          `/api/sessions/${encodeURIComponent(code)}/collaboration`,
+          "GET", undefined, controller.signal,
+        );
+        if (generation !== requestVersion.current) return false;
         setState({ code, data: next });
         setError("");
+        return true;
+      } catch (error) {
+        if (generation === requestVersion.current) {
+          if (error instanceof ApiError && error.status === 429) {
+            nextRequestAt.current = Date.now() + (error.retryAfterMs || 5_000);
+          }
+          setError(error instanceof Error ? error.message : "Unable to refresh collaboration.");
+        }
+        return false;
+      } finally {
+        clearTimeout(timeout);
+        if (generation === requestVersion.current) inFlight.current = null;
       }
-    } catch (error) {
-      if (version === requestVersion.current)
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Unable to refresh collaboration.",
-        );
-    } finally {
-      clearTimeout(timeout);
-    }
+    })();
+    inFlight.current = pending;
+    return pending;
   }, [code, enabled]);
-  const invalidate = useCallback(() => {
-    requestVersion.current += 1;
-  }, []);
-  useEffect(() => () => invalidate(), [code, enabled, invalidate]);
-  useSessionPolling(refresh, {
-    enabled: enabled && pollingEnabled,
-    intervalMs: sessionPollInterval(status),
-    refreshOnEnable: true,
-  });
+  useEffect(() => {
+    void refresh();
+    return () => {
+      requestVersion.current += 1;
+      inFlight.current = null;
+      nextRequestAt.current = 0;
+    };
+  }, [refresh]);
   return {
     data: enabled && state?.code === code ? state.data : null,
     error,

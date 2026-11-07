@@ -22,6 +22,10 @@ Club home starts with the live session, otherwise the first waiting session, oth
 
 `/community/...` compatibility routes use the same controllers. `normalizeProductHref` replaces older `tools` bookmarks and tab names (`host`, `tournaments`, `leaderboard`, `members`, `claims`) with current destinations. No parameter selects another renderer. Old practice parameters open regular screens. Existing test records stay outside the club’s Sessions list. API aliases remain supported.
 
+## Session refresh
+
+Use **Refresh** on a session or its match history to see the latest changes. The time beside it shows the last successful check. The app checks on entry, when returning to the screen, and after a save. Only interclub organizers and players coordinating a score approval get a 30-second check while their session screen is visible.
+
 ## Preserved capabilities
 
 - **Reset history:** Manage club → Settings → Reset club history. Explicit confirmation remains required.

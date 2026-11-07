@@ -26,11 +26,9 @@ function HookHarness({
   code,
   enabled,
   setError,
-  pollingEnabled = true,
 }: {
   code: string;
   enabled: boolean;
-  pollingEnabled?: boolean;
   setError: (message: string) => void;
 }) {
   const {
@@ -43,7 +41,6 @@ function HookHarness({
   } = useSessionData({
     code,
     enabled,
-    pollingEnabled,
     safeJson,
     setError,
   });
@@ -68,6 +65,7 @@ function HookHarness({
         Urgent patch
       </button>
       <button type="button" onClick={() => void fetchSession()}>Refresh</button>
+      <button type="button" onClick={() => void fetchSession({ afterMutation: true })}>Check saved change</button>
       <button type="button" onClick={retryInitialLoad}>
         Retry
       </button>
@@ -111,6 +109,11 @@ describe("useSessionData", () => {
     });
   }
 
+  async function click(name: string) {
+    await act(async () => Array.from(container.querySelectorAll("button"))
+      .find(button => button.textContent === name)!.click());
+  }
+
   async function renderHarness(setError = vi.fn(), code = "UICHECK") {
     await act(async () => {
       root.render(
@@ -139,7 +142,8 @@ describe("useSessionData", () => {
     expect(setError).not.toHaveBeenCalled();
   });
 
-  it("can retry successfully after the first load fails", async () => {
+  it("can retry successfully after the first load cooldown", async () => {
+    vi.useFakeTimers();
     vi.stubGlobal(
       "fetch",
       vi
@@ -159,6 +163,7 @@ describe("useSessionData", () => {
     );
     expect(retryButton).toBeTruthy();
 
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
     await act(async () => {
       retryButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -192,31 +197,7 @@ describe("useSessionData", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("shows a score snapshot from another viewer on the next five-second poll", async () => {
-    vi.useFakeTimers();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse({ name: "Before score" }))
-      .mockResolvedValueOnce(createJsonResponse({ name: "After score" }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await renderHarness();
-    expect(readTestText(container, "name")).toBe("Before score");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/sessions/UICHECK",
-      expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) })
-    );
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
-    await flushAsyncWork();
-
-    expect(readTestText(container, "name")).toBe("After score");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not let a poll started before a local score patch revert that patch", async () => {
+  it("reads again after a local patch and never applies the earlier snapshot", async () => {
     vi.useFakeTimers();
     let resolveStaleResponse: ((response: Response) => void) | undefined;
     const fetchMock = vi
@@ -227,13 +208,12 @@ describe("useSessionData", () => {
           new Promise<Response>((resolve) => {
             resolveStaleResponse = resolve;
           })
-      );
+      )
+      .mockResolvedValueOnce(createJsonResponse({ name: "Confirmed on server" }));
     vi.stubGlobal("fetch", fetchMock);
 
     await renderHarness();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
+    await click("Refresh");
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     const urgentPatchButton = Array.from(
@@ -246,16 +226,19 @@ describe("useSessionData", () => {
     });
     expect(readTestText(container, "name")).toBe("Urgent Patch Applied");
 
+    await click("Check saved change");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     await act(async () => {
       resolveStaleResponse?.(createJsonResponse({ name: "Stale response" }));
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(readTestText(container, "name")).toBe("Urgent Patch Applied");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(readTestText(container, "name")).toBe("Confirmed on server");
   });
 
-  it("does not overlap polls while a session request is still pending", async () => {
+  it("coalesces ordinary reads while a session request is still pending", async () => {
     vi.useFakeTimers();
     let resolvePending: ((response: Response) => void) | undefined;
     const fetchMock = vi
@@ -270,9 +253,8 @@ describe("useSessionData", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await renderHarness();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(12_000);
-    });
+    await click("Refresh");
+    await click("Refresh");
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     await act(async () => {
@@ -283,7 +265,7 @@ describe("useSessionData", () => {
     expect(readTestText(container, "name")).toBe("Latest");
   });
 
-  it("aborts a hung poll after ten seconds and resumes polling", async () => {
+  it("aborts a hung read after ten seconds and allows another refresh", async () => {
     vi.useFakeTimers();
     let requestSignal: AbortSignal | undefined;
     const fetchMock = vi
@@ -304,9 +286,7 @@ describe("useSessionData", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await renderHarness();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
+    await click("Refresh");
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     await act(async () => {
@@ -315,76 +295,13 @@ describe("useSessionData", () => {
     await flushAsyncWork();
     expect(requestSignal?.aborted).toBe(true);
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
+    await click("Refresh");
     await flushAsyncWork();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(readTestText(container, "name")).toBe("Recovered");
   });
 
-  it("refreshes when the tab regains focus", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse({ name: "Before focus" }))
-      .mockResolvedValueOnce(createJsonResponse({ name: "After focus" }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await renderHarness();
-    await act(async () => {
-      window.dispatchEvent(new Event("focus"));
-    });
-    await flushAsyncWork();
-
-    expect(readTestText(container, "name")).toBe("After focus");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("pauses polling while hidden and refreshes when visible again", async () => {
-    vi.useFakeTimers();
-    const visibilitySpy = vi
-      .spyOn(document, "visibilityState", "get")
-      .mockReturnValue("visible");
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse({ name: "Before hidden" }))
-      .mockResolvedValueOnce(createJsonResponse({ name: "After visible" }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await renderHarness();
-    visibilitySpy.mockReturnValue("hidden");
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(12_000);
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    visibilitySpy.mockReturnValue("visible");
-    await act(async () => {
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
-    await flushAsyncWork();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(readTestText(container, "name")).toBe("After visible");
-  });
-
-  it("refreshes when the network comes back online", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createJsonResponse({ name: "Before reconnect" }))
-      .mockResolvedValueOnce(createJsonResponse({ name: "After reconnect" }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await renderHarness();
-    await act(async () => {
-      window.dispatchEvent(new Event("online"));
-    });
-    await flushAsyncWork();
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(readTestText(container, "name")).toBe("After reconnect");
-  });
-
-  it("respects Retry-After before sending another poll", async () => {
+  it("respects Retry-After on manual refresh", async () => {
     vi.useFakeTimers();
     const rateLimited = new Response(
       JSON.stringify({ error: "Rate limit exceeded" }),
@@ -404,19 +321,14 @@ describe("useSessionData", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await renderHarness();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
+    await click("Refresh");
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(4_000);
-    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(4_000); });
+    await click("Refresh");
     expect(fetchMock).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    await click("Refresh");
     await flushAsyncWork();
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(readTestText(container, "name")).toBe("Recovered");
@@ -456,62 +368,4 @@ describe("useSessionData", () => {
     expect(readTestText(container, "name")).toBe("New session");
   });
 
-  it("limits an unchanged active session to twelve scheduled reads per minute", async () => {
-    vi.useFakeTimers();
-    const fetchMock = vi.fn(async () => createJsonResponse({ name: "Live", status: "ACTIVE" }));
-    vi.stubGlobal("fetch", fetchMock);
-    await renderHarness();
-    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
-    expect(fetchMock).toHaveBeenCalledTimes(13); // Initial load plus twelve polls.
-  });
-
-  it("changes cadence as a waiting session starts and stops polling after completion", async () => {
-    vi.useFakeTimers();
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ name: "Waiting", status: "WAITING" }))
-      .mockResolvedValueOnce(createJsonResponse({ name: "Playing", status: "ACTIVE" }))
-      .mockImplementation(async () => createJsonResponse({ name: "Finished", status: "COMPLETED" }));
-    vi.stubGlobal("fetch", fetchMock);
-    await renderHarness();
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-    expect(readTestText(container, "name")).toBe("Playing");
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-    expect(readTestText(container, "name")).toBe("Finished");
-    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    await act(async () => { window.dispatchEvent(new Event("focus")); });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-  });
-
-  it("keeps data and manual refresh available while parent polling is paused for history", async () => {
-    vi.useFakeTimers();
-    const setError = vi.fn();
-    const fetchMock = vi.fn(async () => createJsonResponse({ name: "Retained", status: "ACTIVE" }));
-    vi.stubGlobal("fetch", fetchMock);
-    await renderHarness(setError);
-    await act(async () => root.render(<HookHarness code="UICHECK" enabled pollingEnabled={false} setError={setError} />));
-    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); window.dispatchEvent(new Event("focus")); });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(readTestText(container, "name")).toBe("Retained");
-    await act(async () => Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Refresh")!.click());
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await act(async () => root.render(<HookHarness code="UICHECK" enabled pollingEnabled setError={setError} />));
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(readTestText(container, "name")).toBe("Retained");
-  });
-
-  it("coalesces visibility, focus, and reconnect events even after the first read settles", async () => {
-    vi.useFakeTimers();
-    const fetchMock = vi.fn(async () => createJsonResponse({ name: "Live", status: "ACTIVE" }));
-    vi.stubGlobal("fetch", fetchMock);
-    await renderHarness();
-    for (const event of ["visibilitychange", "focus", "online"]) {
-      await act(async () => { (event === "visibilitychange" ? document : window).dispatchEvent(new Event(event)); });
-    }
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-  });
 });

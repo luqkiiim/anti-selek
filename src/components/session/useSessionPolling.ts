@@ -2,47 +2,51 @@
 
 import { useEffect, useRef } from "react";
 
-export function sessionPollInterval(status?: string) {
-  if (status === "COMPLETED") return null;
-  return status === "WAITING" ? 10_000 : 5_000;
-}
+export const SHARED_SESSION_REFRESH_MS = 30_000;
+const RESUME_DELAY_MS = 10_000;
 
 interface SessionPollingOptions {
   enabled?: boolean;
   intervalMs: number | null;
-  refreshOnEnable?: boolean;
+  lastCheckedAt?: number | null;
   refreshOnResume?: boolean;
 }
 
 /** Poll only the visible session view; focus/reconnect also refresh completed views. */
 export function useSessionPolling(
   refresh: () => Promise<unknown>,
-  { enabled = true, intervalMs, refreshOnEnable = false, refreshOnResume = true }: SessionPollingOptions,
+  { enabled = true, intervalMs, lastCheckedAt, refreshOnResume = true }: SessionPollingOptions,
 ) {
   const refreshRef = useRef(refresh);
   const previouslyEnabled = useRef(enabled);
-  const lastWakeAt = useRef(-Infinity);
-  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
+  const lastRunAt = useRef(0);
+  const lastCheckedAtRef = useRef(lastCheckedAt);
+  useEffect(() => { refreshRef.current = refresh; lastCheckedAtRef.current = lastCheckedAt; }, [refresh, lastCheckedAt]);
 
   useEffect(() => {
     const resumed = !previouslyEnabled.current && enabled;
     previouslyEnabled.current = enabled;
     if (!enabled) return;
+    if (!lastRunAt.current) lastRunAt.current = Date.now();
 
     let disposed = false;
     let pending = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const clearTimer = () => { clearTimeout(timer); timer = undefined; };
+    const timeSinceLastCheck = () => Date.now() - Math.max(lastRunAt.current, lastCheckedAtRef.current ?? 0);
     const schedule = () => {
       clearTimer();
-      if (!disposed && intervalMs !== null && document.visibilityState !== "hidden") {
-        timer = setTimeout(run, intervalMs);
-      }
+      if (disposed || intervalMs === null || document.visibilityState === "hidden") return;
+      timer = setTimeout(() => {
+        if (timeSinceLastCheck() >= intervalMs) run();
+        else schedule();
+      }, Math.max(0, intervalMs - timeSinceLastCheck()));
     };
     const run = () => {
       clearTimer();
       if (disposed || pending || document.visibilityState === "hidden") return;
       pending = true;
+      lastRunAt.current = Date.now();
       void Promise.resolve().then(() => {
         if (!disposed) return refreshRef.current();
       }).catch(() => {
@@ -54,13 +58,12 @@ export function useSessionPolling(
     };
     const wake = () => {
       if (document.visibilityState === "hidden") { clearTimer(); return; }
-      // Browsers commonly emit visibilitychange and focus for the same return.
-      if (Date.now() - lastWakeAt.current < 1_000) return;
-      lastWakeAt.current = Date.now();
-      run();
+      // Focus, reconnect and visibility changes can all accompany one return.
+      if (timeSinceLastCheck() >= RESUME_DELAY_MS) run();
+      else if (timer === undefined && !pending) schedule();
     };
 
-    if (refreshOnEnable || (resumed && refreshOnResume)) run();
+    if (resumed && refreshOnResume) run();
     else schedule();
     window.addEventListener("focus", wake);
     window.addEventListener("online", wake);
@@ -72,5 +75,5 @@ export function useSessionPolling(
       window.removeEventListener("online", wake);
       document.removeEventListener("visibilitychange", wake);
     };
-  }, [enabled, intervalMs, refreshOnEnable, refreshOnResume]);
+  }, [enabled, intervalMs, refreshOnResume]);
 }

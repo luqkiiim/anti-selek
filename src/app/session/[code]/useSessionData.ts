@@ -1,14 +1,12 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
-import { getErrorMessage, type SafeJson } from "@/lib/http";
+import { getErrorMessage, getRetryAfterDelay, type SafeJson } from "@/lib/http";
 import type { SessionData } from "@/components/session/sessionTypes";
-import { sessionPollInterval, useSessionPolling } from "@/components/session/useSessionPolling";
 
 interface UseSessionDataArgs {
   code: string;
   enabled: boolean;
-  pollingEnabled?: boolean;
   readQuery?: string;
   safeJson: SafeJson;
   setError: (message: string) => void;
@@ -44,22 +42,11 @@ function hasOlderScores(current: SessionData, incoming: SessionData) {
   });
 }
 
-function getRetryAfterDelay(value: string | null) {
-  if (!value?.trim()) return 0;
-
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) {
-    return Math.max(0, seconds * 1_000);
-  }
-
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? 0 : Math.max(0, timestamp - Date.now());
-}
+type SessionRead = { data: SessionData; checkedAt: number } | "retry" | undefined;
 
 export function useSessionData({
   code,
   enabled,
-  pollingEnabled = true,
   readQuery = "",
   safeJson,
   setError,
@@ -67,7 +54,10 @@ export function useSessionData({
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [isInitialLoadPending, setIsInitialLoadPending] = useState(false);
   const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
+  const [initialReadAt, setInitialReadAt] = useState<number | null>(null);
   const hasLoadedSessionRef = useRef(false);
+  const snapshotRef = useRef(sessionData);
+  useEffect(() => { snapshotRef.current = sessionData; }, [sessionData]);
   const revalidateTimeoutRef = useRef<number | null>(null);
   const deferredRecoveryTimeoutRef = useRef<number | null>(null);
   const deferredRecoveryRef = useRef<Promise<void> | null>(null);
@@ -77,8 +67,9 @@ export function useSessionData({
     id: number;
     code: string;
     timeoutId: number | null;
-    settled: Promise<void>;
-    resolveSettled: () => void;
+    revision: number;
+    recovery: boolean;
+    settled: Promise<SessionRead>;
   } | null>(null);
   const requestIdRef = useRef(0);
   const activeGenerationRef = useRef(0);
@@ -88,12 +79,24 @@ export function useSessionData({
   const lastServerSnapshotRef = useRef<string | null>(null);
   const nextRequestAllowedAtRef = useRef(0);
   const fetchSession = useCallback(
-    async ({ silent = false, recoverDeferredQueue = false }: { silent?: boolean; recoverDeferredQueue?: boolean } = {}) => {
-      if (!code || !isActiveRef.current) return;
-      if (inFlightRef.current?.code === code) return "retry";
+    async ({ silent = false, recoverDeferredQueue = false, afterMutation = false }: {
+      silent?: boolean; recoverDeferredQueue?: boolean; afterMutation?: boolean;
+    } = {}): Promise<SessionRead> => {
+      if (!code || !isActiveRef.current || activeCodeRef.current !== code) return;
+      const generation = activeGenerationRef.current;
+      let requireNewRead = afterMutation;
+      while (inFlightRef.current?.code === code) {
+        const pending = inFlightRef.current;
+        if (recoverDeferredQueue) return "retry";
+        if (!requireNewRead && !pending.recovery && pending.revision === localRevisionRef.current) {
+          return pending.settled;
+        }
+        await pending.settled;
+        if (!isActiveRef.current || activeGenerationRef.current !== generation) return;
+        requireNewRead = false;
+      }
       if (Date.now() < nextRequestAllowedAtRef.current) return "retry";
 
-      const generation = activeGenerationRef.current;
       const localRevision = localRevisionRef.current;
       const controller = new AbortController();
       const requestId = ++requestIdRef.current;
@@ -103,9 +106,13 @@ export function useSessionData({
         () => controller.abort(),
         REQUEST_TIMEOUT_MS
       );
-      let resolveSettled = () => {};
-      const settled = new Promise<void>((resolve) => { resolveSettled = resolve; });
-      inFlightRef.current = { controller, id: requestId, code, timeoutId, settled, resolveSettled };
+      let outcome: SessionRead;
+      let resolveSettled!: (result: SessionRead) => void;
+      const settled = new Promise<SessionRead>(resolve => { resolveSettled = resolve; });
+      inFlightRef.current = {
+        controller, id: requestId, code, timeoutId, revision: localRevision,
+        recovery: recoverDeferredQueue, settled,
+      };
 
       try {
         const recoveryQuery = recoverDeferredQueue
@@ -145,19 +152,25 @@ export function useSessionData({
               });
             }
           }
-          return res.status === 429 ? "retry" : undefined;
+          if (res.status === 429) outcome = "retry";
+          return outcome;
         }
 
         nextRequestAllowedAtRef.current = 0;
         if (localRevisionRef.current !== localRevision) return;
+        const snapshot = data as SessionData;
+        if (snapshotRef.current && hasOlderScores(snapshotRef.current, snapshot)) return;
+        outcome = { data: snapshot, checkedAt: Date.now() };
+        if (!hasLoadedSessionRef.current) setInitialReadAt(outcome.checkedAt);
         hasLoadedSessionRef.current = true;
+        setError("");
         const snapshotSignature = JSON.stringify(data);
         if (snapshotSignature === lastServerSnapshotRef.current) {
           startTransition(() => {
             setInitialLoadError(null);
             setIsInitialLoadPending(false);
           });
-          return;
+          return outcome;
         }
 
         lastServerSnapshotRef.current = snapshotSignature;
@@ -171,6 +184,7 @@ export function useSessionData({
           setInitialLoadError(null);
           setIsInitialLoadPending(false);
         });
+        return outcome;
       } catch (err) {
         if (!controller.signal.aborted) {
           console.error(err);
@@ -196,7 +210,7 @@ export function useSessionData({
         if (inFlightRef.current?.id === requestId) {
           inFlightRef.current = null;
         }
-        resolveSettled();
+        resolveSettled(outcome);
       }
     },
     [code, readQuery, safeJson, setError]
@@ -289,7 +303,7 @@ export function useSessionData({
       return;
     }
 
-    nextRequestAllowedAtRef.current = 0;
+    if (Date.now() < nextRequestAllowedAtRef.current) return;
     startTransition(() => {
       setInitialLoadError(null);
       setIsInitialLoadPending(true);
@@ -328,6 +342,7 @@ export function useSessionData({
       }
       startTransition(() => {
         setSessionData(null);
+        setInitialReadAt(null);
         setInitialLoadError(null);
         setIsInitialLoadPending(false);
       });
@@ -339,11 +354,13 @@ export function useSessionData({
     activeCodeRef.current = code;
     isActiveRef.current = true;
     hasLoadedSessionRef.current = false;
+    snapshotRef.current = null;
     localRevisionRef.current = 0;
     lastServerSnapshotRef.current = null;
     nextRequestAllowedAtRef.current = 0;
     startTransition(() => {
       setSessionData(null);
+      setInitialReadAt(null);
       setInitialLoadError(null);
       setIsInitialLoadPending(true);
     });
@@ -372,14 +389,9 @@ export function useSessionData({
     };
   }, [enabled, code, fetchSession]);
 
-  const pollSession = useCallback(() => fetchSession({ silent: true }), [fetchSession]);
-  useSessionPolling(pollSession, {
-    enabled: enabled && !!code && pollingEnabled,
-    intervalMs: sessionPollInterval(sessionData?.status),
-  });
-
   return {
     sessionData,
+    initialReadAt,
     isInitialLoadPending,
     initialLoadError,
     fetchSession,

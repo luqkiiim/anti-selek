@@ -29,3 +29,13 @@ export function getErrorMessage(data: unknown, fallback: string) {
 
   return fallback;
 }
+
+export function getRetryAfterDelay(value: string | null) {
+  if (!value?.trim()) return 0;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : Math.max(0, timestamp - Date.now());
+}
