@@ -1,6 +1,8 @@
 # Current interface verification
 
-Verified locally on 6 November 2026 in the isolated `codex/current-ui-only` checkout, based on main `b12715d7c0270f08b04f1af49edd3d4a772bfa15`. The original workspace's unrelated authentication and access-repair changes were left untouched.
+The original interface consolidation was verified locally on 6 November 2026 in the isolated `codex/current-ui-only` checkout, based on main `b12715d7c0270f08b04f1af49edd3d4a772bfa15`. The original workspace's unrelated authentication and access-repair changes were left untouched.
+
+Practice was later removed from the interface. The checks below document the original consolidation.
 
 ## Baseline
 

@@ -55,7 +55,6 @@ import { useSessionStandingsImage } from "@/lib/useSessionStandingsImage";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
 import { adminApi, AdminSaveOutcomeUnknownError } from "@/lib/adminClient";
 import type { UnfinishedMatchReview } from "@/lib/sessionFinish";
-import { PracticeGuide } from "./PracticeGuide";
 import { SaveSessionGuests } from "./SaveSessionGuests";
 import "./first-session.css";
 import { classifyCourtGroupSnapshot, getCourtGroupTypeLabel } from "@/lib/playerGroups";
@@ -150,13 +149,12 @@ export default function LiveSession({
   onOpenMember,
   profileMemberIds,
   globalClubId,
-  activeTab, onTabChange, onSessionData, onHistory, onPracticeTools, onOpenProfile,
+  activeTab, onTabChange, onSessionData, onHistory, onOpenProfile,
 }: {
   activeTab?: string;
   onTabChange?: (tab: string) => void;
   onSessionData?: (session: SessionData) => void;
   onHistory?: () => void;
-  onPracticeTools?: () => void;
   onOpenProfile?: (id: string, clubId: string | null) => void;
   globalClubId?: string;
   code: string;
@@ -1059,7 +1057,7 @@ export default function LiveSession({
           return savedLabel ? { ...court, label: savedLabel.label } : court;
         }) }))}
         onClose={() => setShareMode(null)} />}
-      <header id="admin-onboarding-session-panel" tabIndex={-1} className="pc-header">
+      <header className="pc-header">
         <button className="icon-button" aria-label="Back" onClick={onBack}>
           <ArrowLeft size={23} />
         </button>
@@ -1079,9 +1077,8 @@ export default function LiveSession({
           <span />
         )}
       </header>
-      {s?.status === "ACTIVE" && canManage && <div className="session-finish-toolbar"><button type="button" id="admin-onboarding-end-session" className="secondary" onClick={openFinish}><SignOut size={17} />Finish session</button></div>}
+      {s?.status === "ACTIVE" && canManage && <div className="session-finish-toolbar"><button type="button" className="secondary" onClick={openFinish}><SignOut size={17} />Finish session</button></div>}
       <Pager pages={s?.status !== "ACTIVE" ? [tab] : sessionTabs} active={tab} onChange={navigateTab}>{tab => <>
-          {s && tab === "Courts" && <PracticeGuide enabled={!!s.isTutorialClub && s.tutorialOwnerId === s.viewerUserId && !s.viewerIsQuickAccess} step={s.status === "ACTIVE" ? "session-workflow" : undefined} revision={`${s.status}:${s.matches?.filter(match => match.status === "COMPLETED").length}`} />}
           <ErrorText
             error={pauseError || resource.error || standings.error || (!sheet ? action.error : "")}
           />
@@ -1166,11 +1163,11 @@ export default function LiveSession({
                   onQueueNextMatch={() => void action.run(() => changeQueuedMatch("POST"))}
                 />
               )}
-              {s.courts.map((court, courtIndex) => {
+              {s.courts.map(court => {
                 const match = court.currentMatch;
                 const groupLabel = matchGroupLabel(match);
                 return (
-                  <section id={courtIndex === 0 ? "admin-onboarding-score-input" : undefined} tabIndex={-1} className="court-card" key={court.id}>
+                  <section className="court-card" key={court.id}>
                     <div className="section-heading">
                       <div className="court-heading-title">
                         <h3>{court.label || "Court " + court.courtNumber}</h3>
@@ -1474,7 +1471,6 @@ export default function LiveSession({
             <>
               <Row title="Share session" icon={ShareNetwork} onClick={() => { setSheet(""); setShareMode("message"); }} />
               {canJoin && <Row title="Join session" icon={UsersThree} onClick={() => { setSheet(""); setTab("Players"); }} />}
-              {canManage && (s?.isTest || s?.isTutorialClub) && onPracticeTools && <Row title="Practice tools" icon={GearSix} onClick={() => { setSheet(""); onPracticeTools(); }} />}
               <Row title="Match history" icon={ClockCounterClockwise} onClick={() => { setSheet(""); openHistory(); }} />
               {canManage && !ended && <>
                 <Row title="Session settings" icon={GearSix} onClick={openLiveSettings} />

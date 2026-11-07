@@ -9,9 +9,7 @@ import { AppShell, useAppLocation } from "./AppShell";
 import { ProfileOverlay } from "./ProfileRoute";
 import { backInApp, changeAppQuery, clubHref, getSessionTab, navigateApp, sessionHref } from "@/lib/appNavigation";
 import { withCallbackUrl } from "@/lib/authCallback";
-import { SessionPracticeTools } from "@/components/product/SessionPracticeTools";
 import { normalizeProductHref } from "@/lib/productNavigation";
-import { adminApi } from "@/lib/adminClient";
 
 export default function SessionRoute({ historyView = false }: { historyView?: boolean }) {
   const { code } = useParams<{ code: string }>();
@@ -24,7 +22,6 @@ export default function SessionRoute({ historyView = false }: { historyView?: bo
   const isGlobal = params.getAll("view").includes("global");
   const globalIds = params.getAll("clubId");
   const globalClubId = isGlobal ? globalIds[0] : undefined;
-  const [revision, setRevision] = useState(0);
   const [session, setSession] = useState<SessionData | null>(null);
   const fallback = session?.clubId ? clubHref(session.clubId, "sessions", !!globalClubId) : "/";
   useEffect(() => {
@@ -35,16 +32,15 @@ export default function SessionRoute({ historyView = false }: { historyView?: bo
   const member = params.get("member");
   const openMember = (id: string, profileClubId: string | null) => navigateApp(router, changeAppQuery(href, { member: id, profileClubId }));
   return <AppShell>{historyView ? <div className="pc-app"><SessionMatchHistory code={code} globalClubId={globalClubId} onBack={() => backInApp(router, sessionHref(code, globalClubId))} onNavigate={href => navigateApp(router, href)} /></div> : <LiveSession
-    key={`${code}:${revision}`} code={code} globalClubId={globalClubId}
+    key={code} code={code} globalClubId={globalClubId}
     activeTab={getSessionTab(params.get("tab"))}
     onTabChange={tab => navigateApp(router, changeAppQuery(href, { tab: tab.toLowerCase() }))}
     onSessionData={setSession}
     onOpenProfile={openMember}
     onHistory={() => navigateApp(router, `/session/${encodeURIComponent(code)}/history${globalClubId ? `?view=global&clubId=${encodeURIComponent(globalClubId)}` : ""}`)}
-    onPracticeTools={() => navigateApp(router, changeAppQuery(href, { practice: "1" }))}
     onBack={() => navigateApp(router, "/", true)}
     onEnded={async () => {}}
     onDeleted={async () => navigateApp(router, fallback, true)}
-  />}{session && !isGlobal && <SessionPracticeTools key={code} session={session} open={params.get("practice") === "1"} onClose={() => navigateApp(router, changeAppQuery(href, { practice: null }), true)} refresh={async () => { const fresh = await adminApi<SessionData>(`/api/sessions/${encodeURIComponent(code)}`); setSession(fresh); setRevision(value => value + 1); }} />}{member && <ProfileOverlay playerId={member} clubId={params.get("profileClubId") ?? ""} globalView={!!globalClubId} onBack={() => backInApp(router, changeAppQuery(href, { member: null, profileClubId: null }))} onOpenMember={openMember} />}</AppShell>;
+  />}{member && <ProfileOverlay playerId={member} clubId={params.get("profileClubId") ?? ""} globalView={!!globalClubId} onBack={() => backInApp(router, changeAppQuery(href, { member: null, profileClubId: null }))} onOpenMember={openMember} />}</AppShell>;
 }
 export function SessionHistoryRoute() { return <SessionRoute historyView />; }

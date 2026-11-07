@@ -1,5 +1,4 @@
 "use client";
-import { PracticeGuide } from "./PracticeGuide";
 import { EmergencyPasswordReset } from "./EmergencyPasswordReset";
 import { MixedPairingControl } from "./MixedPairingControl";
 import "./first-session.css";
@@ -84,7 +83,6 @@ export default function Admin({
     [preferredGroup, setPreferredGroup] = useState("B");
   const [pendingRole, setPendingRole] = useState<ClubPageMember["role"] | null>(null);
   const [roleNotice, setRoleNotice] = useState("");
-  const [practiceRevision, setPracticeRevision] = useState(0);
   const [saveNotice, setSaveNotice] = useState("");
   const [saveWarning, setSaveWarning] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -230,7 +228,6 @@ export default function Admin({
           {saveWarning && <p role="status">{saveWarning}</p>}
           <AdminRefreshStatus action={action} />
           <AdminRefreshStatus action={roleAction} />
-          <PracticeGuide revision={practiceRevision} enabled={!!club.isTutorial && club.tutorialOwnerId === viewer.id} step={tab === "Players" ? "players" : undefined} />
           <fieldset disabled={busy} className="club-permission-fields">
           {tab === "Players" ? (
             <>
@@ -238,7 +235,7 @@ export default function Admin({
               <label className="search">
                 <MagnifyingGlass size={20} />
                 <input
-                  id="admin-onboarding-players-tab" aria-label="Search players"
+                  aria-label="Search players"
                   placeholder="Search players by name"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -299,7 +296,7 @@ export default function Admin({
               {!joins.data && !joins.error && <p role="status">Loading requests…</p>}
             </>
           ) : (
-            <ClubSettings onReset={() => setPracticeRevision(value => value + 1)} canReset={!club.isTutorial || club.tutorialOwnerId === viewer.id} club={club} allowJoinRequests={joins.data?.allowJoinRequests} busy={busy} onInvite={() => setSheet("invite")} onToggleJoins={toggleJoinRequests} refresh={refresh} onDeleted={onDeleted} onClubSaved={onClubSaved} />
+            <ClubSettings club={club} allowJoinRequests={joins.data?.allowJoinRequests} busy={busy} onInvite={() => setSheet("invite")} onToggleJoins={toggleJoinRequests} refresh={refresh} onDeleted={onDeleted} onClubSaved={onClubSaved} />
           )}
           </fieldset>
         </main>

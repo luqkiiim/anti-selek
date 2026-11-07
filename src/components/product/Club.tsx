@@ -39,7 +39,6 @@ import {
 import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
-import { PracticeGuide } from "./PracticeGuide";
 import { NewSessionPlayerForm } from "./NewSessionPlayerForm";
 import { ClubMembersSheet } from "./ClubMembersSheet";
 import { MonthlyClimbers } from "./MonthlyClimbers";
@@ -323,11 +322,10 @@ export default function Club({
           {resource.error && <button className="secondary" disabled={resource.loading || resource.retryAt > 0} onClick={() => void resource.refresh().catch(() => {})}>Try again</button>}
           {data && !resource.validated && (page === "admin" || page === "setup") && !resource.error && <p role="status">Loading club…</p>}
           {!data && <p role="status">Loading club…</p>}
-          {data && ["club", "setup"].includes(page) && <PracticeGuide enabled={!!data.club.isTutorial && data.club.tutorialOwnerId === data.viewer.id && !readOnly} />}
           {data && page === "club" && (
             <div className="club-dashboard-grid">
               <div className="club-dashboard-intro">
-                <div id="admin-onboarding-dashboard-community" tabIndex={-1} className="club-welcome">
+                <div className="club-welcome">
                   <div>
                     <span className="eyebrow">
                       {canManage ? "YOUR CLUB, TOGETHER" : "GOOD TO SEE YOU"}
@@ -390,7 +388,6 @@ export default function Club({
                   </div>
                 </section>
               {!completedSessions.length && <p className="club-initial-empty">Your first completed session will appear here.</p>}
-              {data.club.isTutorial && <button className="text-button" onClick={() => go("sessions")}>Practice sessions</button>}
               <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
               {data.clubPulse?.monthlyClimbers && <MonthlyClimbers climbers={data.clubPulse.monthlyClimbers} month={data.clubPulse.monthlyClimbersMonth} onOpenProfile={openMember} />}
               {!readOnly && viewerPlayerId && <div className="club-dashboard-progress">
@@ -434,7 +431,6 @@ export default function Club({
                 </div>
               ))}
               <UpcomingSessions sessions={upcoming} clubId={club.id} busy={action.busy} onReview={canAdmin ? (code, status) => void action.run(() => api(`/api/sessions/${encodeURIComponent(code)}/collab`, "PATCH", { status })) : undefined} canManage={!!canManage} onOpen={openSession} />
-              {data.sessions.some(item => item.isTest) && <section className="past-sessions" aria-label="Practice sessions"><h2>Practice sessions</h2><UpcomingSessions sessions={data.sessions.filter(item => item.isTest && item.status === "WAITING")} clubId={club.id} busy={action.busy} onReview={canAdmin ? (code, status) => void action.run(() => api(`/api/sessions/${encodeURIComponent(code)}/collab`, "PATCH", { status })) : undefined} canManage={!!canManage} onOpen={openSession} />{data.sessions.filter(item => item.isTest && item.status !== "WAITING").map(item => <button key={item.id} className="recent-card" onClick={() => openSession(item.code)}><strong>{item.name}</strong><span>{item.status === "ACTIVE" ? "In progress" : item.status === "COMPLETED" ? "Completed" : "Ready to start"}</span></button>)}</section>}
               <section className="past-sessions" aria-labelledby="past-sessions-heading">
                 <div className="past-sessions-heading">
                   <h2 id="past-sessions-heading">Past sessions</h2>
@@ -520,7 +516,7 @@ export default function Club({
               </button>
             </>
           )}
-          {data && page === "setup" && canManage && <SessionSetup tutorial={!!data.club.isTutorial && data.club.tutorialOwnerId === data.viewer.id} clubId={club.id} members={data.clubMembers} canSavePlayers={canAdmin} onMemberSaved={savedPlayer} onCreated={openSession} />}
+          {data && page === "setup" && canManage && <SessionSetup clubId={club.id} members={data.clubMembers} canSavePlayers={canAdmin} onMemberSaved={savedPlayer} onCreated={openSession} />}
       </>}</Pager>
       {!["setup", "recap"].includes(page) && (
         <MainNav active={page} onNavigate={go} readOnly={readOnly} />

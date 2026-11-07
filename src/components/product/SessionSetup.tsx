@@ -1,6 +1,5 @@
 "use client";
 
-import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAppReady } from "@/components/app/AppStartup";
 import { CaretRight, Check, Minus, Plus, MagnifyingGlass, Shuffle, Scales, ChartBar, UsersThree, Trash, X } from "@phosphor-icons/react";
@@ -25,8 +24,7 @@ function Toggle({ title, hint, checked, onChange }: { title: string; hint?: stri
   return <label className="setup-toggle"><span><strong>{title}</strong>{hint && <small>{hint}</small>}</span><input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} /><span className="setup-switch" aria-hidden="true" /></label>;
 }
 
-export function SessionSetup({ clubId, members: initialMembers, onCreated, canSavePlayers = false, onMemberSaved, tutorial = false }: { clubId: string; members: ClubPageMember[]; onCreated: (code: string) => void; canSavePlayers?: boolean; onMemberSaved?: (member: ClubPageMember) => void; tutorial?: boolean }) {
-  const guide = useAdminOnboardingProgress(tutorial);
+export function SessionSetup({ clubId, members: initialMembers, onCreated, canSavePlayers = false, onMemberSaved }: { clubId: string; members: ClubPageMember[]; onCreated: (code: string) => void; canSavePlayers?: boolean; onMemberSaved?: (member: ClubPageMember) => void }) {
   const [addedMembers, setAddedMembers] = useState<ClubPageMember[]>([]);
   const rosterMembers = [...new Map([...initialMembers, ...addedMembers].map(member => [member.id, member])).values()];
   const [playerNotice, setPlayerNotice] = useState("");
@@ -143,7 +141,6 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
         guestConfigs: guests.map(({ name, initialElo, gender, mixedSideOverride, pool }) => ({ name, initialElo, gender, mixedSideOverride, pool })),
         poolsEnabled: partner && collabFormat === "INTERCLUB" ? false : groups, crossoverFrequency: crossover, autoQueueEnabled: partner && collabFormat === "INTERCLUB" ? false : autoQueue, respectPlayerRest: true, isTest: false,
       });
-      if (tutorial) guide.completeStep("host-session");
       onCreated(created.code);
     });
   }
@@ -153,12 +150,12 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
     <form onSubmit={e => { e.preventDefault(); prepare(); }}>
       <fieldset disabled={action.busy} className="setup-fields">
         <section className="setup-section" aria-label="Session details">
-          <label className="field-label setup-name">Session name<input id="admin-onboarding-session-name" value={name} onChange={e => setName(e.target.value)} required /></label>
+          <label className="field-label setup-name">Session name<input value={name} onChange={e => setName(e.target.value)} required /></label>
           <div className="setup-courts"><span><strong>Courts</strong></span><div className="setup-stepper"><button type="button" aria-label="Fewer courts" disabled={courts === 1} onClick={() => setCourts(n => n - 1)}><Minus size={18} /></button><output aria-label="Court count" aria-live="polite">{courts}</output><button type="button" aria-label="More courts" disabled={courts === 10} onClick={() => setCourts(n => n + 1)}><Plus size={18} /></button></div></div>
         </section>
 
         <section className="setup-section" aria-labelledby="setup-players"><h2 id="setup-players">Who’s playing?</h2>
-          <button type="button" id="admin-onboarding-host-players" className="setup-roster-summary" onClick={() => setRosterOpen(true)} aria-haspopup="dialog">
+          <button type="button" className="setup-roster-summary" onClick={() => setRosterOpen(true)} aria-haspopup="dialog">
             <span className="setup-roster-faces" aria-hidden="true">{players.slice(0, 3).map(p => <Avatar key={p.id} name={p.name} url={p.avatarUrl} />)}{!players.length && <UsersThree size={28} />}</span>
             <span><strong>Add players</strong><small>{count} selected{guests.length ? ` · ${guests.length} session-only` : ""}</small></span><CaretRight size={18} />
           </button>
@@ -189,7 +186,7 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
         </div></details>}
         <SessionDetailsForm value={details} onChange={setDetails} courtNumbers={Array.from({ length: courts }, (_, index) => index + 1)} />
       </fieldset>
-      <div className="setup-submit"><ErrorText error={rosterError ? "" : action.error} /><button className="primary full" id="admin-onboarding-create-session" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : "Prepare session"}<CaretRight size={18} /></button></div>
+      <div className="setup-submit"><ErrorText error={rosterError ? "" : action.error} /><button className="primary full" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : "Prepare session"}<CaretRight size={18} /></button></div>
     </form>
 
     <Sheet open={rosterOpen} busy={savingPlayer} title="Who’s playing?" onClose={() => { setRosterOpen(false); setAddingGuest(false); }}>

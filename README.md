@@ -133,18 +133,6 @@ npm install
 npx prisma migrate dev
 ```
 
-Before testing the tutorial playground locally, confirm your SQLite schema is in
-sync:
-
-```bash
-npx prisma migrate status
-```
-
-If the command reports drift or pending migrations, fix the local database first.
-The playground seeds practice sessions using the current session columns, so an
-out-of-date `dev.db` can surface as an internal server error even when the app
-code and e2e database are healthy.
-
 3. Choose runtime database
 
 Use local SQLite runtime (default):
@@ -350,4 +338,4 @@ Shared constraints:
 
 ## Application interface
 
-See [Current interface](docs/current-interface.md) for production routes, screen ownership, practice tools, profile contexts, and compatibility bookmarks.
+See [Current interface](docs/current-interface.md) for production routes, screen ownership, profile contexts, and compatibility bookmarks.

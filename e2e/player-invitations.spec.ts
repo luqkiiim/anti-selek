@@ -302,18 +302,6 @@ test("normal admission, removal, and admin-approved placeholder recovery preserv
     await page.goto("/settings");
     await expect(page.getByRole("heading", { name: "Account settings" })).toBeVisible();
     await expect(page.getByLabel("Account name")).toHaveValue("Recovery Account");
-    const tutorialResponse = await page.request.post("/api/tutorial-playground");
-    expect(tutorialResponse.ok()).toBe(true);
-    const tutorial = (await tutorialResponse.json()).playground as { clubId: string; clubName: string; sessionCode: string | null };
-    expect(tutorial.clubName).toBe("Tutorial playground");
-    expect(tutorial.sessionCode).toBeTruthy();
-    await page.goto(`/club/${tutorial.clubId}`);
-    await expect(page.getByRole("heading", { name: "Tutorial playground", exact: true })).toBeVisible();
-    const guidedPractice = page.getByRole("link", { name: "Open guided practice" });
-    await expect(guidedPractice).toBeVisible();
-    await guidedPractice.click();
-    await expect(page).toHaveURL(new RegExp(`/session/${tutorial.sessionCode}$`));
-    await expect(page.getByText("Practice rally", { exact: true }).first()).toBeVisible();
     expect(await ownedPlayerIds()).toEqual(expectedOwnedPlayerIds);
     expect(await accountSnapshot()).toEqual(accountBeforeRecovery);
 

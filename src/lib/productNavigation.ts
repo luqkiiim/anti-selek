@@ -10,6 +10,7 @@ export function normalizeProductHref(href: string) {
   url.pathname = url.pathname.replace(/^\/community\//, "/club/");
   const tools = url.searchParams.get("tools");
   url.searchParams.delete("tools");
+  if (url.pathname.startsWith("/session/")) url.searchParams.delete("practice");
   const tab = url.searchParams.get("tab");
   if (/^\/club\/[^/]+\/admin$/.test(url.pathname)) {
     if (tab === "members") url.searchParams.set("tab", "players");
@@ -20,7 +21,6 @@ export function normalizeProductHref(href: string) {
     else if (tools) url.searchParams.set("tab", tools === "practice" ? "sessions" : "setup");
   } else if (/^\/session\/[^/]+$/.test(url.pathname)) {
     if (tab) url.searchParams.set("tab", getSessionTab(tab).toLowerCase());
-    if (tools === "practice") url.searchParams.set("practice", "1");
   }
   return url.pathname + (url.searchParams.size ? `?${url.searchParams}` : "") + url.hash;
 }

@@ -6,25 +6,22 @@ The cream-and-purple product UI is the sole interface. Production components liv
 
 | Real route | Screen / controller |
 | --- | --- |
-| `/` | `product/HomeScreen.tsx` — club chooser, join/create, optional Practice |
+| `/` | `product/HomeScreen.tsx` — club chooser, join/create |
 | `/club/[id]` | `app/ClubRoute.tsx` → `product/Club.tsx` |
 | `?tab=club`, `sessions`, `rankings`, `profile`, `setup` | Club home, sessions, rankings, self profile, session setup |
 | `/club/[id]/admin?tab=players`, `requests`, `settings` | `product/Admin.tsx` — Manage club |
 | `/session/[code]?tab=courts`, `players`, `standings` | `app/SessionRoute.tsx` → `product/LiveSession.tsx` |
-| `/session/[code]?practice=1` | Current session with `SessionPracticeTools` sheet |
 | `/session/[code]/history` | `product/SessionMatchHistory.tsx` |
 | `/profile/[id]?clubId=...` | `app/ProfileRoute.tsx` → `PlayerProfilePage` for active members, `PlayerHistoryProfile` for historical/guest profiles |
 | `/profile/[id]` | `PlayerHistoryProfile` without an invented club membership |
 
 `view=global` retains read-only navigation. Session links require an exact club context; malformed/duplicate scope parameters remain subject to existing validation. Profile participant links preserve their recorded club context, including explicit unscoped identities.
 
-`/community/...` compatibility routes use the same controllers. `normalizeProductHref` replaces older `tools` bookmarks and tab names (`host`, `tournaments`, `leaderboard`, `members`, `claims`) with current destinations. No parameter selects another renderer. API aliases remain supported.
+`/community/...` compatibility routes use the same controllers. `normalizeProductHref` replaces older `tools` bookmarks and tab names (`host`, `tournaments`, `leaderboard`, `members`, `claims`) with current destinations. No parameter selects another renderer. Old practice parameters open regular screens. Existing test records stay outside the club’s Sessions list. API aliases remain supported.
 
 ## Preserved capabilities
 
-- **Practice:** club chooser → Practice opens the private tutorial club. Its guide retains existing step IDs, progress and dismissal. Guide links highlight current controls. Practice sessions appear separately under Sessions.
-- **Practice actions:** session Options → Practice tools has reset and eligible test-to-real copy, with the choice to include completed results. Server eligibility/authorization still applies. Tutorial sessions cannot become real sessions.
-- **Reset history:** Manage club → Settings → Reset club history / Reset playground. Explicit confirmation remains required; playground reset is restricted to its owner.
+- **Reset history:** Manage club → Settings → Reset club history. Explicit confirmation remains required.
 - **Recovery:** Manage club → Requests and player editing retain invitation/admission/account recovery. Emergency password reset is visible only to global admins editing a connected player.
 - **Historical profiles:** guest, archived and unscoped profiles use current styling, match/session history, relationships, rating history, photo viewing and eligible rating/promotion controls. Existing recorded ledgers are used when available; older derived history is marked reconstructed.
 - **Pairing:** Manage club → Players → Edit → Advanced pairing shows Standard, Higher level or Lower level in its collapsed summary. Club admins can change linked and unlinked members' club preference, independently of personal identity and mixed pairing being enabled. Staff gain no saved-pairing permission. Account-holder self-service remains available.
@@ -41,8 +38,7 @@ Shared modules under `components/club`, `components/club-admin`, `components/pro
 2. Edit a linked player under Manage club → Players. Open Advanced pairing, save a gender-appropriate level, then reopen the editor and check its summary.
 3. Prepare a session with four players, including one session-only guest. Start, enter a score, pause a player, and resume them.
 4. Finish the session. Review any unfinished games before choosing discard. Find the podium and save the guest to the club; find the same player in the next setup.
-5. Return to the club chooser and open Practice. Review players, prepare a practice session, hide/reopen the guide, and try Reset playground from Settings.
-6. Open an older `tools=advanced` or `tools=practice` bookmark. Check that it stays in the current design, including after Back and reload.
+5. Open an older `tools=advanced` or `tools=practice` bookmark. Check that it stays in the current design, including after Back and reload.
 
 ## Screenshots
 
@@ -51,9 +47,6 @@ All use synthetic local data and real application routes.
 | Flow | Mobile | Desktop |
 | --- | --- | --- |
 | Linked-player pairing | [320px](current-interface/linked-player-pairing-320.png), [390px](current-interface/linked-player-pairing-390.png) | [1280px](current-interface/linked-player-pairing-1280.png) |
-| Optional guided practice | [390px](current-interface/guided-practice-390.png) | |
-| Reset practice / playground | [Session](current-interface/practice-reset-320.png), [Playground](current-interface/playground-reset-390.png) | |
-| Test-to-real copy | [390px](current-interface/test-to-real-390.png) | |
 | Historical guest profile | [320px](current-interface/guest-profile-320.png), [390px](current-interface/guest-profile-390.png) | [1280px](current-interface/guest-profile-1280.png) |
 | Archived profile | [390px](current-interface/archived-profile-390.png) | |
 | Emergency recovery | [390px](current-interface/emergency-recovery-390.png) | |

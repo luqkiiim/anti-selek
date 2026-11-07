@@ -9,8 +9,8 @@ import { adminApi } from "@/lib/adminClient";
 import { ClubMaintenance } from "./ClubMaintenance";
 import { useAdminAction } from "@/components/club-admin/useAdminAction";
 
-export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggleJoins, refresh, onDeleted, onClubSaved, canReset = true, onReset }: {
-  onReset?: () => void; canReset?: boolean; club: ClubPageClub; allowJoinRequests?: boolean; busy: boolean; onInvite: () => void;
+export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggleJoins, refresh, onDeleted, onClubSaved }: {
+  club: ClubPageClub; allowJoinRequests?: boolean; busy: boolean; onInvite: () => void;
   onToggleJoins: () => void; refresh: () => Promise<unknown>; onDeleted: () => Promise<void>; onClubSaved?: (club: Partial<ClubPageClub>) => void;
 }) {
   const [name, setName] = useState(club.name);
@@ -63,7 +63,7 @@ export function ClubSettings({ club, allowJoinRequests, busy, onInvite, onToggle
           {club.isPasswordProtected && <button className="text-button" type="button" onClick={() => { setJoinCode(""); setNotice(""); void action.run(signal => adminApi(endpoint, "PATCH", { password: "", isPasswordProtected: false }, { signal }), () => { onClubSaved?.({ isPasswordProtected: false }); setNotice("Club join code removed."); }); }}>Remove join code</button>}
         </form>}
       </section>
-      {canReset && <ClubMaintenance onReset={onReset} clubId={club.id} name={club.name} tutorial={!!club.isTutorial} disabled={busy || action.busy} refresh={refresh} />}
+      {!club.isTutorial && <ClubMaintenance clubId={club.id} name={club.name} disabled={busy || action.busy} refresh={refresh} />}
       {!club.isTutorial && <div className="club-settings-danger"><button className="text-button danger" onClick={() => { action.setError(""); setConfirmation(""); setDeleting(true); }}><Trash size={18} />Delete club</button></div>}
     </fieldset>
     <ErrorText error={action.error} />{(action.refreshWarning || action.uncertain) && <div role="status">{action.refreshWarning && <p>{action.refreshWarning}</p>}<button className="text-button" disabled={action.refreshing} onClick={() => void action.retryRefresh()}>{action.refreshing ? "Refreshing…" : "Refresh details"}</button></div>}{notice && <p className="club-settings-notice" role="status">{notice}</p>}

@@ -11,7 +11,8 @@ describe("compatibility navigation uses current screens", () => {
     ["/community/c1/admin?tools=advanced&tab=claims", "/club/c1/admin?tab=requests"],
     ["/club/c1/admin?tools=practice", "/club/c1/admin?tab=settings"],
     ["/club/c1/admin?tab=members", "/club/c1/admin?tab=players"],
-    ["/session/A1?tools=practice&tab=players#details", "/session/A1?tab=players&practice=1#details"],
+    ["/session/A1?tools=practice&tab=players#details", "/session/A1?tab=players#details"],
+    ["/session/A1?practice=1&tab=standings&view=global&clubId=c1", "/session/A1?tab=standings&view=global&clubId=c1"],
     ["/session/A1?tools=advanced&tab=standings", "/session/A1?tab=standings"],
     ["/profile/p1?clubId=c1&view=global", "/profile/p1?clubId=c1&view=global"],
   ])("normalizes %s", (before, after) => {

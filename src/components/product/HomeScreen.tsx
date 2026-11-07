@@ -21,7 +21,6 @@ import { AppShell } from "@/components/app/AppShell";
 import { clubHref, getClubTab, navigateApp } from "@/lib/appNavigation";
 import { BrowseClubs } from "./BrowseClubs";
 import type { AccountUser } from "./AccountSettings";
-import { OpenPractice } from "./PracticeGuide";
 import { JoinClubAdmission } from "./JoinClubAdmission";
 
 const AccountSettings = dynamic(() => import("./AccountSettings").then(module => module.AccountSettings));
@@ -209,7 +208,6 @@ export default function HomeScreen() {
                   <CaretRight size={20} />
                 </button>
               ))}
-              {!auth?.user?.isQuickAccess && <OpenPractice />}
               {auth?.user?.canBrowseAllClubs && <button className="secondary" onClick={() => setBrowseOpen(true)}>Browse clubs</button>}
               {status === "authenticated" && account.data && !account.data.user.isQuickAccess && (
                 <div className="chooser-actions">
