@@ -1,7 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useClubResource, useClubDataStore } from "@/components/app/ClubDataProvider";
 import { adminApi } from "@/lib/adminClient";
 import { clubAdminSnapshotUrl, clubSnapshotUrl, clubProfileUrl } from "@/components/app/clubReadStore";
@@ -34,7 +34,7 @@ import { api, useAction } from "./api";
 import {
   ErrorText, Sheet,
 } from "./Primitives";
-import { Pager } from "./Pager";
+import { Pager, type PagerNavigation } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
 import { NewSessionPlayerForm } from "./NewSessionPlayerForm";
@@ -203,10 +203,17 @@ export default function Club({
   }
 
 
+  const pagerNavigationRef = useRef<PagerNavigation>(null);
+
   function go(p: string) {
     setMemberStack([]);
     if (onRoute) onRoute(p === "admin" ? `/club/${encodeURIComponent(club.id)}/admin?tab=players` : clubHref(club.id, p, readOnly));
     else setPage(p);
+  }
+
+  function navigateMainPage(page: string) {
+    if (pagerNavigationRef.current) pagerNavigationRef.current.navigate(page);
+    else go(page);
   }
 
   const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); const isSelf=target?.id===viewerPlayerId&&!data.viewer.isQuickAccess; return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => closeMember(index)} onNavigate={go} readOnly={readOnly}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={isSelf} canEdit={resource.validated} globalView={readOnly} canInvite={!!canAdmin} onOpenMember={openMember} onOpenSession={openSession} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={isSelf ? renderAchievement() : undefined} milestone={isSelf ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
@@ -285,7 +292,7 @@ export default function Club({
   return (
     <div className="pc-app">
       {pages.includes(page) ? <ClubHeader identity={data?.club ?? club} globalView={readOnly} heading={page === "club"} onSwitch={onSwitch} onManage={canAdmin ? () => go("admin") : undefined} /> : <header className="pc-header"><button className="icon-button" aria-label="Back" onClick={() => go("club")}><ArrowLeft size={23} /></button><strong>{page === "setup" ? "New session" : displayedRecap?.name ?? "Session recap"}</strong><span /></header>}
-      <Pager pages={pages.includes(page) ? pages : [page]} active={page} onChange={go}>{page => <>
+      <Pager pages={pages.includes(page) ? pages : [page]} active={page} onChange={go} navigationRef={pagerNavigationRef}>{page => <>
           <ErrorText error={resource.error || profile.error || achievements.error || action.error} />
           {resource.error && <button className="secondary" disabled={resource.loading || resource.retryAt > 0} onClick={() => void resource.refresh().catch(() => {})}>Try again</button>}
           {data && !resource.validated && (page === "admin" || page === "setup") && !resource.error && <p role="status">Loading club…</p>}
@@ -464,7 +471,7 @@ export default function Club({
           {data && page === "setup" && canManage && <SessionSetup clubId={club.id} members={data.clubMembers} canSavePlayers={canAdmin} onMemberSaved={savedPlayer} onCreated={openSession} />}
       </>}</Pager>
       {!["setup", "recap"].includes(page) && (
-        <MainNav active={page} onNavigate={go} readOnly={readOnly} />
+        <MainNav active={page} onNavigate={navigateMainPage} readOnly={readOnly} />
       )}
       {data && <ClubMembersSheet members={data.clubMembers} onAdd={canAdmin ? () => { setMembersOpen(false); setAddingPlayer(true); } : undefined} open={membersOpen} onClose={() => setMembersOpen(false)} />}
       {canAdmin && <Sheet open={addingPlayer} title="Add players" busy={savingPlayer} onClose={() => setAddingPlayer(false)}>

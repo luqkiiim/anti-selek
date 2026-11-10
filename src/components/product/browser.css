@@ -204,6 +204,15 @@
 }
 
 
+/* The controller owns horizontal touch movement, including the release animation. */
+.product-root .page-pager[data-swipe-pager="true"] {
+  touch-action: pan-y pinch-zoom;
+}
+.product-root .page-pager[data-swipe-moving="true"] {
+  scroll-snap-type: none;
+  scroll-behavior: auto;
+}
+
 .product-root .page-pager {
   position: absolute;
   inset: calc(72px + env(safe-area-inset-top, 0px)) 0 calc(70px + env(safe-area-inset-bottom, 0px));
@@ -219,6 +228,7 @@
   min-width: 0;
   height: 100%;
   overflow-y: auto;
+  touch-action: pan-y pinch-zoom;
   scroll-snap-align: start;
   scroll-snap-stop: always;
   overscroll-behavior-y: contain;

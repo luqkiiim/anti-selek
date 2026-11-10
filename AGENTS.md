@@ -24,6 +24,8 @@
 
 - Production UI lives in `src/components/product/`. Before UI changes, read `docs/current-interface.md` for the canonical route-to-screen map, and verify changes through those real application routes.
 
+- Before current-UI screenshots or interaction checks, verify the visible `.product-root` and expected screen navigation, using `expectCurrentUi` from `e2e/current-ui.ts` in browser tests. Record the source revision. Historical checkouts, component previews, and old screenshots are not current-UI evidence; follow `docs/current-interface.md`.
+
 - Aim for an aesthetic, intuitive, and minimalist feeling throughout the app.
 - Keep interface copy concise. Do not add explanatory subtext unless it is necessary to understand an action, make a decision, or avoid an error. Prefer clear labels and intuitive controls over extra explanation.
 

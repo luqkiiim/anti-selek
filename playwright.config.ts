@@ -28,6 +28,11 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
       },
     },
+    {
+      name: "webkit",
+      testMatch: "swipe-settling.spec.ts",
+      use: { ...devices["iPhone 13"], browserName: "webkit" },
+    },
   ],
   webServer: {
     command: `${npmCommand} run dev -- --hostname 127.0.0.1 --port 3005`,

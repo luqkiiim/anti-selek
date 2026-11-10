@@ -1,57 +1,28 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useImperativeHandle, useRef, type ReactNode, type Ref } from "react";
 import { useScrollRestoration } from "@/components/app/useScrollRestoration";
+import { useSwipePager } from "@/components/ui/useSwipePager";
 
-/** Native scrolling keeps adjacent pages under the finger and preserves vertical scrolling. */
-export function Pager({ pages, active, onChange, children }: {
+export interface PagerNavigation {
+  navigate: (page: string) => void;
+}
+
+export function Pager({ pages, active, onChange, children, navigationRef }: {
   pages: readonly string[];
   active: string;
   onChange: (page: string) => void;
   children: (page: string) => ReactNode;
+  navigationRef?: Ref<PagerNavigation>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const callback = useRef(onChange);
-  const activeRef = useRef(active);
-  const programmaticTarget = useRef<number | null>(null);
-  useEffect(() => { callback.current = onChange; activeRef.current = active; }, [onChange, active]);
-  const pagesKey = pages.join("|");
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    const index = pagesKey.split("|").indexOf(active);
-    programmaticTarget.current = Math.max(0, index) * node.clientWidth;
-    node.scrollTo({ left: programmaticTarget.current,
-      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-  }, [active, pagesKey]);
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    const names = pagesKey.split("|");
-    let timer: ReturnType<typeof setTimeout>;
-    let touching = false;
-    const settle = () => {
-      if (touching) return;
-      if (programmaticTarget.current !== null) {
-        if (Math.abs(node.scrollLeft - programmaticTarget.current) < 2) programmaticTarget.current = null;
-        return;
-      }
-      const next = names[Math.round(node.scrollLeft / node.clientWidth)];
-      if (next && next !== activeRef.current) callback.current(next);
-    };
-    const scroll = () => { clearTimeout(timer); timer = setTimeout(settle, 150); };
-    const down = () => { touching = true; programmaticTarget.current = null; };
-    const up = () => { touching = false; scroll(); };
-    const resize = new ResizeObserver(() => {
-      programmaticTarget.current = Math.max(0, names.indexOf(activeRef.current)) * node.clientWidth;
-      node.scrollTo({ left: programmaticTarget.current, behavior: "instant" });
-    });
-    resize.observe(node);
-    node.addEventListener("scroll", scroll, { passive: true });
-    node.addEventListener("touchstart", down, { passive: true });
-    node.addEventListener("touchend", up, { passive: true });
-    node.addEventListener("touchcancel", up, { passive: true });
-    return () => { clearTimeout(timer); resize.disconnect(); node.removeEventListener("scroll", scroll); node.removeEventListener("touchstart", down); node.removeEventListener("touchend", up); node.removeEventListener("touchcancel", up); };
-  }, [pagesKey]);
+  const { scrollToPage } = useSwipePager(ref, { pages, active, onChange });
+  useImperativeHandle(navigationRef, () => ({
+    navigate(page) {
+      // Start the clock in the tap handler, before rendering the selected panel.
+      scrollToPage(page);
+      onChange(page);
+    },
+  }), [onChange, scrollToPage]);
   return <div className="page-pager" ref={ref}>{pages.map(page => (
     <PagerPage key={page} page={page} active={page === active}>
       <main className={`pc-content pc-content--${page}`}>{children(page)}</main>

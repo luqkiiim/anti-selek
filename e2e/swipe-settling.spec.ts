@@ -1,0 +1,166 @@
+import { expect, test, type CDPSession, type Locator, type Page } from "@playwright/test";
+import { scoreSessionCode, signInAsAdmin } from "./helpers";
+import { expectCurrentUi } from "./current-ui";
+
+test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+type Measurement = { elapsed: number; error: number; stableFrames: number; frames?: Array<{ time: number; left: number; moving: boolean }> };
+type MeasuredPager = HTMLElement & { swipeMeasurement?: Promise<Measurement> };
+
+async function measure(pager: Locator, index: number, trigger: "pointerup" | "click" = "pointerup") {
+  await pager.evaluate((element, { index, trigger }) => {
+    const node = element as MeasuredPager;
+    node.swipeMeasurement = new Promise((resolve) => {
+      const missingRelease = setTimeout(() => resolve({ elapsed: 1000, error: Math.abs(node.scrollLeft - index * node.clientWidth), stableFrames: 0 }), 1000);
+      const start = () => {
+        clearTimeout(missingRelease);
+        const released = performance.now();
+        let alignedAt = 0;
+        let stableFrames = 0;
+        const frames: NonNullable<Measurement["frames"]> = [];
+        const frame = () => {
+          frames.push({ time: performance.now() - released, left: node.scrollLeft, moving: node.hasAttribute("data-swipe-moving") });
+          const error = Math.abs(node.scrollLeft - index * node.clientWidth);
+          if (error < 4) {
+            if (!stableFrames) alignedAt = performance.now();
+            stableFrames++;
+          } else stableFrames = 0;
+          if (stableFrames >= 3 || performance.now() - released > 700) {
+            resolve({ elapsed: (alignedAt || performance.now()) - released, error, stableFrames, frames });
+          } else requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      };
+      // Capture before the controller or React handlers start the release animation.
+      (trigger === "click" ? document : node).addEventListener(trigger, start, { once: true, capture: true });
+    });
+  }, { index, trigger });
+}
+
+async function expectMeasured(pager: Locator) {
+  const result = await pager.evaluate((node) => (node as MeasuredPager).swipeMeasurement!);
+  if (result.elapsed > 300 || result.error >= 4) console.log("Settling trace:", JSON.stringify(result));
+  expect(result.error).toBeLessThan(4);
+  expect(result.stableFrames).toBeGreaterThanOrEqual(3);
+  expect(result.elapsed).toBeLessThanOrEqual(300);
+  test.info().annotations.push({ type: "settling", description: `${result.elapsed.toFixed(1)} ms to stable alignment` });
+}
+
+async function swipe(page: Page, client: CDPSession, pager: Locator, from: number, to: number, vertical = false, steps = 8, atY?: number) {
+  const box = await pager.boundingBox();
+  if (!box) throw new Error("Pager has no swipe area");
+  const top = Math.max(0, box.y);
+  const bottom = Math.min(box.y + box.height, page.viewportSize()!.height - 125);
+  const y = atY ?? top + (vertical ? Math.min(220, (bottom - top) * 0.6) : Math.min(65, (bottom - top) * 0.2));
+  const x = box.x + box.width * from;
+  const end = box.x + box.width * to;
+  const point = (x: number, y: number) => ({ x, y, radiusX: 2, radiusY: 2, force: 1 });
+  await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point(x, y)] });
+  for (let i = 1; i <= steps; i++) {
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchMove", touchPoints: [point(x + (end - x) * i / steps, y - (vertical ? 140 * i / steps : 0))],
+    });
+    await page.waitForTimeout(16);
+  }
+  await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+}
+
+async function openModernClub(page: Page) {
+  await page.goto("/club/community-score-e2e?tab=club");
+  await expectCurrentUi(page, "club");
+  await expect(page.getByRole("button", { name: "Continue hosting", exact: true })).toBeVisible();
+}
+
+const scenarios = [
+  { name: "current club pager", kind: "club", nav: "Main navigation", initial: "Club", next: "Sessions", index: 0 },
+  { name: "current session pager", kind: "session", nav: "Session navigation", initial: "Courts", next: "Standings", index: 1 },
+];
+
+for (const scenario of scenarios) {
+  test(`${scenario.name} settles real touch swipes within 300 ms`, async ({ page, context, browserName }) => {
+    test.skip(browserName !== "chromium", "Native swipe injection uses Chromium CDP; WebKit compatibility is tested separately.");
+    test.setTimeout(120_000);
+    await signInAsAdmin(page);
+    if (scenario.kind === "club") {
+      await openModernClub(page);
+    } else {
+      await page.goto(`/session/${scoreSessionCode}?tab=courts`);
+      await expectCurrentUi(page, "session");
+      await expect(page.getByRole("button", { name: "Court 1 options" })).toBeVisible();
+    }
+    const nav = page.getByRole("navigation", { name: scenario.nav, exact: true });
+    const pager = page.locator('[data-swipe-pager="true"]').first();
+    const selected = (name: string) => expect(nav.getByRole("button", { name, exact: true })).toHaveAttribute("aria-current", "page");
+    await selected(scenario.initial);
+    await expect(pager).toBeVisible();
+    await expect.poll(() => pager.evaluate((node, index) => Math.abs(node.scrollLeft - node.clientWidth * index), scenario.index)).toBeLessThan(4);
+    const client = await context.newCDPSession(page);
+    if (scenario.kind === "session") {
+      await page.getByRole("textbox", { name: "Team 1 score", exact: true }).fill("13");
+    }
+
+    await measure(pager, scenario.index + 1);
+    await swipe(page, client, pager, 0.85, 0.18);
+    await expectMeasured(pager);
+    await selected(scenario.next);
+
+    // A strong return flick must still move exactly one tab.
+    let returnY: number | undefined;
+    if (scenario.kind === "session") {
+      const row = await page.getByRole("table", { name: "Player standings" }).locator("tbody tr").first().boundingBox();
+      if (!row) throw new Error("Current standings rows are not visible");
+      returnY = row.y + row.height / 2;
+    }
+    await measure(pager, scenario.index);
+    await swipe(page, client, pager, 0.12, 0.9, false, 3, returnY);
+    await expectMeasured(pager);
+    await selected(scenario.initial);
+    if (scenario.kind === "session") {
+      await expect(page.getByRole("textbox", { name: "Team 1 score", exact: true })).toHaveValue("13");
+      await expect(pager.locator(".pager-page[inert]")).toHaveCount(2);
+    }
+
+    await measure(pager, scenario.index);
+    await swipe(page, client, pager, 0.55, 0.51);
+    await expectMeasured(pager);
+    await selected(scenario.initial);
+    if (scenario.kind === "club") {
+      // The current minimal club page can fit at 844px; use a short phone viewport.
+      await page.setViewportSize({ width: 390, height: 550 });
+      await expect.poll(() => pager.locator(".pager-page").first().evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+    }
+    await swipe(page, client, pager, 0.5, 0.49, true);
+    await selected(scenario.initial);
+    if (scenario.kind === "club") {
+      await expect.poll(() => pager.locator(".pager-page").first().evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    }
+
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect.poll(() => pager.evaluate((node, index) => Math.abs(node.scrollLeft - node.clientWidth * index), scenario.index)).toBeLessThan(4);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await nav.getByRole("button", { name: scenario.next, exact: true }).click();
+    await expect.poll(() => pager.evaluate((node, index) => Math.abs(node.scrollLeft - node.clientWidth * index), scenario.index + 1)).toBeLessThan(4);
+    await selected(scenario.next);
+    await expectCurrentUi(page, scenario.kind as "club" | "session");
+    await page.screenshot({ path: `test-results/swipe-current-${scenario.kind}-768.png` });
+    await client.detach();
+  });
+}
+
+test("WebKit keeps shared pager animations bounded, interrupts taps, and respects reduced motion", async ({ page, browserName }) => {
+  test.skip(browserName !== "webkit", "Safari compatibility coverage; native iOS swipes still require a physical device.");
+  test.setTimeout(120_000);
+  await signInAsAdmin(page);
+  await openModernClub(page);
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  const pager = page.locator('[data-swipe-pager="true"]');
+  await measure(pager, 1, "click");
+  await nav.getByRole("button", { name: "Sessions", exact: true }).click();
+  await expectMeasured(pager);
+  await nav.getByRole("button", { name: "Profile", exact: true }).click();
+  await nav.getByRole("button", { name: "Club", exact: true }).click();
+  await expect.poll(() => pager.evaluate((node) => node.scrollLeft)).toBeLessThan(4);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await nav.getByRole("button", { name: "Sessions", exact: true }).click();
+  await expect.poll(() => pager.evaluate((node) => Math.abs(node.scrollLeft - node.clientWidth))).toBeLessThan(4);
+});

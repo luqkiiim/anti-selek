@@ -40,7 +40,7 @@ import {
   Row,
   ErrorText,
 } from "./Primitives";
-import { Pager } from "./Pager";
+import { Pager, type PagerNavigation } from "./Pager";
 import SessionMatchHistory from "./SessionMatchHistory";
 import { SessionRefreshControl } from "./SessionRefreshControl";
 import LivePlayerManagement from "./LivePlayerManagement";
@@ -247,7 +247,11 @@ export default function LiveSession({
   const [confirmedQueueId, setConfirmedQueueId] = useState<string | null>(null);
   const sessionTabs = ["Players", "Courts", "Standings"] as const;
   function setTab(next: string) { if (onTabChange) onTabChange(next); else setLocalTab(next); }
-  function navigateTab(nextTab: string) { setTab(nextTab); }
+  const pagerNavigationRef = useRef<PagerNavigation>(null);
+  function navigateTab(nextTab: string) {
+    if (pagerNavigationRef.current) pagerNavigationRef.current.navigate(nextTab);
+    else setTab(nextTab);
+  }
   function openHistory() { if (onHistory) onHistory(); else setShowHistory(true); }
   useEffect(() => { if (s) onSessionData?.(s); }, [s, onSessionData]);
   const initialSettingsOpened = useRef(false);
@@ -1154,7 +1158,7 @@ export default function LiveSession({
         )}
       </header>
       {s?.status === "ACTIVE" && canManage && <div className="session-finish-toolbar"><button type="button" className="secondary" onClick={openFinish}><SignOut size={17} />Finish session</button></div>}
-      <Pager pages={s?.status !== "ACTIVE" ? [tab] : sessionTabs} active={tab} onChange={navigateTab}>{tab => <>
+      <Pager pages={s?.status !== "ACTIVE" ? [tab] : sessionTabs} active={tab} onChange={setTab} navigationRef={pagerNavigationRef}>{tab => <>
           <ErrorText
             error={pauseError || resource.error || standings.error || (!sheet ? action.error : "")}
           />
