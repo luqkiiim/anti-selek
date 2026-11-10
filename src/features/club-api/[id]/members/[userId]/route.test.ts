@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   rosterMember: vi.fn(),
   roster: vi.fn(),
   propagate: vi.fn(),
+  propagatePairing: vi.fn(),
   rebuildQueue: vi.fn(),
   logError: vi.fn(),
   transaction: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/clubRoster", () => ({ getClubRoster: mocks.roster, getClubRosterMember: mocks.rosterMember }));
 vi.mock("@/lib/quickAccess", () => ({ isQuickAccessSession: vi.fn(() => false), normalizeNameLookupKey: (value: string) => value.toLowerCase() }));
 vi.mock("@/lib/playerGroupPreferences", () => ({ propagatePreferredPoolToClubSessionsInTransaction: mocks.propagate }));
+vi.mock("@/lib/clubPairingPreferences", async original => ({ ...await original<typeof import("@/lib/clubPairingPreferences")>(), propagateClubPairingPreferencesToSessionsInTransaction: mocks.propagatePairing }));
 vi.mock("@/app/api/sessions/[code]/queue-match/shared", () => ({ tryRebuildAutomaticQueuedMatchForSessionId: mocks.rebuildQueue }));
 vi.mock("@/lib/rateLimit", () => ({ rateLimit: mocks.rateLimit }));
 vi.mock("@/lib/errors", () => ({ logError: mocks.logError, safeErrorResponse: vi.fn(() => Response.json({ error: "Internal server error" }, { status: 500 })) }));
@@ -91,6 +93,7 @@ describe("club member transaction responses", () => {
     mocks.transaction.mockImplementation(async callback => callback(prisma));
     mocks.rosterMember.mockResolvedValue({ id: "player-1", preferredPool: "A", name: "Player" });
     mocks.propagate.mockResolvedValue({ immediateSessionCount: 1, deferredSessionCount: 1, automaticQueueSessionIds: ["session-1", "session-2"] });
+    mocks.propagatePairing.mockResolvedValue({ automaticQueueSessionIds: [] });
   });
 
   it("updates the membership, propagates groups, and reads its response in one transaction", async () => {
@@ -168,11 +171,35 @@ describe("club member transaction responses", () => {
     mocks.auth.mockResolvedValue({ user: { id: "admin-account", isAdmin: global } });
     mocks.getClubAdminAccess.mockResolvedValue({ canAdmin: true, membershipRole: global ? null : "ADMIN", isGlobalAdmin: global });
     mocks.clubMemberFindFirst.mockResolvedValue({ id: "connected-membership" });
+    mocks.rosterMember.mockResolvedValue({ id: "player-1", mixedSideOverride: "LOWER" });
     expect((await edit({ mixedSideOverride: "LOWER" })).status).toBe(200);
     expect(mocks.clubMemberUpdate).toHaveBeenCalledExactlyOnceWith({ where: { id: "membership-1" }, data: { mixedSideOverride: "LOWER" } });
     expect(mocks.playerUpdate).not.toHaveBeenCalled();
     expect(mocks.clubMemberUpdateMany).not.toHaveBeenCalled();
     expect(mocks.propagate).not.toHaveBeenCalled();
+    expect(mocks.propagatePairing).toHaveBeenCalledWith(prisma, { clubId: "club-1", playerId: "player-1", mixedSideOverride: "LOWER" });
+  });
+
+  it("commits pairing changes before rebuilding each affected queue once", async () => {
+    mocks.rosterMember.mockResolvedValue({ id: "player-1", mixedSideOverride: null });
+    mocks.propagatePairing.mockResolvedValue({ automaticQueueSessionIds: ["session-1", "session-3"] });
+    let committed = false;
+    mocks.transaction.mockImplementation(async callback => {
+      const result = await callback(prisma);
+      expect(mocks.propagatePairing).toHaveBeenCalledWith(prisma, { clubId: "club-1", playerId: "player-1", mixedSideOverride: null });
+      expect(mocks.rebuildQueue).not.toHaveBeenCalled();
+      committed = true;
+      return result;
+    });
+    mocks.rebuildQueue.mockImplementation(async () => { expect(committed).toBe(true); });
+    expect((await edit({ mixedSideOverride: null, preferredPool: "A" })).status).toBe(200);
+    expect(mocks.rebuildQueue.mock.calls).toEqual([["session-1"], ["session-2"], ["session-3"]]);
+  });
+
+  it("does not rebuild queues if pairing propagation fails before commit", async () => {
+    mocks.propagatePairing.mockRejectedValue(new Error("seat update failed"));
+    expect((await edit({ mixedSideOverride: "LOWER" })).status).toBe(500);
+    expect(mocks.rebuildQueue).not.toHaveBeenCalled();
   });
   it("denies staff and revoked admins when saving club pairing preferences", async () => {
     mocks.getClubAdminAccess.mockResolvedValue({ canAdmin: false, membershipRole: "STAFF" });
@@ -180,6 +207,7 @@ describe("club member transaction responses", () => {
     mocks.getClubAdminAccess.mockResolvedValueOnce({ canAdmin: true, membershipRole: "ADMIN" }).mockResolvedValue({ canAdmin: false, membershipRole: "MEMBER" });
     expect((await edit({ mixedSideOverride: "LOWER" })).status).toBe(403);
     expect(mocks.clubMemberUpdate).not.toHaveBeenCalled();
+    expect(mocks.propagatePairing).not.toHaveBeenCalled();
   });
 
 });

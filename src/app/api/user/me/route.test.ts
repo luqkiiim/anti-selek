@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), accountFind: vi.fn(), members: vi.fn(), member: vi.fn(), sync: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), accountFind: vi.fn(), members: vi.fn(), member: vi.fn(), sync: vi.fn(), propagate: vi.fn(), rebuildQueue: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/rateLimit", () => ({ rateLimit: async () => null }));
 vi.mock("@/lib/serverAudit", () => ({ logAuditEvent: vi.fn() }));
 vi.mock("@/lib/clubPlayerOwnership", () => ({ clubOwnershipTransaction: async (_db: unknown, fn: (tx: object) => unknown) => fn({}) }));
 vi.mock("@/lib/accountProfileSync", async original => ({ ...await original<typeof import("@/lib/accountProfileSync")>(), syncAccountProfile: mocks.sync }));
+vi.mock("@/lib/clubPairingPreferences", async original => ({ ...await original<typeof import("@/lib/clubPairingPreferences")>(), propagateClubPairingPreferencesToSessionsInTransaction: mocks.propagate }));
+vi.mock("@/app/api/sessions/[code]/queue-match/shared", () => ({ tryRebuildAutomaticQueuedMatchForSessionId: mocks.rebuildQueue }));
 vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: mocks.accountFind, findUniqueOrThrow: mocks.accountFind }, clubMember: { findMany: mocks.members, findUnique: mocks.member } } }));
 import { GET, PATCH } from "./route";
 const account = { id: "account", name: "Account Name", email: "account@example.com", avatarKey: null, gender: "MALE", mixedSideOverride: null, isActive: true, selfNameChangedAt: null, selfGenderChangedAt: null };
@@ -14,6 +16,7 @@ beforeEach(() => {
   vi.resetAllMocks(); mocks.auth.mockResolvedValue({ user: { id: account.id } }); mocks.accountFind.mockResolvedValue(account);
   mocks.members.mockResolvedValue(["a", "b"].map(clubId => ({ id: `member-${clubId}`, playerId: "shared", clubId, status: clubId === "b" ? "ARCHIVED" : "ACTIVE", club: { name: clubId }, player: { id: "shared", name: "Name", avatarKey: null, gender: "MALE" } })));
   mocks.sync.mockResolvedValue({ account, playerIds: ["shared"] });
+  mocks.propagate.mockResolvedValue({ automaticQueueSessionIds: ["active-session"] });
 });
 describe("account profile settings", () => {
   it("preserves unique players compatibility but exposes only owned club contexts", async () => {
@@ -44,5 +47,12 @@ describe("account profile settings", () => {
     mocks.member.mockResolvedValue({ ownerUserId: "claimed", status: "ACTIVE", player: { isActive: true } });
     expect((await GET(request())).status).toBe(401);
     expect((await patch({ name: "Nope" })).status).toBe(403);
+  });
+  it("applies self-service pairing to unfinished sessions and refreshes automatic queues", async () => {
+    const clubPreferences = { clubId: "a", playerId: "shared", mixedSideOverride: "LOWER" };
+    mocks.sync.mockResolvedValue({ account, playerIds: ["shared"], clubPreferences });
+    expect((await patch({ clubPreferences })).status).toBe(200);
+    expect(mocks.propagate).toHaveBeenCalledWith({}, clubPreferences);
+    expect(mocks.rebuildQueue).toHaveBeenCalledWith("active-session");
   });
 });

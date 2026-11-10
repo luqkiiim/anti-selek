@@ -8,9 +8,28 @@ async function capture(page: Page, name: string, width: number) {
   await page.screenshot({ path: `test-results/current-interface/${name}-${width}.png`, fullPage: true });
 }
 
-test("admin edits linked pairing through the current route, with mixed pairing off", async ({ page }) => {
+test("admin edits linked pairing through the current route and updates an active session, with mixed pairing off", async ({ page }) => {
+  test.setTimeout(120_000);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await signInAsAdmin(page);
+  const playerIds = ["user-admin-e2e", "user-host-1-e2e", "user-host-2-e2e", "user-host-3-e2e"];
+  const created = await page.request.post("/api/sessions", { data: {
+    name: "Mid-session pairing check", clubId: hostClubId, courtCount: 1,
+    scoringType: "POINTS", matchmakingStyle: "BALANCED", pairingMode: "OPEN", playerIds,
+    playerConfigs: playerIds.map(playerId => ({ playerId, profileClubId: hostClubId })),
+  } });
+  expect(created.ok(), await created.text()).toBe(true);
+  const { code } = await created.json();
+  const started = await page.request.post(`/api/sessions/${code}/start`);
+  expect(started.ok(), await started.text()).toBe(true);
+  const sessionPlayer = async () => {
+    const response = await page.request.get(`/api/sessions/${code}`);
+    expect(response.ok()).toBe(true);
+    const session = await response.json();
+    expect(session.status).toBe("ACTIVE");
+    return session.players.find((player: { userId: string }) => player.userId === "user-host-1-e2e");
+  };
+  expect(await sessionPlayer()).toMatchObject({ mixedSideOverride: null });
   await page.goto(`/community/${hostClubId}/admin?tab=members&tools=advanced`);
   await expect(page).toHaveURL(`/club/${hostClubId}/admin?tab=players`);
   await page.getByRole("button", { name: "Edit Host Player 1", exact: true }).click();
@@ -20,12 +39,14 @@ test("admin edits linked pairing through the current route, with mixed pairing o
   for (const width of [320, 390, 1280]) await capture(page, "linked-player-pairing", width);
   await editor.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(editor).not.toBeVisible();
+  expect(await sessionPlayer()).toMatchObject({ mixedSideOverride: "LOWER", partnerPreference: "OPEN" });
   await page.getByRole("button", { name: "Edit Host Player 1", exact: true }).click();
   await expect(editor.locator("summary").filter({ hasText: "Advanced pairing" })).toContainText("Lower level");
   await editor.getByText("Advanced pairing", { exact: true }).click();
   await editor.getByLabel("Mixed-pairing level", { exact: true }).selectOption("");
   await editor.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(editor).not.toBeVisible();
+  expect(await sessionPlayer()).toMatchObject({ mixedSideOverride: null, partnerPreference: "OPEN" });
 });
 
 test("old practice bookmarks open regular screens and keep existing data", async ({ page }) => {

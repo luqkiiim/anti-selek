@@ -31,7 +31,7 @@ Use **Refresh** on a session or its match history to see the latest changes. The
 - **Reset history:** Manage club → Settings → Reset club history. Explicit confirmation remains required.
 - **Recovery:** Manage club → Requests and player editing retain invitation/admission/account recovery. Emergency password reset is visible only to global admins editing a connected player.
 - **Historical profiles:** guest, archived and unscoped profiles use current styling, match/session history, relationships, rating history, photo viewing and eligible rating/promotion controls. Existing recorded ledgers are used when available; older derived history is marked reconstructed.
-- **Pairing:** Manage club → Players → Edit → Advanced pairing shows Standard, Higher level or Lower level in its collapsed summary. Club admins can change linked and unlinked members' club preference, independently of personal identity and mixed pairing being enabled. Staff gain no saved-pairing permission. Account-holder self-service remains available.
+- **Pairing:** Manage club → Players → Edit → Advanced pairing shows Standard, Higher level or Lower level in its collapsed summary. Club admins can change linked and unlinked members' club preference, independently of personal identity and mixed pairing being enabled. Saved changes also update unfinished sessions using that exact club profile and refresh automatic queues. Refresh an already-open session to see the change. Existing matches, manual queues and completed sessions remain intact. Staff gain no saved-pairing permission. Account-holder self-service remains available.
 
 ## Verification rule
 

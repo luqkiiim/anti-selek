@@ -272,25 +272,6 @@ export async function PATCH(
       }
     }
 
-    const resolvedMixedState = resolveMixedSideState({
-      gender: nextGender,
-      mixedSideOverride:
-        isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
-          ? mixedSideOverride
-          : isValidPartnerPreference(partnerPreference) ||
-              typeof gender === "string"
-            ? null
-            : existing.mixedSideOverride,
-      partnerPreference:
-        mixedSideOverride !== undefined
-          ? undefined
-          : isValidPartnerPreference(partnerPreference)
-            ? partnerPreference
-            : typeof gender === "string"
-              ? undefined
-              : existing.partnerPreference,
-    });
-
     const mutation = await admissionTransaction(prisma, async (tx) => {
       const [freshSession, freshPlayer] = await Promise.all([
         tx.session.findUnique({
@@ -330,7 +311,7 @@ export async function PATCH(
               playerId,
             },
           },
-          select: { pool: true, pendingPool: true },
+          select: { pool: true, pendingPool: true, gender: true, mixedSideOverride: true, partnerPreference: true },
         }),
       ]);
 
@@ -342,6 +323,20 @@ export async function PATCH(
       }
 
       await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId });
+
+      // Resolve from the reserved writer's snapshot so a group-only save cannot
+      // restore pairing values read before a concurrent club preference update.
+      const resolvedMixedState = resolveMixedSideState({
+        gender: (typeof gender === "string" ? gender : freshPlayer.gender) as PlayerGender,
+        mixedSideOverride:
+          isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
+            ? mixedSideOverride
+            : partnerPreference !== undefined || gender !== undefined ? null : freshPlayer.mixedSideOverride,
+        partnerPreference:
+          mixedSideOverride !== undefined ? undefined
+            : isValidPartnerPreference(partnerPreference) ? partnerPreference
+              : gender !== undefined ? undefined : freshPlayer.partnerPreference,
+      });
 
       const changesCurrentPool =
         freshSession.poolsEnabled &&
@@ -409,7 +404,12 @@ export async function PATCH(
       });
 
       let automaticQueueInvalidated = false;
-      if (changesCurrentPool && freshSession.queuedMatch?.isAutomatic) {
+      const changesPairing =
+        (gender !== undefined || mixedSideOverride !== undefined || partnerPreference !== undefined) &&
+        ((typeof gender === "string" && gender !== freshPlayer.gender) ||
+          resolvedMixedState.mixedSideOverride !== freshPlayer.mixedSideOverride ||
+          resolvedMixedState.partnerPreference !== freshPlayer.partnerPreference);
+      if ((changesCurrentPool || changesPairing) && freshSession.queuedMatch?.isAutomatic) {
         const deleted = await tx.queuedMatch.deleteMany({
           where: {
             id: freshSession.queuedMatch.id,

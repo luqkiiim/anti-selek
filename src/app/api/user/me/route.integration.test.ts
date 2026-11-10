@@ -3,7 +3,8 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient, type Client } from "@libsql/client";
 import { DatabaseSync } from "node:sqlite";
-import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { claimClubPlayer, clubOwnershipTransaction, removeClubPlayerOwnership } from "@/lib/clubPlayerOwnership";
@@ -35,7 +36,7 @@ beforeAll(() => {
   } finally { sqlite.close(); }
 });
 afterEach(async () => { await db?.$disconnect(); libsql?.close(); libsql = undefined; });
-afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
+afterAll(async () => { await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); });
 
 async function snapshot() {
   // Include complete rows, timestamps and once-only allowances, rather than only

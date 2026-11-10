@@ -12,7 +12,7 @@ import { tryRebuildAutomaticQueuedMatchForSessionId } from "@/app/api/sessions/[
 import { rateLimit } from "@/lib/rateLimit";
 import { ClubAdmissionError } from "@/lib/clubAdmissions";
 import { ClubPlayerOwnershipError, clubOwnershipTransaction, removeClubPlayerOwnership } from "@/lib/clubPlayerOwnership";
-import { normalizeClubMembershipPreferencesForGender } from "@/lib/clubPairingPreferences";
+import { normalizeClubMembershipPreferencesForGender, propagateClubPairingPreferencesToSessionsInTransaction } from "@/lib/clubPairingPreferences";
 import { AccountProfileSyncError, syncAccountProfile } from "@/lib/accountProfileSync";
 import { logError, safeErrorResponse } from "@/lib/errors";
 
@@ -92,9 +92,15 @@ export async function PATCH(request: Request, { params }: Context) {
         : { immediateSessionCount: 0, deferredSessionCount: 0 };
       const responseMember = await getClubRosterMember(tx, clubId, playerId);
       if (!responseMember) throw new Error("Updated club Player response is unavailable.");
-      return { member: responseMember, preferencePropagation };
+      const pairingPropagation = pairingChanged
+        ? await propagateClubPairingPreferencesToSessionsInTransaction(tx, { clubId, playerId, mixedSideOverride: responseMember.mixedSideOverride })
+        : { automaticQueueSessionIds: [] };
+      return { member: responseMember, preferencePropagation, pairingPropagation };
     });
-    const queueSessionIds = "automaticQueueSessionIds" in result.preferencePropagation ? result.preferencePropagation.automaticQueueSessionIds : [];
+    const queueSessionIds = [...new Set([
+      ...("automaticQueueSessionIds" in result.preferencePropagation ? result.preferencePropagation.automaticQueueSessionIds : []),
+      ...result.pairingPropagation.automaticQueueSessionIds,
+    ])];
     const queueResults = await Promise.allSettled(queueSessionIds.map(id => tryRebuildAutomaticQueuedMatchForSessionId(id)));
     let queueRebuildFailed = false;
     queueResults.forEach((queueResult, index) => {

@@ -305,6 +305,27 @@ describe("session player preference route", () => {
     expect(body).not.toHaveProperty("needsMoreRest");
   });
 
+  it.each([true, false])("updates mixed side during a live match and replans only automatic queues (automatic=%s)", async isAutomatic => {
+    const queuedMatch = { id: "queue-1", isAutomatic, team1Player1Id: "player-2", team1Player2Id: "player-3", team2Player1Id: "player-4", team2Player2Id: "player-5" };
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1", clubId: "community-1", status: SessionStatus.ACTIVE,
+      mode: SessionMode.MEXICANO, poolsEnabled: false, queuedMatch,
+      courts: [{ currentMatch: { team1Player1Id: "player-1", team1Player2Id: "player-6", team2Player1Id: "player-7", team2Player2Id: "player-8" } }],
+    });
+    const response = await patchPreferences({ mixedSideOverride: "LOWER" });
+    expect(response.status).toBe(200);
+    expect(mocks.sessionPlayerUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ mixedSideOverride: "LOWER" }) }));
+    expect(mocks.queuedMatchDeleteMany).toHaveBeenCalledTimes(isAutomatic ? 1 : 0);
+    expect(mocks.tryRebuildAutomaticQueuedMatchForSessionId).toHaveBeenCalledTimes(isAutomatic ? 1 : 0);
+  });
+
+  it("keeps the latest club pairing if it changes before a group edit obtains the writer", async () => {
+    const seat = { gender: PlayerGender.FEMALE, partnerPreference: PartnerPreference.FEMALE_FLEX, mixedSideOverride: null, pool: SessionPool.A, pendingPool: null, representingClubId: null, isGuest: false };
+    mocks.sessionPlayerFindUnique.mockResolvedValueOnce(seat).mockResolvedValue({ ...seat, mixedSideOverride: MixedSide.UPPER, partnerPreference: PartnerPreference.OPEN });
+    expect((await patchPreferences({ pool: SessionPool.A })).status).toBe(200);
+    expect(mocks.sessionPlayerUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ mixedSideOverride: MixedSide.UPPER, partnerPreference: PartnerPreference.OPEN }) }));
+  });
+
   it("clears a female upper-side override when Default is selected", async () => {
     mocks.sessionPlayerFindUnique.mockResolvedValue({
       gender: PlayerGender.FEMALE,
