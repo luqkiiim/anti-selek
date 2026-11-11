@@ -114,7 +114,7 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
     deferredSelection = false;
     gesture = {
       pointerId: event.pointerId, x: event.clientX, y: event.clientY,
-      left: node.scrollLeft, index: width > 0 ? clamp(Math.round(node.scrollLeft / width)) : 0,
+      left: node.scrollLeft, index: selectedIndex(),
       horizontal: false, samples: [{ x: event.clientX, time: performance.now() }],
     };
   }
@@ -133,7 +133,8 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
     if (!current.horizontal) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
       if (Math.abs(dx) <= Math.abs(dy) * 1.25) {
-        cancelGesture(true);
+        // Keep ambiguous starts pending: the next movement may be horizontal.
+        if (Math.abs(dy) > Math.abs(dx) * 1.25) cancelGesture(true);
         return;
       }
       current.horizontal = true;
@@ -142,8 +143,9 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
     }
     if (event.cancelable) event.preventDefault();
     sample(current, event.clientX);
-    node.scrollLeft = Math.max(clamp(current.index - 1) * width,
-      Math.min(clamp(current.index + 1) * width, current.left - dx));
+    // Track from the visible position even when the selected tab is still arriving.
+    node.scrollLeft = Math.max(0, current.left - width,
+      Math.min((options.pages.length - 1) * width, current.left + width, current.left - dx));
   }
 
   function up(event: PointerEvent) {
@@ -161,8 +163,11 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
     const velocity = last.time > first.time ? (first.x - last.x) / (last.time - first.time) : 0;
     const delta = current.x - event.clientX;
     const flick = Math.abs(delta) >= 24 && Math.abs(velocity) > 0.45;
-    const advance = flick || Math.abs(delta) >= Math.max(32, width * 0.16);
-    go(current.index + (advance ? Math.sign(flick ? velocity : delta) : 0), true, true);
+    const direction = Math.sign(delta);
+    // Reversing toward the starting page should return there, not skip beyond it.
+    const reversing = flick && Math.sign(velocity) !== direction;
+    const advance = !reversing && (flick || Math.abs(delta) >= Math.max(32, width * 0.16));
+    go(current.index + (advance ? direction : 0), true, true);
     releaseCapture(current.pointerId);
   }
 

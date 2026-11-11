@@ -147,6 +147,78 @@ for (const scenario of scenarios) {
   });
 }
 
+test("session swipes handle diagonal starts and reversals without dead gestures or skipped tabs", async ({ page, context, browserName }) => {
+  test.skip(browserName !== "chromium", "This regression uses native touch through Chromium CDP.");
+  await signInAsAdmin(page);
+  await page.goto(`/session/${scoreSessionCode}?tab=courts`);
+  await expectCurrentUi(page, "session");
+  await expect(page.getByRole("button", { name: "Court 1 options" })).toBeVisible();
+  const pager = page.locator(".product-root .page-pager");
+  const nav = page.getByRole("navigation", { name: "Session navigation", exact: true });
+  const client = await context.newCDPSession(page);
+  const box = await pager.boundingBox();
+  if (!box) throw new Error("Session pager is not visible");
+  const y = box.y + 55;
+  const point = (x: number, y: number) => ({ x, y, radiusX: 3, radiusY: 3, force: 1 });
+  const start = (x: number) => client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point(x, y)] });
+  const move = async (x: number, dy = 0, delay = 16) => {
+    await client.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [point(x, y + dy)] });
+    if (delay) await page.waitForTimeout(delay);
+  };
+  const end = () => client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  const expectSelected = (tab: string) => expect(nav.getByRole("button", { name: tab, exact: true })).toHaveAttribute("aria-current", "page");
+  const resetCourts = async () => {
+    await nav.getByRole("button", { name: "Courts", exact: true }).click();
+    await expectSelected("Courts");
+    await expect.poll(() => pager.evaluate(node => Math.abs(node.scrollLeft - node.clientWidth))).toBeLessThan(1);
+    await expect(pager).not.toHaveAttribute("data-swipe-moving", "true");
+  };
+
+  await resetCourts();
+  await start(300);
+  await move(291, 8);
+  for (const x of [270, 240, 210, 180, 150, 120]) await move(x, 8);
+  // A tiny diagonal wobble must not disable the rest of a clearly horizontal drag.
+  expect(await pager.evaluate(node => node.scrollLeft - node.clientWidth)).toBeGreaterThan(140);
+  await measure(pager, 2);
+  await end();
+  await expectMeasured(pager);
+  await expectSelected("Standings");
+
+  await resetCourts();
+  await start(250);
+  for (const x of [220, 190, 160]) await move(x);
+  await page.waitForTimeout(100);
+  await move(190, 0, 6);
+  await move(220, 0, 0);
+  // Returning toward Courts while still on its right must not skip to Players.
+  expect(await pager.evaluate(node => node.scrollLeft)).toBeGreaterThan(await pager.evaluate(node => node.clientWidth));
+  await measure(pager, 1);
+  await end();
+  await expectMeasured(pager);
+  await expectSelected("Courts");
+
+  await resetCourts();
+  await start(250);
+  await move(220, 0, 0);
+  await end();
+  // Interrupt before the first tab transition can visually reach the next page.
+  await start(150);
+  const interrupted = await pager.evaluate(node => ({
+    left: node.scrollLeft, width: node.clientWidth,
+    tab: document.querySelector('nav[aria-label="Session navigation"] [aria-current="page"]')?.textContent,
+  }));
+  expect(interrupted.tab).toBe("Standings");
+  expect(interrupted.left).toBeLessThan(interrupted.width * 1.5);
+  await move(180, 0, 0);
+  await move(210, 0, 0);
+  await measure(pager, 1);
+  await end();
+  await expectMeasured(pager);
+  await expectSelected("Courts");
+  await client.detach();
+});
+
 test("WebKit keeps shared pager animations bounded, interrupts taps, and respects reduced motion", async ({ page, browserName }) => {
   test.skip(browserName !== "webkit", "Safari compatibility coverage; native iOS swipes still require a physical device.");
   test.setTimeout(120_000);

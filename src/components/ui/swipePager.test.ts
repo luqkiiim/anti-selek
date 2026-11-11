@@ -120,6 +120,21 @@ describe("swipe pager", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("returns a reversed drag to its starting tab instead of skipping past it", () => {
+    pointer("pointerdown", 250);
+    vi.advanceTimersByTime(16);
+    pointer("pointermove", 160);
+    vi.advanceTimersByTime(96);
+    pointer("pointermove", 190);
+    vi.advanceTimersByTime(16);
+    pointer("pointermove", 220);
+    expect(node.scrollLeft).toBe(420);
+    pointer("pointerup", 220);
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(390);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it.each([[190, 160], [145, 120]])("leaves vertical and diagonal gestures native (%s, %s)", (x, y) => {
     pointer("pointerdown", 200);
     expect(pointer("pointermove", x, y).defaultPrevented).toBe(false);
@@ -127,6 +142,17 @@ describe("swipe pager", () => {
     vi.advanceTimersByTime(240);
     expect(node.scrollLeft).toBe(390);
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("waits through an ambiguous diagonal start before accepting a horizontal swipe", () => {
+    pointer("pointerdown", 300, 30);
+    expect(pointer("pointermove", 291, 38).defaultPrevented).toBe(false);
+    pointer("pointermove", 200, 38);
+    expect(node.scrollLeft).toBe(490);
+    pointer("pointerup", 200, 38);
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(780);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("Standings");
   });
 
   it("does not write scrollLeft or disable snapping during a native vertical pan", () => {
@@ -238,7 +264,7 @@ describe("swipe pager", () => {
     expect(node.scrollLeft).toBe(0);
   });
 
-  it("lets a new drag interrupt from the visible position", () => {
+  it("reverses an unfinished tab change by one committed tab, following the visible position", () => {
     controller.scrollToPage("Standings");
     vi.advanceTimersByTime(32);
     const position = node.scrollLeft;
@@ -247,8 +273,19 @@ describe("swipe pager", () => {
     expect(node.scrollLeft).toBe(position - 100);
     pointer("pointerup", 200);
     vi.advanceTimersByTime(240);
-    expect(node.scrollLeft).toBe(0);
-    expect(onChange).toHaveBeenCalledExactlyOnceWith("Players");
+    expect(node.scrollLeft).toBe(390);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("Courts");
+  });
+
+  it("does not jump on the first drag frame when interrupting a distant tab tap", () => {
+    mount({ pages: [...pages, "Profile"], active: "Players" });
+    controller.scrollToPage("Profile");
+    vi.advanceTimersByTime(16);
+    const position = node.scrollLeft;
+    pointer("pointerdown", 100);
+    pointer("pointermove", 140);
+    expect(node.scrollLeft).toBe(position - 40);
+    pointer("pointercancel", 140);
   });
 
   it("realigns instantly on width and page-list changes", () => {
