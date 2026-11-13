@@ -28,6 +28,16 @@ function mount(overrides: Partial<SwipePagerOptions> = {}) {
   controller = createSwipePager(node, options);
 }
 
+function touch(type: string, x: number, y = 30) {
+  const point = { identifier: 7, target: node, clientX: x, clientY: y,
+    screenX: x, screenY: y, pageX: x, pageY: y, radiusX: 1, radiusY: 1,
+    rotationAngle: 0, force: 1 } as Touch;
+  const event = new TouchEvent(type, { bubbles: true, cancelable: true,
+    touches: type === "touchend" || type === "touchcancel" ? [] : [point], changedTouches: [point] });
+  node.dispatchEvent(event);
+  return event;
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
@@ -64,6 +74,61 @@ afterEach(() => {
 });
 
 describe("swipe pager", () => {
+  it("continues a finger swipe after the browser cancels its pointer stream", () => {
+    pointer("pointerdown", 300);
+    touch("touchstart", 300);
+    pointer("pointercancel", 300);
+    expect(touch("touchmove", 200).defaultPrevented).toBe(true);
+    expect(node.scrollLeft).toBe(490);
+    touch("touchend", 200);
+    pointer("pointerup", 200);
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(780);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("Standings");
+  });
+
+  it("supports the finger TouchEvent stream without requiring pointer events", () => {
+    touch("touchstart", 100);
+    touch("touchmove", 220);
+    touch("touchend", 220);
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(0);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("Players");
+  });
+
+  it("keeps vertical finger movement native and returns cancelled finger drags", () => {
+    touch("touchstart", 200);
+    expect(touch("touchmove", 198, 140).defaultPrevented).toBe(false);
+    touch("touchend", 198, 140);
+    expect(node.scrollLeft).toBe(390);
+    touch("touchstart", 300);
+    touch("touchmove", 200);
+    touch("touchcancel", 200);
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(390);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("releases a finger gesture for a pinch and waits for all fingers to lift", () => {
+    const first = touch("touchstart", 300).touches[0];
+    touch("touchmove", 200);
+    const pinch = new TouchEvent("touchstart", { cancelable: true,
+      touches: [first, { ...first, identifier: 8 }] });
+    node.dispatchEvent(pinch);
+    expect(pinch.defaultPrevented).toBe(false);
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(390);
+    expect(touch("touchmove", 100).defaultPrevented).toBe(false);
+    touch("touchend", 100);
+    expect(onChange).not.toHaveBeenCalled();
+    touch("touchstart", 300);
+    touch("touchmove", 200);
+    touch("touchend", 200);
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(780);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("Standings");
+  });
+
   it("follows the finger and finishes within 240 ms without a second settling phase", () => {
     expect(node.scrollLeft).toBe(390);
     pointer("pointerdown", 300);
@@ -95,6 +160,15 @@ describe("swipe pager", () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith("Courts");
   });
 
+  it("bounds settling by elapsed time when animation frame timestamps lag", () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      setTimeout(() => callback(performance.now() - 100), 16));
+    controller.scrollToPage("Standings");
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(780);
+    expect(controller.isInteracting()).toBe(false);
+  });
+
   it("returns a short swipe and advances a short fast flick", () => {
     pointer("pointerdown", 200);
     pointer("pointermove", 180);
@@ -107,6 +181,19 @@ describe("swipe pager", () => {
     pointer("pointermove", 170);
     pointer("pointerup", 170);
     expect(onChange).toHaveBeenCalledExactlyOnceWith("Standings");
+  });
+
+  it("keeps recent flick velocity when release repeats the final finger position", () => {
+    touch("touchstart", 150);
+    vi.advanceTimersByTime(46);
+    touch("touchmove", 180);
+    vi.advanceTimersByTime(33);
+    touch("touchmove", 210);
+    vi.advanceTimersByTime(34);
+    touch("touchend", 210);
+    vi.advanceTimersByTime(240);
+    expect(node.scrollLeft).toBe(0);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("Players");
   });
 
   it("does not treat a swipe held still before release as a fast flick", () => {
@@ -298,6 +385,15 @@ describe("swipe pager", () => {
     expect(node.scrollLeft).toBe(700);
     controller.sync({ ...options, pages: ["Players"], active: "Players" });
     expect(node.scrollLeft).toBe(0);
+  });
+
+  it("does not select a neighboring tab when native scroll precedes resize observation", () => {
+    width = 768;
+    node.scrollLeft = 768;
+    node.dispatchEvent(new Event("scrollend"));
+    resize();
+    expect(node.scrollLeft).toBe(768);
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("respects reduced motion, modal disabling, and desktop layout changes", () => {

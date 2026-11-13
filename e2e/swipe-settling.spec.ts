@@ -7,7 +7,7 @@ test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true
 type Measurement = { elapsed: number; error: number; stableFrames: number; frames?: Array<{ time: number; left: number; moving: boolean }> };
 type MeasuredPager = HTMLElement & { swipeMeasurement?: Promise<Measurement> };
 
-async function measure(pager: Locator, index: number, trigger: "pointerup" | "click" = "pointerup") {
+async function measure(pager: Locator, index: number, trigger: "pointerup" | "click" | "touchend" = "pointerup") {
   await pager.evaluate((element, { index, trigger }) => {
     const node = element as MeasuredPager;
     node.swipeMeasurement = new Promise((resolve) => {
@@ -27,9 +27,11 @@ async function measure(pager: Locator, index: number, trigger: "pointerup" | "cl
           } else stableFrames = 0;
           if (stableFrames >= 3 || performance.now() - released > 700) {
             resolve({ elapsed: (alignedAt || performance.now()) - released, error, stableFrames, frames });
-          } else requestAnimationFrame(frame);
+          } else requestAnimationFrame(() => setTimeout(frame, 0));
         };
-        requestAnimationFrame(frame);
+        // Read after the controller's callbacks update this frame, rather than
+        // measuring the previous position when our callback runs first.
+        requestAnimationFrame(() => setTimeout(frame, 0));
       };
       // Capture before the controller or React handlers start the release animation.
       (trigger === "click" ? document : node).addEventListener(trigger, start, { once: true, capture: true });
@@ -107,7 +109,9 @@ for (const scenario of scenarios) {
     // A strong return flick must still move exactly one tab.
     let returnY: number | undefined;
     if (scenario.kind === "session") {
-      const row = await page.getByRole("table", { name: "Player standings" }).locator("tbody tr").first().boundingBox();
+      const standings = page.getByRole("table", { name: "Player standings" });
+      await expect(standings).toBeVisible();
+      const row = await standings.locator("tbody tr").first().boundingBox();
       if (!row) throw new Error("Current standings rows are not visible");
       returnY = row.y + row.height / 2;
     }
@@ -217,6 +221,38 @@ test("session swipes handle diagonal starts and reversals without dead gestures 
   await expectMeasured(pager);
   await expectSelected("Courts");
   await client.detach();
+});
+
+test("WebKit finger TouchEvents survive pointer cancellation in both directions", async ({ page, browserName }) => {
+  test.skip(browserName !== "webkit", "WebKit TouchEvent compatibility; this is not physical iPhone input.");
+  await signInAsAdmin(page);
+  await page.goto(`/session/${scoreSessionCode}?tab=courts`);
+  await expectCurrentUi(page, "session");
+  await expect(page.getByRole("button", { name: "Court 1 options" })).toBeVisible();
+  const pager = page.locator(".product-root .page-pager");
+  const nav = page.getByRole("navigation", { name: "Session navigation", exact: true });
+  const box = await pager.boundingBox();
+  if (!box) throw new Error("Session pager is not visible");
+  const y = box.y + 55;
+  for (const [from, to, index, tab] of [[300, 120, 2, "Standings"], [100, 280, 1, "Courts"]] as const) {
+    const initialLeft = await pager.evaluate(node => node.scrollLeft);
+    const point = (x: number) => ({ identifier: 7, clientX: x, clientY: y });
+    await pager.dispatchEvent("pointerdown", { pointerId: 1, pointerType: "touch", isPrimary: true, clientX: from, clientY: y });
+    await pager.dispatchEvent("touchstart", { touches: [point(from)], changedTouches: [point(from)] });
+    await pager.dispatchEvent("pointercancel", { pointerId: 1, pointerType: "touch", isPrimary: true });
+    for (let i = 1; i <= 6; i++) {
+      const touch = point(from + (to - from) * i / 6);
+      await pager.dispatchEvent("touchmove", { touches: [touch], changedTouches: [touch], cancelable: true });
+      await page.waitForTimeout(16);
+    }
+    const draggedLeft = await pager.evaluate(node => node.scrollLeft);
+    expect(Math.abs(draggedLeft - initialLeft)).toBeGreaterThan(140);
+    expect(Math.sign(draggedLeft - initialLeft)).toBe(Math.sign(from - to));
+    await measure(pager, index, "touchend");
+    await pager.dispatchEvent("touchend", { touches: [], changedTouches: [point(to)] });
+    await expectMeasured(pager);
+    await expect(nav.getByRole("button", { name: tab, exact: true })).toHaveAttribute("aria-current", "page");
+  }
 });
 
 test("WebKit keeps shared pager animations bounded, interrupts taps, and respects reduced motion", async ({ page, browserName }) => {

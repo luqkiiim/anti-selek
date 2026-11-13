@@ -9,6 +9,7 @@ export interface SwipePagerOptions {
 }
 
 type Sample = { x: number; time: number };
+type SwipeInput = Pick<PointerEvent, "pointerId" | "pointerType" | "isPrimary" | "clientX" | "clientY" | "target" | "cancelable" | "preventDefault">;
 type Gesture = {
   pointerId: number;
   x: number;
@@ -29,6 +30,7 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
   let scrollTimer: ReturnType<typeof setTimeout> | undefined;
   let suppressClick = false;
   let deferredSelection = false;
+  let touchId: number | null = null;
   const media = initial.disabledMedia ? matchMedia(initial.disabledMedia) : null;
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   const enabled = () => !options.disabled && !media?.matches && options.pages.length > 1;
@@ -56,8 +58,10 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
       return;
     }
     const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.max(0, Math.min(1, (now - start) / SWIPE_SETTLE_MS));
+    const tick = () => {
+      // A frame's supplied timestamp can predate a delayed callback, especially
+      // while a newly selected panel renders. Keep the bound on elapsed time.
+      const progress = Math.max(0, Math.min(1, (performance.now() - start) / SWIPE_SETTLE_MS));
       node.scrollLeft = from + (target - from) * (1 - (1 - progress) ** 3);
       if (progress < 1) frame = requestAnimationFrame(tick);
       else finish();
@@ -100,7 +104,7 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
     if (previous) releaseCapture(previous.pointerId);
   }
 
-  function down(event: PointerEvent) {
+  function down(event: SwipeInput) {
     suppressClick = false;
     if (gesture && !event.isPrimary) {
       cancelGesture();
@@ -122,10 +126,12 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
   function sample(current: Gesture, x: number) {
     const time = performance.now();
     current.samples = current.samples.filter((point) => time - point.time <= 80);
-    current.samples.push({ x, time });
+    // Touch release often repeats the final move; it must not dilute flick speed.
+    // The time window still expires movement when the finger is held still.
+    if (current.samples[current.samples.length - 1]?.x !== x) current.samples.push({ x, time });
   }
 
-  function move(event: PointerEvent) {
+  function move(event: SwipeInput) {
     const current = gesture;
     if (!current || current.pointerId !== event.pointerId) return;
     const dx = event.clientX - current.x;
@@ -139,7 +145,7 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
       }
       current.horizontal = true;
       node.dataset.swipeMoving = "true";
-      node.setPointerCapture?.(event.pointerId);
+      if (touchId === null) node.setPointerCapture?.(event.pointerId);
     }
     if (event.cancelable) event.preventDefault();
     sample(current, event.clientX);
@@ -148,7 +154,7 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
       Math.min((options.pages.length - 1) * width, current.left + width, current.left - dx));
   }
 
-  function up(event: PointerEvent) {
+  function up(event: SwipeInput) {
     const current = gesture;
     if (!current || current.pointerId !== event.pointerId) return;
     gesture = null;
@@ -172,17 +178,52 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
   }
 
   function cancelled(event: PointerEvent) {
+    if (touchId !== null) return;
     if (gesture?.pointerId === event.pointerId) cancelGesture(!gesture.horizontal);
   }
 
+  function finger(event: TouchEvent, touch: Touch): SwipeInput {
+    return { pointerId: touch.identifier, pointerType: "touch", isPrimary: true,
+      clientX: touch.clientX, clientY: touch.clientY, target: event.target,
+      cancelable: event.cancelable, preventDefault: () => event.preventDefault() };
+  }
+
+  function touchStarted(event: TouchEvent) {
+    if (event.touches.length !== 1) {
+      if (touchId !== null) cancelGesture(true);
+      touchId = -1;
+      return;
+    }
+    touchId = event.touches[0].identifier;
+    down(finger(event, event.touches[0]));
+  }
+
+  function touchMoved(event: TouchEvent) {
+    const touch = Array.from(event.touches).find(touch => touch.identifier === touchId);
+    if (touch) move(finger(event, touch));
+  }
+
   function touchReleased(event: TouchEvent) {
+    const touch = Array.from(event.changedTouches).find(touch => touch.identifier === touchId);
+    if (touch) up(finger(event, touch));
+    if (event.touches.length === 0) touchId = null;
     if (event.touches.length === 0 && deferredSelection) {
       deferredSelection = false;
       align(selectedIndex(), true);
     }
   }
 
+  function touchCancelled(event: TouchEvent) {
+    if (touchId !== null) cancelGesture(true);
+    touchId = event.touches.length ? -1 : null;
+    if (touchId === null && deferredSelection) {
+      deferredSelection = false;
+      align(selectedIndex(), true);
+    }
+  }
+
   function lostCapture(event: PointerEvent) {
+    if (touchId !== null) return;
     // Taking capture from a touched child emits a bubbling loss on that child.
     // Only losing the pager's own capture interrupts the drag.
     if (event.target === node) cancelled(event);
@@ -199,6 +240,9 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
   function settleNativeScroll() {
     clearTimeout(scrollTimer);
     if (!enabled() || gesture || frame !== null || width <= 0) return;
+    // Native scroll events can precede ResizeObserver after rotation/resizing.
+    // Let the observer preserve the selected page using the new width.
+    if (Math.abs(node.clientWidth - width) >= 0.5) return;
     const index = clamp(Math.round(node.scrollLeft / width));
     if (index !== selectedIndex() || Math.abs(node.scrollLeft - index * width) >= 1) go(index, true, true);
   }
@@ -240,13 +284,20 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
     if (!media?.matches) align(selectedIndex(), false);
   });
   resize.observe(node);
-  node.addEventListener("pointerdown", down);
-  node.addEventListener("pointermove", move, { passive: false });
-  node.addEventListener("pointerup", up);
+  // Keep finger gestures alive if their pointer stream is cancelled independently.
+  // TouchEvents own fingers; retain pointer handling for pen/fallback.
+  const pointerDown = (event: PointerEvent) => { if (touchId === null) down(event); };
+  const pointerMove = (event: PointerEvent) => { if (touchId === null) move(event); };
+  const pointerUp = (event: PointerEvent) => { if (touchId === null) up(event); };
+  node.addEventListener("pointerdown", pointerDown);
+  node.addEventListener("pointermove", pointerMove, { passive: false });
+  node.addEventListener("pointerup", pointerUp);
   node.addEventListener("pointercancel", cancelled);
   node.addEventListener("lostpointercapture", lostCapture);
+  node.addEventListener("touchstart", touchStarted, { passive: true });
+  node.addEventListener("touchmove", touchMoved, { passive: false });
   node.addEventListener("touchend", touchReleased, { passive: true });
-  node.addEventListener("touchcancel", touchReleased, { passive: true });
+  node.addEventListener("touchcancel", touchCancelled, { passive: true });
   node.addEventListener("click", click, true);
   node.addEventListener("scroll", scroll, { passive: true });
   node.addEventListener("scrollend", settleNativeScroll);
@@ -287,13 +338,15 @@ export function createSwipePager(node: HTMLDivElement, initial: SwipePagerOption
       stopAnimation();
       clearGesture();
       resize.disconnect();
-      node.removeEventListener("pointerdown", down);
-      node.removeEventListener("pointermove", move);
-      node.removeEventListener("pointerup", up);
+      node.removeEventListener("pointerdown", pointerDown);
+      node.removeEventListener("pointermove", pointerMove);
+      node.removeEventListener("pointerup", pointerUp);
+      node.removeEventListener("touchstart", touchStarted);
+      node.removeEventListener("touchmove", touchMoved);
       node.removeEventListener("pointercancel", cancelled);
       node.removeEventListener("lostpointercapture", lostCapture);
       node.removeEventListener("touchend", touchReleased);
-      node.removeEventListener("touchcancel", touchReleased);
+      node.removeEventListener("touchcancel", touchCancelled);
       node.removeEventListener("click", click, true);
       node.removeEventListener("scroll", scroll);
       node.removeEventListener("scrollend", settleNativeScroll);
