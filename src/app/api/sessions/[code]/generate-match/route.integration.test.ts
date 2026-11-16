@@ -2078,7 +2078,7 @@ describe("upgraded collaboration mutation boundaries", () => {
     expect(denied.status).toBe(409); expect((await denied.json()).error).toContain("Remove this player from the lineup first");
   });
 
-  it("snapshots BO3 rules and retains participation lock after undo", async () => {
+  it("snapshots BO3 rules and allows removal after an unscored assignment is cleared", async () => {
     const f = await upgradedFixture();
     const response = await postGenerateMatch(f.code, { courtId: f.courtId, manualTeams: { team1: f.playerIds.slice(0, 2), team2: f.playerIds.slice(2) } });
     expect(response.status).toBe(200);
@@ -2088,7 +2088,9 @@ describe("upgraded collaboration mutation boundaries", () => {
     expect((await postGenerateMatch(f.code, { courtId: f.courtId, undoCurrentMatch: true })).status).toBe(200);
     expect(await prisma.match.count({ where: { sessionId: f.sessionId } })).toBe(0);
     const { DELETE: remove } = await import("../players/[userId]/route");
-    const denied = await remove(new Request(`http://localhost/api/sessions/${f.code}/players/${f.playerIds[0]}`, { method: "DELETE" }), { params: Promise.resolve({ code: f.code, userId: f.playerIds[0] }) });
-    expect(denied.status).toBe(409); expect((await denied.json()).error).toContain("already started a match");
+    const removed = await remove(new Request(`http://localhost/api/sessions/${f.code}/players/${f.playerIds[0]}`, { method: "DELETE" }), { params: Promise.resolve({ code: f.code, userId: f.playerIds[0] }) });
+    expect(removed.status).toBe(200);
+    expect(await prisma.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: f.sessionId, playerId: f.playerIds[0] } } })).toBeNull();
+    expect(await prisma.sessionPlayer.count({ where: { sessionId: f.sessionId, hasStartedMatch: true } })).toBe(3);
   });
 });

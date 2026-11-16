@@ -395,6 +395,21 @@ describe("LiveSession score and player controls", () => {
     expect(Array.from(inputsTwo).every((input) => !input.disabled)).toBe(true);
   });
 
+  it.each([false, true])("opens removal directly from a roster row (paused: %s) and confirms before deleting", async isPaused => {
+    setup(sessionWithCourts([], [player("unused", "Unused Player", isPaused)]));
+    await act(async () => root.render(<LiveSession code="TEST01" activeTab="Players" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('.roster [aria-label="Options for Unused Player"]')!.click());
+    const options = container.querySelector('[role="dialog"][aria-label="Unused Player"]')!;
+    await act(async () => [...options.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Remove from session")!.click());
+    expect(mocks.api).not.toHaveBeenCalled();
+    const confirmation = container.querySelector('[role="dialog"][aria-label="Remove player"]')!;
+    expect(confirmation.textContent).toContain("Unused Player");
+    await act(async () => [...confirmation.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === "Remove player")!.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/players/unused", "DELETE");
+    expect(mocks.sessionResource?.refresh).toHaveBeenCalledWith(true);
+    expect(container.querySelector('[role="dialog"][aria-label="Remove player"]')).toBeNull();
+  });
+
   it("keeps an active paused player on court and sends pause/resume payloads", async () => {
     const currentMatch = match("match-1", 1, 0, 0);
     const active = player(currentMatch.team1User1.id, currentMatch.team1User1.name);

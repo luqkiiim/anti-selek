@@ -148,6 +148,31 @@ describe("remove player queue cancellation", () => {
       "session-1"
     );
   });
+
+  it.each(["PENDING", "IN_PROGRESS", "PENDING_APPROVAL"])("keeps a player assigned to a %s match", async status => {
+    mocks.matchFindFirst.mockResolvedValueOnce({ status });
+    const response = await removePlayer();
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toContain("currently assigned to a match");
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("preserves recorded results for an off-court player", async () => {
+    mocks.matchFindFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ status: "COMPLETED" });
+    const response = await removePlayer();
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toContain("recorded match history");
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rechecks matches inside the writer if a court assignment races with removal", async () => {
+    const tx = setupTransaction(queuedMatch(false));
+    tx.match.findFirst.mockResolvedValue({ id: "concurrent-match" });
+    const response = await removePlayer();
+    expect(response.status).toBe(409);
+    expect(tx.sessionPlayer.delete).not.toHaveBeenCalled();
+    expect(tx.queuedMatch.delete).not.toHaveBeenCalled();
+  });
 });
 
 vi.mock("@/lib/clubAdmissions", async (importOriginal) => {

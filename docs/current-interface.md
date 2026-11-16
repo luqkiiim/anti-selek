@@ -28,6 +28,7 @@ Use **Refresh** on a session or its match history to see the latest changes. The
 
 ## Preserved capabilities
 
+- **Session players:** Players → player options → Remove from session. Unused players can be removed when off court; clearing an unscored assignment permits removal again. Recorded match history and active lineup entries remain protected.
 - **Reset history:** Manage club → Settings → Reset club history. Explicit confirmation remains required.
 - **Recovery:** Manage club → Requests and player editing retain invitation/admission/account recovery. Emergency password reset is visible only to global admins editing a connected player.
 - **Historical profiles:** guest, archived and unscoped profiles use current styling, match/session history, relationships, rating history, photo viewing and eligible rating/promotion controls. Existing recorded ledgers are used when available; older derived history is marked reconstructed.

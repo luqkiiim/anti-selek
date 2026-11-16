@@ -251,8 +251,8 @@ export async function DELETE(
     const result = await admissionTransaction(prisma, async (tx) => {
       await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId });
       await assertPlayerNotInLineup(tx, sessionData.id, playerId);
-      const freshSeat = await tx.sessionPlayer.findUnique({ where: { sessionId_playerId: { sessionId: sessionData.id, playerId } }, select: { hasStartedMatch: true } });
-      if (freshSeat?.hasStartedMatch) throw new IdentityConflictError("This player has already started a match. Pause them to change availability.");
+      // An undone, unscored assignment leaves hasStartedMatch set. Only actual
+      // match records should prevent removal once the player is off court.
       const recorded = await tx.match.findFirst({ where: playerMatchWhere, select: { id: true } });
       if (recorded) throw new IdentityConflictError("This player has match history and cannot be removed.");
       const queuedMatch = await tx.queuedMatch.findUnique({

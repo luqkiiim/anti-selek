@@ -52,6 +52,7 @@ export interface LivePlayerManagementProps {
   onChanged: () => Promise<unknown> | unknown;
   manageableClubIds?: string[];
   initialScreen?: ListScreen;
+  initialPlayerId?: string | null;
 }
 
 function messageFor(error: unknown, fallback: string) {
@@ -79,6 +80,7 @@ export function LivePlayerManagement({
   onChanged,
   manageableClubIds,
   initialScreen = "players",
+  initialPlayerId = null,
 }: LivePlayerManagementProps) {
   const [listScreen, setListScreen] = useState<ListScreen>("players");
   const [optionsScreen, setOptionsScreen] = useState<PlayerOptionsScreen | null>(null);
@@ -141,8 +143,8 @@ export function LivePlayerManagement({
     if (open) {
       setListScreen(initialScreen);
       if (initialScreen === "roster") void openRoster();
-      setOptionsScreen(null);
-      setSelectedPlayerId(null);
+      setOptionsScreen(initialPlayerId ? "preferences" : null);
+      setSelectedPlayerId(initialPlayerId);
       setSearch("");
       setError("");
       setRosterError("");
@@ -150,7 +152,7 @@ export function LivePlayerManagement({
     }
     // Opening starts a new picker; polling must not reset an in-progress selection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, open, initialScreen]);
+  }, [code, open, initialScreen, initialPlayerId]);
 
   async function runAction(
     operation: () => Promise<unknown>,

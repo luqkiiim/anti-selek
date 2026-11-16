@@ -234,6 +234,7 @@ export default function LiveSession({
     return () => clearTimeout(timer);
   }, [pauseNotice]);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
+  const [managedPlayerId, setManagedPlayerId] = useState<string | null>(null);
   const [restPlayerId, setRestPlayerId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
@@ -1413,7 +1414,9 @@ export default function LiveSession({
                         <strong>{p.user.name}</strong>
                         <small>{playerStatus(p)} · {p.user.elo}</small>
                       </span>
-                      {ownsSessionSeat(p) && <button className="icon-button" aria-label={`Rest options for ${p.user.name}`} onClick={() => { setRestPlayerId(p.userId); setSheet("self-rest"); }}><DotsThree size={20} /></button>}
+                      {canManageRoster && mayManagePlayer(p) ? (
+                        <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => { setManagedPlayerId(p.userId); setManagePlayersOpen(true); }}><DotsThree size={20} /></button>
+                      ) : ownsSessionSeat(p) ? <button className="icon-button" aria-label={`Rest options for ${p.user.name}`} onClick={() => { setRestPlayerId(p.userId); setSheet("self-rest"); }}><DotsThree size={20} /></button> : null}
                       {((canManageRoster && mayManagePlayer(p)) || ownsSessionSeat(p)) && (
                         <button
                           className="roster-pause-action"
@@ -1442,6 +1445,9 @@ export default function LiveSession({
                           <strong>{p.user.name}</strong>
                           <small>{playerStatus(p)}</small>
                         </span>
+                        {canManageRoster && mayManagePlayer(p) && (
+                          <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => { setManagedPlayerId(p.userId); setManagePlayersOpen(true); }}><DotsThree size={20} /></button>
+                        )}
                         {((canManageRoster && mayManagePlayer(p)) || ownsSessionSeat(p)) && (
                           <button
                             className="roster-pause-action"
@@ -2163,11 +2169,12 @@ export default function LiveSession({
           )}
       </Sheet>
       {s && <LivePlayerManagement
-        initialScreen="roster"
+        initialScreen={managedPlayerId ? "players" : "roster"}
+        initialPlayerId={managedPlayerId}
         code={code}
         session={s}
         open={managePlayersOpen && canManageRoster && !ended}
-        onClose={() => setManagePlayersOpen(false)}
+        onClose={() => { setManagePlayersOpen(false); setManagedPlayerId(null); }}
         onChanged={refresh}
         manageableClubIds={manageableClubIds}
       />}
