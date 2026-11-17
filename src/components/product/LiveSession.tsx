@@ -200,6 +200,8 @@ export default function LiveSession({
     [rawSession, queuedMatchOverlay],
   );
   const standingsVisible = !!rawSession && !showHistory && (tab === "Standings" || rawSession.status === "COMPLETED");
+  // Warm standings while Courts/Players are open; tab changes reuse the same revision.
+  const standingsEnabled = !!rawSession && !showHistory && rawSession.status !== "WAITING";
   const standingsRevision = useMemo(() => standingsKey(rawSession), [rawSession]);
   const standings = useResource<{
     currentLeaderboard: {
@@ -208,7 +210,7 @@ export default function LiveSession({
       sessionPoints: number;
       score?: number;
     }[];
-  }>(endpoint + "/leaderboard" + readQuery, { enabled: standingsVisible, refreshKey: standingsRevision });
+  }>(endpoint + "/leaderboard" + readQuery, { enabled: standingsEnabled, refreshKey: standingsRevision });
   useAppReady(!!resource.error || (!!rawSession && (
     !collaborationEnabled || !!collaboration.data || !!collaboration.error
   ) && (rawSession.status !== "COMPLETED" || !!standings.data || !!standings.error)));

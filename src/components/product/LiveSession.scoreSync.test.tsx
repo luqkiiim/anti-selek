@@ -77,7 +77,7 @@ describe("live score saves with the real session controller", () => {
     await act(async () => root.render(<LiveSession code="SCORE1" activeTab={activeTab} onBack={() => {}} onEnded={async () => {}} />));
   };
 
-  it("makes no timed requests for an ordinary host and reloads visible standings once per refresh", async () => {
+  it("preloads standings, reuses them across tabs and reloads visible standings once per refresh", async () => {
     let snapshot = session();
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith("/leaderboard")) return json({ currentLeaderboard: [] });
@@ -90,7 +90,9 @@ describe("live score saves with the real session controller", () => {
     await render();
     await advance(120_000);
     expect(sessionReads()).toBe(1);
-    expect(standingsReads()).toBe(0);
+    expect(standingsReads()).toBe(1);
+    await render("Players");
+    await render("Courts");
     await render("Standings");
     expect(standingsReads()).toBe(1);
     snapshot = { ...snapshot, resultsRevision: 2 };
@@ -102,6 +104,27 @@ describe("live score saves with the real session controller", () => {
     await render("Courts");
     await clickRefresh();
     expect(standingsReads()).toBe(3);
+    snapshot = { ...snapshot, resultsRevision: 3 };
+    await clickRefresh();
+    expect(standingsReads()).toBe(4);
+    await render("Standings");
+    expect(standingsReads()).toBe(4);
+  });
+
+  it("keeps Courts usable during a slow preload and shares the pending request across tabs", async () => {
+    let resolveStandings!: (response: Response) => void;
+    const pending = new Promise<Response>(resolve => { resolveStandings = resolve; });
+    const fetchMock = vi.fn((url: string) => url.endsWith("/leaderboard")
+      ? pending : Promise.resolve(json(session())));
+    vi.stubGlobal("fetch", fetchMock);
+    await render();
+    expect(container.querySelector('input[aria-label="Team 1 score"]')).not.toBeNull();
+    await render("Standings");
+    await render("Courts");
+    await render("Standings");
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith("/leaderboard"))).toHaveLength(1);
+    await act(async () => resolveStandings(json({ currentLeaderboard: [{ userId: "a", name: "Player a", sessionPoints: 0 }] })));
+    expect(container.querySelector('table[aria-label="Player standings"]')?.textContent).toContain("Player a");
   });
 
   it("checks a shared score every 30 seconds only on visible Courts and coalesces wake events", async () => {
@@ -110,30 +133,32 @@ describe("live score saves with the real session controller", () => {
     snapshot.viewerPlayerId = "a";
     snapshot.courts[0].currentMatch!.team2User1.isClaimed = true;
     const visible = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
-    const fetchMock = vi.fn(async () => json(snapshot));
+    const fetchMock = vi.fn(async (url: string) => url.endsWith("/leaderboard")
+      ? json({ currentLeaderboard: [] }) : json(snapshot));
+    const sessionReads = () => fetchMock.mock.calls.filter(([url]) => url === "/api/sessions/SCORE1").length;
     vi.stubGlobal("fetch", fetchMock);
     try {
       await render();
       await act(async () => { window.dispatchEvent(new Event("focus")); });
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(sessionReads()).toBe(1);
       await advance(29_999);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(sessionReads()).toBe(1);
       await advance(1);
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(sessionReads()).toBe(2);
       await advance(30_000);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(sessionReads()).toBe(3);
       visible.mockReturnValue("hidden");
       await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
       await advance(90_000);
-      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(sessionReads()).toBe(3);
       visible.mockReturnValue("visible");
       for (const event of ["visibilitychange", "focus", "online"]) {
         await act(async () => { (event === "visibilitychange" ? document : window).dispatchEvent(new Event(event)); });
       }
-      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(sessionReads()).toBe(4);
       await render("Players");
       await advance(90_000);
-      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(sessionReads()).toBe(4);
     } finally {
       visible.mockRestore();
     }
@@ -142,10 +167,12 @@ describe("live score saves with the real session controller", () => {
   it("keeps the draft and last success on a rate limit, then refreshes the same snapshot after cooldown", async () => {
     vi.setSystemTime(new Date(2026, 10, 7, 20, 41));
     const snapshot = session();
-    const fetchMock = vi.fn()
+    const sessionFetch = vi.fn()
       .mockResolvedValueOnce(json(snapshot))
       .mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "120" } }))
       .mockResolvedValueOnce(json(snapshot));
+    const fetchMock = vi.fn((url: string) => url.endsWith("/leaderboard")
+      ? Promise.resolve(json({ currentLeaderboard: [] })) : sessionFetch());
     vi.stubGlobal("fetch", fetchMock);
     await render();
     const input = () => container.querySelector<HTMLInputElement>('input[aria-label="Team 1 score"]')!;
@@ -159,7 +186,7 @@ describe("live score saves with the real session controller", () => {
     expect(timestamp()).toBe(initial);
     expect(input().value).toBe("12");
     await clickRefresh();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sessionFetch).toHaveBeenCalledTimes(2);
     await advance(120_000);
     await clickRefresh();
     expect(timestamp()).not.toBe(initial);
@@ -171,6 +198,7 @@ describe("live score saves with the real session controller", () => {
     const snapshot = session();
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/sessions/SCORE1") return json(snapshot);
+      if (url.endsWith("/leaderboard")) return json({ currentLeaderboard: [] });
       if (url.endsWith("/history")) return json({ session: { code: snapshot.code, name: snapshot.name, status: "ACTIVE", createdAt: "2026-10-01T00:00:00Z" }, matches: [] });
       throw new Error(`Unexpected request: ${url}`);
     });
