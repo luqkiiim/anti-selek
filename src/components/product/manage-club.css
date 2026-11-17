@@ -17,8 +17,18 @@
 .manage-player-group .person-info strong { overflow-wrap: anywhere; }
 .manage-player-rating, .manage-player-role { margin: 0 0 20px; padding: 16px; border: 1px solid #e8ddef; border-radius: 14px; background: #fffdfb; }
 .manage-player-rating h3, .manage-player-role h3 { margin: 0 0 8px; font-size: 15px; }
-.manage-player-role-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.manage-player-role-actions .secondary { flex: 1 1 140px; min-height: 44px; margin: 0; }
+.manage-player-role { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.manage-player-role h3 { flex: 1; min-width: 0; margin: 0; }
+.manage-player-role > button { flex-shrink: 0; min-height: 44px; margin: 0; }
+.club-role-choices { display: flex; flex-direction: column; gap: 10px; }
+.club-role-choice { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 13px 14px; border: 1px solid #e8ddef; border-radius: 14px; background: #fffdfb; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.club-role-choice > span { flex: 1; min-width: 0; }
+.club-role-choice strong, .club-role-choice small { display: block; overflow-wrap: anywhere; }
+.club-role-choice strong { font-size: 15px; }
+.club-role-choice small { margin-top: 3px; color: var(--muted); font-size: 13px; }
+.club-role-choice[aria-pressed="true"] { border-color: #bba1df; background: #f2ebf8; }
+.club-role-choice[aria-pressed="true"]:disabled { opacity: 1; cursor: default; }
+.club-role-choice:focus-visible { outline: 3px solid #aa83ed; outline-offset: 2px; }
 .manage-player-account { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 20px; border: 1px solid #e8ddef; border-radius: 14px; background: #fffdfb; }
 .manage-player-account-label { flex: 1; min-width: 0; }
 .manage-player-account-label small { display: block; margin-bottom: 3px; color: var(--muted); font-size: 12px; }

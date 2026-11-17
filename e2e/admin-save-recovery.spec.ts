@@ -11,7 +11,7 @@ const player = {
   matchesPlayed: 5, isClaimed: false, isOwner: false, role: "MEMBER",
 };
 async function mockAdmin(page: Page, claimed = false, advanced = false, globalAdmin = false) {
-  const state = { players: [{ ...player, isClaimed: claimed, ownerUserId: claimed ? "other-account" : null, accountEmail: claimed ? "alex@example.test" : null }], failRefresh: false, unknownWrite: false, ratingConflict: false, rating: player.elo, writes: [] as Array<{ path: string; body: Record<string, unknown> }>, unrelatedReads: [] as string[] };
+  const state = { players: [{ ...player, isClaimed: claimed, ownerUserId: claimed ? "other-account" : null, accountEmail: claimed ? "alex@example.test" : null }], viewerIsOwner: true, failRefresh: false, unknownWrite: false, ratingConflict: false, rating: player.elo, writes: [] as Array<{ path: string; body: Record<string, unknown> }>, unrelatedReads: [] as string[] };
   await page.route("**/api/**", async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -19,7 +19,7 @@ async function mockAdmin(page: Page, claimed = false, advanced = false, globalAd
     if (path === "/api/auth/session") return json({ user: { id: "admin-account", name: "Admin", email: "admin@example.test", isAdmin: globalAdmin }, expires: "2099-01-01T00:00:00.000Z" });
     if (path === `/api/clubs/${clubId}`) {
       if (state.failRefresh) return json({ error: "Snapshot unavailable" }, 503);
-      return json({ viewer: { id: "admin-account", playerId: null, name: "Admin", isAdmin: globalAdmin, email: "admin@example.test", elo: 1000, gender: "MALE", partnerPreference: "OPEN" }, club: { id: clubId, name: "Recovery Club", role: "ADMIN", viewerIsOwner: true, isPasswordProtected: false, isTutorial: false, membersCount: state.players.length, sessionsCount: 0 }, clubMembers: state.players, sessions: [], claimRequests: [] });
+      return json({ viewer: { id: "admin-account", playerId: null, name: "Admin", isAdmin: globalAdmin, email: "admin@example.test", elo: 1000, gender: "MALE", partnerPreference: "OPEN" }, club: { id: clubId, name: "Recovery Club", role: "ADMIN", viewerIsOwner: state.viewerIsOwner, isPasswordProtected: false, isTutorial: false, membersCount: state.players.length, sessionsCount: 0 }, clubMembers: state.players, sessions: [], claimRequests: [] });
     }
     if (path === `/api/clubs/${clubId}/join-requests`) return json({ allowJoinRequests: true, requests: [], candidates: [], warnings: [{ code: "HISTORY_UNAVAILABLE", message: "Some Player history is unavailable." }] });
     if (path === `/api/clubs/${clubId}/members` && request.method() === "GET") return json(state.players);
@@ -115,7 +115,8 @@ test("a lost write response preserves the editor and offers a read-only recovery
 test("promotion confirms the new role and its sheet stays closable after refresh fails", async ({ page }) => {
   const state = await mockAdmin(page, true);
   await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
-  await page.getByRole("dialog", { name: "Edit Alex Local", exact: true }).getByRole("button", { name: "Promote to admin", exact: true }).click();
+  await page.getByRole("dialog", { name: "Edit Alex Local", exact: true }).getByRole("region", { name: "Club role", exact: true }).getByRole("button", { name: "Change", exact: true }).click();
+  await page.getByRole("dialog", { name: "Club role", exact: true }).getByRole("button", { name: /^Admin/ }).click();
   const confirmation = page.getByRole("dialog", { name: "Change Alex Local to admin?", exact: true });
   await confirmation.getByRole("button", { name: "Confirm change", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
@@ -213,6 +214,9 @@ test("account options stay compact and returning preserves the player draft", as
   const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
   const connection = editor.getByRole("region", { name: "Player account connection" });
   await expect(connection).toHaveText("AccountNot connectedInvite player");
+  await expect(editor.getByRole("region", { name: "Club role", exact: true })).toHaveCount(0);
+  await expect(editor.getByRole("combobox", { name: /^Membership/ })).toBeEnabled();
+  await editor.screenshot({ path: "test-results-admin/current-interface/role-placeholder-320.png" });
   await expect(editor.getByText(/Anyone with the link/)).toHaveCount(0);
   await editor.getByLabel("Name", { exact: true }).fill("Alex draft");
   await editor.getByRole("button", { name: "Invite player", exact: true }).click();
@@ -233,6 +237,7 @@ test("connected accounts show the email with recovery behind account options", a
   const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
   const connection = editor.getByRole("region", { name: "Player account connection" });
   await expect(connection).toContainText("alex@example.test");
+  await expect(editor.getByRole("region", { name: "Club role", exact: true })).toHaveText("Club role · MemberChange");
   await expect(editor.getByRole("button", { name: "Emergency password reset", exact: true })).toHaveCount(0);
   for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
@@ -246,4 +251,74 @@ test("connected accounts show the email with recovery behind account options", a
   await page.keyboard.press("Escape");
   await expect(options).not.toBeVisible();
   await expect(connection.getByRole("button", { name: "Account options", exact: true })).toBeFocused();
+});
+
+test("role choices and cancelled confirmation preserve the player draft", async ({ page }) => {
+  const state = await mockAdmin(page, true);
+  await expectCurrentUi(page, "club");
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
+  await editor.getByRole("combobox", { name: /^Membership/ }).selectOption("OCCASIONAL");
+  await editor.getByLabel("Preferred game group", { exact: true }).selectOption("A");
+  const change = editor.getByRole("region", { name: "Club role", exact: true }).getByRole("button", { name: "Change", exact: true });
+  await change.click();
+  const roles = page.getByRole("dialog", { name: "Club role", exact: true });
+  await expect(roles.getByRole("button", { name: /^Member/ })).toBeDisabled();
+  await expect(roles.getByText("Play and view results", { exact: true })).toBeVisible();
+  await expect(roles.getByText("Run sessions", { exact: true })).toBeVisible();
+  await expect(roles.getByText("Manage the club", { exact: true })).toBeVisible();
+  await roles.screenshot({ path: "test-results-admin/current-interface/role-picker-320.png" });
+  await roles.getByRole("button", { name: /^Admin/ }).click();
+  const confirmation = page.getByRole("dialog", { name: "Change Alex Local to admin?", exact: true });
+  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(roles).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(roles).not.toBeVisible();
+  await expect(change).toBeFocused();
+  await expect(editor.getByRole("combobox", { name: /^Membership/ })).toHaveValue("OCCASIONAL");
+  await expect(editor.getByLabel("Preferred game group", { exact: true })).toHaveValue("A");
+  expect(state.writes).toHaveLength(0);
+});
+
+test("staff and member changes save only the chosen role", async ({ page }) => {
+  const state = await mockAdmin(page, true);
+  await expectCurrentUi(page, "club");
+  await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
+  await editor.getByRole("combobox", { name: /^Membership/ }).selectOption("OCCASIONAL");
+  for (const role of ["Staff", "Member"]) {
+    await editor.getByRole("region", { name: "Club role", exact: true }).getByRole("button", { name: "Change", exact: true }).click();
+    await page.getByRole("dialog", { name: "Club role", exact: true }).getByRole("button", { name: new RegExp(`^${role}`) }).click();
+    await expect(page.getByRole("dialog", { name: "Club role", exact: true })).not.toBeVisible();
+    await expect(editor.getByRole("region", { name: "Club role", exact: true })).toContainText(`Club role · ${role}`);
+    if (role === "Staff") {
+      await expect(editor.getByRole("button", { name: "Refresh details", exact: true })).toBeVisible();
+      await expect(editor.getByRole("region", { name: "Club role", exact: true }).getByRole("button", { name: "Change", exact: true })).toBeDisabled();
+      state.failRefresh = false;
+      await editor.getByRole("button", { name: "Refresh details", exact: true }).click();
+    }
+  }
+  await expect(editor.getByRole("combobox", { name: /^Membership/ })).toHaveValue("OCCASIONAL");
+  expect(state.writes.map(write => write.body)).toEqual([{ role: "STAFF" }, { role: "MEMBER" }]);
+});
+
+test("protected connected roles have no change action", async ({ page }) => {
+  const state = await mockAdmin(page, true);
+  for (const target of [
+    { isOwner: true, ownerUserId: "other-account", role: "ADMIN", viewerIsOwner: true },
+    { isOwner: false, ownerUserId: "admin-account", role: "MEMBER", viewerIsOwner: true },
+    { isOwner: false, ownerUserId: "other-account", role: "ADMIN", viewerIsOwner: false },
+  ]) {
+    state.players[0] = { ...state.players[0], isOwner: target.isOwner, ownerUserId: target.ownerUserId, role: target.role };
+    state.viewerIsOwner = target.viewerIsOwner;
+    await page.reload();
+    await expectCurrentUi(page, "club");
+    await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
+    const role = editor.getByRole("region", { name: "Club role", exact: true });
+    await expect(role).toBeVisible();
+    await expect(role.getByRole("button", { name: "Change", exact: true })).toHaveCount(0);
+  }
+  expect(state.writes).toHaveLength(0);
 });

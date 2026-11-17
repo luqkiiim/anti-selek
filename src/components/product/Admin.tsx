@@ -32,6 +32,13 @@ import { PlayerInvitationPanel } from "@/components/club-admin/PlayerInvitationP
 import { RemovedPlayerAccounts } from "@/components/club-admin/RemovedPlayerAccounts";
 import "./manage-club.css";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
+
+const clubRoleOptions = [
+  { role: "MEMBER", description: "Play and view results" },
+  { role: "STAFF", description: "Run sessions" },
+  { role: "ADMIN", description: "Manage the club" },
+] as const;
+
 export default function Admin({
   snapshot,
   refresh,
@@ -82,6 +89,7 @@ export default function Admin({
     [playerLevel, setPlayerLevel] = useState(""),
     [preferredGroup, setPreferredGroup] = useState("B");
   const [pendingRole, setPendingRole] = useState<ClubPageMember["role"] | null>(null);
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
   const [roleNotice, setRoleNotice] = useState("");
   const [saveNotice, setSaveNotice] = useState("");
   const [saveWarning, setSaveWarning] = useState("");
@@ -142,6 +150,7 @@ export default function Admin({
     roleAction.setError("");
     setRoleNotice("");
     setPendingRole(null);
+    setRolePickerOpen(false);
   }
   function changeRole(player: ClubPageMember, role: ClubPageMember["role"]) {
     void roleAction.run(signal => adminApi<ClubPageMember>(endpoint + "/members/" + player.id, "PATCH", { role }, { signal }), updated => {
@@ -149,16 +158,16 @@ export default function Admin({
       setEdit(current => current?.id === player.id ? { ...current, ...updated, wins: current.wins, losses: current.losses, matchesPlayed: current.matchesPlayed } : current);
       setRoleNotice(`${player.name} is now ${getClubRoleLabel(role).toLowerCase()}.`);
       setPendingRole(null);
+      setRolePickerOpen(false);
       setSheet("player");
     });
   }
   function requestRole(role: ClubPageMember["role"]) {
-    if (!currentPlayer || !canChangeRole || busy) return;
+    if (!currentPlayer || !canChangeRole || busy || role === currentPlayer.role) return;
     roleAction.setError("");
     setRoleNotice("");
     if (role === "ADMIN" || currentPlayer.role === "ADMIN") {
       setPendingRole(role);
-      setSheet("role");
     } else changeRole(currentPlayer, role);
   }
   async function save(signal: AbortSignal) {
@@ -310,8 +319,6 @@ export default function Admin({
                 : "Add player"
               : sheet === "remove"
                 ? "Remove player?"
-                : sheet === "role"
-                  ? `Change ${edit?.name} to ${getClubRoleLabel(pendingRole).toLowerCase()}?`
                 : sheet === "invite"
                   ? "Invite to your club"
                   : "Manage club"
@@ -334,14 +341,9 @@ export default function Admin({
                 <h3>Rating · {currentPlayer?.elo ?? edit.elo}</h3>
                 <AdjustClubRating clubId={club.id} userId={edit.id} name={edit.name} onChanged={updated => { setRating(String(updated)); setEdit(current => current ? { ...current, elo: updated } : null); onMemberSaved?.({ ...edit, elo: updated }); void refresh().catch(() => {}); }} />
               </section>}
-              {currentPlayer && <section className="manage-player-role" aria-label="Club role">
+              {currentPlayer?.isClaimed && <section className="manage-player-role" aria-label="Club role">
                 <h3>Club role · {currentPlayer.isOwner ? "Owner" : getClubRoleLabel(currentPlayer.role)}</h3>
-                <p className="muted">Staff can host and run sessions. Admins can also manage club settings, players, and requests.</p>
-                {canChangeRole ? <div className="manage-player-role-actions">
-                  {currentPlayer.role !== "STAFF" && <button type="button" className="secondary" onClick={() => requestRole("STAFF")}>{currentPlayer.role === "ADMIN" ? "Change to staff" : "Make staff"}</button>}
-                  {currentPlayer.role !== "ADMIN" && <button type="button" className="secondary" onClick={() => requestRole("ADMIN")}>Promote to admin</button>}
-                  {currentPlayer.role !== "MEMBER" && <button type="button" className="secondary" onClick={() => requestRole("MEMBER")}>Change to member</button>}
-                </div> : <p className="muted">{currentPlayer.isOwner ? "The club owner keeps admin access." : isCurrentPlayer ? "You cannot change your own club role." : !currentPlayer.isClaimed ? "Connect a registered account before granting staff or admin access." : "Only the club owner can change another admin’s role."}</p>}
+                {canChangeRole && <button type="button" className="secondary" aria-haspopup="dialog" disabled={busy} onClick={() => { setPendingRole(null); setRoleNotice(""); roleAction.setError(""); setRolePickerOpen(true); }}>Change</button>}
               </section>}
               <label className="field-label">
                 Name
@@ -397,12 +399,6 @@ export default function Admin({
                 </button>
               )}
             </>
-          ) : sheet === "role" && currentPlayer && pendingRole ? (
-            <>
-              <p>{pendingRole === "ADMIN" ? `${currentPlayer.name} will be able to manage club settings, players, requests, and sessions.` : pendingRole === "STAFF" ? `${currentPlayer.name} will keep access to host and run sessions, but lose admin controls.` : `${currentPlayer.name} will lose staff and admin controls and stay a club member.`}</p>
-              <button type="button" className="primary" disabled={!canChangeRole} onClick={() => { if (canChangeRole) changeRole(currentPlayer, pendingRole); }}>Confirm change</button>
-              <button type="button" className="text-button" onClick={() => { setPendingRole(null); setSheet("player"); roleAction.setError(""); }}>Cancel</button>
-            </>
           ) : sheet === "remove" ? (
             <>
               <p>
@@ -449,6 +445,27 @@ export default function Admin({
           )}
           </fieldset>
         </Sheet>
+      <Sheet open={rolePickerOpen && sheet === "player" && canChangeRole}
+        title={pendingRole ? `Change ${currentPlayer?.name} to ${getClubRoleLabel(pendingRole).toLowerCase()}?` : "Club role"}
+        busy={mutationBusy}
+        onClose={() => { setRolePickerOpen(false); setPendingRole(null); }}>
+        <ErrorText error={roleAction.error} />
+        <AdminRefreshStatus action={roleAction} />
+        <fieldset disabled={busy} className="club-permission-fields">
+          {currentPlayer && (pendingRole ? <>
+            <p>{pendingRole === "ADMIN" ? `${currentPlayer.name} will be able to manage club settings, players, requests, and sessions.` : pendingRole === "STAFF" ? `${currentPlayer.name} will keep access to host and run sessions, but lose admin controls.` : `${currentPlayer.name} will lose staff and admin controls and stay a club member.`}</p>
+            <button type="button" className="primary" disabled={!canChangeRole} onClick={() => { if (canChangeRole) changeRole(currentPlayer, pendingRole); }}>Confirm change</button>
+            <button type="button" className="text-button" onClick={() => { setPendingRole(null); roleAction.setError(""); }}>Cancel</button>
+          </> : <div className="club-role-choices">
+            {clubRoleOptions.map(option => <button key={option.role} type="button" className="club-role-choice"
+              aria-pressed={currentPlayer.role === option.role} disabled={currentPlayer.role === option.role}
+              onClick={() => requestRole(option.role)}>
+              <span><strong>{getClubRoleLabel(option.role)}</strong><small>{option.description}</small></span>
+              {currentPlayer.role === option.role && <Check size={20} aria-hidden="true" />}
+            </button>)}
+          </div>)}
+        </fieldset>
+      </Sheet>
     </div>
   );
 }
