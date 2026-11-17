@@ -2,7 +2,7 @@ import { prisma } from "./prisma";
 import { getClubRoster } from "./clubRoster";
 import { getClubStatUserResolver } from "./offlineIdentities";
 
-/** Admin controls need roster identities and match counts, not dashboard history. */
+/** Only call after the route authorizes the admin section; includes account emails. */
 export async function getClubAdminRoster(clubId: string) {
   const [roster, matches] = await Promise.all([
     getClubRoster(prisma, clubId),
@@ -11,7 +11,12 @@ export async function getClubAdminRoster(clubId: string) {
       select: { team1Player1Id: true, team1Player2Id: true, team2Player1Id: true, team2Player2Id: true, winnerTeam: true },
     }),
   ]);
-  const resolve = await getClubStatUserResolver(prisma, { clubId, memberUserIds: roster.map(p => p.id) });
+  const ownerIds = [...new Set(roster.flatMap(p => p.ownerUserId ? [p.ownerUserId] : []))];
+  const [resolve, accounts] = await Promise.all([
+    getClubStatUserResolver(prisma, { clubId, memberUserIds: roster.map(p => p.id) }),
+    ownerIds.length ? prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, email: true } }) : [],
+  ]);
+  const emails = new Map(accounts.map(account => [account.id, account.email]));
   const stats = new Map(roster.map(p => [p.id, { wins: 0, losses: 0, matchesPlayed: 0 }]));
   for (const match of matches) {
     const teams = [[match.team1Player1Id, match.team1Player2Id].map(resolve), [match.team2Player1Id, match.team2Player2Id].map(resolve)];
@@ -25,5 +30,5 @@ export async function getClubAdminRoster(clubId: string) {
       if (stat) { if (index + 1 === match.winnerTeam) stat.wins++; else stat.losses++; }
     }));
   }
-  return roster.map(p => ({ ...p, ...stats.get(p.id)! }));
+  return roster.map(p => ({ ...p, accountEmail: p.ownerUserId ? emails.get(p.ownerUserId) ?? null : null, ...stats.get(p.id)! }));
 }

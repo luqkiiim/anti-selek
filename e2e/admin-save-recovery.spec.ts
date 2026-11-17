@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectCurrentUi } from "./current-ui";
 
 // Every application API is mocked. Run with npm run test:e2e:admin (no database setup).
 const clubId = "admin-recovery-club";
@@ -10,7 +11,7 @@ const player = {
   matchesPlayed: 5, isClaimed: false, isOwner: false, role: "MEMBER",
 };
 async function mockAdmin(page: Page, claimed = false, advanced = false, globalAdmin = false) {
-  const state = { players: [{ ...player, isClaimed: claimed, ownerUserId: claimed ? "other-account" : null }], failRefresh: false, unknownWrite: false, ratingConflict: false, rating: player.elo, writes: [] as Array<{ path: string; body: Record<string, unknown> }>, unrelatedReads: [] as string[] };
+  const state = { players: [{ ...player, isClaimed: claimed, ownerUserId: claimed ? "other-account" : null, accountEmail: claimed ? "alex@example.test" : null }], failRefresh: false, unknownWrite: false, ratingConflict: false, rating: player.elo, writes: [] as Array<{ path: string; body: Record<string, unknown> }>, unrelatedReads: [] as string[] };
   await page.route("**/api/**", async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -192,6 +193,7 @@ test("global admin recovery stays in the current player editor", async ({ page }
   const state = await mockAdmin(page, true, false, true);
   await page.setViewportSize({ width: 390, height: 900 });
   await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
+  await page.getByRole("button", { name: "Account options", exact: true }).click();
   await page.getByRole("button", { name: "Emergency password reset", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Emergency password reset", exact: true });
   await sheet.getByLabel("New password", { exact: true }).fill("FixtureOnly123!");
@@ -201,4 +203,47 @@ test("global admin recovery stays in the current player editor", async ({ page }
   await expect(sheet).not.toBeVisible();
   await expect(page.getByText("Emergency password set.", { exact: true })).toBeVisible();
   expect(state.writes).toHaveLength(1);
+});
+
+test("account options stay compact and returning preserves the player draft", async ({ page }) => {
+  const state = await mockAdmin(page, false);
+  await expectCurrentUi(page, "club");
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
+  const connection = editor.getByRole("region", { name: "Player account connection" });
+  await expect(connection).toHaveText("AccountNot connectedInvite player");
+  await expect(editor.getByText(/Anyone with the link/)).toHaveCount(0);
+  await editor.getByLabel("Name", { exact: true }).fill("Alex draft");
+  await editor.getByRole("button", { name: "Invite player", exact: true }).click();
+  const invitation = page.getByRole("dialog", { name: "Invite Alex Local", exact: true });
+  await expect(invitation.getByRole("button", { name: "Create invitation", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(invitation).not.toBeVisible();
+  await expect(editor.getByLabel("Name", { exact: true })).toHaveValue("Alex draft");
+  await expect(editor.getByRole("button", { name: "Invite player", exact: true })).toBeFocused();
+  expect(state.writes).toHaveLength(0);
+  await editor.screenshot({ path: "test-results-admin/current-interface/account-unconnected-320.png" });
+});
+
+test("connected accounts show the email with recovery behind account options", async ({ page }) => {
+  await mockAdmin(page, true, false, true);
+  await expectCurrentUi(page, "club");
+  await page.getByRole("button", { name: "Edit Alex Local", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit Alex Local", exact: true });
+  const connection = editor.getByRole("region", { name: "Player account connection" });
+  await expect(connection).toContainText("alex@example.test");
+  await expect(editor.getByRole("button", { name: "Emergency password reset", exact: true })).toHaveCount(0);
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(connection).toBeVisible();
+    expect(await connection.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await editor.screenshot({ path: `test-results-admin/current-interface/account-connected-${width}.png` });
+  }
+  await connection.getByRole("button", { name: "Account options", exact: true }).click();
+  const options = page.getByRole("dialog", { name: "Account connection", exact: true });
+  await expect(options.getByRole("button", { name: "Emergency password reset", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(options).not.toBeVisible();
+  await expect(connection.getByRole("button", { name: "Account options", exact: true })).toBeFocused();
 });

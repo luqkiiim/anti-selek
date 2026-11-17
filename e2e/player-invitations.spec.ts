@@ -6,6 +6,7 @@ import { admissionTransaction } from "../src/lib/clubAdmissions";
 import { managePlayerInvitation, INVITATION_TTL_MS } from "../src/lib/playerInvitations";
 import bcrypt from "bcryptjs";
 import { createHash } from "node:crypto";
+import { expectCurrentUi } from "./current-ui";
 
 const adminId = "account-user-admin-e2e";
 async function fixture(key: string, expired = false) {
@@ -173,29 +174,56 @@ test("admin can replace, copy, show QR and revoke; later visits cannot reconstru
   captureInvitationAuditApiFailures(page, "/members/");
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await signInAsAdmin(page);
-  await page.getByRole("button", { name: /Invitation Club admin/ }).click();
-  await page.getByRole("button", { name: "Manage club" }).click();
-  await page.getByRole("button", { name: `View ${invited.name} profile` }).click();
-  const profile = page.getByRole("dialog", { name: `${invited.name} profile in Invitation Club admin` });
-  await expect(profile.getByRole("region", { name: "Player account connection" })).toContainText("Active invitation");
-  await expect(profile.getByRole("button", { name: "Copy link", exact: true })).toHaveCount(0);
-  await profile.getByRole("button", { name: "Back to previous page" }).click();
+  await page.goto(`/club/${invited.clubId}/admin?tab=players`);
+  await expectCurrentUi(page, "club");
+  await page.setViewportSize({ width: 390, height: 900 });
   await page.getByRole("button", { name: `Edit ${invited.name}` }).click();
-  await expect(page.getByText("Active invitation", { exact: false })).toBeVisible();
+  const editor = page.getByRole("dialog", { name: `Edit ${invited.name}`, exact: true });
+  await expect(editor.getByText("Expires", { exact: false })).toHaveCount(0);
+  await editor.getByRole("button", { name: "Invite player", exact: true }).click();
+  const details = page.getByRole("dialog", { name: `Invite ${invited.name}`, exact: true });
+  await expect(details.getByText("Expires", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy link", exact: true })).toHaveCount(0);
   page.once("dialog", dialog => dialog.accept());
-  await page.getByRole("button", { name: "Revoke and create replacement" }).click();
+  await details.getByRole("button", { name: "Replace invitation", exact: true }).click();
   await page.getByRole("button", { name: "Copy link", exact: true }).click();
   await expect(page.getByRole("button", { name: "Link copied" })).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(new URL(copied).pathname).toMatch(/^\/player-invites\//);
   expect(new URL(copied).hash.length).toBe(44);
+  await expect(details.getByRole("textbox", { name: "Invitation link", exact: true })).toHaveValue(copied);
   await page.getByRole("button", { name: "Show QR" }).click();
   await expect(page.getByRole("img", { name: `Invitation QR for ${invited.name}` })).toBeVisible();
+  await details.screenshot({ path: "test-results/current-interface/player-invitation-390.png" });
+  await details.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(details).not.toBeVisible();
+  await editor.getByRole("button", { name: "Invite player", exact: true }).click();
+  await expect(details.getByRole("textbox", { name: "Invitation link", exact: true })).toHaveValue(copied);
   await page.getByRole("button", { name: "Revoke invite" }).click();
-  await expect(page.getByRole("button", { name: "Invite player", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Invite player", exact: true }).click();
+  await details.getByRole("button", { name: "Create invitation", exact: true }).click();
   await expect(page.getByRole("button", { name: "Copy link", exact: true })).toBeVisible();
+  await details.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(details).not.toBeVisible();
+  await editor.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(editor).not.toBeVisible();
+  await page.getByRole("button", { name: `Edit ${invited.name}`, exact: true }).click();
+  await editor.getByRole("button", { name: "Invite player", exact: true }).click();
+  await expect(details.getByRole("button", { name: "Replace invitation", exact: true })).toBeVisible();
+  await expect(details.getByRole("textbox", { name: "Invitation link", exact: true })).toHaveCount(0);
+});
+
+test("an expired invitation can be renewed from the invitation sheet", async ({ page }) => {
+  const invited = await fixture("admin-expired", true);
+  await signInAsAdmin(page);
+  await page.goto(`/club/${invited.clubId}/admin?tab=players`);
+  await expectCurrentUi(page, "club");
+  await page.getByRole("button", { name: `Edit ${invited.name}`, exact: true }).click();
+  await page.getByRole("button", { name: "Invite player", exact: true }).click();
+  const details = page.getByRole("dialog", { name: `Invite ${invited.name}`, exact: true });
+  await expect(details.getByText("Invitation expired", { exact: true })).toBeVisible();
+  await details.getByRole("button", { name: "Create new invitation", exact: true }).click();
+  await expect(details.getByRole("button", { name: "Copy link", exact: true })).toBeVisible();
+  await expect(details.getByText("Invitation expired", { exact: true })).toHaveCount(0);
 });
 
 test("normal admission, removal, and admin-approved placeholder recovery preserve history and retire the duplicate", async ({ page, browser }) => {

@@ -48,6 +48,8 @@ export interface ClubPageMember {
   ownerUserId?: string | null;
   name: string;
   email?: string | null;
+  /** Connected account email, supplied only by the authorized admin snapshot. */
+  accountEmail?: string | null;
   avatarUrl?: string | null;
   status: ClubPlayerStatus;
   preferredPool: SessionPool;

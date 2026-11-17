@@ -326,9 +326,10 @@ export default function Admin({
           <fieldset disabled={disabled || action.uncertain || roleAction.uncertain} className="club-permission-fields">
           {sheet === "player" ? (
             <>
-              {edit?.isClaimed && viewer.isAdmin && <EmergencyPasswordReset key={edit.id} clubId={club.id} playerId={edit.id} name={edit.name} disabled={busy} />}
               {edit && <MemberPhotoEditor key={edit.id} member={edit} clubId={club.id} refresh={refresh} onBusyChange={setPhotoBusy} onSaved={avatarUrl => { const updated = { ...edit, avatarUrl }; setEdit(updated); onMemberSaved?.(updated); }} />}
-              {edit && <PlayerInvitationPanel key={`invite:${edit.id}`} clubId={club.id} playerId={edit.id} playerName={edit.name} rating={edit.elo} matchesPlayed={edit.matchesPlayed} connected={edit.isClaimed} />}
+              {edit && <PlayerInvitationPanel key={`invite:${edit.id}`} clubId={club.id} playerId={edit.id} playerName={edit.name} connected={edit.isClaimed} accountEmail={currentPlayer?.accountEmail ?? edit.accountEmail} disabled={busy}>
+                {edit.isClaimed && viewer.isAdmin && <EmergencyPasswordReset clubId={club.id} playerId={edit.id} name={edit.name} disabled={busy} />}
+              </PlayerInvitationPanel>}
               {edit && <section className="manage-player-rating" aria-label="Club rating">
                 <h3>Rating · {currentPlayer?.elo ?? edit.elo}</h3>
                 <AdjustClubRating clubId={club.id} userId={edit.id} name={edit.name} onChanged={updated => { setRating(String(updated)); setEdit(current => current ? { ...current, elo: updated } : null); onMemberSaved?.({ ...edit, elo: updated }); void refresh().catch(() => {}); }} />

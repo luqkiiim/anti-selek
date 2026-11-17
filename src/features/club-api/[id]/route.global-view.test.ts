@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(), account: vi.fn(), club: vi.fn(), access: vi.fn(), membership: vi.fn(), rosterMembers: vi.fn(), rosterAccess: vi.fn(), sessions: vi.fn(), notificationCount: vi.fn(),
-  write: vi.fn(), matches: vi.fn(async () => []),
+  write: vi.fn(), matches: vi.fn(async () => []), accounts: vi.fn(async () => [{ id: "linked-account", email: "linked@example.test" }]),
 }));
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/prisma", () => ({ prisma: {
-  user: { findUnique: mocks.account, create: mocks.write },
+  user: { findUnique: mocks.account, findMany: mocks.accounts, create: mocks.write },
   club: { findUnique: mocks.club, update: mocks.write, delete: mocks.write },
   clubAccess: { findUnique: mocks.access, findMany: mocks.rosterAccess, create: mocks.write },
   clubMember: { findFirst: mocks.membership, findMany: mocks.rosterMembers, create: mocks.write },
@@ -56,11 +56,33 @@ describe("explicit global club viewing", () => {
     mocks.access.mockResolvedValue({ role, status: "ACTIVE" });
     expect((await read("?section=admin")).status).toBe(403);
     expect(mocks.rosterMembers).not.toHaveBeenCalled();
+    expect(mocks.accounts).not.toHaveBeenCalled();
   });
   it("does not turn explicit global viewing into admin access", async () => {
     mocks.access.mockResolvedValue({ role: "OWNER", status: "ACTIVE" });
     expect((await read("?section=admin&view=global")).status).toBe(403);
     expect(mocks.rosterMembers).not.toHaveBeenCalled();
+    expect(mocks.accounts).not.toHaveBeenCalled();
+  });
+  it("includes linked emails only in the authorized admin snapshot", async () => {
+    mocks.rosterMembers.mockResolvedValue([{
+      id: "member", playerId: "linked-player", ownerUserId: "linked-account", retiredByAdmissionEventId: null,
+      elo: 1000, status: "CORE", preferredPool: "B", mixedSideOverride: null,
+      player: { id: "linked-player", name: "Linked Player", gender: "FEMALE", avatarKey: null, isActive: true, createdAt: new Date("2026-01-01") },
+    }]);
+    mocks.access.mockResolvedValue({ role: "ADMIN", status: "ACTIVE" });
+    const admin = await (await read("?section=admin")).json();
+    expect(admin.clubMembers[0].accountEmail).toBe("linked@example.test");
+    mocks.accounts.mockClear();
+    mocks.access.mockResolvedValue({ role: "MEMBER", status: "ACTIVE" });
+    for (const query of ["", "?view=global"]) {
+      const response = await read(query);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.clubMembers[0]).not.toHaveProperty("accountEmail");
+      expect(body.clubMembers[0].email).toBeNull();
+    }
+    expect(mocks.accounts).not.toHaveBeenCalled();
   });
   it("reads protected and closed clubs without creating sporting identities or membership", async () => {
     const response = await read();
