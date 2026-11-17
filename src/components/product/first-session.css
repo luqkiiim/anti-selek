@@ -15,9 +15,10 @@
 .session-finish-toolbar button { min-height: 40px; }
 .product-root .session-finish-toolbar { position: absolute; top: calc(72px + env(safe-area-inset-top, 0px)); left: 0; right: 0; height: 56px; }
 .product-root .has-finish-action > .page-pager { top: calc(128px + env(safe-area-inset-top, 0px)); }
-.roster-pause-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: 0 0 auto; max-width: 116px; min-height: 44px; border: 1px solid #e6daf5; border-radius: 12px; background: transparent; color: inherit; font: inherit; font-size: 12px; font-weight: 700; padding: 8px; }
+.roster-pause-action { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 44px; border: 1px solid #e6daf5; border-radius: 12px; background: transparent; color: inherit; padding: 0; }
 .roster-pause-action svg { flex-shrink: 0; }
-.roster-pause-action span { white-space: normal; line-height: 1.3; }
+.session-roster .person { min-height: 64px; padding-block: 10px; }
+.session-roster .person-info strong, .session-roster .person-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-action-notice { font-size: 13px; }
 .finish-game-list { padding-left: 20px; line-height: 1.7; }
 .guest-save-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; }
@@ -27,11 +28,7 @@
 
 .pm-roster-picker:not([hidden]) { display: grid; gap: 14px; }
 @media (max-width: 440px) {
-  .roster .person:has(.roster-pause-action) { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 8px 12px; }
-  .roster .person:has(.roster-pause-action) > .avatar { grid-column: 1; grid-row: 1; }
-  .roster .person:has(.roster-pause-action) > .person-info { grid-column: 2 / -1; grid-row: 1; }
-  .roster .person > .roster-pause-action { grid-column: 2; grid-row: 2; max-width: none; justify-self: start; }
-  .roster .person:has(.roster-pause-action) > .icon-button { grid-column: 3; grid-row: 2; }
+  .session-roster .person { gap: 8px; }
 }
 
 .pairing-options summary { display: flex; justify-content: space-between; gap: 12px; }

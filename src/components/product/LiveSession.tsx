@@ -1406,29 +1406,31 @@ export default function LiveSession({
               </div>
               {pauseNotice && <p role="status" className="session-action-notice">{pauseNotice}</p>}
               {canManageRoster && <button className="primary full" onClick={() => setManagePlayersOpen(true)}><Plus size={18} />Add players</button>}
-              <div className="roster">
+              <div className="roster session-roster">
                 {activePlayers.map((p) => {
                   const isPaused = isRosterPlayerPaused(p);
+                  const pauseLabel = isPaused ? "Resume" : ownsSessionSeat(p) ? playingCourtFor(p.userId) ? "Take a break after game" : "Take a break" : playingCourtFor(p.userId) ? "Pause after game" : "Pause";
                   return (
                     <div className="person" key={p.userId}>
                       <Avatar name={p.user.name} url={p.user.avatarUrl} />
                       <span className="person-info">
-                        <strong>{p.user.name}</strong>
-                        <small>{playerStatus(p)} · {p.user.elo}</small>
+                        <strong title={p.user.name}>{p.user.name}</strong>
+                        <small title={playerStatus(p)}>{playerStatus(p)} · {p.user.elo}</small>
                       </span>
-                      {canManageRoster && mayManagePlayer(p) ? (
-                        <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => { setManagedPlayerId(p.userId); setManagePlayersOpen(true); }}><DotsThree size={20} /></button>
-                      ) : ownsSessionSeat(p) ? <button className="icon-button" aria-label={`Rest options for ${p.user.name}`} onClick={() => { setRestPlayerId(p.userId); setSheet("self-rest"); }}><DotsThree size={20} /></button> : null}
                       {((canManageRoster && mayManagePlayer(p)) || ownsSessionSeat(p)) && (
                         <button
                           className="roster-pause-action"
-                          aria-label={`${isPaused ? "Resume" : ownsSessionSeat(p) ? playingCourtFor(p.userId) ? "Take a break after game" : "Take a break" : playingCourtFor(p.userId) ? "Pause after game" : "Pause"} ${p.user.name}`}
+                          aria-label={`${pauseLabel} ${p.user.name}`}
+                          title={pauseLabel}
                           disabled={pauseOverlays[p.userId]?.pending === true}
                           onClick={() => void toggleRosterPlayerPause(p.userId, isPaused)}
                         >
-                          {isPaused ? <Play size={16} /> : <Pause size={16} />}<span>{isPaused ? "Resume" : ownsSessionSeat(p) ? playingCourtFor(p.userId) ? "Take a break after game" : "Take a break" : playingCourtFor(p.userId) ? "Pause after game" : "Pause"}</span>
+                          {isPaused ? <Play size={16} /> : <Pause size={16} />}
                         </button>
                       )}
+                      {canManageRoster && mayManagePlayer(p) ? (
+                        <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => { setManagedPlayerId(p.userId); setManagePlayersOpen(true); }}><DotsThree size={20} /></button>
+                      ) : ownsSessionSeat(p) ? <button className="icon-button" aria-label={`Rest options for ${p.user.name}`} onClick={() => { setRestPlayerId(p.userId); setSheet("self-rest"); }}><DotsThree size={20} /></button> : null}
                     </div>
                   );
                 })}
@@ -1439,26 +1441,27 @@ export default function LiveSession({
                     <h3>On break</h3>
                     <small>{pausedPlayers.length} player{pausedPlayers.length === 1 ? "" : "s"}</small>
                   </div>
-                  <div className="roster">
+                  <div className="roster session-roster">
                     {pausedPlayers.map((p) => (
                       <div className="person" key={p.userId}>
                         <Avatar name={p.user.name} url={p.user.avatarUrl} />
                         <span className="person-info">
-                          <strong>{p.user.name}</strong>
-                          <small>{playerStatus(p)}</small>
+                          <strong title={p.user.name}>{p.user.name}</strong>
+                          <small title={playerStatus(p)}>{playerStatus(p)}</small>
                         </span>
-                        {canManageRoster && mayManagePlayer(p) && (
-                          <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => { setManagedPlayerId(p.userId); setManagePlayersOpen(true); }}><DotsThree size={20} /></button>
-                        )}
                         {((canManageRoster && mayManagePlayer(p)) || ownsSessionSeat(p)) && (
                           <button
                             className="roster-pause-action"
                             aria-label={`Resume ${p.user.name}`}
+                            title="Resume"
                             disabled={pauseOverlays[p.userId]?.pending === true}
                             onClick={() => void toggleRosterPlayerPause(p.userId, true)}
                           >
-                            <Play size={16} /><span>Resume</span>
+                            <Play size={16} />
                           </button>
+                        )}
+                        {canManageRoster && mayManagePlayer(p) && (
+                          <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => { setManagedPlayerId(p.userId); setManagePlayersOpen(true); }}><DotsThree size={20} /></button>
                         )}
                       </div>
                     ))}
