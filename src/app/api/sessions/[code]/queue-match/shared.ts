@@ -5,17 +5,20 @@ import { prisma } from "@/lib/prisma";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
+import { isBalancedMatchTypeSourceCurrent } from "@/lib/matchmaking/balancedMatchTypePersistence";
+import { getBalancedQueueDeferralReason } from "@/lib/matchmaking/balancedMatchTypeQueue";
+import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
 import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
-import { getEffectiveSessionType } from "@/lib/sessionSettings";
+import { getEffectiveSessionType, getEffectiveSessionMode } from "@/lib/sessionSettings";
 import {
   checkMatchmakingSearchBudget,
   MatchmakingSearchBudgetExceededError,
   type MatchmakingSearchBudget,
 } from "@/lib/matchmaking/v3/searchBudget";
-import type { CourtGroupType } from "@/types/enums";
+import { SessionMode, SessionType, type CourtGroupType } from "@/types/enums";
 import {
   buildMatchmakingState,
   ensureEnoughPlayers,
@@ -258,11 +261,15 @@ async function createQueuedMatchRecord({
         poolASeatCount,
         poolBSeatCount,
       });
+      if (!await isBalancedMatchTypeSourceCurrent(tx,sessionId,[{partition,matchmakingReasonJson}])) {
+        throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
+      }
       const reasonJson = await resolveSocialHistoryReasonJson(
         tx,
         sessionId,
         partition,
-        matchmakingReasonJson
+        matchmakingReasonJson,
+        { newCommitment: true },
       );
       const queuedMatch = await tx.queuedMatch.create({
         data: {
@@ -334,6 +341,7 @@ export async function selectAutomaticMatchForSession(
       selection.partition.team2[0],
       selection.partition.team2[1],
     ],
+    availablePlayerIds: rankedCandidates.map(player => player.userId),
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
     courtGroupType:
@@ -392,11 +400,15 @@ async function updateQueuedMatchRecord({
       poolASeatCount,
       poolBSeatCount,
     });
+    if (!await isBalancedMatchTypeSourceCurrent(tx,sessionId,[{partition,matchmakingReasonJson}],true)) {
+      throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
+    }
     const reasonJson = await resolveSocialHistoryReasonJson(
       tx,
       sessionId,
       partition,
-      matchmakingReasonJson
+      matchmakingReasonJson,
+      { newCommitment: true },
     );
     const queuedMatch = await tx.queuedMatch.update({
       where: { id: queuedMatchId },
@@ -465,6 +477,15 @@ export async function createQueuedMatchForSession(
 
   const selection = await selectAutomaticMatchForSession(sessionData, searchBudget);
   checkMatchmakingSearchBudget(searchBudget);
+  if (requireAutomaticEligibility && process.env.BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED === "1" &&
+    [SessionType.POINTS,SessionType.ELO].includes(getEffectiveSessionType(sessionData) as SessionType.POINTS|SessionType.ELO) &&
+    getEffectiveSessionMode(sessionData) === SessionMode.MIXICANO &&
+    getBalancedQueueDeferralReason({players:sessionData.players, availablePlayerIds:new Set(selection.availablePlayerIds),
+      partition:selection.partition, reasonJson:selection.matchmakingReasonJson, history:buildSocialSessionHistory(sessionData)})) {
+    // Courts still select normally when they open. Existing reservations and
+    // explicit queue requests are retained; only this optional new hold waits.
+    throw new GenerateMatchError(400,"Queue deferred while waiting for more pairing options.");
+  }
   const queuedMatch = await createQueuedMatchRecord({
     sessionId: sessionData.id,
     actor: sessionData.mutationActor,

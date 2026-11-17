@@ -512,6 +512,525 @@ afterAll(async () => {
 });
 
 describe("Balanced default through production POST routes", () => {
+  it.each([true, false])(
+    "persists adaptive match and queue targets with rest=%s",
+    async (respectPlayerRest) => {
+      vi.stubEnv("BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED", "1");
+      const fixture = await createFixture({
+        prefix: `adaptive-${randomUUID().slice(0, 8)}`,
+        type: SessionType.ELO,
+        playerCount: 14,
+        courtCount: 1,
+        respectPlayerRest,
+      });
+      await prisma.session.update({
+        where: { id: fixture.sessionId },
+        data: { mode: SessionMode.MIXICANO, pairingMode: "MIXED" },
+      });
+      const response = await postGenerateMatch(fixture.code, {
+        courtId: fixture.courtIds[0],
+      });
+      const payload = (await response.json()) as {
+        id: string;
+        queuedMatch: { id: string } | null;
+      };
+      expect(response.status, JSON.stringify(payload)).toBe(200);
+      const stored = await prisma.match.findUniqueOrThrow({
+        where: { id: payload.id },
+      });
+      const queue = await prisma.queuedMatch.findUniqueOrThrow({
+        where: { sessionId: fixture.sessionId },
+      });
+      for (const row of [stored, queue]) {
+        const reason = JSON.parse(row.matchmakingReasonJson!);
+        expect(reason.balancedMatchType).toMatchObject({
+          version: 1,
+          group: "session",
+          target: {
+            UPPER: expect.closeTo(1 / 3),
+            MIXED: expect.closeTo(1 / 3),
+            LOWER: expect.closeTo(1 / 3),
+          },
+          basis: {
+            roster: expect.any(String),
+            commitments: expect.any(String),
+          },
+        });
+        expect(reason.balancedPolicyDecision.outcome).toBe("candidate-exact");
+        expect(
+          reason.balancedPolicyDecision.matchTypeDistribution.certified,
+        ).toBe(true);
+      }
+      expect(
+        JSON.parse(stored.matchmakingReasonJson!).balancedMatchType.basis
+          .commitments,
+      ).not.toBe(
+        JSON.parse(queue.matchmakingReasonJson!).balancedMatchType.basis
+          .commitments,
+      );
+    },
+  );
+
+  it("persists both courts from one adaptive source snapshot", async () => {
+    vi.stubEnv("BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED", "1");
+    const fixture = await createFixture({
+      prefix: `adaptive-batch-${randomUUID().slice(0, 8)}`,
+      type: SessionType.ELO,
+      playerCount: 14,
+      courtCount: 2,
+    });
+    await prisma.session.update({
+      where: { id: fixture.sessionId },
+      data: {
+        mode: SessionMode.MIXICANO,
+        pairingMode: "MIXED",
+        autoQueueEnabled: false,
+      },
+    });
+    const response = await postGenerateMatch(fixture.code, {
+      courtIds: fixture.courtIds,
+    });
+    const payload = (await response.json()) as {
+      matches: Array<{ id: string }>;
+    };
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    const stored = await prisma.match.findMany({
+      where: { sessionId: fixture.sessionId },
+    });
+    expect(stored).toHaveLength(2);
+    const reasons = stored.map((match) =>
+      JSON.parse(match.matchmakingReasonJson!),
+    );
+    expect(reasons[0].balancedMatchType.basis).toEqual(
+      reasons[1].balancedMatchType.basis,
+    );
+    expect(
+      reasons.every(
+        (reason) =>
+          reason.balancedPolicyDecision.matchTypeDistribution.certified,
+      ),
+    ).toBe(true);
+  });
+
+  it("records a manual Mixed commitment in the adaptive ledger", async () => {
+    vi.stubEnv("BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED", "1");
+    const fixture = await createFixture({
+      prefix: `adaptive-manual-${randomUUID().slice(0, 8)}`,
+      type: SessionType.ELO,
+      playerCount: 14,
+      courtCount: 1,
+    });
+    await prisma.session.update({
+      where: { id: fixture.sessionId },
+      data: {
+        mode: SessionMode.MIXICANO,
+        pairingMode: "MIXED",
+        autoQueueEnabled: false,
+      },
+    });
+    const response = await postGenerateMatch(fixture.code, {
+      courtId: fixture.courtIds[0],
+      manualTeams: {
+        team1: fixture.playerIds.slice(0, 2),
+        team2: fixture.playerIds.slice(2, 4),
+      },
+    });
+    const payload = (await response.json()) as { id: string };
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    const stored = await prisma.match.findUniqueOrThrow({
+      where: { id: payload.id },
+    });
+    const reason = JSON.parse(stored.matchmakingReasonJson!);
+    expect(reason.balancedMatchType.category).toBe("MIXED");
+    expect(reason.balancedPolicyDecision).toBeUndefined();
+  });
+
+  it("persists independent adaptive ledgers through grouped batch selection", async () => {
+    vi.stubEnv("BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED", "1");
+    const fixture = await createFixture({
+      prefix: `adaptive-groups-${randomUUID().slice(0, 8)}`,
+      type: SessionType.ELO,
+      playerCount: 16,
+      courtCount: 2,
+    });
+    await prisma.session.update({
+      where: { id: fixture.sessionId },
+      data: {
+        mode: SessionMode.MIXICANO,
+        pairingMode: "MIXED",
+        poolsEnabled: true,
+        crossoverFrequency: "NEVER",
+        autoQueueEnabled: false,
+      },
+    });
+    await prisma.sessionPlayer.updateMany({
+      where: {
+        sessionId: fixture.sessionId,
+        playerId: { in: fixture.playerIds.slice(8) },
+      },
+      data: { pool: SessionPool.B },
+    });
+    const response = await postGenerateMatch(fixture.code, {
+      courtIds: fixture.courtIds,
+    });
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    const stored = await prisma.match.findMany({
+      where: { sessionId: fixture.sessionId },
+    });
+    expect(stored).toHaveLength(2);
+    const reasons = stored.map((match) =>
+      JSON.parse(match.matchmakingReasonJson!),
+    );
+    expect(
+      reasons.map((reason) => reason.balancedMatchType.group).sort(),
+    ).toEqual(["pool:A", "pool:B"]);
+    for (const reason of reasons) {
+      expect(
+        reason.balancedPolicyDecision.matchTypeDistribution.certified,
+      ).toBe(true);
+      expect(reason.balancedMatchType.target.MIXED).toBeCloseTo(1 / 3);
+    }
+  });
+
+  it.each([1, 2])(
+    "preserves club constraints and adaptive snapshots through %s-court interclub writers",
+    async (courtCount) => {
+      vi.stubEnv("BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED", "1");
+      const prefix = `adaptive-clubs-${randomUUID().slice(0, 8)}`;
+      const fixture = await createFixture({
+        prefix,
+        type: SessionType.ELO,
+        playerCount: 12,
+        courtCount,
+      });
+      const clubIds = [`${prefix}-a`, `${prefix}-b`];
+      await prisma.club.createMany({
+        data: clubIds.map((id) => ({
+          id,
+          name: id,
+          createdById: `account-${fixture.playerIds[0]}`,
+        })),
+      });
+      await prisma.session.update({
+        where: { id: fixture.sessionId },
+        data: {
+          mode: SessionMode.MIXICANO,
+          pairingMode: "MIXED",
+          collabFormat: "INTERCLUB",
+          clubId: clubIds[0],
+          autoQueueEnabled: false,
+          sessionClubs: {
+            create: clubIds.map((clubId, index) => ({
+              clubId,
+              role: index === 0 ? "HOST" : "PARTNER",
+              status: "ACCEPTED",
+            })),
+          },
+        },
+      });
+      await prisma.clubMember.createMany({
+        data: fixture.playerIds.map((playerId, index) => ({
+          playerId,
+          clubId: clubIds[Math.floor(index / 6)],
+          elo: 1000,
+        })),
+      });
+      // Club representation is immutable once a participant row exists. Seed valid seats directly.
+      const participants = await prisma.sessionPlayer.findMany({
+        where: { sessionId: fixture.sessionId },
+      });
+      await prisma.sessionPlayer.deleteMany({
+        where: { sessionId: fixture.sessionId },
+      });
+      await prisma.sessionPlayer.createMany({
+        data: participants.map((row) => ({
+          ...row,
+          representingClubId:
+            clubIds[Math.floor(fixture.playerIds.indexOf(row.playerId) / 6)],
+          profileClubId:
+            clubIds[Math.floor(fixture.playerIds.indexOf(row.playerId) / 6)],
+        })),
+      });
+      // Both single and batch adapters must reserve subsequent matches in the same ledger.
+      await prisma.session.update({
+        where: { id: fixture.sessionId },
+        data: { autoQueueEnabled: true },
+      });
+      const response = await postGenerateMatch(
+        fixture.code,
+        courtCount === 1
+          ? { courtId: fixture.courtIds[0] }
+          : { courtIds: fixture.courtIds },
+      );
+      const payload = await response.json();
+      expect(response.status, JSON.stringify(payload)).toBe(200);
+      const stored = await prisma.match.findMany({
+        where: { sessionId: fixture.sessionId },
+      });
+      expect(stored).toHaveLength(courtCount);
+      if (
+        !(await prisma.queuedMatch.findUnique({
+          where: { sessionId: fixture.sessionId },
+        }))
+      ) {
+        const queueResponse = await postQueueMatch(fixture.code, {});
+        expect(queueResponse.status, await queueResponse.text()).toBe(200);
+      }
+      const queued = await prisma.queuedMatch.findUniqueOrThrow({
+        where: { sessionId: fixture.sessionId },
+      });
+      for (const row of [...stored, queued]) {
+        const reason = JSON.parse(row.matchmakingReasonJson!);
+        expect(reason.type).toBe("INTERCLUB");
+        expect(reason.balancedMatchType.group).toBe("session");
+        expect(reason.balancedMatchType.target.MIXED).toBeCloseTo(1 / 3);
+        expect(
+          reason.balancedPolicyDecision.matchTypeDistribution.certified,
+        ).toBe(true);
+        const ids = selectedIds(row);
+        for (const team of [ids.slice(0, 2), ids.slice(2)])
+          expect(team.every((id) => fixture.playerIds.indexOf(id) < 6)).toBe(
+            fixture.playerIds.indexOf(team[0]) < 6,
+          );
+        expect(
+          ids.filter((id) => fixture.playerIds.indexOf(id) < 6),
+        ).toHaveLength(2);
+      }
+    },
+  );
+
+  it.each([false, true])(
+    "defers a cohort-pinning automatic reservation only with the adaptive policy enabled (%s)",
+    async (enabled) => {
+      vi.stubEnv(
+        "BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED",
+        enabled ? "1" : undefined,
+      );
+      const fixture = await createFixture({
+        prefix: `adaptive-reservation-${randomUUID().slice(0, 8)}`,
+        type: SessionType.ELO,
+        playerCount: 12,
+        courtCount: 2,
+      });
+      await prisma.session.update({
+        where: { id: fixture.sessionId },
+        data: { mode: SessionMode.MIXICANO, pairingMode: "MIXED" },
+      });
+      const upper = fixture.playerIds
+        .filter((_id, index) => index % 2 === 0)
+        .slice(0, 4);
+      const lower = fixture.playerIds
+        .filter((_id, index) => index % 2 === 1)
+        .slice(0, 4);
+      const initial = [];
+      for (const [index, ids] of [upper, lower].entries()) {
+        const match = await prisma.match.create({
+          data: {
+            sessionId: fixture.sessionId,
+            courtId: fixture.courtIds[index],
+            status: MatchStatus.IN_PROGRESS,
+            team1Player1Id: ids[0],
+            team1Player2Id: ids[1],
+            team2Player1Id: ids[2],
+            team2Player2Id: ids[3],
+          },
+        });
+        initial.push(match);
+        await prisma.court.update({
+          where: { id: fixture.courtIds[index] },
+          data: { currentMatchId: match.id },
+        });
+      }
+      const firstQueue = await postQueueMatch(fixture.code, {});
+      expect(firstQueue.status, await firstQueue.text()).toBe(200);
+      const completedAt = new Date();
+      await prisma.match.update({
+        where: { id: initial[0].id },
+        data: { status: MatchStatus.COMPLETED, completedAt },
+      });
+      await prisma.court.update({
+        where: { id: fixture.courtIds[0] },
+        data: { currentMatchId: null },
+      });
+      await prisma.sessionPlayer.updateMany({
+        where: { sessionId: fixture.sessionId, playerId: { in: upper } },
+        data: { matchesPlayed: { increment: 1 }, availableSince: completedAt },
+      });
+      const assign = await postAssignQueuedMatch(fixture.code);
+      expect(assign.status, await assign.text()).toBe(200);
+      const next = await prisma.queuedMatch.findUnique({
+        where: { sessionId: fixture.sessionId },
+      });
+      if (!enabled) expect(next).not.toBeNull();
+      else {
+        expect(next).toBeNull();
+        // An explicit operator request still creates the legal reservation.
+        const explicit = await postQueueMatch(fixture.code, {});
+        expect(explicit.status, await explicit.text()).toBe(200);
+        const stored = await prisma.queuedMatch.findUniqueOrThrow({
+          where: { sessionId: fixture.sessionId },
+        });
+        expect(
+          JSON.parse(stored.matchmakingReasonJson!).balancedMatchType.category,
+        ).toBe("UPPER");
+      }
+    },
+  );
+
+  it("reverses adaptive commitments through current-match replacement, reshuffle and undo", async () => {
+    vi.stubEnv("BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED", "1");
+    const fixture = await createFixture({
+      prefix: `adaptive-undo-${randomUUID().slice(0, 8)}`,
+      type: SessionType.ELO,
+      playerCount: 14,
+      courtCount: 1,
+    });
+    await prisma.session.update({
+      where: { id: fixture.sessionId },
+      data: {
+        mode: SessionMode.MIXICANO,
+        pairingMode: "MIXED",
+        autoQueueEnabled: false,
+      },
+    });
+    const firstResponse = await postGenerateMatch(fixture.code, {
+      courtId: fixture.courtIds[0],
+    });
+    expect(firstResponse.status).toBe(200);
+    const first = (await firstResponse.json()) as { id: string };
+    const original = await prisma.match.findUniqueOrThrow({
+      where: { id: first.id },
+    });
+    const originalBasis = JSON.parse(original.matchmakingReasonJson!)
+      .balancedMatchType.basis;
+    const reshuffle = await postGenerateMatch(fixture.code, {
+      courtId: fixture.courtIds[0],
+      forceReshuffle: true,
+    });
+    const reshuffled = (await reshuffle.json()) as { id: string };
+    expect(reshuffle.status, JSON.stringify(reshuffled)).toBe(200);
+    const current = await prisma.match.findUniqueOrThrow({
+      where: { id: reshuffled.id },
+    });
+    const replace = await postGenerateMatch(fixture.code, {
+      courtId: fixture.courtIds[0],
+      replaceUserId: current.team1Player1Id,
+    });
+    const replaced = (await replace.json()) as { id: string };
+    expect(replace.status, JSON.stringify(replaced)).toBe(200);
+    expect(
+      await prisma.match.count({ where: { sessionId: fixture.sessionId } }),
+    ).toBe(1);
+    const undo = await postGenerateMatch(fixture.code, {
+      courtId: fixture.courtIds[0],
+      undoCurrentMatch: true,
+    });
+    expect(undo.status, await undo.text()).toBe(200);
+    expect(
+      await prisma.match.count({ where: { sessionId: fixture.sessionId } }),
+    ).toBe(0);
+    const next = await postGenerateMatch(fixture.code, {
+      courtId: fixture.courtIds[0],
+    });
+    expect(next.status).toBe(200);
+    const after = await prisma.match.findFirstOrThrow({
+      where: { sessionId: fixture.sessionId },
+    });
+    expect(
+      JSON.parse(after.matchmakingReasonJson!).balancedMatchType.basis,
+    ).toEqual(originalBasis);
+  });
+
+  it("rebuilds adaptive targets after a level change and preserves them through queue edits and activation", async () => {
+    vi.stubEnv("BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED", "1");
+    const fixture = await createFixture({
+      prefix: `adaptive-lifecycle-${randomUUID().slice(0, 8)}`,
+      type: SessionType.ELO,
+      playerCount: 14,
+      courtCount: 1,
+    });
+    await prisma.session.update({
+      where: { id: fixture.sessionId },
+      data: { mode: SessionMode.MIXICANO, pairingMode: "MIXED" },
+    });
+    const initialResponse = await postGenerateMatch(fixture.code, {
+      courtId: fixture.courtIds[0],
+    });
+    const initial = (await initialResponse.json()) as { id: string };
+    expect(initialResponse.status).toBe(200);
+    const original = await prisma.match.findUniqueOrThrow({
+      where: { id: initial.id },
+    });
+    const queued = await prisma.queuedMatch.findUniqueOrThrow({
+      where: { sessionId: fixture.sessionId },
+    });
+    const reserved = new Set([
+      ...selectedIds(original),
+      ...selectedIds(queued),
+    ]);
+    const changedPlayer = fixture.playerIds.find(
+      (id, index) => index % 2 === 0 && !reserved.has(id),
+    )!;
+    await prisma.sessionPlayer.update({
+      where: {
+        sessionId_playerId: {
+          sessionId: fixture.sessionId,
+          playerId: changedPlayer,
+        },
+      },
+      data: { mixedSideOverride: MixedSide.LOWER },
+    });
+    await rebuildAutomaticQueuedMatch(fixture.sessionId);
+    const rebuilt = await prisma.queuedMatch.findUniqueOrThrow({
+      where: { sessionId: fixture.sessionId },
+    });
+    const rebuiltTarget = JSON.parse(
+      rebuilt.matchmakingReasonJson!,
+    ).balancedMatchType;
+    expect(rebuiltTarget.target.UPPER).toBeLessThan(1 / 3);
+    expect(
+      (await prisma.match.findUniqueOrThrow({ where: { id: original.id } }))
+        .matchmakingReasonJson,
+    ).toBe(original.matchmakingReasonJson);
+
+    const reshuffled = await postQueueMatch(fixture.code, { reshuffle: true });
+    expect(reshuffled.status, await reshuffled.text()).toBe(200);
+    const afterReshuffle = await prisma.queuedMatch.findUniqueOrThrow({
+      where: { sessionId: fixture.sessionId },
+    });
+    const replaced = await postQueueMatch(fixture.code, {
+      replaceUserId: afterReshuffle.team1Player1Id,
+    });
+    expect(replaced.status, await replaced.text()).toBe(200);
+    const finalQueue = await prisma.queuedMatch.findUniqueOrThrow({
+      where: { sessionId: fixture.sessionId },
+    });
+    expect(
+      JSON.parse(finalQueue.matchmakingReasonJson!).balancedMatchType.target,
+    ).toEqual(rebuiltTarget.target);
+
+    await prisma.session.update({
+      where: { id: fixture.sessionId },
+      data: { autoQueueEnabled: false },
+    });
+    await prisma.match.update({
+      where: { id: initial.id },
+      data: { status: MatchStatus.COMPLETED, completedAt: new Date() },
+    });
+    await prisma.court.update({
+      where: { id: fixture.courtIds[0] },
+      data: { currentMatchId: null },
+    });
+    const consumedResponse = await postAssignQueuedMatch(fixture.code);
+    const consumed = (await consumedResponse.json()) as { id: string };
+    expect(consumedResponse.status, JSON.stringify(consumed)).toBe(200);
+    const stored = await prisma.match.findUniqueOrThrow({
+      where: { id: consumed.id },
+    });
+    expect(stored.matchmakingReasonJson).toBe(finalQueue.matchmakingReasonJson);
+  });
+
   it.each([SessionType.POINTS, SessionType.ELO])(
     "%s supports explicit production rollback while still writing a legal automatic match and queue",
     async (type) => {

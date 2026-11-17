@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PlayerGender, SessionMode, SessionType } from "@/types/enums";
 import { parseMatchmakingReasonJson } from "./matchReason";
 import { resolveSocialHistoryReasonJson } from "./socialHistoryPersistence";
@@ -15,6 +15,7 @@ const players = ["M1", "M2", "F1", "F2"].map((userId) => ({
   partnerPreference: userId.startsWith("M") ? "OPEN" : "FEMALE_FLEX",
   mixedSideOverride: null,
 }));
+afterEach(() => vi.unstubAllEnvs());
 
 function transaction(type = SessionType.SOCIAL_MIX) {
   const tx = {
@@ -49,6 +50,20 @@ describe("shared rotation history persistence", () => {
     expect(stored).toBe(json);
     expect(tx.session.findUnique).not.toHaveBeenCalled();
     expect(tx.sessionPlayer.findMany).not.toHaveBeenCalled();
+  });
+
+  it("records a fresh fallback commitment even when it already has its side snapshot", async () => {
+    vi.stubEnv("BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED", "1");
+    const {tx,client} = transaction(SessionType.ELO);
+    Object.assign(tx,{match:{findMany:vi.fn().mockResolvedValue([])},queuedMatch:{findUnique:vi.fn().mockResolvedValue(null)}});
+    const reason = withSocialVarietySnapshot(JSON.stringify({balancedPolicyDecision:{outcome:"production-fallback"}}),partition,players);
+    const stored = await resolveSocialHistoryReasonJson(client,"session",partition,reason,{newCommitment:true});
+    expect(JSON.parse(stored!).balancedMatchType).toMatchObject({category:"MIXED",target:{UPPER:0,MIXED:1,LOWER:0}});
+    expect(JSON.parse(stored!).socialVariety).toEqual(JSON.parse(reason).socialVariety);
+    expect(JSON.parse(stored!).balancedPolicyDecision).toEqual({outcome:"production-fallback"});
+    tx.session.findUnique.mockClear();
+    expect(await resolveSocialHistoryReasonJson(client,"session",partition,reason)).toBe(reason);
+    expect(tx.session.findUnique).not.toHaveBeenCalled();
   });
 
   it("rebuilds the snapshot for a changed lineup and retains unrelated reason fields", async () => {

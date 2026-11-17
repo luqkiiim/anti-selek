@@ -1,4 +1,5 @@
 import { MatchStatus } from "@/types/enums";
+import { parseBalancedMatchTypeSnapshot } from "./v3/balancedMatchTypes";
 import {
   parseSocialVarietySnapshot,
   type SocialHistoryMatch,
@@ -31,12 +32,20 @@ function toSocialHistoryMatch(row: SocialAssignmentRow): SocialHistoryMatch {
     team1: [row.team1User1Id, row.team1User2Id] as [string, string],
     team2: [row.team2User1Id, row.team2User2Id] as [string, string],
   };
-  const snapshot = parseSocialVarietySnapshot(row.matchmakingReasonJson, partition);
+  let reason: unknown = null;
+  try {
+    if (row.matchmakingReasonJson) reason = JSON.parse(row.matchmakingReasonJson);
+  } catch {
+    // Legacy/manual reasons can be plain text. Their match still belongs in history.
+  }
+  const snapshot = parseSocialVarietySnapshot(reason, partition);
+  const matchType = parseBalancedMatchTypeSnapshot(reason, partition);
   return {
     ...partition,
     ...(row.id ? { id: row.id } : {}),
     completedAt: row.completedAt,
     ...(snapshot ? { socialVariety: snapshot } : {}),
+    ...(matchType ? { balancedMatchType: matchType } : {}),
   };
 }
 
@@ -62,9 +71,9 @@ export function buildSocialSessionHistory(
 
   const queued = toSocialHistoryMatch(session.queuedMatch);
   const activeQuartets = new Set(
-    rows
-      .filter((match) => match.status !== MatchStatus.COMPLETED)
-      .map((match) => quartetKey(toSocialHistoryMatch(match)))
+    history
+      .filter((_match, index) => rows[index].status !== MatchStatus.COMPLETED)
+      .map(quartetKey)
   );
   // Assignment can briefly expose both rows. Completed repeats are never deduplicated.
   if (!activeQuartets.has(quartetKey(queued))) history.push(queued);

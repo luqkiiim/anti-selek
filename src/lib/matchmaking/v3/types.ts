@@ -17,6 +17,7 @@ export interface MatchmakerV3Player {
   partnerPreference?: string;
   mixedSideOverride?: string | null;
   pool?: string | null;
+  representingClubId?: string | null;
   lastPartnerId?: string | null;
 }
 
@@ -36,6 +37,7 @@ export interface SocialVarietySnapshot {
 export interface SocialHistoryMatch extends V3CompletedMatch {
   id?: string;
   socialVariety?: SocialVarietySnapshot;
+  balancedMatchType?: import("./balancedMatchTypes").BalancedMatchTypeSnapshot;
 }
 
 export interface SocialVarietyGains {
@@ -159,6 +161,7 @@ export interface V3CandidatePool<
 export interface V3SingleCourtSelection<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
 > {
+  balancedMatchType?: import("./balancedMatchTypes").BalancedMatchTypeSnapshot;
   ids: [string, string, string, string];
   players: [T, T, T, T];
   partition: V3DoublesPartition;

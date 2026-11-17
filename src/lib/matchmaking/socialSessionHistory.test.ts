@@ -47,4 +47,15 @@ describe("Social committed history", () => {
     }).map((match) => match.id)).toEqual(["manual"]);
     expect(buildSocialSessionHistory({ matches: matches.slice(0, 1) })).toHaveLength(1);
   });
+
+  it("retains legacy rows with plain-text, primitive or malformed reasons", () => {
+    const reasons = ["manual", "{broken", "null", "5", "[]"];
+    const matches = reasons.map((reason, index) => ({
+      ...row(`legacy-${index}`, MatchStatus.COMPLETED),
+      matchmakingReasonJson: reason,
+    }));
+    const history = buildSocialSessionHistory({ matches });
+    expect(history.map((match) => match.id)).toEqual(matches.map((match) => match.id));
+    expect(history.every((match) => !match.socialVariety && !match.balancedMatchType)).toBe(true);
+  });
 });

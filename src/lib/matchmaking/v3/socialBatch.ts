@@ -144,6 +144,9 @@ export interface SocialBatchOptions<T extends MatchmakerV3Player> {
 
 export interface RotationBatchOptions<T extends MatchmakerV3Player> extends SocialBatchOptions<T> {
   sessionType: SessionType;
+  balancedMatchTypeGroups?: boolean;
+  balancedMatchTypeCrossoverFrequency?: string | null;
+  balancedMatchTypeClubs?: boolean;
   balanceGuardrailPolicy?: Partial<Pick<BalanceGuardrailPolicy, "nearBestWindow" | "absoluteCeiling">>;
   /** Benchmark-only opt-in. Omitted keeps the production legacy four-facet gate. */
   coverageGainMetric?: "social-horizon-321" | "rolling-equal" | "social-horizon-3211";

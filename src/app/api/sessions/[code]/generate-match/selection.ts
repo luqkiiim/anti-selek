@@ -547,6 +547,8 @@ function getRotationSelectionOptions(
   return {
     socialHistoryMatches,
     socialVarietyContext,
+    balancedMatchTypeGroups: sessionData.poolsEnabled,
+    balancedMatchTypeCrossoverFrequency: sessionData.crossoverFrequency,
     ...(getMatchmakerSessionType(sessionData) === SessionType.SOCIAL_MIX
       ? { socialStructuralOpportunityConstraints: structuralOpportunityConstraints ?? [] }
       : {}),

@@ -1,6 +1,7 @@
 import { checkMatchmakingSearchBudget, recordMatchmakingSearchPhase, type MatchmakingSearchBudget } from "./searchBudget";
 /** Exact Balanced recurrence selector. Search shortcuts use admissible bounds and dominance proofs. */
 import { SessionMode, SessionType } from "../../../types/enums";
+import type { BalancedMatchTypeContext, BalancedMatchTypeSelectionProof } from "./balancedMatchTypes";
 import {
   buildBalanceGuardrail, getBalanceGuardrailPolicy, isBalanceGuardrailAdmissible,
 } from "./balanceGuardrail";
@@ -295,6 +296,10 @@ interface SocialBatchOptions<T extends MatchmakerV3Player> {
   courtCount: number;
   sessionMode: SessionMode;
   respectPlayerRest?: boolean;
+  balancedMatchTypeContext?: BalancedMatchTypeContext;
+  balancedMatchTypeGroups?: boolean;
+  balancedMatchTypeCrossoverFrequency?: string | null;
+  balancedMatchTypeClubs?: boolean;
   /** Full unpaused roster size, including busy players. */
   rotationPlayerCount?: number;
   completedMatches?: V3CompletedMatch[];
@@ -374,15 +379,17 @@ export interface BalancedRecurrenceProof {
   conditionalTBenefit: number | null;
   coverageExceptionEligible: boolean | null;
   recurrenceExceptionEligible: boolean | null;
+  distributionExceptionEligible?: boolean;
   recurrenceAdmissionCertified: boolean;
   selectedAdmissionEligible: boolean | null;
-  admissionReasons: Array<"replay-minimum" | "first-exposure" | "recurrence"> | null;
+  admissionReasons: Array<"replay-minimum" | "first-exposure" | "recurrence" | "distribution"> | null;
   matureRecurrencePlayers: MatureRecurrencePlayerWindowEvidence[];
 }
 
 export type BalancedRecurrenceResult<T extends ActiveMatchmakerV3Player> =
   SocialBatchResult<T> & BalancedRecurrenceProof & {
     structuralOpportunityVocabulary: BalancedRecurrenceStructuralOpportunityEntry[];
+    matchTypeDistribution?: BalancedMatchTypeSelectionProof;
     debug: SocialBatchResult<T>["debug"] & BalancedRecurrenceProof;
   };
 type SocialBatchResult<T extends ActiveMatchmakerV3Player> = V3BatchResult<T> & {
@@ -655,8 +662,11 @@ export function findBestBalancedRecurrenceSelection<T extends MatchmakerV3Player
   if (runtimeOptions.balanceGuardrailPolicy !== undefined) {
     throw new Error("Balanced recurrence selection uses the fixed production Balanced envelope.");
   }
-  if (options.respectPlayerRest === false) {
+  if (options.respectPlayerRest === false && !options.balancedMatchTypeContext) {
     throw new Error("Balanced recurrence selection requires the existing replay and first-exposure gates.");
+  }
+  if (options.balancedMatchTypeContext && options.sessionMode !== SessionMode.MIXICANO) {
+    throw new Error("Balanced match-type distribution requires Mixed pairing.");
   }
   if (options.recurrencePolicy !== "strict-replay-rescue") {
     throw new Error("Unsupported Balanced recurrence policy.");
@@ -674,6 +684,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   const sharedDeadline = options.searchBudget?.deadline ?? Infinity;
   const socialPriorityPolicy = options.socialPriorityPolicy;
   const recurrencePolicy = options.recurrencePolicy;
+  const matchTypeContext = options.balancedMatchTypeContext;
   if (recurrencePolicy && (options.sessionType !== SessionType.POINTS && options.sessionType !== SessionType.ELO)) {
     throw new Error("Balanced recurrence policy is supported only for POINTS and ELO sessions.");
   }
@@ -716,7 +727,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   const idealRestGap = getSocialIdealRestGap(rotationPlayerCount);
   const overdueAvailablePlayers = availablePlayers.filter((player) => player.restTurns > idealRestGap);
   const required = options.courtCount * 4;
-  const varietyMetricIndex = SOCIAL_STARVATION_METRIC_COUNT + (recurrencePolicy ? 1 : 0);
+  const distributionMetricCount = matchTypeContext ? 2 : 0;
+  const varietyMetricIndex = SOCIAL_STARVATION_METRIC_COUNT + distributionMetricCount + (recurrencePolicy ? 1 : 0);
   const softCadenceMetricIndex = respectRest ? varietyMetricIndex + 1 : null;
   const locked = new Set([
     ...(!balancePolicy ? socialCandidatePool?.lockedPlayers.map((player) => player.userId) ?? [] : []),
@@ -833,6 +845,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   let recurrenceFrontierLimitReached = false;
   let recurrenceFrontierCertified = false;
   let bestMatureDeltaTAtRminUnits: bigint | null = null;
+  let bestCategoryAtRmin: BalancedMatchTypeSelectionProof["minimumReplay"] = null;
   let scheduleIndex: number | null = null;
   let bestRank = Infinity;
   let balanceGuardrail: V3BalanceGuardrail | undefined;
@@ -1142,7 +1155,9 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   const compareCandidatesForMatureRecurrence = (
     left: Candidate<ActiveMatchmakerV3Player<T>>,
     right: Candidate<ActiveMatchmakerV3Player<T>>
-  ) => compareCandidatesForRecurrenceFrontier(left, right) || compareCandidatesForVariety(left, right);
+  ) => compareCandidateStrongerClass(left, right) ||
+    (matchTypeContext ? compareSocialNumberVectors(matchTypeContext.score([left.selection.partition]), matchTypeContext.score([right.selection.partition])) : 0) ||
+    compareCandidatesForRecurrenceFrontier(left, right) || compareCandidatesForVariety(left, right);
   const compareCandidatesForSocialPriority = (
     left: Candidate<ActiveMatchmakerV3Player<T>>,
     right: Candidate<ActiveMatchmakerV3Player<T>>
@@ -1950,6 +1965,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     }
     return [
       ...getStarvation(selectedMask),
+      ...(matchTypeContext ? matchTypeContext.score(selections.map(selection => selection.partition)) : []),
       ...(recurrencePolicy && matureRecurrenceScorer
         ? [-Number(getBatchMatureRecurrenceGainUnits(chosen)) / Number(matureRecurrenceScorer.denominator)]
         : []),
@@ -2283,6 +2299,13 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     if (bestMatureDeltaTAtRminUnits === null || gainUnits > bestMatureDeltaTAtRminUnits) {
       bestMatureDeltaTAtRminUnits = gainUnits;
     }
+    if (matchTypeContext) {
+      const partitions = chosen.map(candidate => candidate.selection.partition);
+      const error = matchTypeContext.score(partitions)[0];
+      if (!bestCategoryAtRmin || error < bestCategoryAtRmin.error) {
+        bestCategoryAtRmin = { error, partitions, scheduleIndex: index };
+      }
+    }
   };
   const consider = (chosen: Candidate<ActiveMatchmakerV3Player<T>>[], mask: bigint, index: number) => {
     if (baselinePhase) { considerBaseline(chosen, mask, index); return; }
@@ -2316,8 +2339,11 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         recurrenceFrontierCertified && bestMatureDeltaTAtRminUnits !== null &&
         replayCount === replayBaseline.replayCount + 1 &&
         getBatchMatureRecurrenceGainUnits(chosen) > bestMatureDeltaTAtRminUnits;
+      const distributionExceptionEligible = matchTypeContext && recurrenceFrontierCertified && bestCategoryAtRmin &&
+        replayCount === replayBaseline.replayCount + 1 &&
+        matchTypeContext.score(chosen.map(candidate => candidate.selection.partition))[0] < bestCategoryAtRmin.error;
       if (replayCount !== replayBaseline.replayCount &&
-        !(coverageExceptionEligible || recurrenceExceptionEligible)) return;
+        !(coverageExceptionEligible || recurrenceExceptionEligible || distributionExceptionEligible)) return;
     }
     const fairnessDiff = bestFairness ? compareSocialNumberVectors(fairness, bestFairness) : -1;
     if (fairnessDiff > 0) return;
@@ -2368,9 +2394,13 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       const candidateMatureGainUnits = getBatchMatureRecurrenceGainUnits(chosen);
       const recurrenceDiff = candidateMatureGainUnits === bestMatureRecurrenceGainUnits
         ? 0 : candidateMatureGainUnits > bestMatureRecurrenceGainUnits ? -1 : 1;
-      objectiveDiff = starvationDiff || recurrenceDiff || compareSocialNumberVectors(
-        metrics.slice(SOCIAL_STARVATION_METRIC_COUNT + 1),
-        bestMetrics.slice(SOCIAL_STARVATION_METRIC_COUNT + 1)
+      const distributionDiff = distributionMetricCount ? compareSocialNumberVectors(
+        metrics.slice(SOCIAL_STARVATION_METRIC_COUNT, SOCIAL_STARVATION_METRIC_COUNT + distributionMetricCount),
+        bestMetrics.slice(SOCIAL_STARVATION_METRIC_COUNT, SOCIAL_STARVATION_METRIC_COUNT + distributionMetricCount)
+      ) : 0;
+      objectiveDiff = starvationDiff || distributionDiff || recurrenceDiff || compareSocialNumberVectors(
+        metrics.slice(SOCIAL_STARVATION_METRIC_COUNT + distributionMetricCount + 1),
+        bestMetrics.slice(SOCIAL_STARVATION_METRIC_COUNT + distributionMetricCount + 1)
       );
     } else if (socialPriorityPolicy && bestSocialPriorityMetrics && socialPriorityMetricsForCandidate) {
       objectiveDiff = priorityStarvationDiff || compareSocialPriorityMetrics(
@@ -2530,12 +2560,22 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           const eligible = filterCandidates(candidates, (candidate) => !balanceGuardrail ||
             candidate.selection.balanceGap <= balanceGuardrail.allowedMaxBalanceGap
           );
-          const frontier = retainPerMaskMetricFrontier(
-            eligible,
-            getCandidateMatureRecurrenceGainUnits,
+          // Different group scopes can share a quartet. Preserve each category/scope
+          // while taking T dominance within it; both independent frontiers need proof.
+          const scopes = new Map<string, typeof eligible>();
+          if (matchTypeContext) for (const candidate of eligible) {
+            const entry = matchTypeContext?.snapshot(candidate.selection.partition);
+            const key = entry ? `${entry.group}/${entry.category}` : "unclassified";
+            const scope = scopes.get(key) ?? [];
+            scope.push(candidate);
+            scopes.set(key, scope);
+          }
+          else scopes.set("unclassified", eligible);
+          const frontier = [...scopes.values()].flatMap(scope => retainPerMaskMetricFrontier(
+            scope, getCandidateMatureRecurrenceGainUnits,
             balanceGuardrail?.allowedTotalBalanceGap !== null &&
               balanceGuardrail?.allowedTotalBalanceGap !== undefined
-          );
+          ));
           return sortCandidates(frontier, compareCandidatesForRecurrenceFrontier);
         }
         if (nearBestFrontierPhase && socialCourtmateBeneficialRescue) {
@@ -2583,7 +2623,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           if (deadline !== Infinity && now() >= deadline) { interrupted = true; break; }
           scoreVariety(candidate);
         }
-        return sortCandidates(eligible, socialCourtmateNearBest ? compareCandidatesForSocialNearBest : compareCandidatesForVariety);
+        return sortCandidates(eligible, matchTypeContext ? compareCandidatesForMatureRecurrence : socialCourtmateNearBest ? compareCandidatesForSocialNearBest : compareCandidatesForVariety);
       });
       if (interrupted) break;
       if (beneficialRescueSelectionPhase) {
@@ -2665,6 +2705,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       const coverageProfileOptimal = () => coverageProfileUpperBound !== null && coverageBaseline !== null &&
         coverageBaseline.coverageGainUnits >= coverageProfileUpperBound;
       if (coverageProfileOptimal()) continue;
+      let recurrenceProfileUpperBound: bigint | null = null;
+      let recurrenceCategoryLowerBound: number | null = null;
       if (recurrenceFrontierPhase) {
         // Mature-T adds across disjoint courts. Summing each filtered court
         // list's maximum is a relaxed upper bound: it ignores player overlap,
@@ -2684,9 +2726,17 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           }
           if (upperBound !== null) upperBound += maximum;
         }
-        if (upperBound === null || (bestMatureDeltaTAtRminUnits !== null &&
-          bestMatureDeltaTAtRminUnits >= upperBound)) continue;
+        if (upperBound === null) continue;
+        recurrenceProfileUpperBound = upperBound;
+        recurrenceCategoryLowerBound = matchTypeContext
+          ? matchTypeContext.lowerBound([], lists.map(candidates => candidates.map(candidate => candidate.selection.partition)))[0]
+          : null;
       }
+      const recurrenceProfileOptimal = () => recurrenceFrontierPhase && recurrenceProfileUpperBound !== null &&
+        bestMatureDeltaTAtRminUnits !== null && bestMatureDeltaTAtRminUnits >= recurrenceProfileUpperBound &&
+        (!matchTypeContext || (bestCategoryAtRmin && recurrenceCategoryLowerBound !== null &&
+          bestCategoryAtRmin.error <= recurrenceCategoryLowerBound));
+      if (recurrenceProfileOptimal()) continue;
       // This cache lives after complete list scoring and only for this
       // phase/profile. Neither membership nor entropy gains change during DFS.
       const entropyFacetMaximums = new WeakMap<Candidate<ActiveMatchmakerV3Player<T>>[], Map<string, number[]>>();
@@ -2717,6 +2767,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
       };
       const visit = (chosen: Candidate<ActiveMatchmakerV3Player<T>>[], used: bigint, remaining: number[]) => {
         if (coverageProfileOptimal()) return;
+        if (recurrenceProfileOptimal()) return;
         if (outOfBudget()) return;
         explored++; phaseExplored++;
         if (!remaining.length) { consider(chosen, used, index); return; }
@@ -2792,6 +2843,12 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
           );
           if (starvationDiff > 0) { pruned++; return; }
           if (starvationDiff === 0) {
+            const adaptiveBoundDiff = bestMetrics && matchTypeContext &&
+              !baselinePhase && !replayBaselinePhase && !coverageBaselinePhase && !recurrenceFrontierPhase
+              ? compareSocialNumberVectors(matchTypeContext.lowerBound(chosen.map(candidate => candidate.selection.partition),
+                remaining.map(other => compatibleByCourt.get(other)!.map(candidate => candidate.selection.partition))),
+                bestMetrics.slice(SOCIAL_STARVATION_METRIC_COUNT, SOCIAL_STARVATION_METRIC_COUNT + 2))
+              : null;
             if (baselinePhase && baseline) {
               // The complete rotation prefix can only tie here. Zero balance
               // is already minimal, so this branch cannot replace its first
@@ -2829,6 +2886,10 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
             } else if (coverageBaselinePhase && coverageBaseline && replayBaseline) {
               if (getOptimisticImmediateReplayCount(used, slots) > replayBaseline.replayCount) { pruned++; return; }
               if (getOptimisticCoverageGainUnits(chosen, remaining, used, lists, compatibleByCourt) <= coverageBaseline.coverageGainUnits) {
+                pruned++; return;
+              }
+            } else if (bestMetrics && matchTypeContext && !recurrenceFrontierPhase && adaptiveBoundDiff !== 0) {
+              if (adaptiveBoundDiff !== null && adaptiveBoundDiff > 0) {
                 pruned++; return;
               }
             } else if (bestMetrics && !socialPriorityPolicy && !recurrenceFrontierPhase) {
@@ -3336,7 +3397,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     coverageBaselinePhase = false;
     recurrenceFrontierPhase = true;
     startNextPhase();
-    if (matureRecurrenceScorer?.typeEligiblePlayerCount === 0 && coverageBaseline) {
+    if (!matchTypeContext && matureRecurrenceScorer?.typeEligiblePlayerCount === 0 && coverageBaseline) {
       // With no mature players the scorer is identically zero for every legal
       // batch. The certified replay-minimum coverage witness therefore proves
       // the entire signed-T frontier without a search or an appearance-count
@@ -3359,7 +3420,8 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     }
     runSearch();
     recurrenceFrontierLimitReached = interrupted;
-    recurrenceFrontierCertified = !interrupted && bestMatureDeltaTAtRminUnits !== null;
+    recurrenceFrontierCertified = !interrupted && bestMatureDeltaTAtRminUnits !== null &&
+      (!matchTypeContext || bestCategoryAtRmin !== null);
     recurrenceFrontierPhase = false;
   };
   const runVarietyPhase = (seed: Candidate<ActiveMatchmakerV3Player<T>>[] | null, requestedSeedIndex?: number) => {
@@ -3554,7 +3616,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   if (recurrencePolicy && (!balancePolicy || !balanceCertified || !fairnessCertified || !selectedRankCertified ||
     !starvationCertified || !replayCertified || !coverageGateCertified || searchLimitReached ||
     !varietyStarted || varietyLimitReached || !matureRecurrenceScorer ||
-    (recurrencePolicy === "strict-replay-rescue" && !recurrenceFrontierCertified))) {
+    (respectRest && recurrencePolicy === "strict-replay-rescue" && !recurrenceFrontierCertified))) {
     // Balanced recurrence never returns a partial proposal as a certified
     // choice when its complete search proof is unavailable.
     best = null;
@@ -3592,6 +3654,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         ...bestSelection,
         ...(balancePolicy ? { balanceGuardrail, fairnessVector: bestFairness ?? [], schedulingRank: bestRank, finalTieBreak } : {}),
         selections: bestSelection.selections.map((court) => ({ ...court, socialStarvation: starvationSummary,
+          ...(matchTypeContext ? { balancedMatchType: matchTypeContext.snapshot(court.partition) ?? undefined } : {}),
           ...(balancePolicy ? { balanceGuardrail, fairnessVector: bestFairness ?? [], schedulingRank: bestRank, finalTieBreak } : {}),
         })),
       }
@@ -3613,14 +3676,14 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
   const varietyOptimal = Boolean(selection && varietyStarted && !varietyLimitReached &&
     fairnessCertified && selectedRankCertified && starvationCertified &&
     (!gateRespectRest || (replayCertified && coverageGateCertified)) && (!balancePolicy || balanceCertified) &&
-    (recurrencePolicy !== "strict-replay-rescue" || recurrenceFrontierCertified));
+    (!respectRest || recurrencePolicy !== "strict-replay-rescue" || recurrenceFrontierCertified));
   const matureRecurrenceScore = recurrencePolicy && matureRecurrenceScorer && bestSelection
     ? matureRecurrenceScorer.score(bestSelection.selections)
     : null;
   const recurrenceCertified = Boolean(recurrencePolicy && selection && varietyOptimal && !searchLimitReached &&
     balancePolicy && balanceCertified && fairnessCertified && selectedRankCertified && starvationCertified &&
     replayCertified && coverageGateCertified && matureRecurrenceScorer &&
-    (recurrencePolicy !== "strict-replay-rescue" || recurrenceFrontierCertified));
+    (!respectRest || recurrencePolicy !== "strict-replay-rescue" || recurrenceFrontierCertified));
   const chosenMatureGainUnits = recurrenceCertified ? matureRecurrenceScore?.gainUnits ?? null : null;
   const certifiedRecurrenceTUnits: bigint | null = recurrenceFrontierCertified
     ? bestMatureDeltaTAtRminUnits as bigint | null
@@ -3634,17 +3697,24 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     chosenImmediateReplayCount === selectedReplayBaseline.replayCount + 1 && chosenMatureGainUnits !== null
     ? chosenMatureGainUnits > certifiedRecurrenceTUnits
     : recurrencePolicy === "strict-replay-rescue" && bestSelection && recurrenceCertified ? false : null;
+  const certifiedCategoryAtRmin = recurrenceFrontierCertified
+    ? bestCategoryAtRmin as BalancedMatchTypeSelectionProof["minimumReplay"] : null;
+  const distributionExceptionEligible = Boolean(matchTypeContext && recurrenceCertified && bestSelection &&
+    selectedReplayBaseline && certifiedCategoryAtRmin &&
+    chosenImmediateReplayCount === selectedReplayBaseline.replayCount + 1 &&
+    matchTypeContext.score(bestSelection.selections.map(court => court.partition))[0] < certifiedCategoryAtRmin.error);
   const selectedAdmissionEligible = recurrenceCertified && bestSelection && selectedReplayBaseline
     ? chosenImmediateReplayCount === selectedReplayBaseline.replayCount ||
-      coverageExceptionEligible === true || recurrenceExceptionEligible === true
+      coverageExceptionEligible === true || recurrenceExceptionEligible === true || distributionExceptionEligible
     : null;
-  const admissionReasons: Array<"replay-minimum" | "first-exposure" | "recurrence"> | null =
+  const admissionReasons: Array<"replay-minimum" | "first-exposure" | "recurrence" | "distribution"> | null =
     !selectedAdmissionEligible || !selectedReplayBaseline ? null
       : chosenImmediateReplayCount === selectedReplayBaseline.replayCount
         ? ["replay-minimum"]
         : [
             ...(coverageExceptionEligible ? ["first-exposure" as const] : []),
             ...(recurrenceExceptionEligible ? ["recurrence" as const] : []),
+            ...(distributionExceptionEligible ? ["distribution" as const] : []),
           ];
   const conditionalTBenefit = recurrencePolicy === "strict-replay-rescue" && recurrenceExceptionEligible &&
     chosenMatureGainUnits !== null && certifiedRecurrenceTUnits !== null && matureRecurrenceScorer
@@ -3678,6 +3748,7 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
         conditionalTBenefit,
         coverageExceptionEligible,
         recurrenceExceptionEligible,
+        ...(matchTypeContext ? { distributionExceptionEligible } : {}),
         recurrenceAdmissionCertified: recurrenceCertified,
         selectedAdmissionEligible,
         admissionReasons,
@@ -3708,6 +3779,10 @@ function findBestRotationBatchSelectionInternal<T extends MatchmakerV3Player>(
     varietyOptimal,
     ...(balancePolicy ? { balanceCertified } : {}),
     structuralOpportunityVocabulary,
+    ...(matchTypeContext && selection ? { matchTypeDistribution: {
+      score: matchTypeContext.score(selection.selections.map(court => court.partition)), certified: varietyOptimal,
+      minimumReplay: certifiedCategoryAtRmin, rescue: distributionExceptionEligible,
+    } } : {}),
     ...matureRecurrenceProof,
     ...(socialPriorityPolicy ? {
       socialPriorityPolicy,

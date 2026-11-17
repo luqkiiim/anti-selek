@@ -321,6 +321,7 @@ function runInterclubSingleCourtSelection({
       options: fallbackOptions,
       candidateOptions: {
         ...fallbackOptions,
+        balancedMatchTypeClubs: true,
         socialHistoryMatches: completedSocialHistory ?? fallbackOptions.socialHistoryMatches,
         recurrencePolicy: balancedCandidatePolicy,
         socialStructuralOpportunityConstraints:
@@ -787,7 +788,7 @@ function toInterclubSelection(
   });
   const withDecision = withSocialCandidateDecision({ matchmakingReasonJson }, socialPolicyDecision);
   const withBalancedDecision = withBalancedCandidateDecision(
-    withDecision,
+    { ...withDecision, balancedMatchType: selection.balancedMatchType },
     selection.balancedPolicyDecision
   );
   return {
@@ -1184,6 +1185,7 @@ export function selectInterclubBatchMatches({
           options,
           candidateOptions: {
             ...options,
+            balancedMatchTypeClubs: true,
             socialHistoryMatches: completedSocialHistory,
             socialStructuralOpportunityConstraints: [context.selectionConstraints],
             recurrencePolicy: balancedBatchPolicy,

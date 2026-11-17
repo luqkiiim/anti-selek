@@ -5,6 +5,7 @@ import { CourtGroupType, MatchStatus } from "@/types/enums";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
+import { isBalancedMatchTypeSourceCurrent } from "@/lib/matchmaking/balancedMatchTypePersistence";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
@@ -107,6 +108,7 @@ async function createMatchAssignment(
     poolASeatCount?: number | null;
     poolBSeatCount?: number | null;
     createdAt?: Date;
+    preserveCommitmentSnapshot?: boolean;
   }
 ) {
   let groupSnapshot =
@@ -171,7 +173,8 @@ async function createMatchAssignment(
     tx,
     sessionId,
     assignment.partition,
-    assignment.matchmakingReasonJson
+    assignment.matchmakingReasonJson,
+    { newCommitment: !assignment.preserveCommitmentSnapshot },
   );
 
   const match = await tx.match.create({
@@ -261,6 +264,9 @@ export async function createMatchesForAssignments(
 ) {
   return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
     await assertAssignmentsAvailable(tx, sessionId, assignments);
+    if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, assignments)) {
+      throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
+    }
 
     const matches = [];
 
@@ -356,6 +362,9 @@ export async function replaceCurrentCourtMatchAssignment({
     }
 
     await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds }]);
+    if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, [{ partition, matchmakingReasonJson }])) {
+      throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
+    }
 
     const match = await createMatchAssignment(tx, sessionId, {
       courtId,
@@ -463,6 +472,7 @@ export async function createQueuedMatchAssignment({
       poolASeatCount,
       poolBSeatCount,
       clearArrivalPriority: isAutomatic ?? matchmakingReasonJson != null,
+      preserveCommitmentSnapshot: true,
     });
 
     await consumeSkipNextMatches(tx, {

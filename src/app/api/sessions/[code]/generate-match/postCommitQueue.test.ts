@@ -37,7 +37,7 @@ describe("post-commit optional queue outcome", () => {
   });
 
   it("offers recovery for an explicit matcher budget error before the outer cutoff", async () => {
-    let elapsed = 0;
+    const elapsed = 0;
     const budget = createMatchmakingSearchBudget({ now: () => elapsed });
     mocks.tryRebuild.mockRejectedValue(new MatchmakingSearchBudgetExceededError());
 

@@ -1,5 +1,8 @@
 import { checkMatchmakingSearchBudget, MatchmakingSearchBudgetExceededError } from "./searchBudget";
 import { SessionMode, SessionType } from "../../../types/enums";
+import { isDeepStrictEqual } from "node:util";
+import { buildBalancedMatchTypeContext, getBalancedMatchTypePolicyKey, parseBalancedMatchTypeSnapshot } from "./balancedMatchTypes";
+import type { BalancedMatchTypeSelectionProof } from "./balancedMatchTypes";
 import { findBestRotationBatchSelection } from "./socialBatch";
 import type { RotationBatchOptions, SocialBatchResult } from "./socialBatch";
 import { findBestBalancedRecurrenceSelection } from "./balancedRecurrence";
@@ -10,8 +13,8 @@ import type {
   BalancedRecurrenceStructuralOpportunityEntry,
 } from "./balancedRecurrence";
 import { getExactPartitionKey } from "./rematch";
-import { getImmediateReplayCount, getSocialFairnessVector, getSocialStarvationSummary } from "./scoring";
-import { getBalanceGuardrailPolicy } from "./balanceGuardrail";
+import { getImmediateReplayCount, getSocialFairnessVector, getSocialStarvationSummary, getSocialStarvationVector } from "./scoring";
+import { getBalanceGuardrailPolicy, isBalanceGuardrailAdmissible } from "./balanceGuardrail";
 import { getPartitionBalanceGap, isValidPartitionForMode } from "./balance";
 import { buildRecentMatchTypeWindows } from "./socialRollingVariety";
 import type { RecentMatchType } from "./socialRollingVariety";
@@ -86,6 +89,7 @@ export type BalancedCandidateDecision = {
   candidateSearch: BalancedCandidateSearchDiagnostics;
   fallbackSearch?: BalancedCandidateSearchDiagnostics;
   wrapperElapsedMs: number;
+  matchTypeDistribution?: BalancedMatchTypeSelectionProof & { diagnostics: ReturnType<typeof buildBalancedMatchTypeContext>["diagnostics"] };
 };
 
 export type BalancedCandidateRun<T extends MatchmakerV3Player> = {
@@ -789,6 +793,13 @@ function validateCandidateProofInternal<T extends MatchmakerV3Player>(
   legacyOptions: RotationBatchOptions<T>,
   result: BalancedCandidateResult<T> | null,
 ): string[] {
+  if (options.balancedMatchTypeContext && options.respectPlayerRest === false) {
+    if (![SessionType.POINTS,SessionType.ELO].includes(options.sessionType) || options.sessionMode !== SessionMode.MIXICANO ||
+      options.socialStructuralOpportunityConstraints === undefined) return ["MATCH_TYPE_POLICY_UNSUPPORTED_FORMAT_OR_OPPORTUNITIES"];
+    if (result?.balancedMatureRecurrencePolicy !== RECURRENCE_POLICY || result?.debug.balancedMatureRecurrencePolicy !== RECURRENCE_POLICY) return ["POLICY_ECHO_MISMATCH"];
+    const hardProof = verifyBalancedProductionFallback(players, legacyOptions, result);
+    return [...hardProof.reasons, ...validateDistributionProof(players, options, legacyOptions, result).reasons];
+  }
   const reasons: string[] = [];
   if (!result) return ["CANDIDATE_MATCHER_ERROR"];
   const { outer, debug, selection } = getResultParts(result);
@@ -903,6 +914,10 @@ function validateCandidateProofInternal<T extends MatchmakerV3Player>(
     coverageProof.chosenGainUnits > (coverageBaselineUnits ?? BigInt(0));
   const recurrenceException = chosenReplayCount !== null && minReplay !== null && chosenReplayCount === minReplay + 1 &&
     chosenTUnits !== null && frontierUnits !== null && chosenTUnits > frontierUnits;
+  const distribution = options.balancedMatchTypeContext
+    ? validateDistributionProof(players, options, legacyOptions, result)
+    : { reasons: [], rescue: false };
+  reasons.push(...distribution.reasons);
   const admissionExpected = isBalancedStrictReplayRescueAdmissible({
     chosenReplayCount,
     minimumReplayCount: minReplay,
@@ -910,7 +925,7 @@ function validateCandidateProofInternal<T extends MatchmakerV3Player>(
     bestMinimumReplayCoverageGainUnits: coverageBaselineUnits,
     chosenMatureDeltaTUnits: chosenTUnits,
     bestMatureDeltaTAtMinimumReplayUnits: frontierUnits,
-  });
+  }) || distribution.rescue;
   if (chosenReplayCount === minReplay && minReplay !== null) {
     if (!Array.isArray(outer.admissionReasons) || outer.admissionReasons.join("|") !== "replay-minimum" ||
       !Array.isArray(debug.admissionReasons) || debug.admissionReasons.join("|") !== "replay-minimum") {
@@ -920,6 +935,7 @@ function validateCandidateProofInternal<T extends MatchmakerV3Player>(
     const expectedReasons = [
       ...(coverageException ? ["first-exposure"] : []),
       ...(recurrenceException ? ["recurrence"] : []),
+      ...(distribution.rescue ? ["distribution"] : []),
     ];
     if (!Array.isArray(outer.admissionReasons) || outer.admissionReasons.join("|") !== expectedReasons.join("|") ||
       !Array.isArray(debug.admissionReasons) || debug.admissionReasons.join("|") !== expectedReasons.join("|")) {
@@ -947,6 +963,206 @@ function validateCandidateProofInternal<T extends MatchmakerV3Player>(
     reasons.push("CONDITIONAL_T_BENEFIT_MISMATCH");
   }
   return [...new Set(reasons)];
+}
+
+function validateDistributionProof<T extends MatchmakerV3Player>(
+  players: readonly T[],
+  options: BalancedRecurrenceOptions<T>,
+  legacyOptions: RotationBatchOptions<T>,
+  result: BalancedCandidateResult<T> | null,
+): { reasons: string[]; rescue: boolean } {
+  if (
+    !result?.selection ||
+    result.varietyOptimal !== true ||
+    result.debug.searchLimitReached !== false ||
+    result.matchTypeDistribution?.certified !== true
+  )
+    return { reasons: ["MATCH_TYPE_SEARCH_UNCERTIFIED"], rescue: false };
+  const fresh = buildBalancedMatchTypeContext(
+    players,
+    legacyOptions.socialHistoryMatches ?? legacyOptions.completedMatches ?? [],
+    {
+      groups: options.balancedMatchTypeGroups,
+      constraints: options.socialStructuralOpportunityConstraints,
+      searchBudget: options.searchBudget,
+      clubs: options.balancedMatchTypeClubs,
+      policy: getBalancedMatchTypePolicyKey({
+        sessionType: options.sessionType,
+        sessionMode: options.sessionMode,
+        respectPlayerRest: options.respectPlayerRest,
+        groups: options.balancedMatchTypeGroups,
+        clubs: options.balancedMatchTypeClubs,
+        crossoverFrequency: options.balancedMatchTypeCrossoverFrequency,
+      }),
+    },
+  );
+  const partitions = result.selection.selections.map(
+    (court) => court.partition,
+  );
+  const score = fresh.score(partitions);
+  const reasons: string[] = [];
+  if (
+    score.some(
+      (value, index) => value !== result.matchTypeDistribution!.score[index],
+    )
+  )
+    reasons.push("MATCH_TYPE_SCORE_MISMATCH");
+  for (const court of result.selection.selections) {
+    const expected = fresh.snapshot(court.partition);
+    const actual = parseBalancedMatchTypeSnapshot(
+      court.balancedMatchType,
+      court.partition,
+    );
+    if (!isDeepStrictEqual(actual, expected))
+      reasons.push("MATCH_TYPE_TARGET_MISMATCH");
+  }
+  const proof = result.matchTypeDistribution;
+  const witness = proof.minimumReplay;
+  if (options.respectPlayerRest === false) {
+    if (witness !== null) reasons.push("MATCH_TYPE_DISABLED_REPLAY_WITNESS");
+  } else if (
+    !witness ||
+    !Number.isFinite(witness.error) ||
+    witness.error < 0 ||
+    !Number.isInteger(witness.scheduleIndex) ||
+    witness.scheduleIndex < 0 ||
+    !Array.isArray(witness.partitions) ||
+    witness.partitions.length !== options.courtCount
+  ) {
+    reasons.push("MATCH_TYPE_REPLAY_FRONTIER_MISSING");
+  } else {
+    // Recompute the frontier witness from authoritative players. Its complete-search
+    // certificate supplies optimality; this boundary independently verifies its
+    // legality, frozen fairness/balance/rest class and category arithmetic.
+    const activeIds = options.candidatePool?.activePlayers
+      ? new Set(
+          options.candidatePool.activePlayers.map((player) => player.userId),
+        )
+      : null;
+    const available = players
+      .filter(
+        (player) =>
+          !player.isPaused &&
+          !player.isBusy &&
+          (!activeIds || activeIds.has(player.userId)),
+      )
+      .map(getActiveConstraintPlayer);
+    const byId = new Map(available.map((player) => [player.userId, player]));
+    const selected = [] as Array<ActiveMatchmakerV3Player<T>>;
+    const gaps: number[] = [];
+    const witnessPartitions: V3DoublesPartition[] = [];
+    for (const [courtIndex, raw] of witness.partitions.entries()) {
+      checkMatchmakingSearchBudget(options.searchBudget);
+      const partition = asPartition(raw);
+      const ids = partition ? [...partition.team1, ...partition.team2] : [];
+      if (
+        !partition ||
+        new Set(ids).size !== 4 ||
+        ids.some((id) => !byId.has(id))
+      ) {
+        reasons.push("MATCH_TYPE_REPLAY_WITNESS_LAYOUT_INVALID");
+        continue;
+      }
+      const quartet = ids.map((id) => byId.get(id)!) as [
+        ActiveMatchmakerV3Player<T>,
+        ActiveMatchmakerV3Player<T>,
+        ActiveMatchmakerV3Player<T>,
+        ActiveMatchmakerV3Player<T>,
+      ];
+      const constraint = scheduleConstraints(
+        options,
+        courtIndex,
+        witness.scheduleIndex,
+      );
+      if (
+        !isValidPartitionForMode(partition, byId, options.sessionMode) ||
+        (constraint?.isQuartetAllowed &&
+          !constraint.isQuartetAllowed(quartet)) ||
+        (constraint?.normalizePartition &&
+          orderedPartitionKey(
+            constraint.normalizePartition({
+              partition,
+              players: quartet,
+              playersById: byId,
+            }) ?? { team1: ["", ""], team2: ["", ""] },
+          ) !== orderedPartitionKey(partition)) ||
+        options.excludedQuartetKeys?.has([...ids].sort().join("|")) ||
+        (options.excludedPartitionKey &&
+          options.excludedPartitionKey === getExactPartitionKey(partition))
+      ) {
+        reasons.push("MATCH_TYPE_REPLAY_WITNESS_ELIGIBILITY_INVALID");
+      }
+      selected.push(...quartet);
+      const gap = getPartitionBalanceGap(partition, byId);
+      if (gap === null || !Number.isFinite(gap))
+        reasons.push("MATCH_TYPE_REPLAY_WITNESS_BALANCE_INVALID");
+      else gaps.push(gap);
+      witnessPartitions.push(partition);
+    }
+    const selectedIds = new Set(selected.map((player) => player.userId));
+    const locked = [
+      ...(options.lockedPlayerIds ?? []),
+      ...(options.candidatePool?.lockedPlayers.map((player) => player.userId) ??
+        []),
+    ];
+    const rank = options.schedules?.length
+      ? options.schedules[witness.scheduleIndex]?.rank
+      : witness.scheduleIndex === 0
+        ? 0
+        : undefined;
+    const starvation = getSocialStarvationVector(selected, {
+      activePlayerCount:
+        options.rotationPlayerCount ??
+        players.filter((player) => !player.isPaused).length,
+      availablePlayers: available,
+    });
+    const guardrail = result.selection.balanceGuardrail;
+    if (
+      selectedIds.size !== options.courtCount * 4 ||
+      locked.some((id) => !selectedIds.has(id)) ||
+      getImmediateReplayCount(selected) !== result.bestImmediateReplayCount ||
+      rank === undefined ||
+      rank !== result.selection.schedulingRank ||
+      !result.selection.fairnessVector ||
+      !sameArray(
+        getSocialFairnessVector(selected),
+        result.selection.fairnessVector,
+      ) ||
+      !sameArray(starvation, [
+        result.debug.leftOutOverduePlayerCount,
+        result.debug.highestLeftOutRestTurns,
+        result.debug.totalLeftOutRestTurns,
+      ]) ||
+      !guardrail ||
+      !isBalanceGuardrailAdmissible(
+        {
+          maxBalanceGap: Math.max(...gaps),
+          totalBalanceGap: gaps.reduce((sum, gap) => sum + gap, 0),
+        },
+        guardrail,
+      )
+    ) {
+      reasons.push("MATCH_TYPE_REPLAY_WITNESS_CLASS_INVALID");
+    }
+    if (fresh.score(witnessPartitions)[0] !== witness.error)
+      reasons.push("MATCH_TYPE_REPLAY_FRONTIER_SCORE_MISMATCH");
+  }
+  const rescue =
+    reasons.length === 0 &&
+    options.respectPlayerRest !== false &&
+    witness !== null &&
+    witness !== undefined &&
+    result.chosenImmediateReplayCount ===
+      (result.bestImmediateReplayCount ?? -2) + 1 &&
+    score[0] < witness.error;
+  if (
+    proof.rescue !== rescue ||
+    result.distributionExceptionEligible !== rescue ||
+    result.debug.distributionExceptionEligible !== rescue
+  ) {
+    reasons.push("MATCH_TYPE_RESCUE_MISMATCH");
+  }
+  return { reasons, rescue };
 }
 
 /** Public, side-effect-free acceptance check for focused callers and benchmarks. */
@@ -1411,6 +1627,15 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
   let candidateBudgetExhausted = false;
   const candidateStartedAt = now();
   try {
+    if (process.env.BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED === "1" && options.sessionMode === SessionMode.MIXICANO) {
+      effectiveCandidateOptions.balancedMatchTypeContext = buildBalancedMatchTypeContext(candidatePlayers, options.socialHistoryMatches ?? options.completedMatches ?? [], {
+        groups: effectiveCandidateOptions.balancedMatchTypeGroups,
+        clubs: effectiveCandidateOptions.balancedMatchTypeClubs,
+        constraints: effectiveCandidateOptions.socialStructuralOpportunityConstraints,
+        searchBudget: primaryBudget,
+        policy: getBalancedMatchTypePolicyKey({sessionType: options.sessionType, sessionMode: options.sessionMode, respectPlayerRest: options.respectPlayerRest, groups: effectiveCandidateOptions.balancedMatchTypeGroups, clubs: effectiveCandidateOptions.balancedMatchTypeClubs, crossoverFrequency: effectiveCandidateOptions.balancedMatchTypeCrossoverFrequency}),
+      });
+    }
     candidateResult = findBestBalancedRecurrenceSelection(candidatePlayers, {
       ...effectiveCandidateOptions,
       // Reserve a bounded slice for independent acceptance within the 3s cutoff.
@@ -1443,6 +1668,9 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
       candidateProof: getCandidateProof(candidateResult, true),
       candidateSearch: candidateDiagnostics,
       wrapperElapsedMs: now() - wrapperStartedAt,
+      ...(candidateResult.matchTypeDistribution && effectiveCandidateOptions.balancedMatchTypeContext ? { matchTypeDistribution: {
+        ...candidateResult.matchTypeDistribution, diagnostics: effectiveCandidateOptions.balancedMatchTypeContext.diagnostics,
+      } } : {}),
     };
     return { result: candidateResult, decision, elapsedMs: decision.wrapperElapsedMs };
   }
@@ -1487,6 +1715,18 @@ export function runBalancedCandidateWithProductionFallback<T extends MatchmakerV
         fallbackBudget?.isExpired() ? { ...productionResult, debug: { ...productionResult.debug, searchLimitReached: true } } : productionResult
       )
     : buildNoSelectionFallback(productionPlayers, options);
+  if (result.selection && effectiveCandidateOptions.balancedMatchTypeContext) {
+    result.selection.selections = result.selection.selections.map(court => ({ ...court,
+      balancedMatchType: effectiveCandidateOptions.balancedMatchTypeContext!.snapshot(court.partition) ?? undefined,
+    }));
+  }
+  if (effectiveCandidateOptions.balancedMatchTypeContext) {
+    decision.matchTypeDistribution = {
+      score: effectiveCandidateOptions.balancedMatchTypeContext.score(result.selection?.selections.map(court=>court.partition) ?? []),
+      certified: false,
+      diagnostics: effectiveCandidateOptions.balancedMatchTypeContext.diagnostics,
+    };
+  }
   return { result, decision, elapsedMs: decision.wrapperElapsedMs };
 }
 
@@ -1497,14 +1737,16 @@ export function withBalancedCandidateDecision<T extends object>(
 ): T & { balancedPolicyDecision?: BalancedCandidateDecision; matchmakingReasonJson?: string | null } {
   if (!decision) return selection as T & { balancedPolicyDecision?: BalancedCandidateDecision; matchmakingReasonJson?: string | null };
   const reasonJson = (selection as T & { matchmakingReasonJson?: string | null }).matchmakingReasonJson;
+  const matchType = (selection as T & { balancedMatchType?: unknown }).balancedMatchType;
+  const metadata = { balancedPolicyDecision: decision, ...(matchType ? { balancedMatchType: matchType } : {}) };
   let matchmakingReasonJson: string;
   try {
     const parsed: unknown = reasonJson ? JSON.parse(reasonJson) : {};
     matchmakingReasonJson = isRecord(parsed)
-      ? JSON.stringify({ ...parsed, balancedPolicyDecision: decision })
-      : JSON.stringify({ balancedPolicyDecision: decision, originalReasonJson: reasonJson ?? null });
+      ? JSON.stringify({ ...parsed, ...metadata })
+      : JSON.stringify({ ...metadata, originalReasonJson: reasonJson ?? null });
   } catch {
-    matchmakingReasonJson = JSON.stringify({ balancedPolicyDecision: decision, originalReasonJson: reasonJson ?? null });
+    matchmakingReasonJson = JSON.stringify({ ...metadata, originalReasonJson: reasonJson ?? null });
   }
   return { ...selection, balancedPolicyDecision: decision, matchmakingReasonJson };
 }
