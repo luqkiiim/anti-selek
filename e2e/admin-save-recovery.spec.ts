@@ -37,7 +37,7 @@ async function mockAdmin(page: Page, claimed = false, advanced = false, globalAd
     }
     if (path === `/api/clubs/${clubId}/members` && request.method() === "POST") {
       const body = request.postDataJSON(); state.writes.push({ path, body });
-      const created = { ...player, id: "new-player", name: body.name, gender: body.gender, status: body.status, elo: body.initialRating ?? 1000 };
+      const created = { ...player, id: "new-player", name: body.name, gender: body.gender, status: body.status, elo: body.initialRating ?? 1000, accountEmail: null };
       state.players.push(created); state.failRefresh = true;
       return json(created, 201);
     }

@@ -10,12 +10,19 @@ export interface LevelPolicy {
 export interface LevelSelectionContext {
   strongerPriorityVector: number[];
   balanceGuardrail: V3BalanceGuardrail;
+  skillEnvelope?: { bestWorst: number; allowedWorst: number; allowedTotal: number };
 }
 
 export interface LevelSelectionDiagnostics {
   metric: SessionBalanceMetric;
   levelSpread: number;
   balanceGap: number;
+  compatibility?: number;
+  bestCompatibility?: number;
+  allowedCompatibility?: number;
+  withinSideGap?: number | null;
+  relativeGap?: number | null;
+  matchType?: "MIXED" | "UPPER" | "LOWER" | null;
   bestBalanceGap: number;
   allowedBalanceGap: number;
   ceilingFeasible: boolean;

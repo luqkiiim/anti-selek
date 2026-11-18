@@ -11,9 +11,10 @@ single courts, global batches, player groups, Interclub, reshuffles and player
 replacement. Level Match uses the separate ladder matcher.
 
 Current Level Match (`RACE`) uses `ladder/levelSelection.ts` with the selected
-Rating or Session points metric, a fixed team-balance envelope, then player-level
-similarity. It has no variety or repeat objective. Legacy `LADDER` retains its
-old selection policy. See the [Level Match plan and implementation notes](../../../../docs/level-match-plan.md).
+Rating or Session points metric, a fixed team-balance envelope, then a skill
+compatibility window for variety. [Level Match 2.0](../../../../docs/level-match-2.md)
+describes the current policy and the [original plan](../../../../docs/level-match-plan.md)
+documents its baseline.
 
 ## Shared stronger priorities
 
