@@ -5,6 +5,7 @@ import { getExactPartitionKey } from "../v3/rematch";
 import * as balanceGuardrail from "../v3/balanceGuardrail";
 import { createMatchmakingSearchBudget } from "../v3/searchBudget";
 import { findBestLevelBatchSelection } from "./levelSelection";
+import { buildLevelDistributionTargets } from "./levelDistribution";
 import type {
   LadderSelectionConstraints,
   MatchmakerLadderPlayer,
@@ -492,6 +493,24 @@ describe("Level selection policy", () => {
     });
     expect(result.debug.levelDiagnostics?.matchType).toBe("MIXED");
     expect(result.selection?.maxBalanceGap).toBe(0);
+  });
+
+  it("prefers complementary court types in the candidate batch without changing the stronger class", () => {
+    const upper = quartet("upper", [1000, 1000, 1000, 1000]);
+    const lower = quartet("lower", [1000, 1000, 1000, 1000]).map((p) => ({
+      ...p, gender: PlayerGender.FEMALE, partnerPreference: "FEMALE_FLEX",
+    }));
+    const players = [...upper, ...lower];
+    const old = { team1: [upper[0].userId, lower[0].userId] as [string, string],
+      team2: [upper[1].userId, lower[1].userId] as [string, string] };
+    const result = select(players, { courtCount: 2, sessionMode: SessionMode.MIXICANO, level3: { groups: false },
+      history: [{ ...old, levelMatchType: buildLevelDistributionTargets(players, false)(old) }],
+    });
+    expect(result.selection?.selections.map((court) => court.levelDiagnostics?.matchType).sort()).toEqual(["LOWER", "UPPER"]);
+    expect(result.debug.levelDiagnostics?.levelDistribution).toMatchObject({ count: 3, actual: [1, 1, 1] });
+    expect(result.selection?.maxBalanceGap).toBe(0);
+    expect(result.debug.baselineCertified).toBe(true);
+    expect(result.debug.searchLimitReached).toBe(false);
   });
 
   it("finds the complete-batch variety optimum across overlapping court choices", () => {

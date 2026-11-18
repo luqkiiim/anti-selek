@@ -2,6 +2,7 @@ import { SessionBalanceMetric, SessionType } from "@/types/enums";
 import { getBalanceGuardrailPolicy } from "../v3/balanceGuardrail";
 import type { V3BalanceGuardrail } from "../v3/types";
 import type { ActiveMatchmakerLadderPlayer, LadderSingleCourtSelection } from "./types";
+import type { LevelDistributionSnapshot } from "./levelDistribution";
 
 export interface LevelPolicy {
   metric: SessionBalanceMetric;
@@ -23,6 +24,8 @@ export interface LevelSelectionDiagnostics {
   withinSideGap?: number | null;
   relativeGap?: number | null;
   matchType?: "MIXED" | "UPPER" | "LOWER" | null;
+  levelMatchType?: LevelDistributionSnapshot;
+  levelDistribution?: { count: number; actual: number[]; expected: number[]; normalizedError: number };
   bestBalanceGap: number;
   allowedBalanceGap: number;
   ceilingFeasible: boolean;

@@ -1,4 +1,5 @@
 import { MatchStatus } from "@/types/enums";
+import { parseLevelDistributionSnapshot } from "./ladder/levelDistribution";
 import { parseBalancedMatchTypeSnapshot } from "./v3/balancedMatchTypes";
 import {
   parseSocialVarietySnapshot,
@@ -40,12 +41,15 @@ function toSocialHistoryMatch(row: SocialAssignmentRow): SocialHistoryMatch {
   }
   const snapshot = parseSocialVarietySnapshot(reason, partition);
   const matchType = parseBalancedMatchTypeSnapshot(reason, partition);
+  const levelMatchType = reason && typeof reason === "object" && "levelMatchType" in reason
+    ? parseLevelDistributionSnapshot(reason.levelMatchType, partition) : null;
   return {
     ...partition,
     ...(row.id ? { id: row.id } : {}),
     completedAt: row.completedAt,
     ...(snapshot ? { socialVariety: snapshot } : {}),
     ...(matchType ? { balancedMatchType: matchType } : {}),
+    ...(levelMatchType ? { levelMatchType } : {}),
   };
 }
 

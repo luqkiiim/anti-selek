@@ -1518,18 +1518,27 @@ describe("Balanced default through production POST routes", () => {
     expect(candidateSpy).not.toHaveBeenCalled();
   });
 
-  it.each([SessionBalanceMetric.RATING, SessionBalanceMetric.SESSION_POINTS])(
-    "persists Level %s decisions across refill, queue rebuild, reshuffle, replacement and consumption",
-    async (metric) => {
+  it.each([
+    { metric: SessionBalanceMetric.RATING, level3: false },
+    { metric: SessionBalanceMetric.SESSION_POINTS, level3: false },
+    { metric: SessionBalanceMetric.RATING, level3: true },
+    { metric: SessionBalanceMetric.SESSION_POINTS, level3: true },
+  ])(
+    "persists Level $metric decisions across the queue lifecycle with candidate=$level3",
+    async ({ metric, level3 }) => {
+      vi.stubEnv("LEVEL_MATCH_3_ENABLED", level3 ? "1" : undefined);
       const fixture = await createFixture({
         prefix: `level-queue-${metric.toLowerCase()}-${randomUUID().slice(0, 8)}`,
         type: SessionType.RACE,
-        playerCount: 16,
+        // Mixed Pairs needs a spare on either side even after both live
+        // courts and the queued quartet reserve the strongest eligible seats.
+        playerCount: level3 ? 22 : 16,
         courtCount: 2,
       });
       await prisma.session.update({
         where: { id: fixture.sessionId },
-        data: { matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH, balanceMetric: metric },
+        data: { matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH, balanceMetric: metric,
+          ...(level3 ? { mode: SessionMode.MIXICANO, pairingMode: "MIXED" } : {}) },
       });
       const busy = await createCurrentMatch(fixture);
       const response = await postGenerateMatch(fixture.code, { courtId: fixture.courtIds[1] });
@@ -1541,6 +1550,14 @@ describe("Balanced default through production POST routes", () => {
         expect(reason).toMatchObject({ source: "level", metric, baselineCertified: true });
         expect(reason.balanceGap).toBeLessThanOrEqual(reason.allowedBalanceGap);
         expect(reason.balancedPolicyDecision).toBeUndefined();
+        if (level3) {
+          expect(reason.levelMatch3Basis).toMatch(/^[a-f0-9]{64}$/);
+          expect(reason.levelMatchType).toMatchObject({ version: 1, scope: "session" });
+          expect(reason.levelDistribution.count).toBeGreaterThan(0);
+        } else {
+          expect(reason.levelMatchType).toBeUndefined();
+          expect(reason.levelMatch3Basis).toBeUndefined();
+        }
         return reason;
       };
       expectLevelReason(refill.matchmakingReasonJson);
@@ -1563,7 +1580,7 @@ describe("Balanced default through production POST routes", () => {
       const removed = queued.team1Player1Id;
       const retained = selectedIds(queued).filter((id) => id !== removed);
       const replace = await postQueueMatch(fixture.code, { replaceUserId: removed });
-      expect(replace.status).toBe(200);
+      expect(replace.status, await replace.text()).toBe(200);
       queued = await prisma.queuedMatch.findUniqueOrThrow({ where: { sessionId: fixture.sessionId } });
       expect(selectedIds(queued)).toEqual(expect.arrayContaining(retained));
       expect(selectedIds(queued)).not.toContain(removed);
@@ -1583,6 +1600,37 @@ describe("Balanced default through production POST routes", () => {
       expect((await prisma.court.findUniqueOrThrow({ where: { id: fixture.courtIds[0] } })).currentMatchId).toBe(busy.id);
     },
   );
+
+  it("saves manual Level commitments, removes them on undo and rejects stale automatic proposals", async () => {
+    vi.stubEnv("LEVEL_MATCH_3_ENABLED", "1");
+    const { getLevelMatch3Basis } = await import("@/lib/matchmaking/levelMatchPersistence");
+    const { withLegacySportingAliases } = await import("@/lib/sportingIdentity");
+    const { createMatchesForAssignments } = await import("./assignments");
+    const fixture = await createFixture({ prefix: "level-v3-manual", type: SessionType.RACE, playerCount: 8, courtCount: 1 });
+    await prisma.session.update({ where: { id: fixture.sessionId }, data: {
+      matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH, balanceMetric: SessionBalanceMetric.RATING,
+      mode: SessionMode.MIXICANO, pairingMode: "MIXED", autoQueueEnabled: false,
+    } });
+    const [a, b, c, d] = fixture.playerIds;
+    const partition: [string, string][] = [[a, b], [c, d]];
+    const manual = await postGenerateMatch(fixture.code, {
+      courtId: fixture.courtIds[0], manualTeams: { team1: partition[0], team2: partition[1] },
+    });
+    expect(manual.status).toBe(200);
+    const manualGame = await prisma.match.findFirstOrThrow({ where: { sessionId: fixture.sessionId } });
+    expect(JSON.parse(manualGame.matchmakingReasonJson ?? "{}").levelMatchType).toMatchObject({ version: 1, category: "MIXED" });
+    const undo = await postGenerateMatch(fixture.code, { courtId: fixture.courtIds[0], undoCurrentMatch: true });
+    expect(undo.status).toBe(200);
+    const source = await prisma.session.findUniqueOrThrow({ where: { id: fixture.sessionId }, include: { players: true, matches: true, queuedMatch: true } });
+    expect(source.matches).toHaveLength(0);
+    const basis = getLevelMatch3Basis(withLegacySportingAliases(source));
+    await prisma.sessionPlayer.updateMany({ where: { sessionId: fixture.sessionId, playerId: fixture.playerIds[7] }, data: { isPaused: true } });
+    await expect(createMatchesForAssignments(fixture.sessionId, [{ courtId: fixture.courtIds[0], selectedIds: [a, b, c, d],
+      partition: { team1: partition[0], team2: partition[1] },
+      matchmakingReasonJson: JSON.stringify({ source: "level", levelMatch3Basis: basis }),
+    }])).rejects.toMatchObject({ status: 409 });
+    expect(await prisma.match.count({ where: { sessionId: fixture.sessionId } })).toBe(0);
+  });
 
   it.each([SessionType.POINTS, SessionType.ELO])(
     "%s refuses to create a match when candidate and production proofs are tampered",

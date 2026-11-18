@@ -6,6 +6,7 @@ import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
 import { isBalancedMatchTypeSourceCurrent } from "@/lib/matchmaking/balancedMatchTypePersistence";
+import { hasLevelMatch3Commitment, isLevelMatchTypeSourceCurrent } from "@/lib/matchmaking/levelMatchPersistence";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
@@ -264,7 +265,8 @@ export async function createMatchesForAssignments(
 ) {
   return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
     await assertAssignmentsAvailable(tx, sessionId, assignments);
-    if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, assignments)) {
+    if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, assignments) ||
+      !await isLevelMatchTypeSourceCurrent(tx, sessionId, assignments)) {
       throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
     }
 
@@ -362,7 +364,8 @@ export async function replaceCurrentCourtMatchAssignment({
     }
 
     await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds }]);
-    if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, [{ partition, matchmakingReasonJson }])) {
+    if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, [{ partition, matchmakingReasonJson }]) ||
+      !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }])) {
       throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
     }
 
@@ -453,6 +456,10 @@ export async function createQueuedMatchAssignment({
       where: {
         id: queuedMatchId,
         sessionId,
+        ...(hasLevelMatch3Commitment(matchmakingReasonJson) ? {
+          team1Player1Id: partition.team1[0], team1Player2Id: partition.team1[1],
+          team2Player1Id: partition.team2[0], team2Player2Id: partition.team2[1], matchmakingReasonJson,
+        } : {}),
       },
     });
     if (removedQueue.count === 0) {
