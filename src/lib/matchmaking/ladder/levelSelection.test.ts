@@ -513,6 +513,37 @@ describe("Level selection policy", () => {
     expect(result.debug.searchLimitReached).toBe(false);
   });
 
+  it.each([
+    { ratings: [965, 965, 1035, 1035], chosen: "LOWER" },
+    { ratings: [965, 965, 965, 1035], chosen: "MIXED" },
+    { ratings: [960, 960, 1040, 1040], chosen: "MIXED" },
+  ])("uses the extra skill allowance only with a better distribution and certified balance ($ratings)", ({ ratings, chosen }) => {
+    const upper = quartet("u", [1000, 1000, 1000, 1000]);
+    const lower = quartet("l", [...ratings, 1000, 1000]).map((p) => ({
+      ...p, gender: PlayerGender.FEMALE, partnerPreference: "FEMALE_FLEX",
+    }));
+    const players = [...upper, ...lower];
+    const sameSide = lower.slice(0, 4);
+    const mixed = [upper[0], upper[1], lower[4], lower[5]];
+    const previous = { team1: ["u0", "l4"] as [string, string], team2: ["u1", "l5"] as [string, string] };
+    const commitment = { ...previous, levelMatchType: buildLevelDistributionTargets(players, false)(previous) };
+    const settings = {
+      sessionMode: SessionMode.MIXICANO,
+      selectionConstraints: allowQuartets(sameSide, mixed),
+      history: [{ ...commitment, id: "1" }, { ...commitment, id: "2" }],
+    };
+    expect(select(players, { ...settings, level3: { groups: false } }).debug.levelDiagnostics?.matchType).toBe("MIXED");
+    const enableRecovery = { groups: false, recoverDistribution: true };
+    const result = select(players, { ...settings, level3: enableRecovery });
+    expect(result.debug.levelDiagnostics).toMatchObject({
+      matchType: chosen, allowedBalanceGap: 30, balanceGap: 0, baselineCertified: true,
+      distributionRecovery: { used: chosen === "LOWER", types: ["LOWER"] },
+    });
+    const withoutDebt = select(players, { ...settings, history: [], level3: enableRecovery });
+    expect(withoutDebt.debug.levelDiagnostics?.matchType).toBe("MIXED");
+    expect(withoutDebt.debug.levelDiagnostics?.distributionRecovery).toBeUndefined();
+  });
+
   it("finds the complete-batch variety optimum across overlapping court choices", () => {
     const players = quartet("a", [1000, 1000, 1000, 1000]).concat(quartet("b", [1000, 1000, 1000, 1000]));
     const ids = players.map((p) => p.userId);

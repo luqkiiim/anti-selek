@@ -29,6 +29,10 @@ export function isLevelMatch3Enabled() {
   return process.env.LEVEL_MATCH_3_ENABLED === "1";
 }
 
+export function isLevelMatch31Enabled() {
+  return process.env.LEVEL_MATCH_31_ENABLED === "1";
+}
+
 const zeroCounts = (): Counts => [0, 0, 0];
 const isFraction = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
@@ -159,6 +163,11 @@ export function buildLevelDistributionContext(
     }
   }
   return {
+    recoveryTypes() {
+      if (residual[1] < SHARE_UNIT) return [];
+      return LEVEL_MATCH_TYPES.filter((type, i): type is Exclude<LevelMatchType, "MIXED"> =>
+        type !== "MIXED" && residual[i] <= -0.75 * SHARE_UNIT);
+    },
     snapshot: (partition: V3DoublesPartition, category?: LevelMatchType | null) =>
       mode === SessionMode.MIXICANO ? targetFor(partition, category) : undefined,
     impact,

@@ -1519,14 +1519,17 @@ describe("Balanced default through production POST routes", () => {
   });
 
   it.each([
-    { metric: SessionBalanceMetric.RATING, level3: false },
-    { metric: SessionBalanceMetric.SESSION_POINTS, level3: false },
-    { metric: SessionBalanceMetric.RATING, level3: true },
-    { metric: SessionBalanceMetric.SESSION_POINTS, level3: true },
+    { metric: SessionBalanceMetric.RATING, level3: false, level31: false },
+    { metric: SessionBalanceMetric.SESSION_POINTS, level3: false, level31: false },
+    { metric: SessionBalanceMetric.RATING, level3: true, level31: false },
+    { metric: SessionBalanceMetric.SESSION_POINTS, level3: true, level31: false },
+    { metric: SessionBalanceMetric.RATING, level3: true, level31: true },
+    { metric: SessionBalanceMetric.SESSION_POINTS, level3: true, level31: true },
   ])(
-    "persists Level $metric decisions across the queue lifecycle with candidate=$level3",
-    async ({ metric, level3 }) => {
+    "persists Level $metric decisions across the queue lifecycle with level3=$level3 and level31=$level31",
+    async ({ metric, level3, level31 }) => {
       vi.stubEnv("LEVEL_MATCH_3_ENABLED", level3 ? "1" : undefined);
+      vi.stubEnv("LEVEL_MATCH_31_ENABLED", level31 ? "1" : undefined);
       const fixture = await createFixture({
         prefix: `level-queue-${metric.toLowerCase()}-${randomUUID().slice(0, 8)}`,
         type: SessionType.RACE,

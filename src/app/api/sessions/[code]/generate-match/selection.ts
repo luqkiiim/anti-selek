@@ -79,7 +79,7 @@ import {
 } from "@/lib/matchmaking/v3/searchBudget";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import { getLevelMatch3Basis } from "@/lib/matchmaking/levelMatchPersistence";
-import { isLevelMatch3Enabled } from "@/lib/matchmaking/ladder/levelDistribution";
+import { isLevelMatch3Enabled, isLevelMatch31Enabled } from "@/lib/matchmaking/ladder/levelDistribution";
 import {
   buildSocialVarietySnapshot,
   buildSocialVarietyContext,
@@ -1261,7 +1261,7 @@ function selectLevelBatch({
       selectionContext,
       searchBudget,
       history,
-      ...(level3 ? { level3: { groups: sessionData.poolsEnabled } } : {}),
+      ...(level3 ? { level3: { groups: sessionData.poolsEnabled, recoverDistribution: isLevelMatch31Enabled() } } : {}),
     });
     if (!result.selection) {
       if (result.debug.searchLimitReached) throw getLevelSearchLimitError();

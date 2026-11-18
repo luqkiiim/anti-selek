@@ -26,6 +26,7 @@ export interface LevelSelectionDiagnostics {
   matchType?: "MIXED" | "UPPER" | "LOWER" | null;
   levelMatchType?: LevelDistributionSnapshot;
   levelDistribution?: { count: number; actual: number[]; expected: number[]; normalizedError: number };
+  distributionRecovery?: { types: ("UPPER" | "LOWER")[]; used: boolean; standardAllowedCompatibility: number };
   bestBalanceGap: number;
   allowedBalanceGap: number;
   ceilingFeasible: boolean;

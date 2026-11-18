@@ -47,7 +47,7 @@ export interface LevelSelectionOptions<T extends MatchmakerLadderPlayer> {
   history?: readonly SocialHistoryMatch[];
   /** Internal override for comparative benchmarks, in compatibility units. */
   skillTolerance?: number;
-  level3?: { groups: boolean };
+  level3?: { groups: boolean; recoverDistribution?: boolean };
 }
 
 export interface LevelBatchResult<T extends ActiveMatchmakerLadderPlayer> extends LadderBatchResult<T> {
@@ -171,6 +171,9 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
   const scoreSkill = buildLevelCompatibilityScorer(players, options.sessionMode, options.levelPolicy.metric);
   const history = options.history ?? [];
   const distribution = options.level3 ? buildLevelDistributionContext(players, history, options.sessionMode, options.level3.groups) : null;
+  // Reshuffles reuse the original certified envelope.
+  const recoveryTypes = options.level3?.recoverDistribution && !context ? distribution!.recoveryTypes() : [];
+  const recoveryAllowance = LEVEL_SKILL_UNIT / 4;
   const relationships = options.level3 ? buildLevelRelationshipVariety(history) : null;
   const scoreLegacyVariety = !options.level3 && history.length ? buildLevelVarietyScorer(players, history, options.sessionMode) : null;
   const scoreVariety = relationships || scoreLegacyVariety;
@@ -199,12 +202,15 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
     Math.floor(Math.max(0, worst - (skillEnvelope?.bestWorst ?? 0)) / (LEVEL_SKILL_UNIT * 0.4)),
   ];
   const impactsOf = (candidates: readonly Candidate[]) => candidates.map((candidate) => distributionFor(candidate)!.impact);
-  const qualityOf = (candidates: readonly Candidate[], variety = false) => [
-    ...(variety && distribution ? [distribution.band(impactsOf(candidates)), ...skillBands(skillOf(candidates))] : []),
-    ...(variety ? varietyOf(candidates) : []),
-    ...skillOf(candidates),
-    ...getLevelQualityVector(candidates.map((candidate) => candidate.selection), options.levelPolicy, respectRest).slice(2),
-  ];
+  const qualityOf = (candidates: readonly Candidate[], variety = false) => {
+    const skill = skillOf(candidates);
+    return [
+      ...(variety && distribution ? [distribution.band(impactsOf(candidates)), ...recoveryCost(skill), ...skillBands(skill)] : []),
+      ...(variety ? varietyOf(candidates) : []),
+      ...skill,
+      ...getLevelQualityVector(candidates.map((candidate) => candidate.selection), options.levelPolicy, respectRest).slice(2),
+    ];
+  };
 
   const starvationContext = {
     activePlayerCount: players.filter((player) => !player.isPaused).length,
@@ -355,6 +361,18 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
   let skillEnvelope = context?.skillEnvelope;
   const admitsSkill = ([worst, total]: readonly number[]) => !skillEnvelope ||
     (worst <= skillEnvelope.allowedWorst && total <= skillEnvelope.allowedTotal);
+  const recoveryCost = (skill: readonly number[]) => recoveryTypes.length ? [Number(!admitsSkill(skill))] : [];
+  const qualifiesForRecovery = ({ matchType }: LevelCompatibility) =>
+    (matchType === "UPPER" || matchType === "LOWER") && recoveryTypes.includes(matchType);
+  const recoveryWorst = (allowedWorst: number) =>
+    Math.max(allowedWorst, Math.min(allowedWorst + recoveryAllowance, LEVEL_SEVERE_COMPATIBILITY));
+  const admitsRecovery = ([worst, total]: readonly number[]) => !!skillEnvelope &&
+    worst <= recoveryWorst(skillEnvelope.allowedWorst) && total <= skillEnvelope.allowedTotal + recoveryAllowance;
+  const admitsCourt = (candidate: Candidate, useVariety: boolean) => {
+    const { skill } = candidate;
+    const scores = [skill.worst, skill.mean];
+    return admitsSkill(scores) || (useVariety && qualifiesForRecovery(skill) && admitsRecovery(scores));
+  };
   const globalLowerBound = optimisticFor(stateFor(BigInt(0)), Math.min(...prepared.map((schedule) => schedule.rank)));
 
   const runPass = (searchPhase: "baseline" | "skill" | "variety") => {
@@ -365,7 +383,7 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
     if (useVariety && relationships && history.length) {
       for (const list of new Set(prepared.flatMap((schedule) => schedule.candidates))) for (const candidate of list) {
         checkScanBudget();
-        if (!admitsSkill([candidate.skill.worst, candidate.skill.mean])) continue;
+        if (!admitsCourt(candidate, useVariety)) continue;
         for (const alternative of candidate.alternatives) {
           if (admitsPartition(candidate, alternative)) relationships.opportunities(alternative.partition);
         }
@@ -389,7 +407,7 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
         checkScanBudget();
         if (searchPhase === "baseline") { list.push(candidate); continue; }
         if (!guardrail || candidate.selection.balanceGap > guardrail.allowedMaxBalanceGap ||
-          !admitsSkill([candidate.skill.worst, candidate.skill.mean])) continue;
+          !admitsCourt(candidate, useVariety)) continue;
         if (!useVariety || !scoreVariety) { list.push(candidate); continue; }
         let chosen: Candidate | null = null;
         for (const alternative of candidate.alternatives) {
@@ -492,7 +510,9 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
               baselineProven = compareLevelVectors(stronger, globalLowerBound) === 0 &&
                 batch.maxBalanceGap === 0 && batch.totalBalanceGap === 0;
             }
-          } else if (fairnessCompare === 0 && guardrail && isBalanceGuardrailAdmissible(batch, guardrail) && admitsSkill(skillOf(chosen))) {
+          } else if (fairnessCompare === 0 && guardrail && isBalanceGuardrailAdmissible(batch, guardrail) &&
+            (admitsSkill(skillOf(chosen)) || (useVariety && chosen.some((candidate) => qualifiesForRecovery(candidate.skill)) &&
+              admitsRecovery(skillOf(chosen))))) {
             const quality = qualityOf(chosen, useVariety);
             if (!bestQuality || compareLevelVectors(quality, bestQuality) < 0) {
               best = batch; bestQuality = quality; bestSchedule = schedule.index;
@@ -538,10 +558,11 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
             chosen.reduce((sum, candidate) => sum + candidate.skill.mean, 0) +
               compatible.reduce((sum, summary) => sum + summary.minPairwise, 0),
           ];
-          if (!admitsSkill(skillBound)) { pruned++; return; }
+          // The optimistic bound may still be completed by a recovery-eligible court.
+          if (!admitsSkill(skillBound) && !(useVariety && recoveryTypes.length && admitsRecovery(skillBound))) { pruned++; return; }
           lowerQuality = [
             ...(useVariety && distribution ? [distribution.band(impactsOf(chosen), compatible.map((summary) => summary.distribution!)),
-              ...skillBands(skillBound)] : []),
+              ...recoveryCost(skillBound), ...skillBands(skillBound)] : []),
             ...(useVariety ? varietyOf(chosen).map((value, index) => value +
               compatible.reduce((sum, summary) => sum + summary.minVariety[index], 0)) : []),
             ...skillBound,
@@ -613,7 +634,12 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
         }
       }
       if (scoreVariety && skillEnvelope && !limitReached) {
+        const certified = { best, bestCandidates, bestSchedule };
         runWithinBudget(() => runPass("variety"));
+        if (limitReached && !admitsSkill(skillOf(bestCandidates))) {
+          // An unfinished search has not ruled out a standard-window batch in the same distribution band.
+          ({ best, bestCandidates, bestSchedule } = certified);
+        }
       } else if (context?.skillEnvelope && !scoreVariety) {
         runWithinBudget(() => runPass("skill"));
       }
@@ -626,6 +652,7 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
     ? selection.selections.map((chosen, index) => distribution.snapshot(chosen.partition, bestCandidates[index].skill.matchType))
     : [];
   const distributionDiagnostics = distribution?.diagnostics(distributionSnapshots);
+  const usedRecovery = !admitsSkill(skillOf(bestCandidates));
   selection.selections = selection.selections.map((chosen, index) => ({
     ...chosen,
     levelContext: selectionContext,
@@ -633,11 +660,16 @@ export function findBestLevelBatchSelection<T extends MatchmakerLadderPlayer>(
       metric: options.levelPolicy.metric, levelSpread: chosen.groupingSummary.maxLadderGap,
       compatibility: bestCandidates[index].skill.worst / LEVEL_SKILL_UNIT,
       bestCompatibility: skillEnvelope === undefined ? undefined : skillEnvelope.bestWorst / LEVEL_SKILL_UNIT,
-      allowedCompatibility: skillEnvelope === undefined ? undefined : skillEnvelope.allowedWorst / LEVEL_SKILL_UNIT,
+      allowedCompatibility: skillEnvelope === undefined ? undefined :
+        (usedRecovery && qualifiesForRecovery(bestCandidates[index].skill) ? recoveryWorst(skillEnvelope.allowedWorst) :
+          skillEnvelope.allowedWorst) / LEVEL_SKILL_UNIT,
       withinSideGap: bestCandidates[index].skill.withinSideGap,
       relativeGap: bestCandidates[index].skill.relativeGap,
       matchType: bestCandidates[index].skill.matchType,
       ...(distribution ? { levelMatchType: distributionSnapshots[index], levelDistribution: distributionDiagnostics } : {}),
+      ...(recoveryTypes.length && skillEnvelope ? { distributionRecovery: {
+        types: recoveryTypes, used: usedRecovery, standardAllowedCompatibility: skillEnvelope.allowedWorst / LEVEL_SKILL_UNIT,
+      } } : {}),
       balanceGap: chosen.balanceGap, bestBalanceGap: guardrail!.bestMaxBalanceGap,
       allowedBalanceGap: guardrail!.allowedMaxBalanceGap, ceilingFeasible: guardrail!.ceilingFeasible,
       baselineCertified: true, searchLimitReached: limitReached,
