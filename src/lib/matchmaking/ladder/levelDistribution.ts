@@ -162,11 +162,22 @@ export function buildLevelDistributionContext(
       exposure.set(id, prior);
     }
   }
+  /** Independent coordinate intervals overstate possible repairs, making a safe lower bound. */
+  const error = (chosen: readonly Counts[], remaining: readonly { min: Counts; max: Counts }[] = []) => {
+    let squaredError = 0;
+    for (let i = 0; i < 3; i++) {
+      const projected = residual[i] + chosen.reduce((sum, delta) => sum + delta[i], 0);
+      const low = projected + remaining.reduce((sum, range) => sum + range.min[i], 0);
+      const high = projected + remaining.reduce((sum, range) => sum + range.max[i], 0);
+      squaredError += (low > 0 ? low : high < 0 ? high : 0) ** 2;
+    }
+    return squaredError;
+  };
   return {
     recoveryTypes() {
-      if (residual[1] < SHARE_UNIT) return [];
+      if (residual[1] < 0.75 * SHARE_UNIT) return [];
       return LEVEL_MATCH_TYPES.filter((type, i): type is Exclude<LevelMatchType, "MIXED"> =>
-        type !== "MIXED" && residual[i] <= -0.75 * SHARE_UNIT);
+        type !== "MIXED" && residual[i] <= -0.5 * SHARE_UNIT);
     },
     snapshot: (partition: V3DoublesPartition, category?: LevelMatchType | null) =>
       mode === SessionMode.MIXICANO ? targetFor(partition, category) : undefined,
@@ -182,17 +193,8 @@ export function buildLevelDistributionContext(
         return sum + Math.round((excess(next) - excess(debt)) * 1_000);
       }, 0);
     },
-    /** Independent coordinate intervals overstate possible repairs, making a safe lower bound. */
-    band(chosen: readonly Counts[], remaining: readonly { min: Counts; max: Counts }[] = []) {
-      let error = 0;
-      for (let i = 0; i < 3; i++) {
-        const projected = residual[i] + chosen.reduce((sum, delta) => sum + delta[i], 0);
-        const low = projected + remaining.reduce((sum, range) => sum + range.min[i], 0);
-        const high = projected + remaining.reduce((sum, range) => sum + range.max[i], 0);
-        error += (low > 0 ? low : high < 0 ? high : 0) ** 2;
-      }
-      return Math.floor(error / ERROR_BAND);
-    },
+    error,
+    band: (...args: Parameters<typeof error>) => Math.floor(error(...args) / ERROR_BAND),
     diagnostics(entries: readonly (LevelDistributionSnapshot | undefined)[]) {
       const projectedActual = [...actual], projectedExpected = [...expected];
       let projectedCount = count;

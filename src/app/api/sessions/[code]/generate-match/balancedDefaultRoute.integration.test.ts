@@ -1604,12 +1604,13 @@ describe("Balanced default through production POST routes", () => {
     },
   );
 
-  it("saves manual Level commitments, removes them on undo and rejects stale automatic proposals", async () => {
+  it.each([false, true])("saves manual Level commitments, removes them on undo and rejects stale proposals (refined=%s)", async (refined) => {
     vi.stubEnv("LEVEL_MATCH_3_ENABLED", "1");
+    vi.stubEnv("LEVEL_MATCH_31_ENABLED", refined ? "1" : undefined);
     const { getLevelMatch3Basis } = await import("@/lib/matchmaking/levelMatchPersistence");
     const { withLegacySportingAliases } = await import("@/lib/sportingIdentity");
     const { createMatchesForAssignments } = await import("./assignments");
-    const fixture = await createFixture({ prefix: "level-v3-manual", type: SessionType.RACE, playerCount: 8, courtCount: 1 });
+    const fixture = await createFixture({ prefix: `level-v3-manual-${refined}`, type: SessionType.RACE, playerCount: 8, courtCount: 1 });
     await prisma.session.update({ where: { id: fixture.sessionId }, data: {
       matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH, balanceMetric: SessionBalanceMetric.RATING,
       mode: SessionMode.MIXICANO, pairingMode: "MIXED", autoQueueEnabled: false,

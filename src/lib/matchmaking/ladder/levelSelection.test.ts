@@ -495,7 +495,7 @@ describe("Level selection policy", () => {
     expect(result.selection?.maxBalanceGap).toBe(0);
   });
 
-  it("prefers complementary court types in the candidate batch without changing the stronger class", () => {
+  it.each([false, true])("prefers complementary court types across a batch without changing the stronger class (refined=%s)", (recoverDistribution) => {
     const upper = quartet("upper", [1000, 1000, 1000, 1000]);
     const lower = quartet("lower", [1000, 1000, 1000, 1000]).map((p) => ({
       ...p, gender: PlayerGender.FEMALE, partnerPreference: "FEMALE_FLEX",
@@ -503,7 +503,7 @@ describe("Level selection policy", () => {
     const players = [...upper, ...lower];
     const old = { team1: [upper[0].userId, lower[0].userId] as [string, string],
       team2: [upper[1].userId, lower[1].userId] as [string, string] };
-    const result = select(players, { courtCount: 2, sessionMode: SessionMode.MIXICANO, level3: { groups: false },
+    const result = select(players, { courtCount: 2, sessionMode: SessionMode.MIXICANO, level3: { groups: false, recoverDistribution },
       history: [{ ...old, levelMatchType: buildLevelDistributionTargets(players, false)(old) }],
     });
     expect(result.selection?.selections.map((court) => court.levelDiagnostics?.matchType).sort()).toEqual(["LOWER", "UPPER"]);
@@ -514,10 +514,11 @@ describe("Level selection policy", () => {
   });
 
   it.each([
-    { ratings: [965, 965, 1035, 1035], chosen: "LOWER" },
-    { ratings: [965, 965, 965, 1035], chosen: "MIXED" },
-    { ratings: [960, 960, 1040, 1040], chosen: "MIXED" },
-  ])("uses the extra skill allowance only with a better distribution and certified balance ($ratings)", ({ ratings, chosen }) => {
+    { ratings: [965, 965, 1035, 1035], chosen: "LOWER", balanceGap: 0 },
+    { ratings: [965, 965, 965, 1035], chosen: "LOWER", balanceGap: 35 },
+    { ratings: [945, 945, 945, 1055], chosen: "MIXED", balanceGap: 0 },
+    { ratings: [935, 935, 1065, 1065], chosen: "MIXED", balanceGap: 0 },
+  ])("uses the recovery window only for a better distribution within the skill and balance limits ($ratings)", ({ ratings, chosen, balanceGap }) => {
     const upper = quartet("u", [1000, 1000, 1000, 1000]);
     const lower = quartet("l", [...ratings, 1000, 1000]).map((p) => ({
       ...p, gender: PlayerGender.FEMALE, partnerPreference: "FEMALE_FLEX",
@@ -536,12 +537,49 @@ describe("Level selection policy", () => {
     const enableRecovery = { groups: false, recoverDistribution: true };
     const result = select(players, { ...settings, level3: enableRecovery });
     expect(result.debug.levelDiagnostics).toMatchObject({
-      matchType: chosen, allowedBalanceGap: 30, balanceGap: 0, baselineCertified: true,
-      distributionRecovery: { used: chosen === "LOWER", types: ["LOWER"] },
+      matchType: chosen, allowedBalanceGap: chosen === "LOWER" ? 45 : 30, balanceGap, baselineCertified: true,
+      distributionRecovery: { used: chosen === "LOWER", types: ["LOWER"], standardAllowedBalanceGap: 30 },
     });
     const withoutDebt = select(players, { ...settings, history: [], level3: enableRecovery });
     expect(withoutDebt.debug.levelDiagnostics?.matchType).toBe("MIXED");
     expect(withoutDebt.debug.levelDiagnostics?.distributionRecovery).toBeUndefined();
+  });
+
+  it("prefers a closer game over a new quartet when the match-type contribution ties", () => {
+    const close = quartet("a", [1000, 1000, 1000, 1000]);
+    const novel = quartet("b", [985, 985, 1015, 1015]);
+    const players = [...close, ...novel];
+    const old = { team1: ["a0", "a1"] as [string, string], team2: ["a2", "a3"] as [string, string] };
+    const settings = {
+      sessionMode: SessionMode.MIXICANO,
+      selectionConstraints: allowQuartets(close, novel),
+      history: [{ ...old, levelMatchType: buildLevelDistributionTargets(players, false)(old) }],
+    };
+    const standard = select(players, { ...settings, level3: { groups: false } });
+    expect(standard.selection?.selections[0].ids).toEqual(novel.map((p) => p.userId));
+    const refined = select(players, { ...settings, level3: { groups: false, recoverDistribution: true } });
+    expect(refined.selection?.selections[0].ids).toEqual(close.map((p) => p.userId));
+  });
+
+  it("keeps the Session Points balance limit when recovering the match-type distribution", () => {
+    const upper = quartet("u", [5, 5, 5, 5]);
+    const lower = quartet("l", [4, 4, 4, 8, 5, 5]).map((p) => ({
+      ...p, gender: PlayerGender.FEMALE, partnerPreference: "FEMALE_FLEX",
+    }));
+    const players = [...upper, ...lower];
+    const match = { team1: ["u0", "l4"] as [string, string], team2: ["u1", "l5"] as [string, string] };
+    const commitment = { ...match, levelMatchType: buildLevelDistributionTargets(players, false)(match) };
+    const result = select(players, {
+      levelPolicy: { metric: SessionBalanceMetric.SESSION_POINTS },
+      sessionMode: SessionMode.MIXICANO,
+      level3: { groups: false, recoverDistribution: true },
+      selectionConstraints: allowQuartets(lower.slice(0, 4), [upper[0], upper[1], lower[4], lower[5]]),
+      history: [{ ...commitment, id: "1" }, { ...commitment, id: "2" }],
+    });
+    expect(result.debug.levelDiagnostics).toMatchObject({
+      matchType: "MIXED", allowedBalanceGap: 1.5,
+      distributionRecovery: { used: false, recoveryAllowedBalanceGap: 1.5 },
+    });
   });
 
   it("finds the complete-batch variety optimum across overlapping court choices", () => {

@@ -8,27 +8,37 @@ const arg = (key, fallback) => process.argv.find((value) => value.startsWith(`--
 const compare31 = arg("comparison") === "31";
 const baselineVersion = compare31 ? "3.0" : "2.0";
 const baseline = compare31 ? "fb040f8a586b0adeb09cc5dfbe40ff73dcf21414" : "cbbfd966c48989da3622a6afe5e8cc044995180b";
+const previous = "5b39825506b12214409ec95640f4c46f441ba8f2";
 const baselineRoot = arg("baseline-worktree");
+const previousRoot = arg("previous-worktree");
 if (!baselineRoot) throw new Error(`Pass --baseline-worktree=PATH for a clean checkout of Level Match ${baselineVersion}.`);
 const git = (root, ...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 if (git(baselineRoot, "rev-parse", "HEAD") !== baseline || git(baselineRoot, "status", "--porcelain")) {
   throw new Error(`The baseline worktree must be clean and at the pinned Level Match ${baselineVersion} commit.`);
 }
+if (previousRoot && (git(previousRoot, "rev-parse", "HEAD") !== previous || git(previousRoot, "status", "--porcelain"))) {
+  throw new Error("The previous worktree must be clean and at the pinned original Level Match 3.1 commit.");
+}
 const createRunner = (root) => createServer({
   root, configFile: false, logLevel: "error", appType: "custom", server: { middlewareMode: true, ws: false },
   resolve: { alias: { "@": path.resolve(root, "src") } },
 });
-const [referenceServer, candidateServer] = await Promise.all([createRunner(path.resolve(baselineRoot)), createRunner(process.cwd())]);
+const [referenceServer, candidateServer, previousServer] = await Promise.all([
+  createRunner(path.resolve(baselineRoot)), createRunner(process.cwd()), previousRoot ? createRunner(path.resolve(previousRoot)) : null,
+]);
 const load = (server, module) => server.ssrLoadModule(`/src/${module}.ts`);
 const fromCandidate = (module) => load(candidateServer, module);
 
 try {
   const reference = await load(referenceServer, "lib/matchmaking/ladder/levelSelection");
+  const original31 = previousServer && await load(previousServer, "lib/matchmaking/ladder/levelSelection");
   const candidate = await fromCandidate("lib/matchmaking/ladder/levelSelection");
   const { SessionMode, SessionBalanceMetric } = await fromCandidate("types/enums");
   const { buildLevelDistributionTargets } = await fromCandidate("lib/matchmaking/ladder/levelDistribution");
-  const { buildLevelGrouping } = await fromCandidate("lib/matchmaking/ladder/levelPolicy");
-  const { buildLevelCompatibilityScorer } = await fromCandidate("lib/matchmaking/ladder/levelCompatibility");
+  const { buildLevelGrouping, compareLevelVectors } = await fromCandidate("lib/matchmaking/ladder/levelPolicy");
+  const { buildLevelCompatibilityScorer, LEVEL_SKILL_UNIT, LEVEL_SEVERE_COMPATIBILITY } =
+    await fromCandidate("lib/matchmaking/ladder/levelCompatibility");
+  const { getEffectiveMixedSide } = await fromCandidate("lib/mixedSide");
   const { buildRestTurnsByUserId } = await fromCandidate("lib/matchmaking/restTurns");
   const { deriveRaceRecordsByEntryTime } = await fromCandidate("lib/matchmaking/ladder/records");
   const { getExactPartitionKey } = await fromCandidate("lib/matchmaking/v3/rematch");
@@ -48,9 +58,11 @@ try {
   const caseFilter = arg("cases", cases.map(([id]) => id).join(",")).split(",");
   const schedules = arg("schedules", "async,queued,matched").split(",");
   const seeds = arg("seeds", "1,4729,104729").split(",").map(Number);
-  const algorithms = arg("policies", "reference,candidate").split(",");
+  const algorithms = arg("policies", original31 ? "reference,previous,candidate" : "reference,candidate").split(",");
+  if (algorithms.includes("previous") && !original31) throw new Error("Pass --previous-worktree=PATH to compare with original 3.1.");
   const horizons = arg("horizons", "21,100").split(",").map(Number);
   const respectPlayerRest = arg("rest", "on") !== "off";
+  const diagnose = arg("diagnose", "0") === "1";
   const rows = [];
   const out = arg("out", `benchmarks/generated/${compare31 ? "level-match-31" : "level-match-3"}/results.json`);
   const categories = ["UPPER", "MIXED", "LOWER"];
@@ -95,7 +107,7 @@ try {
 
   function simulate([id, upper, lower, profile], horizon, scheduling, seed, policy) {
     const enabled = compare31 || policy === "candidate";
-    const choose = (policy === "reference" ? reference : candidate).findBestLevelBatchSelection;
+    const choose = (policy === "reference" ? reference : policy === "previous" ? original31 : candidate).findBestLevelBatchSelection;
     const groups = id === "groups", lifecycle = id === "lifecycle";
     const courts = scheduling === "matched" ? 1 : id === "three-courts" || id.startsWith("12-8-") ? 3 : 2;
     const sessionMode = id === "open" ? SessionMode.MEXICANO : SessionMode.MIXICANO;
@@ -125,7 +137,8 @@ try {
     const exact = new Set(), quartets = new Set();
     let tick = 0, queued = null, serial = 0, calls = 0, failed = 0, fallbacks = 0, interrupted = 0, activated = 0;
     let illegal = 0, fairness = 0, balance = 0, severe = 0, avoids = 0, repeatQuartets = 0, repeatExact = 0, maxEffectiveGap = 0;
-    let recoveryMatches = 0, previewCalls = 0, previewChanges = 0;
+    let recoveryMatches = 0, balanceRecoveryMatches = 0, previewCalls = 0, previewChanges = 0;
+    const sameSideAudit = recordOf(["UPPER", "LOWER"], () => recordOf(["legal", "fairness", "balance", "skill", "ranked", "search"], () => 0));
     const effective = (p) => Math.max(p.matchesPlayed, p.matchmakingBaseline);
     let unavailableWaits = 0;
 
@@ -145,6 +158,39 @@ try {
       active.push({ ...game, startedAt: tick, end: tick + 3 + (serial++ % 2) });
     };
 
+    function auditSameSide(players, options, court, interrupted) {
+      const { levelContext: context, levelDiagnostics: proof } = court;
+      for (const side of ["UPPER", "LOWER"]) {
+        const audit = sameSideAudit[side];
+        if (interrupted || !context.skillEnvelope) { audit.search++; continue; }
+        const probe = (selectionContext) => choose(players, {
+          ...options, level3: undefined, history: [], randomFn: rng(seed + (calls - 1) * 37),
+          selectionContext, selectionConstraints: { isQuartetAllowed: (quartet) =>
+            quartet.every((player) => getEffectiveMixedSide(player) === side) },
+        });
+        const bySide = probe();
+        const best = bySide.selection?.selections[0];
+        if (bySide.debug.searchLimitReached) { audit.search++; continue; }
+        if (!best) { audit.legal++; continue; }
+        if (compareLevelVectors(best.levelContext.strongerPriorityVector, context.strongerPriorityVector) !== 0) {
+          audit.fairness++;
+          continue;
+        }
+        const recovery = proof.distributionRecovery?.types.includes(side) ? proof.distributionRecovery : undefined;
+        const allowedMaxBalanceGap = recovery?.recoveryAllowedBalanceGap ?? context.balanceGuardrail.allowedMaxBalanceGap;
+        if (best.levelDiagnostics.bestBalanceGap > allowedMaxBalanceGap) { audit.balance++; continue; }
+        const skillEnvelope = { ...context.skillEnvelope };
+        if (recovery) {
+          skillEnvelope.allowedWorst = Math.round((recovery.recoveryAllowedCompatibility ??
+            Math.max(skillEnvelope.allowedWorst, Math.min(skillEnvelope.allowedWorst + 250, LEVEL_SEVERE_COMPATIBILITY)) / LEVEL_SKILL_UNIT) * LEVEL_SKILL_UNIT);
+          skillEnvelope.allowedTotal = recovery.recoveryAllowedTotalCompatibility === undefined
+            ? skillEnvelope.allowedTotal + 250 : Math.round(recovery.recoveryAllowedTotalCompatibility * LEVEL_SKILL_UNIT);
+        }
+        const admitted = probe({ ...context, balanceGuardrail: { ...context.balanceGuardrail, allowedMaxBalanceGap }, skillEnvelope });
+        audit[admitted.debug.searchLimitReached ? "search" : admitted.selection ? "ranked" : "skill"]++;
+      }
+    }
+
     function select(courtCount, players, reservation) {
       const eligible = players.filter((p) => !p.isPaused && !p.isBusy);
       const matchType = scheduling === "matched" ? categories[history.length % 3] : null;
@@ -154,7 +200,7 @@ try {
       const options = { courtCount, sessionMode, levelPolicy: { metric }, respectPlayerRest, randomFn: rng(seed + calls++ * 37),
         history: [...history, ...active.map((game) => game.commitment)], selectionConstraints: allowed,
         schedules: groups ? groupSchedules(players, eligible, courtCount, groupHistory) : undefined,
-        ...(enabled ? { level3: { groups, recoverDistribution: compare31 && policy === "candidate" } } : {}) };
+        ...(enabled ? { level3: { groups, recoverDistribution: compare31 && (policy === "candidate" || policy === "previous") } } : {}) };
       const started = performance.now();
       let result = choose(players, options);
       // Benchmark-only preview. Assume the oldest live court finishes next,
@@ -209,6 +255,10 @@ try {
         }
       }
       const elapsed = performance.now() - started;
+      if (diagnose && !groups && courtCount === 1 && selected?.levelDiagnostics?.matchType === "MIXED" &&
+          ledger && ledger.actual[1] - ledger.expected[1] >= 1) {
+        auditSameSide(players, options, selected, result.debug.searchLimitReached);
+      }
       timing.push(elapsed);
       if (courtCount > 1) batchTiming.push(elapsed);
       branchCounts.push(result.debug.exploredBranches);
@@ -292,6 +342,7 @@ try {
         quality.compatibility.push(score.worst / 1_000);
         quality.balance.push(proof.balanceGap);
         if (proof.distributionRecovery?.used) recoveryMatches++;
+        if (proof.balanceGap > proof.distributionRecovery?.standardAllowedBalanceGap) balanceRecoveryMatches++;
         if (type === "MIXED") { quality.withinSide.push(score.withinSideGap); quality.relative.push(score.relativeGap); }
         else quality.sameSide.push(proof.levelSpread);
         if (score.worst > 2_500) { severe++; if (proof.bestCompatibility !== undefined && proof.bestCompatibility <= 2.5) avoids++; }
@@ -344,7 +395,8 @@ try {
       means: Object.fromEntries(Object.entries(quality).map(([key, values]) => [key, mean(values)])),
       maxEffectiveGap, maxWait: max(waits), backToBack: mean(waits.map((wait) => Number(wait === 0))), repeatQuartets, repeatExact,
       illegal, fairness, guardrailViolations: balance, severeMatches: severe, avoidableSevere: avoids, interrupted, fallbacks, failed, activated, unavailableWaits,
-      p95Compatibility: percentile(quality.compatibility, 0.95), recoveryMatches, interruptionPhases, previewCalls, previewChanges,
+      p95Compatibility: percentile(quality.compatibility, 0.95), recoveryMatches, balanceRecoveryMatches, interruptionPhases, previewCalls, previewChanges,
+      ...(diagnose ? { sameSideAudit } : {}),
       p50Ms: percentile(timing, 0.5), p95Ms: percentile(timing, 0.95), p99Ms: percentile(timing, 0.99),
       avgMs: mean(timing), p95BatchMs: percentile(batchTiming, 0.95),
       maxBranches: max(branchCounts), totalBranches: branchCounts.reduce((sum, count) => sum + count, 0),
@@ -359,7 +411,8 @@ try {
     for (const seed of seeds) for (const policy of algorithms) {
       const row = simulate(scenario, horizon, schedule, seed, policy);
       rows.push(row);
-      writeFileSync(out, JSON.stringify({ baseline, candidateBase: git(process.cwd(), "rev-parse", "HEAD"), rows }, null, 2));
+      writeFileSync(out, JSON.stringify({ baseline, ...(previousRoot ? { previous } : {}),
+        candidateBase: git(process.cwd(), "rev-parse", "HEAD"), rows }, null, 2));
       console.log(row.id, row.scheduling, row.horizon, row.seed, row.policy, row.completed,
         Object.values(row.actual).join("/"), row.opponents.toFixed(2), row.partners.toFixed(2), Math.round(row.p95Ms), `queue=${row.activated}`);
     }
@@ -383,5 +436,5 @@ try {
     }
   }
 } finally {
-  await Promise.all([referenceServer.close(), candidateServer.close()]);
+  await Promise.all([referenceServer.close(), candidateServer.close(), previousServer?.close()]);
 }

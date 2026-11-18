@@ -1,5 +1,7 @@
 # Level Match 3.1 review
 
+This report covers the original 3.1 experiment. The [refinement report](level-match-31-refinement.md) compares that version with the current draft.
+
 **Recommendation:** Keep `LEVEL_MATCH_31_ENABLED` off. The candidate protects the existing fairness and balance rules, but the improvement in match-type distribution is inconsistent across the sessions that motivated the change.
 
 ## Why mixed doubles can dominate
