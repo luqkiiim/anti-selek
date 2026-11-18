@@ -1,1 +1,1 @@
-{"framework":"nextjs","installCommand":"npm ci","buildCommand":"npm run build","outputDirectory":".next","git":{"deploymentEnabled":{"codex/level-match-2":false,"codex/level-match-3":false}}}
+{"framework":"nextjs","installCommand":"npm ci","buildCommand":"npm run build","outputDirectory":".next","git":{"deploymentEnabled":{"codex/level-match-2":false,"codex/level-match-3":false,"codex/level-match-31":false}}}
