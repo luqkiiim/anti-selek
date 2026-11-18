@@ -79,6 +79,7 @@ import {
 } from "@/lib/matchmaking/v3/searchBudget";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import {
+  buildSocialVarietySnapshot,
   buildSocialVarietyContext,
 } from "@/lib/matchmaking/v3/socialVariety";
 import {
@@ -253,6 +254,9 @@ function withMatchmakingReason<
         team1UserIds: selection.partition.team1,
         team2UserIds: selection.partition.team2,
         ...selection.levelDiagnostics,
+        ...(getMatchmakerSessionMode(sessionData) === SessionMode.MIXICANO ? {
+          socialVariety: buildSocialVarietySnapshot(selection.partition, sessionData.players),
+        } : {}),
       }),
     }, selection.socialPolicyDecision), selection.balancedPolicyDecision);
   }
@@ -1186,6 +1190,7 @@ function selectLevelBatch({
 }) {
   checkMatchmakingSearchBudget(searchBudget);
   const players = buildLadderPlayers(sessionData, playersById, rankedCandidates);
+  const history = buildSocialSessionHistory(sessionData);
   const activeCounts = getPoolActiveCounts(sessionData);
   const activePlayerCount = activeCounts[SessionPool.A] + activeCounts[SessionPool.B];
   const competitiveTargetRatio = activePlayerCount > 0
@@ -1233,7 +1238,7 @@ function selectLevelBatch({
           previousPriority = priority;
           return {
             rank,
-            // Keep the configured planner cadence; court history adds no Level preference.
+            // The configured Player Groups cadence precedes skill and variety.
             courts: plan.compositions.map(constraintsFor),
           };
         })
@@ -1250,6 +1255,7 @@ function selectLevelBatch({
       excludedPartitionKey,
       selectionContext,
       searchBudget,
+      history,
     });
     if (!result.selection) {
       if (result.debug.searchLimitReached) throw getLevelSearchLimitError();

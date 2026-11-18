@@ -398,7 +398,7 @@ describe("Level selection policy", () => {
   });
 
   it.each([SessionBalanceMetric.RATING, SessionBalanceMetric.SESSION_POINTS])(
-    "ignores partner history even for exact skill ties with %s",
+    "uses committed assignments instead of legacy last-partner hints with %s",
     (metric) => {
       const players = quartet("A", [1000, 1000, 1000, 1000]).concat(quartet("B", [1000, 1000, 1000, 1000]));
       const before = select(players, { levelPolicy: { metric }, randomFn: seededRandom() });
@@ -414,6 +414,119 @@ describe("Level selection policy", () => {
         .toEqual(before.selection?.selections.map((court) => getExactPartitionKey(court.partition)));
     }
   );
+
+  it.each([898, 899, 900, 901])("keeps adjacent skill peers eligible when their rating is %s", (rating) => {
+    const peers = quartet("peers", [880, rating, 901, 920]);
+    const distant = quartet("distant", [1050, 1100, 1150, 1200]);
+    const result = select([...peers, ...distant], { lockedPlayerIds: new Set([peers[1].userId]) });
+    expect(result.selection?.selections[0].ids).toEqual(peers.map((p) => p.userId).sort());
+  });
+
+  it.each([false, true])("uses within-side positions despite absolute rating offsets; reverse=%s", (reverse) => {
+    const upper = quartet("upper", reverse ? [900, 880, 700, 680] : [1200, 1180, 900, 880]);
+    const lower = quartet("lower", reverse ? [1200, 1180, 900, 880] : [900, 880, 700, 680])
+      .map((entry) => ({ ...entry, gender: PlayerGender.FEMALE, partnerPreference: "FEMALE_FLEX" }));
+    const comparable = [...upper.slice(0, 2), ...lower.slice(0, 2)];
+    const rawNear = reverse ? [...upper.slice(0, 2), ...lower.slice(2)] : [...upper.slice(2), ...lower.slice(0, 2)];
+    const result = select([...upper, ...lower], {
+      sessionMode: SessionMode.MIXICANO,
+      selectionConstraints: allowQuartets(comparable, rawNear),
+    });
+    const court = result.selection?.selections[0];
+    expect(court?.ids).toEqual(comparable.map((p) => p.userId).sort());
+    expect(court?.balanceGap).toBe(0);
+    expect(court?.levelDiagnostics).toMatchObject({ matchType: "MIXED", relativeGap: 0, withinSideGap: 20 });
+  });
+
+  it("admits a close alternative quartet for variety, and widens only inside the certified skill window", () => {
+    const regular = quartet("a", [880, 899, 901, 920]);
+    const crossover = quartet("b", [865, 890, 910, 935]);
+    const severe = quartet("c", [700, 850, 950, 1100]);
+    const options = { selectionConstraints: allowQuartets(regular, crossover, severe) };
+    const history = [{ team1: ["a0", "a3"] as [string, string], team2: ["a1", "a2"] as [string, string] }];
+    const result = select([...regular, ...crossover, ...severe], { ...options, history });
+    expect(result.selection?.selections[0].ids).toEqual(crossover.map((p) => p.userId));
+    expect(result.debug.levelDiagnostics?.allowedCompatibility).toBe(0.9);
+    const exact = select([...regular, ...crossover, ...severe], { ...options, history, skillTolerance: 0 });
+    expect(exact.selection?.selections[0].ids).toEqual(regular.map((p) => p.userId));
+  });
+
+  it("explores a fresh partition while respecting the team-average balance envelope", () => {
+    const players = quartet("a", [880, 900, 1180, 1200]);
+    players[0].gender = PlayerGender.FEMALE;
+    players[0].partnerPreference = "FEMALE_FLEX";
+    players[1].mixedSideOverride = "LOWER";
+    const options = { sessionMode: SessionMode.MIXICANO };
+    const first = select(players, options).selection!.selections[0];
+    const second = select(players, { ...options, history: [first.partition] }).selection!.selections[0];
+    expect(getExactPartitionKey(second.partition)).not.toBe(getExactPartitionKey(first.partition));
+    expect(first.balanceGap).toBe(0);
+    expect(second.balanceGap).toBe(20);
+    expect(second.levelDiagnostics?.allowedBalanceGap).toBe(30);
+  });
+
+  it("does not spend the variety allowance on a severe spread if the fair class has a closer match", () => {
+    const closer = quartet("a", [880, 900, 1100, 1120]);
+    const wide = quartet("b", [860, 900, 1100, 1140]);
+    const history = [{ team1: ["a0", "a3"] as [string, string], team2: ["a1", "a2"] as [string, string] }];
+    const result = select([...closer, ...wide], { selectionConstraints: allowQuartets(closer, wide), history });
+    expect(result.selection?.selections[0].ids).toEqual(closer.map((p) => p.userId));
+    expect(result.debug.levelDiagnostics).toMatchObject({ bestCompatibility: 2.4, allowedCompatibility: 2.5 });
+    const due = select([...closer, ...wide], { selectionConstraints: allowQuartets(closer, wide), history, lockedPlayerIds: new Set(["b0"]) });
+    expect(due.selection?.selections[0].ids).toEqual(wide.map((p) => p.userId));
+  });
+
+  it("favors a legal underexposed match type when courtmate coverage and skill are tied", () => {
+    const upper = quartet("upper", [1000, 1000, 1000, 1000]);
+    const lower = quartet("lower", [1000, 1000, 1000, 1000]).map((entry) => ({
+      ...entry, gender: PlayerGender.FEMALE, partnerPreference: "FEMALE_FLEX",
+    }));
+    const mixed = [...upper.slice(0, 2), ...lower.slice(0, 2)];
+    const teams = (ids: string[]) => ({ team1: [ids[0], ids[1]] as [string, string], team2: [ids[2], ids[3]] as [string, string] });
+    const history = Array.from({ length: 5 }, () => [teams(upper.map((p) => p.userId)), teams(lower.map((p) => p.userId))]).flat();
+    history.push(teams(["upper0", "lower0", "upper1", "lower1"]));
+    const result = select([...upper, ...lower], {
+      sessionMode: SessionMode.MIXICANO,
+      selectionConstraints: allowQuartets(upper, mixed),
+      history,
+    });
+    expect(result.debug.levelDiagnostics?.matchType).toBe("MIXED");
+    expect(result.selection?.maxBalanceGap).toBe(0);
+  });
+
+  it("finds the complete-batch variety optimum across overlapping court choices", () => {
+    const players = quartet("a", [1000, 1000, 1000, 1000]).concat(quartet("b", [1000, 1000, 1000, 1000]));
+    const ids = players.map((p) => p.userId);
+    const history = [
+      { team1: ["a0", "a1"], team2: ["a2", "a3"] },
+      { team1: ["b0", "b1"], team2: ["b2", "b3"] },
+      { team1: ["a0", "b0"], team2: ["a1", "b1"] },
+      { team1: ["a0", "b3"], team2: ["a2", "b2"] },
+    ] satisfies NonNullable<Options["history"]>;
+    const score = (court: typeof history[number]) => {
+      const seats = [...court.team1, ...court.team2];
+      const overlap = (a: string, b: string) => history.some((p) => [...p.team1, ...p.team2].includes(a) && [...p.team1, ...p.team2].includes(b));
+      const opponents = court.team1.flatMap((a) => court.team2.map((b) => Number(history.some((p) =>
+        p.team1.includes(a) && p.team2.includes(b) || p.team2.includes(a) && p.team1.includes(b)))));
+      const partners = [court.team1, court.team2].map(([a, b]) => Number(history.some((p) =>
+        [p.team1, p.team2].some((team) => team.includes(a) && team.includes(b)))));
+      return seats.flatMap((a, i) => seats.slice(i + 1).map((b) => Number(overlap(a, b)))).reduce((a, b) => a + b, 0) * 100 +
+        opponents.reduce((a, b) => a + b, 0) * 10 + partners.reduce((a, b) => a + b, 0);
+    };
+    const splits = (court: string[]) => court.slice(1).map((partner) => ({
+      team1: [court[0], partner] as [string, string],
+      team2: court.filter((id) => id !== court[0] && id !== partner) as [string, string],
+    }));
+    let best = Infinity;
+    for (let a = 1; a < 8; a++) for (let b = a + 1; b < 8; b++) for (let c = b + 1; c < 8; c++) {
+      const first = [ids[0], ids[a], ids[b], ids[c]];
+      const second = ids.filter((id) => !first.includes(id));
+      for (const left of splits(first)) for (const right of splits(second)) best = Math.min(best, score(left) + score(right));
+    }
+    const result = select(players, { courtCount: 2, history });
+    expect(result.selection?.selections.reduce((sum, court) => sum + score(court.partition), 0)).toBe(best);
+    expect(result.debug.searchLimitReached).toBe(false);
+  });
 
   it.each([true, false])("preserves count, arrival and excessive-wait priority ahead of an outlier's level fit; rest=%s", (respectPlayerRest) => {
     const regulars = Array.from({ length: 8 }, (_, i) => player(`regular${i}`));

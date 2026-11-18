@@ -309,6 +309,23 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
   });
 
+  it("defaults new Level Match requests to Club rating and honors explicit settings", () => {
+    const level = {
+      name: "Level Night",
+      clubId: "community-1",
+      matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH,
+    };
+    expect(parseCreateSessionRequest(level)).toMatchObject({
+      type: SessionType.RACE, balanceMetric: SessionBalanceMetric.RATING, poolsEnabled: false,
+    });
+    expect(parseCreateSessionRequest({ ...level, balanceMetric: SessionBalanceMetric.SESSION_POINTS })).toMatchObject({
+      balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+    });
+    expect(parseCreateSessionRequest({ ...level, matchmakingStyle: SessionMatchmakingStyle.BALANCED })).toMatchObject({
+      balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+    });
+  });
+
   it("rejects retired test-session creation instead of silently creating a rated session", () => {
     expect(() => parseCreateSessionRequest({
       name: "Dry Run",

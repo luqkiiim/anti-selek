@@ -26,6 +26,8 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
   SessionMode,
   SessionPool,
   SessionCollabFormat,
@@ -426,7 +428,8 @@ export function parseCreateSessionRequest(
     mode: typeof mode === "string" ? mode : undefined,
     scoringType: scoringType as string | undefined,
     matchmakingStyle: matchmakingStyle as string | undefined,
-    balanceMetric: balanceMetric as string | undefined,
+    balanceMetric: balanceMetric ??
+      (matchmakingStyle === SessionMatchmakingStyle.LEVEL_MATCH ? SessionBalanceMetric.RATING : undefined),
     pairingMode: pairingMode as string | undefined,
   });
   const legacyType =

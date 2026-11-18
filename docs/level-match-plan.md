@@ -1,6 +1,6 @@
 # Level Match implementation plan
 
-Status: implemented and verified locally. Production delivery is verified separately.
+Historical baseline. See [Level Match 2.0](./level-match-2.md) for the current policy.
 
 ## Intended behaviour
 
