@@ -71,6 +71,8 @@ For the two additional 12/8 seeds (17 and 9973), each of the six refined wide-ra
 
 **Recommendation:** Keep the flag off for general rollout. The Rating distribution gains justify a targeted trial, but more severe games accumulated in wide-skill sessions, and the queued Session Points and some smaller-roster cases remain variable. Lower opponent and partner variety is expected under the revised priorities.
 
+The [refill forecast follow-up](level-match-refill-forecast.md) tested whether an alternate current lineup could protect the next court. It missed the severe-game and mixed-count gates and stays in the benchmark.
+
 ## Reproduce
 
 The three-way comparison pins Level Match 3.0 at `fb040f8a586b0adeb09cc5dfbe40ff73dcf21414` and pre-refinement 3.1 at `5b39825506b12214409ec95640f4c46f441ba8f2`. From the refined checkout, point the script at clean worktrees at those commits.

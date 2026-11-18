@@ -9,8 +9,10 @@ const compare31 = arg("comparison") === "31";
 const baselineVersion = compare31 ? "3.0" : "2.0";
 const baseline = compare31 ? "fb040f8a586b0adeb09cc5dfbe40ff73dcf21414" : "cbbfd966c48989da3622a6afe5e8cc044995180b";
 const previous = "5b39825506b12214409ec95640f4c46f441ba8f2";
+const refined = "2c1a3fc30329a0de53516616ca22414e761021e1";
 const baselineRoot = arg("baseline-worktree");
 const previousRoot = arg("previous-worktree");
+const refinedRoot = arg("refined-worktree");
 if (!baselineRoot) throw new Error(`Pass --baseline-worktree=PATH for a clean checkout of Level Match ${baselineVersion}.`);
 const git = (root, ...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
 if (git(baselineRoot, "rev-parse", "HEAD") !== baseline || git(baselineRoot, "status", "--porcelain")) {
@@ -19,12 +21,16 @@ if (git(baselineRoot, "rev-parse", "HEAD") !== baseline || git(baselineRoot, "st
 if (previousRoot && (git(previousRoot, "rev-parse", "HEAD") !== previous || git(previousRoot, "status", "--porcelain"))) {
   throw new Error("The previous worktree must be clean and at the pinned original Level Match 3.1 commit.");
 }
+if (refinedRoot && (git(refinedRoot, "rev-parse", "HEAD") !== refined || git(refinedRoot, "status", "--porcelain"))) {
+  throw new Error("The refined worktree must be clean and at the pinned refined Level Match 3.1 commit.");
+}
 const createRunner = (root) => createServer({
   root, configFile: false, logLevel: "error", appType: "custom", server: { middlewareMode: true, ws: false },
   resolve: { alias: { "@": path.resolve(root, "src") } },
 });
-const [referenceServer, candidateServer, previousServer] = await Promise.all([
+const [referenceServer, candidateServer, previousServer, refinedServer] = await Promise.all([
   createRunner(path.resolve(baselineRoot)), createRunner(process.cwd()), previousRoot ? createRunner(path.resolve(previousRoot)) : null,
+  refinedRoot ? createRunner(path.resolve(refinedRoot)) : null,
 ]);
 const load = (server, module) => server.ssrLoadModule(`/src/${module}.ts`);
 const fromCandidate = (module) => load(candidateServer, module);
@@ -32,6 +38,7 @@ const fromCandidate = (module) => load(candidateServer, module);
 try {
   const reference = await load(referenceServer, "lib/matchmaking/ladder/levelSelection");
   const original31 = previousServer && await load(previousServer, "lib/matchmaking/ladder/levelSelection");
+  const refined31 = refinedServer && await load(refinedServer, "lib/matchmaking/ladder/levelSelection");
   const candidate = await fromCandidate("lib/matchmaking/ladder/levelSelection");
   const { SessionMode, SessionBalanceMetric } = await fromCandidate("types/enums");
   const { buildLevelDistributionTargets } = await fromCandidate("lib/matchmaking/ladder/levelDistribution");
@@ -60,7 +67,14 @@ try {
   const seeds = arg("seeds", "1,4729,104729").split(",").map(Number);
   const algorithms = arg("policies", original31 ? "reference,previous,candidate" : "reference,candidate").split(",");
   if (algorithms.includes("previous") && !original31) throw new Error("Pass --previous-worktree=PATH to compare with original 3.1.");
+  if (algorithms.some((policy) => policy === "forecast" || policy === "refined") && (!compare31 || !refined31)) {
+    throw new Error("Use --comparison=31 and --refined-worktree=PATH for the refill forecast comparison.");
+  }
+  const forecastRefill = algorithms.includes("forecast") &&
+    (await candidateServer.ssrLoadModule("/scripts/level-match-refill-forecast.ts")).forecastSingleLevelRefill;
   const horizons = arg("horizons", "21,100").split(",").map(Number);
+  const finishOrder = arg("finish-order", "staggered");
+  if (!["staggered", "varied"].includes(finishOrder)) throw new Error("Finish order must be staggered or varied.");
   const respectPlayerRest = arg("rest", "on") !== "off";
   const diagnose = arg("diagnose", "0") === "1";
   const rows = [];
@@ -107,7 +121,9 @@ try {
 
   function simulate([id, upper, lower, profile], horizon, scheduling, seed, policy) {
     const enabled = compare31 || policy === "candidate";
-    const choose = (policy === "reference" ? reference : policy === "previous" ? original31 : candidate).findBestLevelBatchSelection;
+    const frozenRefined = policy === "refined" || policy === "forecast";
+    const choose = (frozenRefined ? refined31 : policy === "reference" ? reference :
+      policy === "previous" ? original31 : candidate).findBestLevelBatchSelection;
     const groups = id === "groups", lifecycle = id === "lifecycle";
     const courts = scheduling === "matched" ? 1 : id === "three-courts" || id.startsWith("12-8-") ? 3 : 2;
     const sessionMode = id === "open" ? SessionMode.MEXICANO : SessionMode.MIXICANO;
@@ -138,6 +154,11 @@ try {
     let tick = 0, queued = null, serial = 0, calls = 0, failed = 0, fallbacks = 0, interrupted = 0, activated = 0;
     let illegal = 0, fairness = 0, balance = 0, severe = 0, avoids = 0, repeatQuartets = 0, repeatExact = 0, maxEffectiveGap = 0;
     let recoveryMatches = 0, balanceRecoveryMatches = 0, previewCalls = 0, previewChanges = 0;
+    const refillForecast = {
+      calls: 0, finalists: 0, finishScenarios: 0, projectedSevere: 0, projectedPreventions: 0,
+      outcomes: {}, finalistComparisons: {},
+    };
+    let newerCourtFinishedFirst = 0;
     const sameSideAudit = recordOf(["UPPER", "LOWER"], () => recordOf(["legal", "fairness", "balance", "skill", "ranked", "search"], () => 0));
     const effective = (p) => Math.max(p.matchesPlayed, p.matchmakingBaseline);
     let unavailableWaits = 0;
@@ -155,7 +176,10 @@ try {
       const byId = new Map(players.map((p) => [p.userId, p]));
       if (game.ids.some((player) => byId.get(player).isBusy || byId.get(player).isPaused)) { illegal++; return; }
       for (const player of game.ids) waits.push(byId.get(player).restTurns);
-      active.push({ ...game, startedAt: tick, end: tick + 3 + (serial++ % 2) });
+      const durations = [3, 7, 2, 5, 2, 6, 3, 8];
+      const duration = finishOrder === "varied" ? durations[(serial + seed % durations.length) % durations.length] : 3 + (serial % 2);
+      active.push({ ...game, startedAt: tick, end: tick + duration });
+      serial++;
     };
 
     function auditSameSide(players, options, court, interrupted) {
@@ -197,12 +221,32 @@ try {
       const groupHistory = [...history, ...active.map((game) => game.commitment)].map((game) => classifyCourtGroupSnapshot(game.team1, game.team2, pool));
       const allowed = matchType ? { isQuartetAllowed: (quartet) =>
         quartet.filter((p) => p.gender === "MALE").length === ({ UPPER: 4, MIXED: 2, LOWER: 0 })[matchType] } : undefined;
-      const options = { courtCount, sessionMode, levelPolicy: { metric }, respectPlayerRest, randomFn: rng(seed + calls++ * 37),
+      const decisionSeed = seed + calls++ * 37;
+      const options = { courtCount, sessionMode, levelPolicy: { metric }, respectPlayerRest, randomFn: rng(decisionSeed),
         history: [...history, ...active.map((game) => game.commitment)], selectionConstraints: allowed,
         schedules: groups ? groupSchedules(players, eligible, courtCount, groupHistory) : undefined,
-        ...(enabled ? { level3: { groups, recoverDistribution: compare31 && (policy === "candidate" || policy === "previous") } } : {}) };
+        ...(enabled ? { level3: { groups, recoverDistribution: compare31 && (frozenRefined || policy === "candidate" || policy === "previous") } } : {}) };
       const started = performance.now();
       let result = choose(players, options);
+      if (policy === "forecast" && scheduling !== "queued" && scheduling !== "matched" && !reservation &&
+          sessionMode === SessionMode.MIXICANO && metric === SessionBalanceMetric.RATING && !groups &&
+          history.length && courtCount === 1 && active.length === courts - 1 && (courts === 2 || courts === 3)) {
+        const decision = forecastRefill({
+          players, options, original: result, liveCourts: active.map((game) => game.ids),
+          completionTime: clock(tick + 1), randomForCandidate: () => rng(decisionSeed), searchStartedAt: started,
+        });
+        refillForecast.calls++;
+        refillForecast.finalists += decision.finalists;
+        refillForecast.finishScenarios += decision.forecasts;
+        refillForecast.projectedSevere += decision.baselineSevere;
+        refillForecast.projectedPreventions += decision.severePreventions;
+        const outcomes = refillForecast.outcomes;
+        outcomes[decision.outcome] = (outcomes[decision.outcome] ?? 0) + 1;
+        for (const [reason, count] of Object.entries(decision.comparisonCounts)) {
+          refillForecast.finalistComparisons[reason] = (refillForecast.finalistComparisons[reason] ?? 0) + count;
+        }
+        result = decision.result;
+      }
       // Benchmark-only preview. Assume the oldest live court finishes next,
       // and use the existing certified selector for both the current alternative and the next court.
       const selected = result.selection?.selections[0];
@@ -333,6 +377,7 @@ try {
       for (let index = active.length - 1; index >= 0; index--) {
         if (active[index].end > tick) continue;
         const [game] = active.splice(index, 1);
+        if (active.some((other) => other.end > tick && other.startedAt < game.startedAt)) newerCourtFinishedFirst++;
         const { commitment, score, snapshot, type, proof } = game;
         history.push({ ...commitment, status: "COMPLETED", completedAt: clock(tick) });
         if (snapshot && type) {
@@ -382,7 +427,7 @@ try {
     const categoryGames = Object.values(actual).reduce((sum, count) => sum + count, 0);
     const percentile = (values, p) => [...values].sort((a, b) => a - b)[Math.ceil(values.length * p) - 1] ?? null;
     return {
-      id, seed, horizon, scheduling, policy, respectPlayerRest, completed: history.length, profiles, actual, expected,
+      id, seed, horizon, scheduling, policy, finishOrder, newerCourtFinishedFirst, respectPlayerRest, completed: history.length, profiles, actual, expected,
       selectionFingerprint: createHash("sha256").update(JSON.stringify(history.map(getExactPartitionKey))).digest("hex"),
       nearestInteger: !groups && !lifecycle && categoryGames ? nearestIntegerTarget(upper, lower, categoryGames, expected,
         { UPPER: upper >= 4, MIXED: upper >= 2 && lower >= 2, LOWER: lower >= 4 }) : null,
@@ -396,6 +441,7 @@ try {
       maxEffectiveGap, maxWait: max(waits), backToBack: mean(waits.map((wait) => Number(wait === 0))), repeatQuartets, repeatExact,
       illegal, fairness, guardrailViolations: balance, severeMatches: severe, avoidableSevere: avoids, interrupted, fallbacks, failed, activated, unavailableWaits,
       p95Compatibility: percentile(quality.compatibility, 0.95), recoveryMatches, balanceRecoveryMatches, interruptionPhases, previewCalls, previewChanges,
+      ...(policy === "forecast" ? { refillForecast } : {}),
       ...(diagnose ? { sameSideAudit } : {}),
       p50Ms: percentile(timing, 0.5), p95Ms: percentile(timing, 0.95), p99Ms: percentile(timing, 0.99),
       avgMs: mean(timing), p95BatchMs: percentile(batchTiming, 0.95),
@@ -411,7 +457,7 @@ try {
     for (const seed of seeds) for (const policy of algorithms) {
       const row = simulate(scenario, horizon, schedule, seed, policy);
       rows.push(row);
-      writeFileSync(out, JSON.stringify({ baseline, ...(previousRoot ? { previous } : {}),
+      writeFileSync(out, JSON.stringify({ baseline, ...(previousRoot ? { previous } : {}), ...(refinedRoot ? { refined } : {}),
         candidateBase: git(process.cwd(), "rev-parse", "HEAD"), rows }, null, 2));
       console.log(row.id, row.scheduling, row.horizon, row.seed, row.policy, row.completed,
         Object.values(row.actual).join("/"), row.opponents.toFixed(2), row.partners.toFixed(2), Math.round(row.p95Ms), `queue=${row.activated}`);
@@ -436,5 +482,5 @@ try {
     }
   }
 } finally {
-  await Promise.all([referenceServer.close(), candidateServer.close(), previousServer?.close()]);
+  await Promise.all([referenceServer.close(), candidateServer.close(), previousServer?.close(), refinedServer?.close()]);
 }
