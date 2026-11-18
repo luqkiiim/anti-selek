@@ -235,8 +235,7 @@ export default function LiveSession({
     const timer = setTimeout(() => setPauseNotice(""), 5000);
     return () => clearTimeout(timer);
   }, [pauseNotice]);
-  const [managePlayersOpen, setManagePlayersOpen] = useState(false);
-  const [managedPlayerId, setManagedPlayerId] = useState<string | null>(null);
+  const [playerManagement, setPlayerManagement] = useState<{ screen: "players" | "roster"; playerId?: string } | null>(null);
   const [restPlayerId, setRestPlayerId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
@@ -1173,7 +1172,7 @@ export default function LiveSession({
             void refresh().catch(() => {});
           }} />}
           {canJoin && s?.status === "ACTIVE" && tab === "Courts" && <button className="secondary full" onClick={() => setTab("Players")}>Join session</button>}
-          {s && collaborationEnabled && (s.status === "WAITING" || tab === "Courts" || ended) && <ClubCollaboration session={s} data={collaboration.data} error={collaboration.error} onChanged={refresh} onManagePlayers={() => setManagePlayersOpen(true)} onReset={() => setSheet("reset")} />}
+          {s && collaborationEnabled && (s.status === "WAITING" || tab === "Courts" || ended) && <ClubCollaboration session={s} data={collaboration.data} error={collaboration.error} onChanged={refresh} onManagePlayers={() => setPlayerManagement({ screen: s.status === "WAITING" ? "players" : "roster" })} onReset={() => setSheet("reset")} />}
           {s && ended ? (
             <>
               {standings.data ? (
@@ -1213,7 +1212,7 @@ export default function LiveSession({
               busy={action.busy}
               onSettings={openLiveSettings}
               onShare={() => setShareMode("message")}
-              onManagePlayers={() => setManagePlayersOpen(true)}
+              onManagePlayers={() => setPlayerManagement({ screen: "players" })}
               onStart={() => void action.run(
                 () => api(endpoint + "/start", "POST"),
                 () => setTab("Courts"),
@@ -1405,7 +1404,7 @@ export default function LiveSession({
                 </small>
               </div>
               {pauseNotice && <p role="status" className="session-action-notice">{pauseNotice}</p>}
-              {canManageRoster && <button className="primary full" onClick={() => setManagePlayersOpen(true)}><Plus size={18} />Add players</button>}
+              {canManageRoster && <button className="primary full" onClick={() => setPlayerManagement({ screen: "roster" })}><Plus size={18} />Add players</button>}
               <div className="roster session-roster">
                 {activePlayers.map((p) => {
                   const isPaused = isRosterPlayerPaused(p);
@@ -1429,7 +1428,7 @@ export default function LiveSession({
                         </button>
                       )}
                       {canManageRoster && mayManagePlayer(p) ? (
-                        <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => { setManagedPlayerId(p.userId); setManagePlayersOpen(true); }}><DotsThree size={20} /></button>
+                        <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => setPlayerManagement({ screen: "players", playerId: p.userId })}><DotsThree size={20} /></button>
                       ) : ownsSessionSeat(p) ? <button className="icon-button" aria-label={`Rest options for ${p.user.name}`} onClick={() => { setRestPlayerId(p.userId); setSheet("self-rest"); }}><DotsThree size={20} /></button> : null}
                     </div>
                   );
@@ -1461,7 +1460,7 @@ export default function LiveSession({
                           </button>
                         )}
                         {canManageRoster && mayManagePlayer(p) && (
-                          <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => { setManagedPlayerId(p.userId); setManagePlayersOpen(true); }}><DotsThree size={20} /></button>
+                          <button type="button" className="icon-button" aria-label={`Options for ${p.user.name}`} onClick={() => setPlayerManagement({ screen: "players", playerId: p.userId })}><DotsThree size={20} /></button>
                         )}
                       </div>
                     ))}
@@ -2174,12 +2173,12 @@ export default function LiveSession({
           )}
       </Sheet>
       {s && <LivePlayerManagement
-        initialScreen={managedPlayerId ? "players" : "roster"}
-        initialPlayerId={managedPlayerId}
+        initialScreen={playerManagement?.screen}
+        initialPlayerId={playerManagement?.playerId}
         code={code}
         session={s}
-        open={managePlayersOpen && canManageRoster && !ended}
-        onClose={() => { setManagePlayersOpen(false); setManagedPlayerId(null); }}
+        open={!!playerManagement && canManageRoster && !ended}
+        onClose={() => setPlayerManagement(null)}
         onChanged={refresh}
         manageableClubIds={manageableClubIds}
       />}

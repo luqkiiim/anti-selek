@@ -60,7 +60,7 @@ test("first session: saved players, guest, breaks, safe finish, podium and guest
   await page.getByRole("button", { name: "Prepare session" }).click();
   await expect(page).toHaveURL(/\/session\//);
   const code = new URL(page.url()).pathname.split("/").pop()!;
-  await expect(page.getByRole("button", { name: "Add players", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Manage players", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Start session", exact: true }).click();
   const nav = page.getByRole("navigation", { name: "Session navigation" });
   await nav.getByRole("button", { name: "Courts", exact: true }).click();

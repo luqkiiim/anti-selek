@@ -25,6 +25,34 @@ test("removes unused players from the session roster while preserving court play
     return response.json();
   };
   try {
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.goto(`/session/${code}`);
+    await expectCurrentUi(page);
+    await expect(page).toHaveURL(new RegExp(`/session/${code}`));
+    await expect(page.getByRole("heading", { name: "Session setup", exact: true })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Session navigation" })).toHaveCount(0);
+    const standbyRoster = page.getByRole("region", { name: "Players", exact: true });
+    await standbyRoster.getByRole("button", { name: "Manage players", exact: true }).click();
+    const roster = page.getByRole("dialog", { name: "Players", exact: true });
+    const picker = page.getByRole("dialog", { name: "Add players", exact: true });
+    await roster.getByRole("button", { name: "Add players", exact: true }).click();
+    await picker.getByRole("searchbox", { name: "Search club members" }).fill("Host Player 6");
+    await picker.getByRole("button", { name: "Players", exact: true }).click();
+    await roster.getByRole("button", { name: "Options for Host Player 5", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "Remove player", exact: true });
+    await page.getByRole("dialog", { name: "Host Player 5", exact: true }).getByRole("button", { name: "Remove from session", exact: true }).click();
+    await confirmation.getByRole("button", { name: "Remove player", exact: true }).click();
+    await expect(roster.getByText("Host Player 5", { exact: true })).toHaveCount(0);
+    expect((await read()).players).toHaveLength(4);
+
+    await roster.getByRole("button", { name: "Add players", exact: true }).click();
+    await picker.getByRole("searchbox", { name: "Search club members" }).fill("Host Player 5");
+    await picker.getByRole("button", { name: "Add to session", exact: true }).click();
+    await expect(roster.getByText("Host Player 5", { exact: true })).toBeVisible();
+    await roster.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(standbyRoster).toContainText("5 players");
+    expect((await read()).status).toBe("WAITING");
+
     const started = await page.request.post(`${endpoint}/start`);
     expect(started.ok(), await started.text()).toBe(true);
     const courtId = (await read()).courts[0].id;
@@ -44,7 +72,6 @@ test("removes unused players from the session roster while preserving court play
 
     await page.locator(".roster").getByRole("button", { name: "Options for Host Player 1", exact: true }).click();
     await page.getByRole("dialog", { name: "Host Player 1", exact: true }).getByRole("button", { name: "Remove from session", exact: true }).click();
-    const confirmation = page.getByRole("dialog", { name: "Remove player", exact: true });
     await confirmation.getByRole("button", { name: "Remove player", exact: true }).click();
     await expect(confirmation.getByRole("alert")).toContainText("currently assigned to a match");
     expect((await read()).players).toHaveLength(5);

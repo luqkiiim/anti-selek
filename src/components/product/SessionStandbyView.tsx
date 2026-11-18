@@ -129,7 +129,7 @@ export function SessionStandbyView({
               onClick={onManagePlayers}
               disabled={busy}
             >
-              Add players
+              Manage players
             </button>
           ) : null}
         </div>

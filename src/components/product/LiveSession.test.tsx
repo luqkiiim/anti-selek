@@ -873,7 +873,7 @@ describe("LiveSession score and player controls", () => {
     });
     expect(container.textContent).toContain("Not started");
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
-    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Add players")).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
   });
 
   it("saves a trimmed session name before starting and rejects a blank draft", async () => {
@@ -937,7 +937,7 @@ describe("LiveSession score and player controls", () => {
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/reset", "POST");
     expect(container.textContent).toContain("Not started");
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.getAttribute("aria-label") === "Review session settings")).toBe(true);
-    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Add players")).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
   });
 

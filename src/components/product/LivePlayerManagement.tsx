@@ -312,6 +312,7 @@ export function LivePlayerManagement({
             disabled={busy}
             onClick={() => {
               setError("");
+              setSearch("");
               setListScreen("players");
             }}
           >
@@ -380,7 +381,7 @@ export function LivePlayerManagement({
               </div>
             ) : (
               <div className="pm-empty">
-                <p>No players match this search.</p>
+                <p>{normalizedSearch ? "No players match this search." : "No players yet"}</p>
                 {canManage && search.trim().length >= 2 ? (
                   <button type="button" className="pm-secondary" disabled={busy} onClick={() => {
                     const prefill = search.trim();

@@ -128,7 +128,7 @@ test("prototype host can reach court controls, player management, and match hist
   await expect(page.getByText("Not started", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Session navigation" })).toHaveCount(0);
   await expect(page.getByText("Score Player 1", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add players", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Manage players", exact: true })).toBeVisible();
   for (const width of [320, 390, 430, 1100]) {
     await page.setViewportSize({ width, height: 844 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
