@@ -6,6 +6,7 @@ import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
 import { isBalancedMatchTypeSourceCurrent } from "@/lib/matchmaking/balancedMatchTypePersistence";
+import { hasLevelMatch3Commitment, isLevelMatchTypeSourceCurrent } from "@/lib/matchmaking/levelMatchPersistence";
 import { getBalancedQueueDeferralReason } from "@/lib/matchmaking/balancedMatchTypeQueue";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
@@ -261,7 +262,8 @@ async function createQueuedMatchRecord({
         poolASeatCount,
         poolBSeatCount,
       });
-      if (!await isBalancedMatchTypeSourceCurrent(tx,sessionId,[{partition,matchmakingReasonJson}])) {
+      if (!await isBalancedMatchTypeSourceCurrent(tx,sessionId,[{partition,matchmakingReasonJson}]) ||
+        !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }])) {
         throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
       }
       const reasonJson = await resolveSocialHistoryReasonJson(
@@ -364,6 +366,7 @@ async function updateQueuedMatchRecord({
   sessionId,
   actor,
   queuedMatchId,
+  previousQueue,
   partition,
   targetPool,
   courtGroupType,
@@ -378,6 +381,7 @@ async function updateQueuedMatchRecord({
 }: {
   sessionId: string;
   queuedMatchId: string;
+  previousQueue: Pick<QueueRecord, "team1Player1Id" | "team1Player2Id" | "team2Player1Id" | "team2Player2Id" | "matchmakingReasonJson">;
   actor?: SessionMutationActor;
   partition: ManualMatchTeams;
   targetPool?: string | null;
@@ -400,8 +404,17 @@ async function updateQueuedMatchRecord({
       poolASeatCount,
       poolBSeatCount,
     });
-    if (!await isBalancedMatchTypeSourceCurrent(tx,sessionId,[{partition,matchmakingReasonJson}],true)) {
+    if (!await isBalancedMatchTypeSourceCurrent(tx,sessionId,[{partition,matchmakingReasonJson}],true) ||
+      !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }], true)) {
       throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
+    }
+    if (hasLevelMatch3Commitment(matchmakingReasonJson)) {
+      const current = await tx.queuedMatch.findUnique({ where: { id: queuedMatchId } });
+      if (!current || current.team1Player1Id !== previousQueue.team1Player1Id || current.team1Player2Id !== previousQueue.team1Player2Id ||
+        current.team2Player1Id !== previousQueue.team2Player1Id || current.team2Player2Id !== previousQueue.team2Player2Id ||
+        current.matchmakingReasonJson !== previousQueue.matchmakingReasonJson) {
+        throw new GenerateMatchError(409, "The queued match changed. Please refresh and retry.");
+      }
     }
     const reasonJson = await resolveSocialHistoryReasonJson(
       tx,
@@ -574,6 +587,7 @@ export async function reshuffleQueuedMatchForSession(
     sessionId: sessionData.id,
     actor: sessionData.mutationActor,
     queuedMatchId: sessionData.queuedMatch.id,
+    previousQueue: sessionData.queuedMatch,
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
     courtGroupType:
@@ -671,6 +685,7 @@ export async function replaceQueuedMatchPlayerForSession(
     sessionId: sessionData.id,
     actor: sessionData.mutationActor,
     queuedMatchId: sessionData.queuedMatch.id,
+    previousQueue: sessionData.queuedMatch,
     partition: replacementSelection.partition,
     targetPool: sessionData.queuedMatch.targetPool ?? null,
     courtGroupType:
@@ -767,6 +782,7 @@ async function tryRebuildAutomaticQueuedMatch(
     const queuedMatch = await updateQueuedMatchRecord({
       sessionId: sessionData.id,
       queuedMatchId: sessionData.queuedMatch.id,
+      previousQueue: sessionData.queuedMatch,
       partition: selection.partition,
       targetPool: selection.targetPool,
       courtGroupType: selection.courtGroupType,

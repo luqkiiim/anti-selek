@@ -6,6 +6,8 @@ import {
 } from "@/lib/sessionSettings";
 import { SessionMode, SessionType } from "@/types/enums";
 import { appendBalancedMatchTypeSnapshot } from "./balancedMatchTypePersistence";
+import { appendManualLevelMatchType, hasLevelMatch3Commitment } from "./levelMatchPersistence";
+import { isLevelMatch3Enabled } from "./ladder/levelDistribution";
 import { parseBalancedMatchTypeSnapshot } from "./v3/balancedMatchTypes";
 import { usesRotationMatchmaking } from "./v3/socialBatch";
 import type { V3DoublesPartition } from "./v3/types";
@@ -22,6 +24,7 @@ export async function resolveSocialHistoryReasonJson(
   reasonJson?: string | null,
   options: { newCommitment?: boolean } = {},
 ): Promise<string | null> {
+  if (hasLevelMatch3Commitment(reasonJson)) return reasonJson ?? null;
   // A queued commitment keeps its original sides when it becomes an active game.
   const existingSides = reasonJson
     ? parseSocialVarietySnapshot(reasonJson, partition)
@@ -49,6 +52,10 @@ export async function resolveSocialHistoryReasonJson(
       crossoverFrequency: true,
     },
   });
+  if (session && options.newCommitment && isLevelMatch3Enabled() &&
+    getEffectiveSessionType(session) === SessionType.RACE && getEffectiveSessionMode(session) === SessionMode.MIXICANO) {
+    return appendManualLevelMatchType(tx, sessionId, partition, reasonJson, session.poolsEnabled);
+  }
   if (!session || !usesRotationMatchmaking(getEffectiveSessionType(session))) {
     return reasonJson ?? null;
   }

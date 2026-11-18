@@ -78,6 +78,8 @@ import {
   type MatchmakingSearchBudget,
 } from "@/lib/matchmaking/v3/searchBudget";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
+import { getLevelMatch3Basis } from "@/lib/matchmaking/levelMatchPersistence";
+import { isLevelMatch3Enabled } from "@/lib/matchmaking/ladder/levelDistribution";
 import {
   buildSocialVarietySnapshot,
   buildSocialVarietyContext,
@@ -225,7 +227,7 @@ function getV3Selections(
 
 function withMatchmakingReason<
   TSelection extends MatchSelectionBase,
->(selection: TSelection, sessionData: GenerateMatchSession) {
+>(selection: TSelection, sessionData: GenerateMatchSession, levelMatch3Basis?: string) {
   const groupSnapshot = sessionData.poolsEnabled
     ? {
         courtGroupType:
@@ -254,6 +256,7 @@ function withMatchmakingReason<
         team1UserIds: selection.partition.team1,
         team2UserIds: selection.partition.team2,
         ...selection.levelDiagnostics,
+        ...(levelMatch3Basis ? { levelMatch3Basis } : {}),
         ...(getMatchmakerSessionMode(sessionData) === SessionMode.MIXICANO ? {
           socialVariety: buildSocialVarietySnapshot(selection.partition, sessionData.players),
         } : {}),
@@ -1191,6 +1194,8 @@ function selectLevelBatch({
   checkMatchmakingSearchBudget(searchBudget);
   const players = buildLadderPlayers(sessionData, playersById, rankedCandidates);
   const history = buildSocialSessionHistory(sessionData);
+  const level3 = isLevelMatch3Enabled();
+  const levelMatch3Basis = level3 ? getLevelMatch3Basis(sessionData) : undefined;
   const activeCounts = getPoolActiveCounts(sessionData);
   const activePlayerCount = activeCounts[SessionPool.A] + activeCounts[SessionPool.B];
   const competitiveTargetRatio = activePlayerCount > 0
@@ -1256,6 +1261,7 @@ function selectLevelBatch({
       selectionContext,
       searchBudget,
       history,
+      ...(level3 ? { level3: { groups: sessionData.poolsEnabled } } : {}),
     });
     if (!result.selection) {
       if (result.debug.searchLimitReached) throw getLevelSearchLimitError();
@@ -1276,7 +1282,7 @@ function selectLevelBatch({
           targetPool: composition ? getCompositionTargetPool(composition) : null,
           missedPool: null,
           competitiveTargetRatio,
-        }, sessionData);
+        }, sessionData, levelMatch3Basis);
       }),
       poolSchedulingState: sessionData,
       competitiveTargetRatio,
