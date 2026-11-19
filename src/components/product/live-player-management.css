@@ -22,13 +22,13 @@
 .pm-player-card { display: flex; flex-direction: column; gap: 9px; padding: 11px; border: 1px solid #eee5ef; border-radius: 16px; background: #fffdfb; }
 .pm-player-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .pm-player-heading > .avatar { width: 40px; height: 40px; border-radius: 13px; color: #7040bc; background: #f1e8f7; font-size: 15px; font-weight: 900; }
+.pm-roster-picker .pm-player-heading > .pm-secondary { white-space: nowrap; }
 .pm-player-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
 .pm-player-copy strong { overflow-wrap: anywhere; font-size: 14px; line-height: 1.3; }
 .pm-player-copy small { display: block; }
 .pm-skip-state { color: #a46716 !important; font-weight: 800; }
 .pm-empty { margin: 0; padding: 16px 10px; text-align: center; color: #80718b; font-size: 13px; }
-.pm-roster-actions { display: flex; align-items: center; gap: 8px; }
-.pm-pool-choice { flex: 1; min-width: 0; }
+.pm-pool-choice { min-width: 0; }
 .pm-pool-choice select { width: 100%; min-height: 44px; padding: 8px 9px; border: 1px solid #e8ddef; border-radius: 11px; color: #291440; background: white; font: inherit; font-size: 13px; }
 .pm-label { display: flex; flex-direction: column; gap: 6px; color: #59416d; font-size: 12px; font-weight: 800; }
 .pm-label small { color: #80718b; font-size: 11px; font-weight: 600; }
@@ -38,6 +38,5 @@
 .pm-remove-confirm .pm-hint { margin-top: -7px; }
 .live-player-management .product-error { margin: 0; }
 @media (max-width: 360px) {
-  .pm-roster-actions { align-items: stretch; }
-  .pm-roster-actions .pm-secondary { padding-inline: 9px; font-size: 12px; }
+  .pm-roster-picker .pm-player-heading > .pm-secondary { padding-inline: 9px; font-size: 12px; }
 }

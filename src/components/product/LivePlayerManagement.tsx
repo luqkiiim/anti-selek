@@ -436,28 +436,26 @@ export function LivePlayerManagement({
                         <strong>{member.name}</strong>
                         <small>{member.representingClubName ? `${member.representingClubName} · ` : ""}Rating {member.elo}</small>
                       </div>
-                    </div>
-                    <div className="pm-roster-actions">
-                      {session.poolsEnabled ? (
-                        <label className="pm-pool-choice">
-                          <span className="sr-only">Group for {member.name}</span>
-                          <select
-                            value={poolByRosterEntry[key] ?? member.preferredPool}
-                            onChange={(event) => setPoolByRosterEntry((current) => ({
-                              ...current,
-                              [key]: event.target.value as SessionPool,
-                            }))}
-                            disabled={busy}
-                          >
-                            <option value={SessionPool.A}>{session.poolAName || "Competitive"}</option>
-                            <option value={SessionPool.B}>{session.poolBName || "Social"}</option>
-                          </select>
-                        </label>
-                      ) : null}
                       <button type="button" className="pm-secondary" disabled={busy} onClick={() => void addMember(member)}>
                         Add to session
                       </button>
                     </div>
+                    {session.poolsEnabled ? (
+                      <label className="pm-pool-choice">
+                        <span className="sr-only">Group for {member.name}</span>
+                        <select
+                          value={poolByRosterEntry[key] ?? member.preferredPool}
+                          onChange={(event) => setPoolByRosterEntry((current) => ({
+                            ...current,
+                            [key]: event.target.value as SessionPool,
+                          }))}
+                          disabled={busy}
+                        >
+                          <option value={SessionPool.A}>{session.poolAName || "Competitive"}</option>
+                          <option value={SessionPool.B}>{session.poolBName || "Social"}</option>
+                        </select>
+                      </label>
+                    ) : null}
                   </article>
                 );
               })}
