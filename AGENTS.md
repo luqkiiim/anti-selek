@@ -20,6 +20,10 @@
 - Reuse existing release tooling and completed reviews. Do not build general-purpose rollout frameworks or run exhaustive failure simulations for a one-off release. For changes to previously reviewed work, review the affected differences rather than restarting the whole process.
 - Preserve practical safeguards: backups before production data changes, correct target/credentials, migration compatibility, and a recovery path. Keep the required production writer review and user approval; do not add repeated confirmation requests for actions already authorized.
 
+## Work Continuation
+
+- Apply the `continue-long-task` skill and schedule a resume only when the user explicitly invokes that skill for the task. Otherwise, continue in the current turn while Codex permits work. Remaining-usage percentages do not trigger a pause or a scheduled resume.
+
 ## UI/UX Direction
 
 - Production UI lives in `src/components/product/`. Before UI changes, read `docs/current-interface.md` for the canonical route-to-screen map, and verify changes through those real application routes.
