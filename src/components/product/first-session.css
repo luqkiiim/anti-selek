@@ -17,6 +17,9 @@
 .product-root .has-finish-action > .page-pager { top: calc(128px + env(safe-area-inset-top, 0px)); }
 .roster-pause-action { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; min-height: 44px; border: 1px solid #e6daf5; border-radius: 12px; background: transparent; color: inherit; padding: 0; }
 .roster-pause-action svg { flex-shrink: 0; }
+.session-roster-tools { display: flex; align-items: center; gap: 8px; }
+.session-roster-sort { display: flex; flex-shrink: 0; gap: 2px; padding: 2px; border-radius: 14px; background: #f0e8f8; }
+.session-roster-sort button[aria-pressed="true"] { background: var(--purple); color: #fff; }
 .session-roster .person { min-height: 64px; padding-block: 10px; }
 .session-roster .person-info strong, .session-roster .person-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-action-notice { font-size: 13px; }

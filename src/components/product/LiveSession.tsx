@@ -16,7 +16,9 @@ import {
   SignOut,
   Trash,
   ShareNetwork,
+  Trophy,
 } from "@phosphor-icons/react";
+import { ArrowDownAZ } from "lucide-react";
 import type {
   SessionData,
   Match,
@@ -236,6 +238,7 @@ export default function LiveSession({
     return () => clearTimeout(timer);
   }, [pauseNotice]);
   const [playerManagement, setPlayerManagement] = useState<{ screen: "players" | "roster"; playerId?: string } | null>(null);
+  const [rosterSort, setRosterSort] = useState<"name" | "rating">("name");
   const [restPlayerId, setRestPlayerId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
@@ -615,13 +618,14 @@ export default function LiveSession({
     }
     return isRosterPlayerPaused(player) ? "On break" : "Waiting";
   }
-  const alphabeticalPlayers = [...(s?.players ?? [])].sort((left, right) =>
-    left.user.name.localeCompare(right.user.name, undefined, { sensitivity: "base" }),
-  );
-  const activePlayers = alphabeticalPlayers.filter((player) =>
+  const sortedPlayers = [...(s?.players ?? [])].sort((left, right) => {
+    const ratingOrder = rosterSort === "rating" ? right.user.elo - left.user.elo : 0;
+    return ratingOrder || left.user.name.localeCompare(right.user.name, undefined, { sensitivity: "base" });
+  });
+  const activePlayers = sortedPlayers.filter((player) =>
     !isRosterPlayerPaused(player) || !!playingCourtFor(player.userId),
   );
-  const pausedPlayers = alphabeticalPlayers.filter((player) =>
+  const pausedPlayers = sortedPlayers.filter((player) =>
     isRosterPlayerPaused(player) && !playingCourtFor(player.userId),
   );
   function ownsSessionSeat(player: SessionData["players"][number]) {
@@ -1399,9 +1403,31 @@ export default function LiveSession({
             <>
               <div className="section-heading">
                 <h2>Players</h2>
-                <small>
-                  {s.players.filter((p) => isRosterPlayerPaused(p)).length} taking a break
-                </small>
+                <div className="session-roster-tools">
+                  <small>
+                    {s.players.filter((p) => isRosterPlayerPaused(p)).length} taking a break
+                  </small>
+                  <div className="session-roster-sort" role="group" aria-label="Sort players">
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Sort alphabetically"
+                      aria-pressed={rosterSort === "name"}
+                      onClick={() => setRosterSort("name")}
+                    >
+                      <ArrowDownAZ size={20} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      aria-label="Sort by rating"
+                      aria-pressed={rosterSort === "rating"}
+                      onClick={() => setRosterSort("rating")}
+                    >
+                      <Trophy size={20} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
               </div>
               {pauseNotice && <p role="status" className="session-action-notice">{pauseNotice}</p>}
               {canManageRoster && <button className="primary full" onClick={() => setPlayerManagement({ screen: "roster" })}><Plus size={18} />Add players</button>}
