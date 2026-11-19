@@ -23,6 +23,8 @@ export function getSessionTypeLabel(type: SessionType | string): string {
       return "Ladder (legacy)";
     case SessionType.RACE:
       return "Level Match";
+    case SessionType.CLUB_PLAY:
+      return "Club Play";
     default:
       return type;
   }

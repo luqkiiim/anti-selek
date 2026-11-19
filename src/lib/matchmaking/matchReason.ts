@@ -1,5 +1,6 @@
 import { CourtGroupType, SessionMode, SessionType } from "@/types/enums";
 import { getCourtGroupTypeLabel } from "@/lib/playerGroups";
+import { parseClubPlayDistributionSnapshot, type ClubPlayDistributionSnapshot } from "./ladder/clubPlayDistribution";
 import {
   buildSocialVarietySnapshot,
   parseSocialVarietySnapshot,
@@ -16,7 +17,7 @@ import type {
 
 export interface MatchmakingReason {
   version: 1;
-  source: "v3";
+  source: "v3" | "club-play";
   sessionType: string;
   sessionMode: string;
   selectedUserIds: [string, string, string, string];
@@ -24,6 +25,7 @@ export interface MatchmakingReason {
   team2UserIds: [string, string];
   summary: string[];
   socialVariety?: SocialVarietySnapshot;
+  clubPlayMatchType?: ClubPlayDistributionSnapshot;
   metrics: {
     fairnessBand: number | null;
     selectedMatchCounts: number[];
@@ -418,7 +420,7 @@ export function parseMatchmakingReasonJson(
     parsed = value;
   }
 
-  if (!isRecord(parsed) || parsed.version !== 1 || parsed.source !== "v3") {
+  if (!isRecord(parsed) || parsed.version !== 1 || (parsed.source !== "v3" && parsed.source !== "club-play")) {
     return null;
   }
 
@@ -552,17 +554,21 @@ export function parseMatchmakingReasonJson(
   const totalWaitSeconds = hasLegacyWaitMetrics
     ? (metrics.totalWaitSeconds as number)
     : undefined;
-  const socialVariety = parseSocialVarietySnapshot(parsed, {
+  const partition = {
     team1: parsed.team1UserIds as [string, string],
     team2: parsed.team2UserIds as [string, string],
-  });
+  };
+  const socialVariety = parseSocialVarietySnapshot(parsed, partition);
+  const clubPlayMatchType = parsed.source === "club-play"
+    ? parseClubPlayDistributionSnapshot(parsed.clubPlayMatchType, partition)
+    : null;
   const socialVarietyGains = parseSocialVarietyGains(metrics.socialVarietyGains);
   const socialStarvation = parseSocialStarvationSummary(metrics.socialStarvation);
   const balanceGuardrail = parseBalanceGuardrail(metrics.balanceGuardrail);
 
   return {
     version: 1,
-    source: "v3",
+    source: parsed.source,
     sessionType: parsed.sessionType,
     sessionMode: parsed.sessionMode,
     selectedUserIds: parsed.selectedUserIds as [string, string, string, string],
@@ -570,6 +576,7 @@ export function parseMatchmakingReasonJson(
     team2UserIds: parsed.team2UserIds as [string, string],
     summary: parsed.summary,
     ...(socialVariety ? { socialVariety } : {}),
+    ...(clubPlayMatchType ? { clubPlayMatchType } : {}),
     metrics: {
       fairnessBand: metrics.fairnessBand,
       selectedMatchCounts: metrics.selectedMatchCounts,

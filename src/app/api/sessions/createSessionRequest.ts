@@ -360,6 +360,7 @@ export function parseCreateSessionRequest(
       SessionType.ELO,
       SessionType.LADDER,
       SessionType.RACE,
+      SessionType.CLUB_PLAY,
     ].includes(
       legacyTypeInput as SessionType
     )
@@ -402,13 +403,19 @@ export function parseCreateSessionRequest(
     : [];
   const normalizedAutoQueueEnabled = autoQueueEnabled === true;
   const normalizedRespectPlayerRest = respectPlayerRest !== false;
-  const normalizedPoolsEnabled = poolsEnabled === true;
+  const clubPlay =
+    matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY ||
+    legacyTypeInput === SessionType.CLUB_PLAY;
+  const normalizedPoolsEnabled = !clubPlay && poolsEnabled === true;
   const normalizedPoolAName = DEFAULT_SESSION_POOL_A_NAME;
   const normalizedPoolBName = DEFAULT_SESSION_POOL_B_NAME;
   const normalizedCollabFormat =
     typeof collabFormat === "string"
       ? (collabFormat as SessionCollabFormat)
       : SessionCollabFormat.FREE_PLAY;
+  if (clubPlay && (partnerClubId || normalizedCollabFormat === SessionCollabFormat.INTERCLUB)) {
+    throw new SessionRouteError("Club Play is available for single-club sessions.", 400);
+  }
   if (normalizedCollabFormat === SessionCollabFormat.INTERCLUB) {
     if (typeof partnerClubId !== "string" || !partnerClubId) {
       throw new SessionRouteError(

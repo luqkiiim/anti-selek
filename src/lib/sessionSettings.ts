@@ -81,6 +81,22 @@ function getLegacyPairingMode(mode?: string | null) {
 }
 
 export function getSessionSettings(source: SessionSettingsSource): SessionSettings {
+  if (
+    source.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY ||
+    source.type === SessionType.CLUB_PLAY
+  ) {
+    return {
+      scoringType: SessionScoringType.POINTS,
+      matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY,
+      balanceMetric: SessionBalanceMetric.RATING,
+      pairingMode: isValidSessionPairingMode(source.pairingMode)
+        ? source.pairingMode
+        : source.mode === SessionMode.MEXICANO
+          ? SessionPairingMode.OPEN
+          : SessionPairingMode.MIXED,
+    };
+  }
+
   const settings = {
     scoringType: isValidSessionScoringType(source.scoringType)
       ? source.scoringType
@@ -128,6 +144,10 @@ export function getSessionSettings(source: SessionSettingsSource): SessionSettin
 }
 
 export function getLegacySessionTypeForSettings(settings: SessionSettings) {
+  if (settings.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY) {
+    return SessionType.CLUB_PLAY;
+  }
+
   if (settings.matchmakingStyle === SessionMatchmakingStyle.SOCIAL) {
     return SessionType.SOCIAL_MIX;
   }
@@ -150,7 +170,10 @@ export function getLegacySessionModeForSettings(settings: SessionSettings) {
 }
 
 export function getEffectiveSessionType(source: SessionSettingsSource) {
-  if (source.type === SessionType.LADDER) {
+  if (
+    source.type === SessionType.LADDER &&
+    source.matchmakingStyle !== SessionMatchmakingStyle.CLUB_PLAY
+  ) {
     return SessionType.LADDER;
   }
 
@@ -169,6 +192,8 @@ export function getMatchmakingStyleLabel(style: SessionMatchmakingStyle | string
       return "Social";
     case SessionMatchmakingStyle.LEVEL_MATCH:
       return "Level Match";
+    case SessionMatchmakingStyle.CLUB_PLAY:
+      return "Club Play";
     default:
       return style;
   }

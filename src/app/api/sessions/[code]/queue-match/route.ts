@@ -19,6 +19,7 @@ import {
 import { parseManualTeams } from "../generate-match/request";
 import { validateManualMatchRequest } from "../generate-match/manual";
 import { buildMatchmakingState } from "../generate-match/selection";
+import { MatchmakingSearchBudgetExceededError } from "@/lib/matchmaking/v3/searchBudget";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
@@ -199,6 +200,9 @@ export async function POST(
       queuedMatch: await createQueuedMatchForSession(sessionData),
     });
   } catch (error) {
+    if (error instanceof MatchmakingSearchBudgetExceededError) {
+      return sportingJson({ error: "Match search reached its time limit. Try queuing the match again." }, { status: 409 });
+    }
     if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: 409 });
     if (error instanceof GenerateMatchError) {
       if (error.status === 403) {

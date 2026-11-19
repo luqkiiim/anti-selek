@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { getSideSpecificCourtCreateLabel } from "@/lib/courtCreate";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
 import { getEffectiveSessionMode, getEffectiveSessionType } from "@/lib/sessionSettings";
+import { SessionType } from "@/types/enums";
 import {
   createMatchmakingSearchBudget,
   MatchmakingSearchBudgetExceededError,
@@ -101,6 +102,9 @@ export async function POST(
 
     assertFreePlayScheduling(sessionData);
     ensureInterclubSessionReady(sessionData);
+    const clubPlayBudget = getEffectiveSessionType(sessionData) === SessionType.CLUB_PLAY
+      ? createMatchmakingSearchBudget()
+      : undefined;
 
     if (matchType && sessionData.queuedMatch) {
       throw new GenerateMatchError(
@@ -139,7 +143,7 @@ export async function POST(
 
       return sportingJson({
         ...createdMatch,
-        queuedMatch: await rebuildQueueAfterCommit(sessionData.id, undefined, sessionData.mutationActor),
+        queuedMatch: await rebuildQueueAfterCommit(sessionData.id, clubPlayBudget, sessionData.mutationActor),
       });
     }
 
@@ -197,6 +201,7 @@ export async function POST(
           retainedUserIds: retainedUserIds as [string, string, string],
           excludedUserIds: currentMatchUserIds,
           requiredCourtGroupType: targetCourt.currentMatch.courtGroupType,
+          searchBudget: clubPlayBudget,
         });
 
       const replacementMatch = await replaceCurrentCourtMatchAssignment({
@@ -234,7 +239,7 @@ export async function POST(
 
       return sportingJson({
         ...replacementMatch,
-        queuedMatch: await rebuildQueueAfterCommit(sessionData.id, undefined, sessionData.mutationActor),
+        queuedMatch: await rebuildQueueAfterCommit(sessionData.id, clubPlayBudget, sessionData.mutationActor),
       });
     }
 
@@ -290,6 +295,7 @@ export async function POST(
           rotationHistory,
           reshuffleSource,
           requiredCourtGroupType: targetCourt.currentMatch.courtGroupType,
+          searchBudget: clubPlayBudget,
         });
 
       const newMatch = await replaceCurrentCourtMatchAssignment({
@@ -318,7 +324,7 @@ export async function POST(
         ),
       });
 
-      const queuedMatch = await rebuildQueueAfterCommit(sessionData.id, undefined, sessionData.mutationActor);
+      const queuedMatch = await rebuildQueueAfterCommit(sessionData.id, clubPlayBudget, sessionData.mutationActor);
 
       return sportingJson({ ...newMatch, queuedMatch });
     }
@@ -329,13 +335,13 @@ export async function POST(
     );
     const requestedMatchCount = requestedOpenCourts.length;
     const eligiblePlayerCount = sessionData.players.filter((player) => !player.isPaused).length;
-    const searchBudget = usesGroupedMixedCapacityBudget({
+    const searchBudget = clubPlayBudget ?? (usesGroupedMixedCapacityBudget({
       poolsEnabled: sessionData.poolsEnabled,
       sessionType: getEffectiveSessionType(sessionData),
       sessionMode: getEffectiveSessionMode(sessionData),
       requestedMatchCount,
       eligiblePlayerCount,
-    }) ? createMatchmakingSearchBudget() : undefined;
+    }) ? createMatchmakingSearchBudget() : undefined);
     const preparationStartedAt = performance.now();
     const { busyPlayerIds, playersById, rotationHistory } =
       await buildMatchmakingState(sessionData);
@@ -353,7 +359,7 @@ export async function POST(
       ensureEnoughPlayers(
         availableCandidates.length,
         rankedCandidates.length,
-        sessionData.poolsEnabled ? 1 : requestedMatchCount
+        clubPlayBudget || sessionData.poolsEnabled ? 1 : requestedMatchCount
       );
     }
 
@@ -365,6 +371,7 @@ export async function POST(
           sessionData,
           rotationHistory,
           reshuffleSource,
+          searchBudget,
         });
 
       const [newMatch] = await createMatchesForAssignments(sessionData.id, [

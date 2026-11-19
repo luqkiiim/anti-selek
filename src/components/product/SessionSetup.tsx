@@ -18,6 +18,7 @@ const formats = [
   { id: "BALANCED", name: "Balanced", description: "More variety, while keeping teams balanced.", icon: Scales },
   { id: "SOCIAL", name: "Social", description: "Prioritize playing with different people.", icon: Shuffle },
   { id: "LEVEL_MATCH", name: "Level match", description: "Bring players of similar ability together.", icon: ChartBar },
+  { id: "CLUB_PLAY", name: "Club Play", description: "Play mostly with others near your skill level, with fair turns and a healthy mix of doubles.", icon: UsersThree },
 ] as const;
 
 function Toggle({ title, hint, checked, onChange }: { title: string; hint?: string; checked: boolean; onChange: (checked: boolean) => void }) {
@@ -63,12 +64,18 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
   const [metric, setMetric] = useState("RATING");
   const [mixed, setMixed] = useState(false);
   const [groups, setGroups] = useState(false);
+  const [clubPlayMixed, setClubPlayMixed] = useState(true);
   const [crossover, setCrossover] = useState("BALANCED");
   const [autoQueue, setAutoQueue] = useState(false);
   const [pools, setPools] = useState<Record<string, Pool>>({});
   const [rosterOpen, setRosterOpen] = useState(false);
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const selectedStyle = partner && style === "CLUB_PLAY" ? "BALANCED" : style;
+  const isClubPlay = selectedStyle === "CLUB_PLAY";
+  const playTogether = !partner || collabFormat === "FREE_PLAY";
+  const useMixed = playTogether && (isClubPlay ? clubPlayMixed : mixed);
+  const useGroups = playTogether && !isClubPlay && groups;
   const searchInput = useRef<HTMLInputElement>(null);
   const rosterHeader = useRef<HTMLDivElement>(null);
   const playerRows = useRef(new Map<string, HTMLDivElement>());
@@ -136,17 +143,17 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
     void action.run(async () => {
       if (!name.trim()) throw new Error("Give this session a name.");
       if (!partner && count < 2) throw new Error("Choose at least two players or guests.");
-      if ((!partner || collabFormat === "FREE_PLAY") && mixed && players.some(p => getGender(p) === "UNSPECIFIED")) throw new Error("Some players haven’t set their gender. Ask them to update their account before using mixed pairs.");
-      if ((!partner || collabFormat === "FREE_PLAY") && mixed && guests.some(g => g.gender === "UNSPECIFIED")) throw new Error("Set a gender for each guest in the player list before using mixed pairs.");
-      if ((!partner || collabFormat === "FREE_PLAY") && groups && (competitive < 2 || count - competitive < 2)) throw new Error("Open the player list and assign at least two players to each group.");
+      if (useMixed && players.some(p => getGender(p) === "UNSPECIFIED")) throw new Error("Some players haven’t set their gender. Ask them to update their account before using mixed pairs.");
+      if (useMixed && guests.some(g => g.gender === "UNSPECIFIED")) throw new Error("Set a gender for each guest in the player list before using mixed pairs.");
+      if (useGroups && (competitive < 2 || count - competitive < 2)) throw new Error("Open the player list and assign at least two players to each group.");
       const created = await api<{ code: string }>("/api/sessions", "POST", {
         details: sessionDetailsFromDraft(details, Array.from({ length: courts }, (_, index) => index + 1)),
-        name: name.trim(), clubId, courtCount: courts, scoringType: "POINTS", matchmakingStyle: style,
-        balanceMetric: metric, pairingMode: partner && collabFormat === "INTERCLUB" ? "OPEN" : mixed ? "MIXED" : "OPEN", collabFormat: partner ? collabFormat : "FREE_PLAY",
+        name: name.trim(), clubId, courtCount: courts, scoringType: "POINTS", matchmakingStyle: selectedStyle,
+        balanceMetric: isClubPlay ? "RATING" : metric, pairingMode: useMixed ? "MIXED" : "OPEN", collabFormat: partner ? collabFormat : "FREE_PLAY",
         ...(partner ? { partnerClubId: partner.id, collaborationVersion: 2, schedulingMode: collabFormat === "INTERCLUB" ? schedulingMode : "FREE_PLAY", scoringFormat: collabFormat === "INTERCLUB" ? scoringFormat : "SINGLE_GAME", ratingMode: collabFormat === "INTERCLUB" ? ratingMode : "RATED" } : {}),
         playerIds: players.map(p => p.id), playerConfigs: players.map(p => ({ playerId: p.id, pool: getPool(p) })),
         guestConfigs: guests.map(({ name, initialElo, gender, mixedSideOverride, pool }) => ({ name, initialElo, gender, mixedSideOverride, pool })),
-        poolsEnabled: partner && collabFormat === "INTERCLUB" ? false : groups, crossoverFrequency: crossover, autoQueueEnabled: partner && collabFormat === "INTERCLUB" ? false : autoQueue, respectPlayerRest: true, isTest: false,
+        poolsEnabled: useGroups, crossoverFrequency: crossover, autoQueueEnabled: playTogether && autoQueue, respectPlayerRest: true, isTest: false,
       });
       onCreated(created.code);
     });
@@ -170,10 +177,10 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
           {count < 4 && <p className="setup-hint">You’ll need four players to start a doubles game.</p>}
         </section>
 
-        {(!partner || collabFormat === "FREE_PLAY") && <section className="setup-section" aria-labelledby="setup-matches"><h2 id="setup-matches">How should we match?</h2>
-          <div className="setup-format-list" role="radiogroup" aria-label="Matchmaking style">{formats.map(({ id, name, description, icon: Icon }) => <label key={id} className={`setup-format ${style === id ? "is-selected" : ""}`}><input type="radio" name="matchmaking" value={id} checked={style === id} onChange={() => setStyle(id)} /><Icon size={24} weight="duotone" aria-hidden="true" /><span><strong>{name}</strong><small>{description}</small></span><span className="setup-radio-mark" aria-hidden="true">{style === id && <Check size={13} weight="bold" />}</span></label>)}</div>
-          <Toggle title="Mixed pairs" checked={mixed} onChange={setMixed} />
-          {style !== "SOCIAL" && <fieldset className="setup-metric"><legend>Balance teams using</legend><div className="setup-segments">{[{ id: "RATING", name: "Club rating" }, { id: "SESSION_POINTS", name: "Session points" }].map(option => <label key={option.id}><input type="radio" name="balance" value={option.id} checked={metric === option.id} onChange={() => setMetric(option.id)} /><span>{option.name}</span></label>)}</div></fieldset>}
+        {playTogether && <section className="setup-section" aria-labelledby="setup-matches"><h2 id="setup-matches">How should we match?</h2>
+          <div className="setup-format-list" role="radiogroup" aria-label="Matchmaking style">{formats.filter(format => !partner || format.id !== "CLUB_PLAY").map(({ id, name, description, icon: Icon }) => <label key={id} className={`setup-format ${selectedStyle === id ? "is-selected" : ""}`}><input type="radio" name="matchmaking" value={id} checked={selectedStyle === id} onChange={() => setStyle(id)} /><Icon size={24} weight="duotone" aria-hidden="true" /><span><strong>{name}</strong><small>{description}</small></span><span className="setup-radio-mark" aria-hidden="true">{selectedStyle === id && <Check size={13} weight="bold" />}</span></label>)}</div>
+          <Toggle title="Mixed pairs" checked={useMixed} onChange={isClubPlay ? setClubPlayMixed : setMixed} />
+          {!isClubPlay && selectedStyle !== "SOCIAL" && <fieldset className="setup-metric"><legend>Balance teams using</legend><div className="setup-segments">{[{ id: "RATING", name: "Club rating" }, { id: "SESSION_POINTS", name: "Session points" }].map(option => <label key={option.id}><input type="radio" name="balance" value={option.id} checked={metric === option.id} onChange={() => setMetric(option.id)} /><span>{option.name}</span></label>)}</div></fieldset>}
         </section>}
 
         <details className="setup-options setup-partner" aria-label="Partner club">
@@ -185,9 +192,9 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
           </div>
         </details>
 
-        {(!partner || collabFormat === "FREE_PLAY") && <details className="setup-options"><summary><span><strong>More options</strong></span><CaretRight size={18} /></summary><div className="setup-options-content">
-          <Toggle title="Player groups" hint="Separate Competitive and Social groups." checked={groups} onChange={setGroups} />
-          {groups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setGroupsOpen(true)} aria-haspopup="dialog">{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
+        {playTogether && <details className="setup-options"><summary><span><strong>More options</strong></span><CaretRight size={18} /></summary><div className="setup-options-content">
+          {!isClubPlay && <Toggle title="Player groups" hint="Separate Competitive and Social groups." checked={groups} onChange={setGroups} />}
+          {useGroups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setGroupsOpen(true)} aria-haspopup="dialog">{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
           <Toggle title="Prepare the next game" hint="Automatically keep the next match queued." checked={autoQueue} onChange={setAutoQueue} />
 
         </div></details>}
@@ -200,12 +207,12 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
       <div className="setup-roster-sheet"><div hidden={addingGuest}><div ref={rosterHeader} className="setup-roster-header"><div className="setup-roster-tools"><strong>{count} selected</strong></div>
         <div className="setup-search"><MagnifyingGlass size={18} aria-hidden="true" /><input ref={searchInput} aria-label="Find a player" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a player" />{search && <button type="button" className="setup-search-clear" aria-label="Clear player search" onClick={() => { setSearch(""); searchInput.current?.focus(); }}><X size={18} aria-hidden="true" /></button>}</div>
         </div>
-        <div className="setup-roster-list">{visibleMembers.map(p => <div key={p.id} ref={node => { if (node) playerRows.current.set(p.id, node); else playerRows.current.delete(p.id); }} className="setup-person"><label className="setup-person-select"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => togglePlayer(p.id)} /><Avatar name={p.name} url={p.avatarUrl} /><span><strong>{p.name}</strong><small>{p.status === "CORE" ? "Core" : "Occasional"} · {p.elo}</small></span></label>{selected.includes(p.id) && groups && <div className="setup-person-options">{groups && <label>Group<select value={getPool(p)} onChange={e => setPools(g => ({ ...g, [p.id]: e.target.value as Pool }))} aria-label={`Group for ${p.name}`}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}{!visibleMembers.length && <div className="setup-no-match"><p className="setup-hint">No players found.</p>{!addingGuest && search.trim().length >= 2 && <button type="button" className="secondary full" onClick={() => openPlayerForm(search.trim())}>Add “{search.trim()}”</button>}</div>}</div>
-        {guests.length > 0 && <div className="setup-guests"><h3>Guests</h3>{[...guests].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map(g => <div className="setup-person" key={g.id}><div className="setup-guest-heading"><Avatar name={g.name} /><span><strong>{g.name}</strong><small>Guest · {g.initialElo}</small></span><button type="button" className="icon-button" aria-label={`Remove guest ${g.name}`} onClick={() => setGuests(list => list.filter(item => item.id !== g.id))}><Trash size={18} /></button></div>{(mixed || groups) && <div className="setup-person-options">{mixed && <label>Gender<select aria-label={`Gender for ${g.name}`} value={g.gender} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, gender: e.target.value as Gender, mixedSideOverride: null } : item))}><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{groups && <label>Group<select aria-label={`Group for ${g.name}`} value={g.pool} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, pool: e.target.value as Pool } : item))}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}</div>}
+        <div className="setup-roster-list">{visibleMembers.map(p => <div key={p.id} ref={node => { if (node) playerRows.current.set(p.id, node); else playerRows.current.delete(p.id); }} className="setup-person"><label className="setup-person-select"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => togglePlayer(p.id)} /><Avatar name={p.name} url={p.avatarUrl} /><span><strong>{p.name}</strong><small>{p.status === "CORE" ? "Core" : "Occasional"} · {p.elo}</small></span></label>{selected.includes(p.id) && useGroups && <div className="setup-person-options"><label>Group<select value={getPool(p)} onChange={e => setPools(g => ({ ...g, [p.id]: e.target.value as Pool }))} aria-label={`Group for ${p.name}`}><option value="A">Competitive</option><option value="B">Social</option></select></label></div>}</div>)}{!visibleMembers.length && <div className="setup-no-match"><p className="setup-hint">No players found.</p>{!addingGuest && search.trim().length >= 2 && <button type="button" className="secondary full" onClick={() => openPlayerForm(search.trim())}>Add “{search.trim()}”</button>}</div>}</div>
+        {guests.length > 0 && <div className="setup-guests"><h3>Guests</h3>{[...guests].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map(g => <div className="setup-person" key={g.id}><div className="setup-guest-heading"><Avatar name={g.name} /><span><strong>{g.name}</strong><small>Guest · {g.initialElo}</small></span><button type="button" className="icon-button" aria-label={`Remove guest ${g.name}`} onClick={() => setGuests(list => list.filter(item => item.id !== g.id))}><Trash size={18} /></button></div>{(useMixed || useGroups) && <div className="setup-person-options">{useMixed && <label>Gender<select aria-label={`Gender for ${g.name}`} value={g.gender} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, gender: e.target.value as Gender, mixedSideOverride: null } : item))}><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{useGroups && <label>Group<select aria-label={`Group for ${g.name}`} value={g.pool} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, pool: e.target.value as Pool } : item))}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}</div>}
         {playerNotice && <p role="status">{playerNotice}</p>}</div>
         {addingGuest ? <NewSessionPlayerForm
           clubs={[{ id: clubId, name: "This club", canSave: canSavePlayers }]}
-          mode="setup" initialName={newPlayerName} mixed={mixed && (!partner || collabFormat === "FREE_PLAY")}
+          mode="setup" initialName={newPlayerName} mixed={useMixed}
           onBusyChange={setSavingPlayer} onSaved={selectSavedMember}
           onGuest={guest => {
             if (guests.some(item => item.name.trim().toLocaleLowerCase() === guest.name.toLocaleLowerCase())) throw new Error("That guest is already selected.");
@@ -218,7 +225,7 @@ export function SessionSetup({ clubId, members: initialMembers, onCreated, canSa
       </div>
     </Sheet>
 
-    <Sheet open={groupsOpen} title="Player groups" onClose={() => setGroupsOpen(false)}>
+    <Sheet open={groupsOpen && useGroups} title="Player groups" onClose={() => setGroupsOpen(false)}>
       <div className="setup-roster-sheet">
         <div className="setup-roster-tools"><strong>{count} selected</strong></div>
         {!count && <p className="setup-hint">Choose players in “Who’s playing?” first.</p>}

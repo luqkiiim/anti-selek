@@ -69,4 +69,22 @@ describe("sessionSettings", () => {
     );
     expect(getEffectiveSessionMode(settings)).toBe(SessionMode.MIXICANO);
   });
+
+  it("keeps Club Play independent of historical type and balance settings", () => {
+    const source = {
+      type: SessionType.ELO,
+      matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY,
+      balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+    };
+
+    expect(getSessionSettings(source)).toEqual({
+      scoringType: SessionScoringType.POINTS,
+      matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY,
+      balanceMetric: SessionBalanceMetric.RATING,
+      pairingMode: SessionPairingMode.MIXED,
+    });
+    expect(getEffectiveSessionType(source)).toBe(SessionType.CLUB_PLAY);
+    expect(getEffectiveSessionMode(source)).toBe(SessionMode.MIXICANO);
+    expect(getEffectiveSessionMode({ ...source, pairingMode: SessionPairingMode.OPEN })).toBe(SessionMode.MEXICANO);
+  });
 });

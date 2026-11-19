@@ -9,6 +9,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionMatchmakingStyle,
   SessionPool,
   SessionStatus,
   SessionType,
@@ -41,6 +42,7 @@ let prisma: PrismaInstance;
 let POST: RouteHandler;
 let GET_SESSION: typeof import("../route")["GET"];
 let DELETE_QUEUE: typeof import("../queue-match/route")["DELETE"];
+let POST_ASSIGN_QUEUE: typeof import("../queue-match/assign/route")["POST"];
 let mockedAuth: MockedFunction<typeof import("@/lib/auth")["auth"]>;
 let rebuildAutomaticQueuedMatchForSessionId: RebuildAutomaticQueuedMatchForSessionId;
 
@@ -298,10 +300,149 @@ beforeAll(async () => {
   POST = routeModule.POST;
   GET_SESSION = (await import("../route")).GET;
   DELETE_QUEUE = (await import("../queue-match/route")).DELETE;
+  POST_ASSIGN_QUEUE = (await import("../queue-match/assign/route")).POST;
 
   const queueModule = await import("../queue-match/shared");
   rebuildAutomaticQueuedMatchForSessionId =
     queueModule.tryRebuildAutomaticQueuedMatchForSessionId;
+});
+
+describe("Club Play assignments", () => {
+  async function setup(played: number[], mode = SessionMode.MEXICANO, poolsEnabled = false) {
+    const prefix = `club-play-${randomUUID().slice(0, 8)}`;
+    const { clubId } = await createClubAdmin(prefix);
+    const keys = played.map((_count, index) => `p${index}`);
+    const playerIds = keys.map((key) => `${prefix}-${key}`);
+    const courtIds = [1, 2, 3].map((number) => `${prefix}-court-${number}`);
+    const genderAt = (index: number) => index < 6 ? PlayerGender.MALE : PlayerGender.FEMALE;
+    await createUsers(prefix, keys.map((key, index) => ({ key, gender: genderAt(index) })));
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix, clubId, type: SessionType.CLUB_PLAY, mode, courtIds, autoQueueEnabled: false, poolsEnabled,
+      players: playerIds.map((playerId, index) => ({
+        playerId, matchesPlayed: played[index], gender: genderAt(index),
+        partnerPreference: index < 6 ? PartnerPreference.OPEN : PartnerPreference.FEMALE_FLEX,
+        pool: index % 2 ? SessionPool.A : SessionPool.B,
+      })),
+    });
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY, balanceMetric: "RATING", pairingMode: mode === SessionMode.MIXICANO ? "MIXED" : "OPEN" },
+    });
+    return { sessionId, code, clubId, courtIds, playerIds };
+  }
+
+  it("fills the largest legal batch across saved groups and records started Mixed categories", async () => {
+    const { sessionId, code, courtIds, playerIds } = await setup(Array(8).fill(0), SessionMode.MIXICANO, true);
+    const response = await postGenerateMatch(code, { courtIds });
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    expect(payload.matches.flatMap(getSelectedIds).sort()).toEqual([...playerIds].sort());
+    expect(payload.matches.map((match: { matchmakingReason: { clubPlayMatchType: { category: string } } }) =>
+      match.matchmakingReason.clubPlayMatchType.category).sort()).toEqual(["MIXED", "UPPER"]);
+    const rows = await prisma.match.findMany({ where: { sessionId } });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.courtGroupType === null && row.status === MatchStatus.IN_PROGRESS)).toBe(true);
+  });
+
+  it("replaces a stale automatic reservation before starting the queued game", async () => {
+    const { sessionId, code, playerIds } = await setup([1, 1, 1, 1, 0, 0, 0, 0]);
+    await prisma.queuedMatch.create({ data: {
+      sessionId, isAutomatic: true, team1Player1Id: playerIds[0], team1Player2Id: playerIds[1],
+      team2Player1Id: playerIds[2], team2Player2Id: playerIds[3],
+    } });
+    const response = await POST_ASSIGN_QUEUE(new Request(`http://localhost/api/sessions/${code}/queue-match/assign`, {
+      method: "POST",
+    }), { params: Promise.resolve({ code }) });
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    expect(getSelectedIds(payload).sort()).toEqual(playerIds.slice(4).sort());
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId } })).toBeNull();
+    expect(await prisma.match.count({ where: { sessionId, status: MatchStatus.IN_PROGRESS } })).toBe(1);
+  });
+
+  it("refuses a stale fairness decision even when its players and court remain free", async () => {
+    const { sessionId, clubId, playerIds, courtIds } = await setup(Array(8).fill(0));
+    const { loadSessionRecordById } = await import("./shared");
+    const { buildMatchmakingState, getRankedCandidates, selectSingleCourtMatch } = await import("./selection");
+    const { createMatchesForAssignments } = await import("./assignments");
+    const sessionData = (await loadSessionRecordById(sessionId))!;
+    const { playersById, busyPlayerIds, rotationHistory } = await buildMatchmakingState(sessionData);
+    const { rankedCandidates } = getRankedCandidates(sessionData, busyPlayerIds);
+    const selected = selectSingleCourtMatch({
+      sessionData, playersById, rankedCandidates, rotationHistory, reshuffleSource: null,
+    });
+    await prisma.clubMember.create({ data: {
+      clubId, playerId: playerIds.find((id) => !(selected.ids as readonly string[]).includes(id))!, elo: 1275,
+    } });
+    await expect(createMatchesForAssignments(sessionId, [{
+      courtId: courtIds[0], selectedIds: selected.ids, partition: selected.partition,
+      matchmakingReasonJson: selected.matchmakingReasonJson,
+    }])).rejects.toMatchObject({ status: 409 });
+    expect(await prisma.match.count({ where: { sessionId } })).toBe(0);
+  });
+
+  it("allows only one of two disjoint starts computed from the same fairness state", async () => {
+    const { sessionId, playerIds, courtIds } = await setup(Array(8).fill(0));
+    const { loadSessionRecordById } = await import("./shared");
+    const { buildMatchmakingState, getRankedCandidates, selectSingleCourtMatch } = await import("./selection");
+    const { createMatchesForAssignments } = await import("./assignments");
+    const sessionData = (await loadSessionRecordById(sessionId))!;
+    const { playersById, busyPlayerIds, rotationHistory } = await buildMatchmakingState(sessionData);
+    const { rankedCandidates } = getRankedCandidates(sessionData, busyPlayerIds);
+    const batches = [playerIds.slice(0, 4), playerIds.slice(4)].map((ids, index) => {
+      const selected = selectSingleCourtMatch({
+        sessionData, playersById, rotationHistory, reshuffleSource: null,
+        rankedCandidates: rankedCandidates.filter((candidate) => ids.includes(candidate.userId)),
+      });
+      return { courtId: courtIds[index], selectedIds: selected.ids, partition: selected.partition,
+        matchmakingReasonJson: selected.matchmakingReasonJson };
+    });
+    const results = await Promise.allSettled(batches.map((batch) => createMatchesForAssignments(sessionId, [batch])));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")).toMatchObject({ reason: { status: 409 } });
+    expect(await prisma.match.count({ where: { sessionId } })).toBe(1);
+  });
+
+  it("honors a skip only when an automatic reservation starts a game", async () => {
+    const { sessionId, playerIds, courtIds } = await setup([0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2]);
+    const { loadSessionRecordById } = await import("./shared");
+    const { createQueuedMatchForSession, assignAutomaticClubPlayQueue } = await import("../queue-match/shared");
+    const where = { sessionId_playerId: { sessionId, playerId: playerIds[0] } };
+    await prisma.sessionPlayer.update({ where, data: { skipNextMatchAt: new Date() } });
+    await prisma.court.updateMany({ where: { id: { in: courtIds.slice(1) } }, data: { isActive: false } });
+    const current = await prisma.match.create({ data: {
+      sessionId, courtId: courtIds[0], status: MatchStatus.IN_PROGRESS,
+      team1Player1Id: playerIds[8], team1Player2Id: playerIds[9],
+      team2Player1Id: playerIds[10], team2Player2Id: playerIds[11],
+    } });
+    await prisma.court.update({ where: { id: courtIds[0] }, data: { currentMatchId: current.id } });
+    await createQueuedMatchForSession((await loadSessionRecordById(sessionId))!);
+    expect((await prisma.sessionPlayer.findUniqueOrThrow({ where })).skipNextMatchAt).not.toBeNull();
+    await prisma.match.update({ where: { id: current.id }, data: { status: MatchStatus.COMPLETED, completedAt: new Date() } });
+    await prisma.court.update({ where: { id: courtIds[0] }, data: { currentMatchId: null } });
+    const started = await assignAutomaticClubPlayQueue((await loadSessionRecordById(sessionId))!, courtIds[0]);
+    expect(getSelectedIds(started)).not.toContain(playerIds[0]);
+    expect(await prisma.sessionPlayer.findUniqueOrThrow({ where })).toMatchObject({
+      skipNextMatchAt: null, matchmakingMatchesCredit: 1,
+    });
+  });
+
+  it("keeps a concurrently edited manual queue and rejects promotion of the old lineup", async () => {
+    const { sessionId, playerIds, courtIds } = await setup(Array(8).fill(0));
+    const { createQueuedMatchAssignment, getQueuedMatchAssignmentVersion } = await import("./assignments");
+    const queue = await prisma.queuedMatch.create({ data: {
+      sessionId, team1Player1Id: playerIds[0], team1Player2Id: playerIds[1],
+      team2Player1Id: playerIds[2], team2Player2Id: playerIds[3],
+    } });
+    await prisma.queuedMatch.update({ where: { id: queue.id }, data: { team1Player1Id: playerIds[4] } });
+    await expect(createQueuedMatchAssignment({
+      courtId: courtIds[0], sessionId, queuedMatchId: queue.id,
+      partition: { team1: [playerIds[0], playerIds[1]], team2: [playerIds[2], playerIds[3]] },
+      isAutomatic: false, previousQueue: getQueuedMatchAssignmentVersion(queue),
+    })).rejects.toMatchObject({ status: 409 });
+    expect(await prisma.match.count({ where: { sessionId } })).toBe(0);
+    expect(await prisma.queuedMatch.findUnique({ where: { id: queue.id } })).toMatchObject({ team1Player1Id: playerIds[4] });
+  });
 });
 
 beforeEach(() => {

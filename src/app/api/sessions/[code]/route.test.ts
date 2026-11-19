@@ -448,6 +448,42 @@ describe("session settings route", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it.each([1, 0])("writes Club Play only while the session is still waiting (%i rows updated)", async (count) => {
+    const expectedSettings = {
+      type: SessionType.CLUB_PLAY,
+      mode: SessionMode.MEXICANO,
+      matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY,
+      balanceMetric: SessionBalanceMetric.RATING,
+      pairingMode: SessionPairingMode.OPEN,
+      poolsEnabled: false,
+    };
+    vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(baseSession as never);
+    if (count) vi.mocked(prisma.session.findUnique).mockResolvedValueOnce(updatedSession(expectedSettings) as never);
+    const tx = transactionDouble();
+    tx.session.updateMany.mockResolvedValue({ count });
+    vi.mocked(prisma.$transaction).mockImplementation(async callback => callback(tx as never));
+
+    const response = await PATCH(request({
+      autoQueueEnabled: true,
+      respectPlayerRest: true,
+      gameplaySettings: {
+        matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY,
+        balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+        pairingMode: SessionPairingMode.OPEN,
+        poolsEnabled: true,
+        crossoverFrequency: SessionCrossoverFrequency.BALANCED,
+        courtCount: 1,
+      },
+    }), { params: Promise.resolve({ code: "session-1" }) });
+
+    expect(response.status).toBe(count ? 200 : 409);
+    expect(tx.session.updateMany).toHaveBeenCalledWith({
+      where: { id: "session-1", status: SessionStatus.WAITING },
+      data: expect.objectContaining(expectedSettings),
+    });
+    expect(tx.sessionPlayer.updateMany).not.toHaveBeenCalled();
+  });
+
   it("rejects player groups for club vs club tournaments", async () => {
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       ...baseSession,

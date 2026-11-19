@@ -12,6 +12,8 @@ import {
   Trophy,
 } from "@phosphor-icons/react";
 import { parseGameScores, resolveMatchResult, resolveMatchScoreInput } from "@/lib/matchRules";
+import { getMatchmakingStyleLabel } from "@/lib/sessionSettings";
+import { SessionMatchmakingStyle } from "@/types/enums";
 import { ErrorText, Sheet } from "./Primitives";
 import { getRetryAfterDelay } from "@/lib/http";
 import { SessionRefreshControl } from "./SessionRefreshControl";
@@ -49,6 +51,7 @@ type SessionHistoryResponse = {
     ratingPolicyVersion?: number;
     ratingMode?: "RATED" | "UNRATED";
     collaborationVersion?: number;
+    matchmakingStyle?: SessionMatchmakingStyle;
     name: string;
     status: string;
     createdAt: string;
@@ -318,6 +321,14 @@ export default function SessionMatchHistory({
   const pendingCount = matches.filter(
     (match) => match.status === "PENDING_APPROVAL",
   ).length;
+  const summary = [
+    session?.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY
+      ? getMatchmakingStyleLabel(session.matchmakingStyle)
+      : null,
+    session?.ratingMode === "UNRATED" ? "Unrated" : null,
+    `${completedCount} completed ${completedCount === 1 ? "match" : "matches"}`,
+    pendingCount ? `${pendingCount} awaiting approval` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <section ref={scrollRef} className={styles.history} aria-label="Session match history">
@@ -347,9 +358,7 @@ export default function SessionMatchHistory({
         </div>
         <div className={styles.summaryRow}>
           <p className={styles.summary}>
-            {loading && !data
-              ? "Loading recorded matches…"
-              : `${session?.ratingMode === "UNRATED" ? "Unrated · " : ""}${completedCount} completed ${completedCount === 1 ? "match" : "matches"}${pendingCount ? ` · ${pendingCount} awaiting approval` : ""}`}
+            {loading && !data ? "Loading recorded matches…" : summary}
           </p>
           {data && <SessionRefreshControl checkedAt={response?.checkedAt} refreshing={loading || saving} failed={!!loadError} onRefresh={() => void refreshHistory()} />}
         </div>

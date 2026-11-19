@@ -309,6 +309,31 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
   });
 
+  it("creates Club Play with club rating, mixed pairing, and one pool by default", () => {
+    const base = {
+      name: "Club Play night",
+      clubId: "community-1",
+      matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY,
+      balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+      poolsEnabled: true,
+    };
+    expect(parseCreateSessionRequest(base)).toMatchObject({
+      type: SessionType.CLUB_PLAY,
+      mode: SessionMode.MIXICANO,
+      matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY,
+      balanceMetric: SessionBalanceMetric.RATING,
+      pairingMode: SessionPairingMode.MIXED,
+      poolsEnabled: false,
+    });
+    expect(parseCreateSessionRequest({ ...base, pairingMode: SessionPairingMode.OPEN })).toMatchObject({
+      type: SessionType.CLUB_PLAY,
+      mode: SessionMode.MEXICANO,
+      pairingMode: SessionPairingMode.OPEN,
+    });
+    expect(() => parseCreateSessionRequest({ ...base, partnerClubId: "community-2" }))
+      .toThrowError(new SessionRouteError("Club Play is available for single-club sessions.", 400));
+  });
+
   it("defaults new Level Match requests to Club rating and honors explicit settings", () => {
     const level = {
       name: "Level Night",

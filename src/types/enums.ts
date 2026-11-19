@@ -4,6 +4,7 @@ export enum SessionType {
   ELO = "ELO",
   LADDER = "LADDER",
   RACE = "RACE",
+  CLUB_PLAY = "CLUB_PLAY",
 }
 
 export enum SessionMode {
@@ -19,6 +20,7 @@ export enum SessionMatchmakingStyle {
   BALANCED = "BALANCED",
   SOCIAL = "SOCIAL",
   LEVEL_MATCH = "LEVEL_MATCH",
+  CLUB_PLAY = "CLUB_PLAY",
 }
 
 export enum SessionBalanceMetric {

@@ -12,6 +12,7 @@ const FORMAT_LABELS: Record<SessionType, string> = {
   [SessionType.ELO]: "Balanced Rating/Elo",
   [SessionType.LADDER]: "Ladder",
   [SessionType.RACE]: "Race",
+  [SessionType.CLUB_PLAY]: "Club Play",
 };
 
 export interface NamedHorizonReport {

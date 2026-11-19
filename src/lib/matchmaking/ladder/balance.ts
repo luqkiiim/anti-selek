@@ -1,4 +1,5 @@
 import {
+  MixedSide,
   PlayerGender,
   SessionMode,
 } from "../../../types/enums";
@@ -16,76 +17,17 @@ type LadderBalancedPartitionEvaluation = LadderBalancedPartition & {
   mixedSideGap: number;
 };
 
-function inferMixedMatchType(
-  team1: [{ effectiveMixedSide?: string | null }, { effectiveMixedSide?: string | null }],
-  team2: [{ effectiveMixedSide?: string | null }, { effectiveMixedSide?: string | null }]
+export function hasLegalEffectiveMixedSides(
+  partition: LadderDoublesPartition,
+  getSide: (id: string) => MixedSide | null | undefined,
 ) {
-  const lowerCountFor = (
-    team: [
-      { effectiveMixedSide?: string | null },
-      { effectiveMixedSide?: string | null },
-    ]
-  ) => team.filter((player) => player.effectiveMixedSide === "LOWER").length;
-
-  const team1LowerCount = lowerCountFor(team1);
-  const team2LowerCount = lowerCountFor(team2);
-
-  if (team1LowerCount === 2 && team2LowerCount === 2) {
-    return "WOMENS";
-  }
-
-  if (team1LowerCount === 1 && team2LowerCount === 1) {
-    return "MIXED";
-  }
-
-  if (team1LowerCount === 0 && team2LowerCount === 0) {
-    return "MENS";
-  }
-
-  return "HYBRID";
-}
-
-function isValidMixedPartition<
-  T extends Pick<
-    MatchmakerLadderPlayer,
-    "gender" | "partnerPreference" | "mixedSideOverride"
-  >,
->(team1: [T, T], team2: [T, T]) {
-  const effectiveTeam1 = team1.map((player) => ({
-    effectiveMixedSide: getEffectiveMixedSide({
-      gender: player.gender as PlayerGender,
-      mixedSideOverride: player.mixedSideOverride,
-      partnerPreference: player.partnerPreference,
-    }),
-  }));
-  const effectiveTeam2 = team2.map((player) => ({
-    effectiveMixedSide: getEffectiveMixedSide({
-      gender: player.gender as PlayerGender,
-      mixedSideOverride: player.mixedSideOverride,
-      partnerPreference: player.partnerPreference,
-    }),
-  }));
-
-  if (
-    [...effectiveTeam1, ...effectiveTeam2].some(
-      (player) => player.effectiveMixedSide === null
-    )
-  ) {
-    return false;
-  }
-
-  const matchType = inferMixedMatchType(
-    effectiveTeam1 as [
-      { effectiveMixedSide?: string | null },
-      { effectiveMixedSide?: string | null },
-    ],
-    effectiveTeam2 as [
-      { effectiveMixedSide?: string | null },
-      { effectiveMixedSide?: string | null },
-    ]
-  );
-
-  return matchType !== "HYBRID";
+  const a = getSide(partition.team1[0]);
+  const b = getSide(partition.team1[1]);
+  const c = getSide(partition.team2[0]);
+  const d = getSide(partition.team2[1]);
+  return Boolean(a && b && c && d) &&
+    Number(a === MixedSide.LOWER) + Number(b === MixedSide.LOWER) ===
+    Number(c === MixedSide.LOWER) + Number(d === MixedSide.LOWER);
 }
 
 export function getDoublesPartitions(
@@ -114,16 +56,10 @@ export function isValidPartitionForMode<
     return true;
   }
 
-  const player1 = playersById.get(partition.team1[0]);
-  const player2 = playersById.get(partition.team1[1]);
-  const player3 = playersById.get(partition.team2[0]);
-  const player4 = playersById.get(partition.team2[1]);
-
-  if (!player1 || !player2 || !player3 || !player4) {
-    return false;
-  }
-
-  return isValidMixedPartition([player1, player2], [player3, player4]);
+  return hasLegalEffectiveMixedSides(partition, (id) => {
+    const player = playersById.get(id);
+    return player ? getEffectiveMixedSide(player) : null;
+  });
 }
 
 function getPartitionMixedSideGap<

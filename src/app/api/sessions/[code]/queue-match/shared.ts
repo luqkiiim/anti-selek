@@ -7,6 +7,9 @@ import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
 import { isBalancedMatchTypeSourceCurrent } from "@/lib/matchmaking/balancedMatchTypePersistence";
 import { hasLevelMatch3Commitment, isLevelMatchTypeSourceCurrent } from "@/lib/matchmaking/levelMatchPersistence";
+import { isAutomaticClubPlayReason, isClubPlayDecisionCurrent } from "@/lib/matchmaking/clubPlayPersistence";
+import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
+import { getPendingSkipNextUserIds } from "@/lib/sessionSkipNext";
 import { getBalancedQueueDeferralReason } from "@/lib/matchmaking/balancedMatchTypeQueue";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
@@ -16,6 +19,7 @@ import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
 import { getEffectiveSessionType, getEffectiveSessionMode } from "@/lib/sessionSettings";
 import {
   checkMatchmakingSearchBudget,
+  createMatchmakingSearchBudget,
   MatchmakingSearchBudgetExceededError,
   type MatchmakingSearchBudget,
 } from "@/lib/matchmaking/v3/searchBudget";
@@ -24,10 +28,12 @@ import {
   buildMatchmakingState,
   ensureEnoughPlayers,
   getRankedCandidates,
+  selectClubPlayReservationIfAdmissible,
   selectReplacementMatchRespectingSkips,
   selectSingleCourtMatchRespectingSkips,
 } from "../generate-match/selection";
 import { resolveSocialCandidatePolicy } from "../generate-match/socialCandidateAcceptance";
+import { assertAssignmentsAvailable, createQueuedMatchAssignment, getQueuedMatchAssignmentVersion } from "../generate-match/assignments";
 import {
   GenerateMatchError,
   loadSessionRecord,
@@ -164,10 +170,14 @@ async function resolveQueuedGroupSnapshot(
 ) {
   const session = await tx.session.findUnique({
     where: { id: sessionId },
-    select: { poolsEnabled: true, collaborationVersion: true },
+    select: { poolsEnabled: true, matchmakingStyle: true, collaborationVersion: true },
   });
   if (!session) {
     throw new GenerateMatchError(404, "Tournament not found");
+  }
+  if (session.matchmakingStyle === SessionType.CLUB_PLAY) {
+    await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds: [...partition.team1, ...partition.team2] }], { allowQueuedPlayers: true });
+    return null;
   }
   if (isUpgradedCollaboration(session)) {
     const selectedIds = [...partition.team1, ...partition.team2];
@@ -263,15 +273,16 @@ async function createQueuedMatchRecord({
         poolBSeatCount,
       });
       if (!await isBalancedMatchTypeSourceCurrent(tx,sessionId,[{partition,matchmakingReasonJson}]) ||
-        !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }])) {
+        !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }]) ||
+        !await isClubPlayDecisionCurrent(tx, sessionId, [{ matchmakingReasonJson }])) {
         throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
       }
       const reasonJson = await resolveSocialHistoryReasonJson(
         tx,
         sessionId,
         partition,
-        matchmakingReasonJson,
-        { newCommitment: true },
+        !isAutomatic && isAutomaticClubPlayReason(matchmakingReasonJson) ? null : matchmakingReasonJson,
+        { newCommitment: true, reservation: true },
       );
       const queuedMatch = await tx.queuedMatch.create({
         data: {
@@ -291,10 +302,9 @@ async function createQueuedMatchRecord({
         },
       });
 
-      await consumeSkipNextMatches(tx, {
-        sessionId,
-        userIds: consumeSkipNextUserIds,
-      });
+      if (!isAutomaticClubPlayReason(matchmakingReasonJson)) {
+        await consumeSkipNextMatches(tx, { sessionId, userIds: consumeSkipNextUserIds });
+      }
 
       return queuedMatch;
     });
@@ -362,6 +372,51 @@ export async function selectAutomaticMatchForSession(
   };
 }
 
+export async function selectAutomaticClubPlayQueueAssignment(sessionData: QueueSessionRecord) {
+  const queue = sessionData.queuedMatch;
+  if (!queue?.isAutomatic) throw new GenerateMatchError(409, "The automatic queue changed. Refresh and try again.");
+  const searchBudget = createMatchmakingSearchBudget();
+  const source = { ...sessionData, queuedMatch: null };
+  const { busyPlayerIds, playersById, rotationHistory } = await buildMatchmakingState(source);
+  const { availableCandidates, rankedCandidates } = getRankedCandidates(source, busyPlayerIds);
+  ensureEnoughPlayers(availableCandidates.length, rankedCandidates.length, 1);
+  const { selection, consumedSkipUserIds } = selectSingleCourtMatchRespectingSkips({
+    sessionData: source, playersById, rankedCandidates, rotationHistory, searchBudget, reshuffleSource: null,
+  });
+
+  const reservation: ManualMatchTeams = {
+    team1: [queue.team1Player1Id, queue.team1Player2Id],
+    team2: [queue.team2Player1Id, queue.team2Player2Id],
+  };
+  const partitionKey = getExactPartitionKey(reservation);
+  const pendingSkips = getPendingSkipNextUserIds(source.players);
+  const context = "clubPlayContext" in selection ? selection.clubPlayContext : undefined;
+  const keepCandidate = context &&
+    getExactPartitionKey(selection.partition) !== partitionKey &&
+    ![...reservation.team1, ...reservation.team2].some((id) => pendingSkips.has(id));
+  const chosen = keepCandidate
+    ? selectClubPlayReservationIfAdmissible({
+        sessionData: source, rankedCandidates, playersById, requestedMatchCount: 1, partitionKey,
+        consumedSkipUserIds, searchBudget, selectionContext: context,
+      }) ?? selection
+    : selection;
+  return { chosen, consumedSkipUserIds, queue };
+}
+
+export async function assignAutomaticClubPlayQueue(
+  sessionData: QueueSessionRecord,
+  courtId: string,
+  actor?: SessionMutationActor,
+) {
+  const { chosen, consumedSkipUserIds, queue } = await selectAutomaticClubPlayQueueAssignment(sessionData);
+  return createQueuedMatchAssignment({
+    sessionId: sessionData.id, actor, courtId, queuedMatchId: queue.id, partition: chosen.partition,
+    matchmakingReasonJson: chosen.matchmakingReasonJson, isAutomatic: true,
+    consumeSkipNextUserIds: consumedSkipUserIds,
+    previousQueue: getQueuedMatchAssignmentVersion(queue),
+  });
+}
+
 async function updateQueuedMatchRecord({
   sessionId,
   actor,
@@ -405,10 +460,12 @@ async function updateQueuedMatchRecord({
       poolBSeatCount,
     });
     if (!await isBalancedMatchTypeSourceCurrent(tx,sessionId,[{partition,matchmakingReasonJson}],true) ||
-      !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }], true)) {
+      !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }], true) ||
+      !await isClubPlayDecisionCurrent(tx, sessionId, [{ matchmakingReasonJson }], true)) {
       throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
     }
-    if (hasLevelMatch3Commitment(matchmakingReasonJson)) {
+    if (hasLevelMatch3Commitment(matchmakingReasonJson) ||
+      isAutomaticClubPlayReason(matchmakingReasonJson) || isAutomaticClubPlayReason(previousQueue.matchmakingReasonJson)) {
       const current = await tx.queuedMatch.findUnique({ where: { id: queuedMatchId } });
       if (!current || current.team1Player1Id !== previousQueue.team1Player1Id || current.team1Player2Id !== previousQueue.team1Player2Id ||
         current.team2Player1Id !== previousQueue.team2Player1Id || current.team2Player2Id !== previousQueue.team2Player2Id ||
@@ -420,8 +477,8 @@ async function updateQueuedMatchRecord({
       tx,
       sessionId,
       partition,
-      matchmakingReasonJson,
-      { newCommitment: true },
+      !isAutomatic && isAutomaticClubPlayReason(matchmakingReasonJson) ? null : matchmakingReasonJson,
+      { newCommitment: true, reservation: true },
     );
     const queuedMatch = await tx.queuedMatch.update({
       where: { id: queuedMatchId },
@@ -441,10 +498,9 @@ async function updateQueuedMatchRecord({
       },
     });
 
-    await consumeSkipNextMatches(tx, {
-      sessionId: queuedMatch.sessionId,
-      userIds: consumeSkipNextUserIds,
-    });
+    if (!isAutomaticClubPlayReason(matchmakingReasonJson)) {
+      await consumeSkipNextMatches(tx, { sessionId: queuedMatch.sessionId, userIds: consumeSkipNextUserIds });
+    }
 
     await applyPendingPlayerGroupChangesInTransaction(tx, {
       sessionId: queuedMatch.sessionId,
@@ -797,7 +853,8 @@ async function tryRebuildAutomaticQueuedMatch(
 
     return buildQueuedMatchResponse(sessionData, queuedMatch);
   } catch (error) {
-    if (error instanceof GenerateMatchError) {
+    if (error instanceof GenerateMatchError ||
+      (getEffectiveSessionType(sessionData) === SessionType.CLUB_PLAY && error instanceof MatchmakingSearchBudgetExceededError)) {
       return buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
     }
 
@@ -825,6 +882,8 @@ async function tryRebuildQueuedMatch(
   try {
     return await createQueuedMatchForSession(sessionData, searchBudget, true);
   } catch (error) {
+    if (!searchBudget && getEffectiveSessionType(sessionData) === SessionType.CLUB_PLAY &&
+      error instanceof MatchmakingSearchBudgetExceededError) return null;
     if (error instanceof GenerateMatchError) {
       if (searchBudget && error.message.startsWith("Match search reached its time limit")) {
         // A budgeted optional queue attempt may time out inside the matcher

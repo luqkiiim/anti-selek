@@ -6,6 +6,7 @@ import {
 } from "@/lib/sessionSettings";
 import { SessionMode, SessionType } from "@/types/enums";
 import { appendBalancedMatchTypeSnapshot } from "./balancedMatchTypePersistence";
+import { appendManualClubPlayMatchType, isAutomaticClubPlayReason } from "./clubPlayPersistence";
 import { appendManualLevelMatchType, hasLevelMatch3Commitment } from "./levelMatchPersistence";
 import { isLevelMatch3Enabled } from "./ladder/levelDistribution";
 import { parseBalancedMatchTypeSnapshot } from "./v3/balancedMatchTypes";
@@ -22,9 +23,9 @@ export async function resolveSocialHistoryReasonJson(
   sessionId: string,
   partition: V3DoublesPartition,
   reasonJson?: string | null,
-  options: { newCommitment?: boolean } = {},
+  options: { newCommitment?: boolean; reservation?: boolean } = {},
 ): Promise<string | null> {
-  if (hasLevelMatch3Commitment(reasonJson)) return reasonJson ?? null;
+  if (hasLevelMatch3Commitment(reasonJson) || isAutomaticClubPlayReason(reasonJson)) return reasonJson ?? null;
   // A queued commitment keeps its original sides when it becomes an active game.
   const existingSides = reasonJson
     ? parseSocialVarietySnapshot(reasonJson, partition)
@@ -52,6 +53,10 @@ export async function resolveSocialHistoryReasonJson(
       crossoverFrequency: true,
     },
   });
+  if (session && getEffectiveSessionType(session) === SessionType.CLUB_PLAY &&
+      getEffectiveSessionMode(session) === SessionMode.MIXICANO) {
+    return options.reservation ? reasonJson ?? null : appendManualClubPlayMatchType(tx, sessionId, partition, reasonJson);
+  }
   if (session && options.newCommitment && isLevelMatch3Enabled() &&
     getEffectiveSessionType(session) === SessionType.RACE && getEffectiveSessionMode(session) === SessionMode.MIXICANO) {
     return appendManualLevelMatchType(tx, sessionId, partition, reasonJson, session.poolsEnabled);

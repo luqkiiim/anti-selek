@@ -1,5 +1,6 @@
 import { MatchStatus } from "@/types/enums";
 import { parseLevelDistributionSnapshot } from "./ladder/levelDistribution";
+import { parseClubPlayDistributionSnapshot } from "./ladder/clubPlayDistribution";
 import { parseBalancedMatchTypeSnapshot } from "./v3/balancedMatchTypes";
 import {
   parseSocialVarietySnapshot,
@@ -43,6 +44,8 @@ function toSocialHistoryMatch(row: SocialAssignmentRow): SocialHistoryMatch {
   const matchType = parseBalancedMatchTypeSnapshot(reason, partition);
   const levelMatchType = reason && typeof reason === "object" && "levelMatchType" in reason
     ? parseLevelDistributionSnapshot(reason.levelMatchType, partition) : null;
+  const clubPlayMatchType = reason && typeof reason === "object" && "clubPlayMatchType" in reason
+    ? parseClubPlayDistributionSnapshot(reason.clubPlayMatchType, partition) : null;
   return {
     ...partition,
     ...(row.id ? { id: row.id } : {}),
@@ -50,6 +53,7 @@ function toSocialHistoryMatch(row: SocialAssignmentRow): SocialHistoryMatch {
     ...(snapshot ? { socialVariety: snapshot } : {}),
     ...(matchType ? { balancedMatchType: matchType } : {}),
     ...(levelMatchType ? { levelMatchType } : {}),
+    ...(clubPlayMatchType ? { clubPlayMatchType } : {}),
   };
 }
 
@@ -63,11 +67,13 @@ export function buildSocialSessionHistory(
   options: {
     excludeMatchIds?: ReadonlySet<string>;
     excludeQueuedMatch?: boolean;
+    excludePendingMatches?: boolean;
   } = {}
 ): SocialHistoryMatch[] {
   const rows = session.matches.filter(
     (match) =>
       COMMITTED_STATUSES.has(match.status) &&
+      !(options.excludePendingMatches && match.status === MatchStatus.PENDING) &&
       !(match.id && options.excludeMatchIds?.has(match.id))
   );
   const history = rows.map(toSocialHistoryMatch);

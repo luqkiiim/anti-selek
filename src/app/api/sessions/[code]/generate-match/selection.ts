@@ -50,6 +50,11 @@ import {
   type LadderSelectionConstraints,
 } from "@/lib/matchmaking/ladder";
 import { findBestLevelBatchSelection } from "@/lib/matchmaking/ladder/levelSelection";
+import {
+  findBestClubPlayBatchSelection,
+  type ClubPlaySelectionContext,
+} from "@/lib/matchmaking/ladder/clubPlaySelection";
+import { getClubPlayDecisionBasis, getClubPlayRatings } from "@/lib/matchmaking/clubPlayPersistence";
 import type {
   LevelSelectionContext,
   LevelSelectionDiagnostics,
@@ -71,9 +76,13 @@ import type {
 } from "@/lib/matchmaking/v3/types";
 import type { BalancedCandidateDecision } from "@/lib/matchmaking/v3/balancedCandidateAcceptance";
 import type { BalancedRecurrenceOptions } from "@/lib/matchmaking/v3/balancedRecurrence";
-import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
+import {
+  buildExactRematchHistory, buildOpponentRepeatHistory, buildPartnerRepeatHistory,
+  getExactPartitionKey, getExactRematchPenalty, getOpponentRepeatPenalty, getPartnerRepeatPenalty,
+} from "@/lib/matchmaking/v3/rematch";
 import {
   checkMatchmakingSearchBudget,
+  createMatchmakingSearchBudget,
   MatchmakingSearchBudgetExceededError,
   type MatchmakingSearchBudget,
 } from "@/lib/matchmaking/v3/searchBudget";
@@ -161,6 +170,7 @@ interface PoolAwareSelection extends CourtGroupSnapshot {
   balancedPolicyDecision?: BalancedCandidateDecision;
   levelContext?: LevelSelectionContext;
   levelDiagnostics?: LevelSelectionDiagnostics;
+  clubPlayContext?: ClubPlaySelectionContext;
 }
 
 type MatchSelectionBase = {
@@ -451,6 +461,7 @@ function getPlayerBalanceInput({
 }) {
   if (
     sessionType === SessionType.ELO ||
+    sessionType === SessionType.CLUB_PLAY ||
     (sessionType === SessionType.RACE &&
       balanceMetric === SessionBalanceMetric.RATING)
   ) {
@@ -726,6 +737,9 @@ export async function buildMatchmakingState(
     sessionType === SessionType.ELO ||
     (sessionType === SessionType.RACE &&
       balanceMetric === SessionBalanceMetric.RATING);
+  const clubPlayRatings = sessionType === SessionType.CLUB_PLAY
+    ? await getClubPlayRatings(prisma, sessionData)
+    : undefined;
   const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
   if (options?.reserveQueuedPlayers !== false) {
     for (const userId of getQueuedMatchUserIds(sessionData.queuedMatch)) {
@@ -800,7 +814,7 @@ export async function buildMatchmakingState(
       player.userId,
       {
         userId: player.userId,
-        elo: getPlayerBalanceInput({
+        elo: clubPlayRatings?.get(player.userId) ?? getPlayerBalanceInput({
           sessionType,
           balanceMetric,
           sessionPoints: player.sessionPoints,
@@ -1163,6 +1177,109 @@ function getLevelSearchLimitError() {
     400,
     "Match search reached its time limit before establishing a fair batch. Try again."
   );
+}
+
+function selectClubPlayBatch({
+  rankedCandidates, playersById, sessionData, requestedMatchCount, lockedPlayerIds, randomFn,
+  excludedQuartetKey, excludedPartitionKey, searchBudget = createMatchmakingSearchBudget(),
+  selectionContext, requiredPartitionKey,
+}: Pick<Parameters<typeof selectLevelBatch>[0], "rankedCandidates" | "playersById" | "sessionData" |
+  "requestedMatchCount" | "lockedPlayerIds" | "randomFn" | "excludedPartitionKey" | "searchBudget"> & {
+  excludedQuartetKey?: string;
+  requiredPartitionKey?: string;
+  selectionContext?: ClubPlaySelectionContext;
+}) {
+  const players = buildLadderPlayers(sessionData, playersById, rankedCandidates);
+  const history = buildSocialSessionHistory(sessionData, { excludeQueuedMatch: true, excludePendingMatches: true });
+  const sessionMode = getMatchmakerSessionMode(sessionData);
+  const ratings = new Map(players.map((player) => [player.userId, player.strength]));
+  const clubPlayBasis = getClubPlayDecisionBasis(sessionData, ratings);
+  for (let courtCount = Math.min(requestedMatchCount, Math.floor(rankedCandidates.length / 4)); courtCount > 0; courtCount--) {
+    checkMatchmakingSearchBudget(searchBudget);
+    const result = findBestClubPlayBatchSelection(players, {
+      courtCount, sessionMode, history, respectPlayerRest: sessionData.respectPlayerRest, randomFn,
+      lockedPlayerIds, searchBudget, selectionContext, requiredPartitionKey, excludedPartitionKey,
+      excludedQuartetKeys: excludedQuartetKey ? new Set([excludedQuartetKey]) : undefined,
+    });
+    if (result.selection) {
+      const exactRematches = buildExactRematchHistory(history);
+      const partnerRepeats = buildPartnerRepeatHistory(history);
+      const opponentRepeats = buildOpponentRepeatHistory(history);
+      return {
+        ...result.selection,
+        selections: result.selection.selections.map((selection) => ({
+          ...selection,
+          courtGroupType: null,
+          poolASeatCount: null,
+          poolBSeatCount: null,
+          competitiveTargetRatio: 0,
+          balancedPolicyDecision: undefined,
+          matchmakingReasonJson: JSON.stringify({
+            version: 1,
+            source: "club-play",
+            sessionType: SessionType.CLUB_PLAY,
+            sessionMode,
+            team1UserIds: selection.partition.team1,
+            team2UserIds: selection.partition.team2,
+            selectedUserIds: selection.ids,
+            summary: ["Selected for fair turns, individual skill fit, and competitive team balance."],
+            metrics: {
+              fairnessBand: Math.min(...selection.players.map((player) => player.effectiveMatchCount)),
+              selectedMatchCounts: selection.players.map((player) => player.effectiveMatchCount),
+              balanceGap: selection.balanceGap,
+              partnerRepeatPenalty: getPartnerRepeatPenalty(selection.partition, partnerRepeats),
+              opponentRepeatPenalty: getOpponentRepeatPenalty(selection.partition, opponentRepeats),
+              exactRematchPenalty: getExactRematchPenalty(selection.partition, exactRematches),
+              restTurnRange: Math.max(...selection.restSummary.restTurnVector) - selection.restSummary.minimumRestTurns,
+              minimumRestTurns: selection.restSummary.minimumRestTurns,
+              totalRestTurns: selection.restSummary.totalRestTurns,
+              mixedMode: sessionMode === SessionMode.MIXICANO,
+            },
+            ...selection.clubPlayDiagnostics,
+            clubPlayBasis,
+          }),
+        })),
+        poolSchedulingState: sessionData,
+        competitiveTargetRatio: 0,
+      };
+    }
+    if (result.debug.searchLimitReached && !selectionContext) throw getLevelSearchLimitError();
+    if (selectionContext) break;
+  }
+  return null;
+}
+
+function selectClubPlaySingleCourtMatch({
+  reshuffleSource, searchBudget = createMatchmakingSearchBudget(), ...options
+}: Parameters<typeof selectClubPlayBatch>[0] & { reshuffleSource: ReshuffleSource | null }) {
+  const initial = selectClubPlayBatch({ ...options, searchBudget })?.selections[0];
+  if (initial) {
+    const selection = applyReshuffleExclusions(initial, reshuffleSource, (exclusions) =>
+      searchBudget.isExpired() ? null : selectClubPlayBatch({
+        ...options, ...exclusions, searchBudget, selectionContext: initial.clubPlayContext,
+      })?.selections[0] ?? null);
+    if (selection) return selection;
+  }
+  if (reshuffleSource) {
+    throw new GenerateMatchError(409, "No alternative reshuffle preserving fair turns and match quality was found.");
+  }
+  throw new GenerateMatchError(400, `No valid pairing found for current ${getSessionModeLabel(getMatchmakerSessionMode(options.sessionData))} session rules.`);
+}
+
+/** An automatic reservation has no entitlement to a turn after the roster changes. */
+export function selectClubPlayReservationIfAdmissible({
+  partitionKey, consumedSkipUserIds, ...options
+}: Parameters<typeof selectClubPlayBatch>[0] & {
+  partitionKey: string;
+  consumedSkipUserIds: readonly string[];
+  selectionContext: ClubPlaySelectionContext;
+}) {
+  if (options.searchBudget?.isExpired() || !options.selectionContext.skillEnvelope) return null;
+  return selectClubPlayBatch({
+    ...options,
+    rankedCandidates: filterRankedCandidatesByExcludedUserIds(options.rankedCandidates, new Set(consumedSkipUserIds)),
+    requiredPartitionKey: partitionKey,
+  })?.selections[0] ?? null;
 }
 
 /** Level evaluates complete schedules together, before any court is committed. */
@@ -2314,6 +2431,11 @@ export function selectSingleCourtMatch({
     );
   }
 
+  if (getMatchmakerSessionType(sessionData) === SessionType.CLUB_PLAY) {
+    return selectClubPlaySingleCourtMatch({
+      rankedCandidates, playersById, sessionData, requestedMatchCount: 1, reshuffleSource, searchBudget,
+    });
+  }
   if (getMatchmakerSessionType(sessionData) === SessionType.RACE) {
     return selectLevelSingleCourtMatch({
       rankedCandidates,
@@ -2545,6 +2667,11 @@ function selectExactQuartetMatch({
   if (exactRankedCandidates.length !== 4) {
     return null;
   }
+  if (getMatchmakerSessionType(sessionData) === SessionType.CLUB_PLAY) {
+    return selectClubPlayBatch({
+      sessionData, playersById, rankedCandidates, lockedPlayerIds: selectedUserIds, requestedMatchCount: 1,
+    })?.selections[0] ?? null;
+  }
 
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
@@ -2706,14 +2833,16 @@ export function selectReplacementMatch({
 
   const excludedUserIdSet = new Set(excludedUserIds);
 
-  if (getMatchmakerSessionType(sessionData) === SessionType.RACE) {
+  const sessionType = getMatchmakerSessionType(sessionData);
+  if (sessionType === SessionType.RACE || sessionType === SessionType.CLUB_PLAY) {
     const eligibleCandidates = rankedCandidates.filter((candidate) =>
       retainedUserIdSet.has(candidate.userId) || !excludedUserIdSet.has(candidate.userId)
     );
     if (!retainedUserIds.every((id) => eligibleCandidates.some((player) => player.userId === id))) {
       throw new GenerateMatchError(409, "The retained players are no longer available for this match.");
     }
-    const selection = selectLevelBatch({
+    const select = sessionType === SessionType.CLUB_PLAY ? selectClubPlayBatch : selectLevelBatch;
+    const selection = select({
       rankedCandidates: eligibleCandidates,
       playersById,
       sessionData,
@@ -2887,6 +3016,7 @@ export function selectSingleCourtMatchRespectingSkips({
   socialPriorityPolicy?: SocialCandidatePolicy;
   searchBudget?: MatchmakingSearchBudget;
 }) {
+  searchBudget ??= getMatchmakerSessionType(sessionData) === SessionType.CLUB_PLAY ? createMatchmakingSearchBudget() : undefined;
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
@@ -2965,6 +3095,7 @@ export function selectReplacementMatchRespectingSkips({
   socialPriorityPolicy?: SocialCandidatePolicy;
   searchBudget?: MatchmakingSearchBudget;
 }) {
+  searchBudget ??= getMatchmakerSessionType(sessionData) === SessionType.CLUB_PLAY ? createMatchmakingSearchBudget() : undefined;
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
@@ -3222,8 +3353,10 @@ export function selectBatchMatches({
     };
   }
 
-  if (getMatchmakerSessionType(sessionData) === SessionType.RACE) {
-    const result = selectLevelBatch({
+  const sessionType = getMatchmakerSessionType(sessionData);
+  if (sessionType === SessionType.RACE || sessionType === SessionType.CLUB_PLAY) {
+    const select = sessionType === SessionType.CLUB_PLAY ? selectClubPlayBatch : selectLevelBatch;
+    const result = select({
       rankedCandidates,
       playersById,
       sessionData,
@@ -3506,6 +3639,7 @@ export function selectBatchMatchesRespectingSkips({
   socialPriorityPolicy?: SocialCandidatePolicy;
   searchBudget?: MatchmakingSearchBudget;
 }) {
+  searchBudget ??= getMatchmakerSessionType(sessionData) === SessionType.CLUB_PLAY ? createMatchmakingSearchBudget() : undefined;
   const resolvedSocialPriorityPolicy = resolveSocialCandidatePolicy(
     getMatchmakerSessionType(sessionData),
     socialPriorityPolicy,
@@ -3521,7 +3655,7 @@ export function selectBatchMatchesRespectingSkips({
       excludedSkipUserIds
     );
 
-    const minimumRequiredPlayerCount = sessionData.poolsEnabled
+    const minimumRequiredPlayerCount = sessionData.poolsEnabled || getMatchmakerSessionType(sessionData) === SessionType.CLUB_PLAY
       ? 4
       : requestedMatchCount * 4;
     if (eligibleRankedCandidates.length < minimumRequiredPlayerCount) {

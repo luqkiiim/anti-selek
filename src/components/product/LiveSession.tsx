@@ -81,6 +81,7 @@ import { CourtPairingDetails } from "./CourtPairingDetails";
 import { SHARED_SESSION_REFRESH_MS, useSessionPolling } from "@/components/session/useSessionPolling";
 import { SessionShareSheet } from "@/components/session/SessionShareSheet";
 import { SessionDetailsSummary } from "@/components/session/SessionDetailsSummary";
+import { getMatchmakingStyleLabel } from "@/lib/sessionSettings";
 import { sessionHref } from "@/lib/appNavigation";
 type LiveSettingsDraft = {
   name: string;
@@ -89,6 +90,7 @@ type LiveSettingsDraft = {
   matchmakingStyle: SessionMatchmakingStyle;
   balanceMetric: SessionBalanceMetric;
   pairingMode: SessionPairingMode;
+  clubPlayPairingMode: SessionPairingMode;
   poolsEnabled: boolean;
   crossoverFrequency: SessionCrossoverFrequency;
   courtCount: number;
@@ -101,11 +103,27 @@ function settingsDraft(session: SessionData): LiveSettingsDraft {
     matchmakingStyle: session.matchmakingStyle ?? SessionMatchmakingStyle.BALANCED,
     balanceMetric: session.balanceMetric ?? SessionBalanceMetric.RATING,
     pairingMode: session.pairingMode ?? SessionPairingMode.OPEN,
+    clubPlayPairingMode: session.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY
+      ? session.pairingMode ?? SessionPairingMode.MIXED
+      : SessionPairingMode.MIXED,
     poolsEnabled: session.poolsEnabled,
     crossoverFrequency: session.crossoverFrequency,
     courtCount: session.courts.length,
   };
 }
+
+function getDraftGameplaySettings(draft: LiveSettingsDraft) {
+  const clubPlay = draft.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY;
+  return {
+    matchmakingStyle: draft.matchmakingStyle,
+    balanceMetric: clubPlay ? SessionBalanceMetric.RATING : draft.balanceMetric,
+    pairingMode: clubPlay ? draft.clubPlayPairingMode : draft.pairingMode,
+    poolsEnabled: !clubPlay && draft.poolsEnabled,
+    crossoverFrequency: draft.crossoverFrequency,
+    courtCount: draft.courtCount,
+  };
+}
+
 type ManualTarget =
   | { kind: "court"; courtId: string }
   | { kind: "queue"; replaceQueuedMatch: boolean };
@@ -510,8 +528,14 @@ export default function LiveSession({
       setSharing(false);
     }
   }
+  const draftGameplay = liveSettingsDraft && getDraftGameplaySettings(liveSettingsDraft);
+  const clubPlayDraft = draftGameplay?.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY;
+  const canSelectClubPlay = !!s?.clubId &&
+    (s.collaborationVersion ?? 1) < 2 &&
+    (s.clubs?.length ?? 0) <= 1 &&
+    s.collabFormat !== "INTERCLUB" && s.schedulingMode !== "LINEUP";
   const hasLiveSettingsChanges = !!(
-    s && liveSettingsDraft && (
+    s && liveSettingsDraft && draftGameplay && (
       (canRename && liveSettingsDraft.name.trim() !== s.name) ||
       liveSettingsDraft.autoQueueEnabled !== s.autoQueueEnabled ||
       (s.status !== "COMPLETED" && liveSettingsDraft.courtCount !== s.courts.length) ||
@@ -521,11 +545,11 @@ export default function LiveSession({
           (court.label ?? "").trim(),
       ) ||
       (s.status === "WAITING" && (
-        liveSettingsDraft.matchmakingStyle !== (s.matchmakingStyle ?? SessionMatchmakingStyle.BALANCED) ||
-        liveSettingsDraft.balanceMetric !== (s.balanceMetric ?? SessionBalanceMetric.RATING) ||
-        liveSettingsDraft.pairingMode !== (s.pairingMode ?? SessionPairingMode.OPEN) ||
-        liveSettingsDraft.poolsEnabled !== s.poolsEnabled ||
-        liveSettingsDraft.crossoverFrequency !== s.crossoverFrequency
+        draftGameplay.matchmakingStyle !== (s.matchmakingStyle ?? SessionMatchmakingStyle.BALANCED) ||
+        draftGameplay.balanceMetric !== (s.balanceMetric ?? SessionBalanceMetric.RATING) ||
+        draftGameplay.pairingMode !== (s.pairingMode ?? SessionPairingMode.OPEN) ||
+        draftGameplay.poolsEnabled !== s.poolsEnabled ||
+        draftGameplay.crossoverFrequency !== s.crossoverFrequency
       ))
     )
   );
@@ -908,14 +932,7 @@ export default function LiveSession({
         label: liveSettingsDraft.courtLabels[index + 1]?.trim() || null,
       })).filter(court => Object.hasOwn(liveSettingsDraft.courtLabels, court.courtNumber)),
       ...(s.status === "WAITING" ? {
-        gameplaySettings: {
-          matchmakingStyle: liveSettingsDraft.matchmakingStyle,
-          balanceMetric: liveSettingsDraft.balanceMetric,
-          pairingMode: liveSettingsDraft.pairingMode,
-          poolsEnabled: liveSettingsDraft.poolsEnabled,
-          crossoverFrequency: liveSettingsDraft.crossoverFrequency,
-          courtCount: liveSettingsDraft.courtCount,
-        },
+        gameplaySettings: getDraftGameplaySettings(liveSettingsDraft),
       } : {}),
     };
     void action.run(
@@ -1750,9 +1767,10 @@ export default function LiveSession({
                             <option value={SessionMatchmakingStyle.BALANCED}>Balanced</option>
                             <option value={SessionMatchmakingStyle.SOCIAL}>Social</option>
                             <option value={SessionMatchmakingStyle.LEVEL_MATCH}>Level match</option>
+                            {canSelectClubPlay && <option value={SessionMatchmakingStyle.CLUB_PLAY}>Club Play</option>}
                           </select>
                         </label>
-                        {liveSettingsDraft.matchmakingStyle !== SessionMatchmakingStyle.SOCIAL && (
+                        {!clubPlayDraft && liveSettingsDraft.matchmakingStyle !== SessionMatchmakingStyle.SOCIAL && (
                           <label className="live-settings-field">
                             Balance teams using
                             <select
@@ -1774,17 +1792,17 @@ export default function LiveSession({
                           <select
                             aria-label="Pairing"
                             className="live-settings-select"
-                            value={liveSettingsDraft.pairingMode}
+                            value={draftGameplay?.pairingMode}
                             onChange={(event) => setLiveSettingsDraft((current) => current ? {
                               ...current,
-                              pairingMode: event.target.value as SessionPairingMode,
+                              [clubPlayDraft ? "clubPlayPairingMode" : "pairingMode"]: event.target.value as SessionPairingMode,
                             } : current)}
                           >
                             <option value={SessionPairingMode.OPEN}>Open pairs</option>
                             <option value={SessionPairingMode.MIXED}>Mixed pairs</option>
                           </select>
                         </label>
-                        <div className="live-settings-row live-settings-group-toggle">
+                        {!clubPlayDraft && <div className="live-settings-row live-settings-group-toggle">
                           <span>
                             <strong>Player groups</strong>
                             <small>Separate Competitive and Social players.</small>
@@ -1802,8 +1820,8 @@ export default function LiveSession({
                           >
                             {liveSettingsDraft.poolsEnabled ? "On" : "Off"}
                           </button>
-                        </div>
-                        {liveSettingsDraft.poolsEnabled && (
+                        </div>}
+                        {draftGameplay?.poolsEnabled && (
                           <>
                             <label className="live-settings-field">
                               Mix groups
@@ -1849,7 +1867,7 @@ export default function LiveSession({
                         </div>
                         <div className="setting-line">
                           <span>Matchmaking style</span>
-                          <strong>{s.matchmakingStyle?.toLowerCase().replaceAll("_", " ") || "—"}</strong>
+                          <strong>{s.matchmakingStyle ? getMatchmakingStyleLabel(s.matchmakingStyle) : "—"}</strong>
                         </div>
                       </div>
                     </details>

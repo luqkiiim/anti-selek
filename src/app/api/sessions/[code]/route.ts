@@ -25,6 +25,8 @@ import {
   MatchStatus,
 
   SessionCollabFormat,
+  SessionClubRole,
+  SessionMatchmakingStyle,
   SessionPool,
   SessionScoringType,
   SessionStatus,
@@ -45,6 +47,7 @@ import { getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
 import {
   getLegacySessionModeForSettings,
   getLegacySessionTypeForSettings,
+  getSessionSettings,
   isValidSessionBalanceMetric,
   isValidSessionMatchmakingStyle,
   isValidSessionPairingMode,
@@ -133,11 +136,13 @@ function parseGameplaySettings(value: unknown): ParsedGameplaySettings | null {
   }
 
   return {
-    scoringType: SessionScoringType.POINTS,
-    matchmakingStyle: candidate.matchmakingStyle,
-    balanceMetric: candidate.balanceMetric,
-    pairingMode: candidate.pairingMode,
-    poolsEnabled: candidate.poolsEnabled,
+    ...getSessionSettings({
+      scoringType: SessionScoringType.POINTS,
+      matchmakingStyle: candidate.matchmakingStyle,
+      balanceMetric: candidate.balanceMetric,
+      pairingMode: candidate.pairingMode,
+    }),
+    poolsEnabled: candidate.matchmakingStyle !== SessionMatchmakingStyle.CLUB_PLAY && candidate.poolsEnabled,
     crossoverFrequency: candidate.crossoverFrequency,
     courtCount: candidate.courtCount as number,
   };
@@ -609,7 +614,13 @@ export async function PATCH(
         collabFormat: true,
         collaborationVersion: true,
         schedulingMode: true,
+        matchmakingStyle: true,
         poolAssignmentsInitialized: true,
+        sessionClubs: {
+          where: { role: SessionClubRole.PARTNER },
+          select: { id: true },
+          take: 1,
+        },
       },
     });
 
@@ -644,6 +655,19 @@ export async function PATCH(
         { error: "Reset the tournament before changing gameplay settings" },
         { status: 409 }
       );
+    }
+    const selectsClubPlay = gameplaySettings?.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY;
+    if (
+      selectsClubPlay &&
+      (
+        !sessionData.clubId ||
+        isUpgradedCollaboration(sessionData) ||
+        sessionData.collabFormat === SessionCollabFormat.INTERCLUB ||
+        sessionData.schedulingMode === "LINEUP" ||
+        sessionData.sessionClubs?.length > 0
+      )
+    ) {
+      throw new SessionRouteError("Club Play is available for single-club sessions.", 400);
     }
     if (
       gameplaySettings?.poolsEnabled &&
@@ -736,28 +760,36 @@ export async function PATCH(
         }
       }
 
-      await tx.session.update({
-        where: { id: sessionData.id },
-        data: {
-          autoQueueEnabled,
-          respectPlayerRest,
-          ...(gameplaySettings
-            ? {
-                type: getLegacySessionTypeForSettings(gameplaySettings),
-                mode: getLegacySessionModeForSettings(gameplaySettings),
-                scoringType: gameplaySettings.scoringType,
-                matchmakingStyle: gameplaySettings.matchmakingStyle,
-                balanceMetric: gameplaySettings.balanceMetric,
-                pairingMode: gameplaySettings.pairingMode,
-                poolsEnabled: gameplaySettings.poolsEnabled,
-                crossoverFrequency: gameplaySettings.crossoverFrequency,
-                poolAssignmentsInitialized:
-                  initializeLegacyPools ||
-                  sessionData.poolAssignmentsInitialized,
-              }
-            : {}),
-        },
-      });
+      const updates = {
+        autoQueueEnabled,
+        respectPlayerRest,
+        ...(gameplaySettings
+          ? {
+              type: getLegacySessionTypeForSettings(gameplaySettings),
+              mode: getLegacySessionModeForSettings(gameplaySettings),
+              scoringType: gameplaySettings.scoringType,
+              matchmakingStyle: gameplaySettings.matchmakingStyle,
+              balanceMetric: gameplaySettings.balanceMetric,
+              pairingMode: gameplaySettings.pairingMode,
+              poolsEnabled: gameplaySettings.poolsEnabled,
+              crossoverFrequency: gameplaySettings.crossoverFrequency,
+              poolAssignmentsInitialized:
+                initializeLegacyPools ||
+                sessionData.poolAssignmentsInitialized,
+            }
+          : {}),
+      };
+      if (gameplaySettings && (selectsClubPlay || sessionData.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY)) {
+        const result = await tx.session.updateMany({
+          where: { id: sessionData.id, status: SessionStatus.WAITING },
+          data: updates,
+        });
+        if (result.count !== 1) {
+          throw new SessionRouteError("Reset the tournament before changing gameplay settings", 409);
+        }
+      } else {
+        await tx.session.update({ where: { id: sessionData.id }, data: updates });
+      }
 
       for (const courtLabel of courtLabels) {
         await tx.court.updateMany({

@@ -1,23 +1,34 @@
 import { prisma } from "@/lib/prisma";
 import { withLegacySportingAliases } from "@/lib/sportingIdentity";
+import { withSessionProfileRatings } from "@/lib/sessionProfileIdentity";
+import { IdentityConflictError } from "@/lib/playerIdentity";
+import { getEffectiveSessionType } from "@/lib/sessionSettings";
+import { SessionType } from "@/types/enums";
+import { MatchmakingSearchBudgetExceededError } from "@/lib/matchmaking/v3/searchBudget";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import {
   createMatchesForAssignments,
   createQueuedMatchAssignment,
+  getQueuedMatchAssignmentVersion,
 } from "@/app/api/sessions/[code]/generate-match/assignments";
 import { buildMatchmakingState } from "@/app/api/sessions/[code]/generate-match/selection";
-import { selectAutomaticMatchForSession } from "@/app/api/sessions/[code]/queue-match/shared";
+import { assignAutomaticClubPlayQueue, selectAutomaticMatchForSession } from "@/app/api/sessions/[code]/queue-match/shared";
 import { validateManualMatchRequest } from "@/app/api/sessions/[code]/generate-match/manual";
 import { GenerateMatchError } from "@/app/api/sessions/[code]/generate-match/shared";
 import { getInterclubTeamClubIdsForPartition } from "@/app/api/sessions/[code]/generate-match/interclub";
+
+function canDeferClubPlayAssignment(error: unknown) {
+  return error instanceof MatchmakingSearchBudgetExceededError || error instanceof IdentityConflictError ||
+    (error instanceof GenerateMatchError && (error.status === 409 || error.status === 400));
+}
 
 export async function autoAssignQueuedMatch(
   sessionId: string,
   options?: { generateIfMissing?: boolean }
 ) {
-  const sessionData = withLegacySportingAliases(await prisma.session.findUnique({
+  const record = await prisma.session.findUnique({
     where: { id: sessionId },
     include: {
       players: {
@@ -35,11 +46,15 @@ export async function autoAssignQueuedMatch(
         include: { currentMatch: true },
       },
     },
-  }));
+  });
 
-  if (!sessionData) {
+  if (!record) {
     return { autoAssignedMatch: null, queuedMatchCleared: false };
   }
+  const clubPlay = getEffectiveSessionType(record) === SessionType.CLUB_PLAY;
+  const sessionData = withLegacySportingAliases(clubPlay
+    ? { ...record, players: await withSessionProfileRatings(prisma, record, record.players) }
+    : record);
 
   if (!sessionData.queuedMatch) {
     if (!options?.generateIfMissing || !sessionData.autoQueueEnabled) {
@@ -78,7 +93,7 @@ export async function autoAssignQueuedMatch(
 
       return { autoAssignedMatch, queuedMatchCleared: true };
     } catch (error) {
-      if (error instanceof GenerateMatchError) {
+      if (error instanceof GenerateMatchError || (clubPlay && canDeferClubPlayAssignment(error))) {
         return { autoAssignedMatch: null, queuedMatchCleared: true };
       }
       throw error;
@@ -88,11 +103,22 @@ export async function autoAssignQueuedMatch(
   const targetCourt = rankOpenCourtsForGroupType(
     sessionData.courts.filter((court) => !court.currentMatchId),
     sessionData.matches,
-    sessionData.queuedMatch.courtGroupType
+    clubPlay ? null : sessionData.queuedMatch.courtGroupType
   )[0];
 
   if (!targetCourt) {
     return { autoAssignedMatch: null, queuedMatchCleared: false };
+  }
+  if (clubPlay && sessionData.queuedMatch.isAutomatic) {
+    try {
+      const autoAssignedMatch = await assignAutomaticClubPlayQueue(sessionData, targetCourt.id);
+      return { autoAssignedMatch, queuedMatchCleared: false };
+    } catch (error) {
+      if (canDeferClubPlayAssignment(error)) {
+        return { autoAssignedMatch: null, queuedMatchCleared: false };
+      }
+      throw error;
+    }
   }
 
   const { busyPlayerIds } = await buildMatchmakingState(sessionData, {
@@ -127,6 +153,7 @@ export async function autoAssignQueuedMatch(
           where: {
             id: sessionData.queuedMatch!.id,
             sessionId,
+            ...(clubPlay ? getQueuedMatchAssignmentVersion(sessionData.queuedMatch!) : {}),
           },
         });
         if (
@@ -145,18 +172,25 @@ export async function autoAssignQueuedMatch(
     throw error;
   }
 
-  const autoAssignedMatch = await createQueuedMatchAssignment({
-    sessionId,
-    queuedMatchId: sessionData.queuedMatch.id,
-    courtId: targetCourt.id,
-    partition,
-    ...teamClubIds,
-    matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson ?? null,
-    courtGroupType: sessionData.queuedMatch.courtGroupType,
-    poolASeatCount: sessionData.queuedMatch.poolASeatCount,
-    poolBSeatCount: sessionData.queuedMatch.poolBSeatCount,
-    isAutomatic: sessionData.queuedMatch.isAutomatic,
-  });
-
-  return { autoAssignedMatch, queuedMatchCleared: false };
+  try {
+    const autoAssignedMatch = await createQueuedMatchAssignment({
+      sessionId,
+      queuedMatchId: sessionData.queuedMatch.id,
+      courtId: targetCourt.id,
+      partition,
+      ...teamClubIds,
+      matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson ?? null,
+      courtGroupType: sessionData.queuedMatch.courtGroupType,
+      poolASeatCount: sessionData.queuedMatch.poolASeatCount,
+      poolBSeatCount: sessionData.queuedMatch.poolBSeatCount,
+      isAutomatic: sessionData.queuedMatch.isAutomatic,
+      ...(clubPlay ? { previousQueue: getQueuedMatchAssignmentVersion(sessionData.queuedMatch) } : {}),
+    });
+    return { autoAssignedMatch, queuedMatchCleared: false };
+  } catch (error) {
+    if (clubPlay && canDeferClubPlayAssignment(error)) {
+      return { autoAssignedMatch: null, queuedMatchCleared: false };
+    }
+    throw error;
+  }
 }

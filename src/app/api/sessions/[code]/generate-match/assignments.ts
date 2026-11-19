@@ -1,12 +1,14 @@
 import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
+import type { QueuedMatch } from "@prisma/client";
 import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { prisma } from "@/lib/prisma";
-import { CourtGroupType, MatchStatus } from "@/types/enums";
+import { CourtGroupType, MatchStatus, SessionMatchmakingStyle } from "@/types/enums";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
 import { isBalancedMatchTypeSourceCurrent } from "@/lib/matchmaking/balancedMatchTypePersistence";
 import { hasLevelMatch3Commitment, isLevelMatchTypeSourceCurrent } from "@/lib/matchmaking/levelMatchPersistence";
+import { isAutomaticClubPlayReason, isClubPlayDecisionCurrent } from "@/lib/matchmaking/clubPlayPersistence";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
@@ -43,12 +45,13 @@ function getAllSelectedIds(
   return assignments.flatMap((assignment) => assignment.selectedIds);
 }
 
-async function assertAssignmentsAvailable(
+export async function assertAssignmentsAvailable(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   sessionId: string,
   assignments: Array<{
     selectedIds: string[];
-  }>
+  }>,
+  options: { allowQueuedPlayers?: boolean } = {},
 ) {
   const allSelectedIds = getAllSelectedIds(assignments);
   const uniqueSelectedIds = new Set(allSelectedIds);
@@ -60,11 +63,20 @@ async function assertAssignmentsAvailable(
     );
   }
 
-  const source = await tx.session.findUnique({ where: { id: sessionId }, select: { collaborationVersion: true } });
-  if (source && isUpgradedCollaboration(source)) {
+  const source = await tx.session.findUnique({
+    where: { id: sessionId }, select: { collaborationVersion: true, matchmakingStyle: true },
+  });
+  if (source && (isUpgradedCollaboration(source) || source.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY)) {
     const selected = await tx.sessionPlayer.findMany({ where: { sessionId, playerId: { in: [...uniqueSelectedIds] } }, select: { playerId: true, isPaused: true } });
     if (selected.length !== uniqueSelectedIds.size || selected.some(player => player.isPaused)) {
       throw new GenerateMatchError(409, "Selected players are no longer available. Refresh and try again.");
+    }
+  }
+  if (source?.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY && !options.allowQueuedPlayers) {
+    const queue = await tx.queuedMatch.findUnique({ where: { sessionId } });
+    if (queue && [queue.team1Player1Id, queue.team1Player2Id, queue.team2Player1Id, queue.team2Player2Id]
+      .some((playerId) => uniqueSelectedIds.has(playerId))) {
+      throw new GenerateMatchError(409, "A selected player is already reserved for the queued match. Refresh and try again.");
     }
   }
 
@@ -125,9 +137,9 @@ async function createMatchAssignment(
 
   const session = await tx.session.findUnique({
     where: { id: sessionId },
-    select: { poolsEnabled: true, scoringFormat: true, collaborationVersion: true },
+    select: { poolsEnabled: true, matchmakingStyle: true, scoringFormat: true, collaborationVersion: true },
   });
-  if (session?.poolsEnabled) {
+  if (session?.poolsEnabled && session.matchmakingStyle !== SessionMatchmakingStyle.CLUB_PLAY) {
     const selectedPlayers = await tx.sessionPlayer.findMany({
       where: {
         sessionId,
@@ -266,7 +278,8 @@ export async function createMatchesForAssignments(
   return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
     await assertAssignmentsAvailable(tx, sessionId, assignments);
     if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, assignments) ||
-      !await isLevelMatchTypeSourceCurrent(tx, sessionId, assignments)) {
+      !await isLevelMatchTypeSourceCurrent(tx, sessionId, assignments) ||
+      !await isClubPlayDecisionCurrent(tx, sessionId, assignments)) {
       throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
     }
 
@@ -365,7 +378,8 @@ export async function replaceCurrentCourtMatchAssignment({
 
     await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds }]);
     if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, [{ partition, matchmakingReasonJson }]) ||
-      !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }])) {
+      !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }]) ||
+      !await isClubPlayDecisionCurrent(tx, sessionId, [{ matchmakingReasonJson }])) {
       throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
     }
 
@@ -411,6 +425,14 @@ export async function replaceCurrentCourtMatchAssignment({
   });
 }
 
+export function getQueuedMatchAssignmentVersion(queue: QueuedMatch) {
+  return {
+    team1Player1Id: queue.team1Player1Id, team1Player2Id: queue.team1Player2Id,
+    team2Player1Id: queue.team2Player1Id, team2Player2Id: queue.team2Player2Id,
+    matchmakingReasonJson: queue.matchmakingReasonJson, createdAt: queue.createdAt, isAutomatic: queue.isAutomatic,
+  };
+}
+
 export async function createQueuedMatchAssignment({
   sessionId,
   actor,
@@ -425,6 +447,7 @@ export async function createQueuedMatchAssignment({
   poolBSeatCount,
   isAutomatic,
   consumeSkipNextUserIds,
+  previousQueue,
 }: {
   sessionId: string;
   actor?: SessionMutationActor;
@@ -439,6 +462,7 @@ export async function createQueuedMatchAssignment({
   poolBSeatCount?: number | null;
   isAutomatic?: boolean;
   consumeSkipNextUserIds?: string[];
+  previousQueue?: ReturnType<typeof getQueuedMatchAssignmentVersion>;
 }) {
   return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
     await assertAssignmentsAvailable(tx, sessionId, [
@@ -450,16 +474,20 @@ export async function createQueuedMatchAssignment({
           partition.team2[1],
         ],
       },
-    ]);
+    ], { allowQueuedPlayers: true });
 
+    if (isAutomaticClubPlayReason(matchmakingReasonJson) &&
+      !await isClubPlayDecisionCurrent(tx, sessionId, [{ matchmakingReasonJson }], true)) {
+      throw new GenerateMatchError(409, "The roster or match assignments changed. Please retry matchmaking.");
+    }
     const removedQueue = await tx.queuedMatch.deleteMany({
       where: {
         id: queuedMatchId,
         sessionId,
-        ...(hasLevelMatch3Commitment(matchmakingReasonJson) ? {
+        ...(previousQueue ?? (hasLevelMatch3Commitment(matchmakingReasonJson) ? {
           team1Player1Id: partition.team1[0], team1Player2Id: partition.team1[1],
           team2Player1Id: partition.team2[0], team2Player2Id: partition.team2[1], matchmakingReasonJson,
-        } : {}),
+        } : {})),
       },
     });
     if (removedQueue.count === 0) {

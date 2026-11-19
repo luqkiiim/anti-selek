@@ -1,4 +1,5 @@
 import type { LevelSelectionContext, LevelSelectionDiagnostics } from "./levelPolicy";
+import type { ClubPlaySelectionContext, ClubPlaySelectionDiagnostics } from "./clubPlaySelection";
 
 export interface LadderRecord {
   wins: number;
@@ -137,6 +138,8 @@ export interface LadderSingleCourtSelection<
   randomScore: number;
   levelContext?: LevelSelectionContext;
   levelDiagnostics?: LevelSelectionDiagnostics;
+  clubPlayContext?: ClubPlaySelectionContext;
+  clubPlayDiagnostics?: ClubPlaySelectionDiagnostics;
 }
 
 export interface LadderSingleCourtDebug {
@@ -182,6 +185,7 @@ export interface LadderBatchSelection<
 }
 
 export interface LadderBatchDebug {
+  clubPlayDiagnostics?: ClubPlaySelectionDiagnostics;
   searchLimitReached?: boolean;
   searchLimitPhase?: "preparation" | "baseline" | "quality" | null;
   phaseElapsedMs?: { preparation: number; baseline: number; quality: number };

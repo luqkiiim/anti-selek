@@ -7,8 +7,11 @@ import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
-import { tryRebuildQueuedMatchForSessionId } from "../shared";
-import { createQueuedMatchAssignment } from "../../generate-match/assignments";
+import { assignAutomaticClubPlayQueue, tryRebuildQueuedMatchForSessionId } from "../shared";
+import { getEffectiveSessionType } from "@/lib/sessionSettings";
+import { SessionType } from "@/types/enums";
+import { createQueuedMatchAssignment, getQueuedMatchAssignmentVersion } from "../../generate-match/assignments";
+import { MatchmakingSearchBudgetExceededError } from "@/lib/matchmaking/v3/searchBudget";
 import { buildMatchmakingState } from "../../generate-match/selection";
 import {
   GenerateMatchError,
@@ -96,13 +99,25 @@ export async function POST(
       include: { currentMatch: true },
     });
 
+    const clubPlay = getEffectiveSessionType(sessionData) === SessionType.CLUB_PLAY;
     const targetCourt = rankOpenCourtsForGroupType(
       openCourts,
       sessionData.matches,
-      sessionData.queuedMatch.courtGroupType
+      clubPlay ? null : sessionData.queuedMatch.courtGroupType
     )[0];
     if (!targetCourt) {
       throw new GenerateMatchError(409, "No free court available for the queued match.");
+    }
+    if (clubPlay && sessionData.queuedMatch.isAutomatic) {
+      const match = await assignAutomaticClubPlayQueue(sessionData, targetCourt.id, {
+        userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin,
+      });
+      return sportingJson({
+        ...match,
+        courtId: targetCourt.id,
+        assignedCourt: { id: targetCourt.id, label: getCourtDisplayLabel(targetCourt) },
+        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+      });
     }
 
     const { busyPlayerIds } = await buildMatchmakingState(sessionData, {
@@ -145,6 +160,7 @@ export async function POST(
       poolASeatCount: sessionData.queuedMatch.poolASeatCount,
       poolBSeatCount: sessionData.queuedMatch.poolBSeatCount,
       isAutomatic: sessionData.queuedMatch.isAutomatic,
+      ...(clubPlay ? { previousQueue: getQueuedMatchAssignmentVersion(sessionData.queuedMatch) } : {}),
     });
 
     return sportingJson({
@@ -157,6 +173,9 @@ export async function POST(
       queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
     });
   } catch (error) {
+    if (error instanceof MatchmakingSearchBudgetExceededError) {
+      return sportingJson({ error: "Match search reached its time limit. Try assigning the queued match again." }, { status: 409 });
+    }
     if (error instanceof IdentityConflictError || error instanceof ClubAdmissionError) return sportingJson({ error: error.message }, { status: error.statusCode });
     if (error instanceof GenerateMatchError) {
       if (error.status === 403) {
