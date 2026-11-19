@@ -60,6 +60,28 @@ describe("Club Play selection", () => {
     expect(isolatedGap.worst).toBeGreaterThan(widerNeighborhood.worst);
   });
 
+  it("finds a close same-side court when ties would otherwise shrink the quality window to zero", () => {
+    const players = [
+      ...roster([500, 1000, 1020, 1020, 1040, 1040, 1060]),
+      ...[1000, 1000, 1020, 1020, 1040, 1040, 1550].map((rating, index) =>
+        player(`f${index}`, rating, { gender: PlayerGender.FEMALE })),
+    ];
+    const result = findBestClubPlayBatchSelection(players, { courtCount: 2 });
+    expect(result.debug.baselineCertified).toBe(true);
+    const ownSide = result.selection?.selections.filter((court) => court.clubPlayDiagnostics?.matchType !== "MIXED") ?? [];
+    expect(ownSide.length).toBeGreaterThan(0);
+    expect(ownSide.every((court) => court.groupingSummary.maxLadderGap <= 40)).toBe(true);
+  });
+
+  it("keeps separated tied cohorts out of the distribution window", () => {
+    const ratings = [500, 500, 900, 900, 1300, 1300];
+    const players = [...roster(ratings), ...ratings.map((rating, index) =>
+      player(`f${index}`, rating, { gender: PlayerGender.FEMALE }))];
+    const result = findBestClubPlayBatchSelection(players, { courtCount: 2 });
+    expect(result.selection?.selections.map((court) => court.clubPlayDiagnostics?.matchType)).toEqual(["MIXED", "MIXED"]);
+    expect(buildClubPlayCompatibilityScorer(players.filter(({ strength }) => strength !== 900)).frontierMargin).toBe(0);
+  });
+
   it("aligns mixed cohorts by relative strength and still uses raw team balance", () => {
     const players = [
       player("u1", 1300), player("u2", 1250), player("u3", 1100), player("u4", 1050),

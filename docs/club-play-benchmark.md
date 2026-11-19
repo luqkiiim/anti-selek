@@ -84,3 +84,25 @@ Across all three seeds, Club Play made 9–11 mixed games out of 26 in the compa
 | 28 players | 13–14 | 15–21 of 28 | 7–8 | 27–29 | 1,338–2,327 |
 
 The 20-player case still favored mixed play under staggered rest and court commitments. Level Match scheduled 34–37 mixed games in those sessions. The 24-player seed 4729 included a severe mixed game with Higher players H9 and H10 and Lower players L3 and L4. Changing the batch within the same seats could satisfy the balance guardrail while avoiding that extreme combination. This was the only such witness observed in the Club Play runs. The 28-player cases used a certified fallback twice. Eligibility and balance were preserved, with the extra search cost visible in the largest batches.
+
+## Exact 20-game replays
+
+The replay stops after 20 completed games and reports remaining starts and reservations separately. These snapshots use a 7/7 roster, two courts, and the same three seeds as the earlier simulations. For each Club Play decision the audit enumerates disjoint legal quartets, taking the most balanced partition for each quartet. It then checks whether the certified fairness class, team-balance guardrail and adaptive skill window admit a batch with at least one same-side court. The enumerated fairness optimum agreed with the production proof in every recorded decision.
+
+```sh
+npm run benchmark:club-play -- --cases=tied-20,compact-20,wide-20,wide-queued-20,offset-20,offset-queued-20,outliers-20 --seeds=1,4729,104729 --policies=club-play
+```
+
+| Scenario | Mixed games before the follow-up | Mixed games after the follow-up | Post-change starts with a same-side option inside fairness, balance and skill |
+| --- | --- | --- | --- |
+| Tied 7/7 | 8/7/8 | 8/7/8 | 32 of 46 |
+| Compact 7/7 | 8/7/8 | 8/7/8 | 30 of 46 |
+| Wide 7/7 | 20/20/20 | 20/20/20 | 0 of 46 |
+| Wide 7/7 with queue | 20/20/20 | 20/20/20 | 0 of 59 |
+| Offset 7/7 | 8/7/8 | 8/7/8 | 30 of 46 |
+| Offset 7/7 with queue | 16/12/18 | 8/8/8 | 33 of 59 |
+| Tied ratings with outliers | 14/14/14 | 10/8/8 | 27 of 46 |
+
+The offset queue result improved when promotion began comparing the reserved match's effect on the mix with that of a fresh decision. The outlier result improved when the local skill margin started using nonzero steps between distinct rating levels if ties had made the ordinary local estimate zero. In its seed-1 opening, a balanced Lower-side court spanning 20 Elo scored 0.072 against the previous zero allowance. The adjusted allowance was 0.122, and the matcher started two same-side courts. The outlier scenario went from 13 to 27 of 46 starts admitting a same-side option.
+
+Wide 7/7 had just two or three players from each side in each planted skill cluster. In all six runs, every fair and balanced batch containing a same-side court fell outside the quality window. The audit found such batches inside fairness and balance in 31 of 46 unqueued decisions and 28 of 59 queued start or activation decisions. In the first unqueued opening, the closest same-side alternative included a Higher court with a 2.5 Elo team-average gap, a 395-point individual spread and compatibility cost 1.013, above the 0.705 allowance. The best all-mixed batch scored 0.177 at worst. Both paths completed 20 mixed games per seed and a final match-count spread of one. The larger wide 12/12 roster offers more local same-side options and still achieved 13/13/13 across its three longer runs.

@@ -22,6 +22,8 @@ import { isBalanceGuardrailAdmissible } from "./v3/balanceGuardrail";
 import { getExactPartitionKey } from "./v3/rematch";
 import { createMatchmakingSearchBudget, MatchmakingSearchBudgetExceededError } from "./v3/searchBudget";
 import type { V3BalanceGuardrail, V3DoublesPartition } from "./v3/types";
+import { getBusyPlayerIds } from "./busyFilter";
+import { analyzeReplayAdmission, type ReplayDecision } from "./clubPlayReplayAdmission";
 import { buildClubPlayDistributionTargets, parseClubPlayDistributionSnapshot } from "./ladder/clubPlayDistribution";
 import type { ClubPlaySelectionDiagnostics } from "./ladder/clubPlaySelection";
 import { getLevelMatchCategory, LEVEL_MATCH_TYPES } from "./ladder/levelDistribution";
@@ -59,6 +61,12 @@ const p95 = (values: readonly number[]) => values.length ? [...values].sort((a, 
 const sides = (values: readonly BenchmarkPlayer[]) => (id: string) => values.find((player) => player.id === id)?.effectiveSide;
 const idsOf = ({ team1, team2 }: V3DoublesPartition) => [...team1, ...team2];
 const categories = () => ({ UPPER: 0, MIXED: 0, LOWER: 0 });
+
+function replayCandidates(ranked: ReturnType<typeof getRankedCandidates>["rankedCandidates"]) {
+  return ranked.map(({ userId, effectiveMatchCount, restTurns, arrivalPriorityAt }) => (
+    { userId, effectiveMatchCount, restTurns, arrivalPriorityAt }
+  ));
+}
 
 function clubPlayReason(selection?: Selection) {
   return selection?.matchmakingReasonJson ? JSON.parse(selection.matchmakingReasonJson) as
@@ -176,7 +184,7 @@ function hasNonSevereBatchWitness(seats: string[], severe: (players: readonly st
 
 async function simulate(scenario: ScenarioId, policy: Policy, seed: number) {
   const { config, players, calibration } = makeClubPlayBenchmarkScenario(scenario, seed);
-  const horizon = config.duration ?? 120;
+  let horizon = config.duration ?? 120;
   const late = config.lifecycle ? [...players.slice(-2)] : [];
   const seats = players.filter((player) => !late.includes(player)).map((player) => makeSeat(player));
   const courts = Array.from({ length: config.courts }, (_, index) => ({ id: `c${index + 1}`, isActive: true, currentMatchId: null } as Court));
@@ -192,6 +200,9 @@ async function simulate(scenario: ScenarioId, policy: Policy, seed: number) {
   const mixedRankGaps: number[] = [], withinSideGaps: number[] = [], compatibility: number[] = [];
   const latencies: { elapsedMs: number; courts: number; queue: boolean }[] = [];
   const decisions: unknown[] = [];
+  const replayDecisions: ReplayDecision[] = [];
+  const traceReplay = config.completionLimit !== undefined && config.courts <= 2 && !config.open && !config.lifecycle &&
+    policy === "club-play" && Boolean(process.env.CLUB_PLAY_BENCHMARK_OUTPUT);
   let started = 0, completed = 0, backToBack = 0, repeatExact = 0, severeCount = 0, avoidableSevere = 0;
   let crossPool = 0, extremeHighLow = 0, unknownType = 0, unusedCourtMinutes = 0;
   let queue: Assignment | null = null, queueCreated = 0, queueActivated = 0, queueCanceled = 0, queueRevalidatedToDifferentLineup = 0;
@@ -254,8 +265,12 @@ async function simulate(scenario: ScenarioId, policy: Policy, seed: number) {
         chosen: result.map((choice) => choice.partition), distribution: club.distribution,
         compatibility: club.compatibility, bestCompatibility: club.bestCompatibility, allowedCompatibility: club.allowedCompatibility,
         certified: club.baselineCertified, exhausted: club.searchLimitReached, fallback: club.fallback,
-        available: rankedCandidates.map(({ userId, effectiveMatchCount, restTurns, arrivalPriorityAt }) => ({ userId, effectiveMatchCount, restTurns, arrivalPriorityAt })),
+        available: replayCandidates(rankedCandidates),
       });
+      if (traceReplay && first && "clubPlayContext" in first && first.clubPlayContext) {
+        replayDecisions.push({ minute, completed, action: queued ? "reserve" : "start", available: replayCandidates(rankedCandidates),
+          selected: result.map((choice) => choice.partition), context: first.clubPlayContext });
+      }
       if (guardrail) {
         const gaps = result.map((choice) => guardrail!.mode === "RATING" ? observedGap(choice.partition) :
           Math.abs(choice.partition.team1.reduce((sum, id) => sum + (state.playersById.get(id)?.elo ?? 0), 0)
@@ -412,8 +427,13 @@ async function simulate(scenario: ScenarioId, policy: Policy, seed: number) {
   for (let minute = 0; minute <= horizon; minute++) {
     let changed = minute === 0;
     for (const court of courts) {
+      if (completed === config.completionLimit) break;
       const game = active.get(court.id);
       if (game?.finishesAt === minute) { finish(game, court, minute); changed = true; }
+    }
+    if (completed === config.completionLimit) {
+      horizon = minute;
+      break;
     }
     if (config.lifecycle) {
       if (minute === 18) {
@@ -453,6 +473,11 @@ async function simulate(scenario: ScenarioId, policy: Policy, seed: number) {
           const start = performance.now();
           try {
             const { chosen, consumedSkipUserIds } = await selectAutomaticClubPlayQueueAssignment(session);
+            if (traceReplay && "clubPlayContext" in chosen && chosen.clubPlayContext) {
+              const { rankedCandidates } = getRankedCandidates(session, getBusyPlayerIds(session.matches));
+              replayDecisions.push({ minute, completed, action: "activate", available: replayCandidates(rankedCandidates),
+                selected: [chosen.partition], context: chosen.clubPlayContext });
+            }
             const target = parseClubPlayDistributionSnapshot(clubPlayReason(chosen)?.clubPlayMatchType, chosen.partition);
             if (!config.open && !target) invalid++;
             toLaunch = { ...queue, selection: chosen, consumedSkipUserIds, target: target ?? undefined };
@@ -554,7 +579,8 @@ async function simulate(scenario: ScenarioId, policy: Policy, seed: number) {
     operations: { invalid, failed, exhausted, fallback, failureReasons, calls: latencies.length,
       p95Ms: p95(latencies.map((sample) => sample.elapsedMs)), p95ByCourtCount: [1, 2, 3].map((count) => p95(latencies.filter((sample) => sample.courts === count && !sample.queue).map((sample) => sample.elapsedMs))),
       p95QueueMs: p95(latencies.filter((sample) => sample.queue).map((sample) => sample.elapsedMs)) },
-    calibration: calibration && { ...calibration, focalOutcome: individual.find((p) => p.id === calibration.focal) }, segments, individual, decisions };
+    calibration: calibration && { ...calibration, focalOutcome: individual.find((p) => p.id === calibration.focal) }, segments, individual, decisions,
+    ...(traceReplay ? { replayAdmission: replayDecisions.map((decision) => analyzeReplayAdmission(players, decision)) } : {}) };
 }
 
 function assertHardInvariants(row: Awaited<ReturnType<typeof simulate>>) {
@@ -595,6 +621,26 @@ function fewestMixedUnderCountFairness(upper: number, lower: number, games: numb
 }
 
 describe("Club Play session outcomes", () => {
+  it("repairs the doubles mix when promoting automatic reservations on two courts", async () => {
+    for (const seed of [1, 4_729, 104_729]) {
+      const row = await simulate("offset-queued-20", "club-play", seed);
+      assertHardInvariants(row);
+      expect(row.completed).toBe(20);
+      expect(row.queue.activated).toBeGreaterThan(0);
+      expect(row.distribution.actual.MIXED).toBeLessThan(row.completed / 2);
+    }
+  });
+
+  it("leaves room for own-side play when most ratings are tied and outliers are present", async () => {
+    for (const seed of [1, 4_729, 104_729]) {
+      const row = await simulate("outliers-20", "club-play", seed);
+      assertHardInvariants(row);
+      expect(row.completed).toBe(20);
+      expect(row.fairness.spread).toBeLessThanOrEqual(1);
+      expect(row.distribution.actual.MIXED).toBeLessThanOrEqual(row.completed / 2);
+    }
+  });
+
   it("respects effective-side inputs, including overrides", () => {
     const { players } = makeClubPlayBenchmarkScenario("overrides-outliers", 1);
     expect(players.some((player) => player.mixedSideOverride !== null)).toBe(true);
@@ -652,7 +698,10 @@ describe.skipIf(!process.env.CLUB_PLAY_BENCHMARK_OUTPUT)("Club Play paired bench
       writeFileSync(out, JSON.stringify({ version: 1, node: process.version,
         revision: process.env.CLUB_PLAY_BENCHMARK_REVISION, dirty: process.env.CLUB_PLAY_BENCHMARK_DIRTY === "true",
         cases, seeds, formats, rows }, null, 2));
-      if (policy === "club-play") assertHardInvariants(row);
+      if (policy === "club-play") {
+        assertHardInvariants(row);
+        for (const decision of row.replayAdmission ?? []) expect(decision.fairnessAgrees).toBe(true);
+      }
     }
   }, 900_000);
 });

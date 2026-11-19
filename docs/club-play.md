@@ -9,7 +9,7 @@ Club Play is an opt-in format for single-club sessions. It uses club ratings and
 3. Find the best quartet fit within those bounds. Compare raw Elo distance, tied rating positions and unusually large adjacent gaps in the available skill neighborhoods. Players already on court still inform the neighborhoods. In Mixed, use within-side gaps and match the two sides by their relative standing. Club Play can use any legal quartet if availability and fairness require it.
 4. Use the local spacing of the roster to determine how much fit can vary. Inside that range, consider the session's match-type mix and each player's exposure, then preserve good fit, competitive teams, rest and relationship variety. The same search and time budget applies to reshuffles.
 
-Counts for session exposure come from started and completed matches. A queued game reserves players without adding exposure. Automatic reservations are checked again just before a court starts. Manual reservations retain their lineups. The assignment transaction verifies the roster, ratings and matches used to make each automatic decision.
+Counts for session exposure come from started and completed matches. A queued game reserves players without adding exposure. When a court opens, an automatic reservation must still meet fairness, balance and skill requirements. In Mixed mode, it also competes with the fresh lineup on session mix first, then player exposure. Manual reservations retain their lineups. The assignment transaction verifies the roster, ratings and matches used to make each automatic decision.
 
 ## Doubles mix and Elo limitations
 

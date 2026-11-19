@@ -12,6 +12,7 @@ interface Scenario {
   open?: boolean;
   overrides?: boolean;
   duration?: number;
+  completionLimit?: number;
   fixedGameMinutes?: number;
 }
 
@@ -19,9 +20,16 @@ export const clubPlayBenchmarkScenarios = {
   compact: { upper: 7, lower: 7, profile: "compact", courts: 2 },
   "balanced-21": { upper: 7, lower: 7, profile: "tied", courts: 1, duration: 105, fixedGameMinutes: 5 },
   "balanced-24": { upper: 8, lower: 8, profile: "tied", courts: 1, fixedGameMinutes: 5 },
+  "tied-20": { upper: 7, lower: 7, profile: "tied", courts: 2, completionLimit: 20 },
+  "compact-20": { upper: 7, lower: 7, profile: "compact", courts: 2, completionLimit: 20 },
   wide: { upper: 12, lower: 12, profile: "wide", courts: 3 },
+  "wide-20": { upper: 7, lower: 7, profile: "wide", courts: 2, completionLimit: 20 },
+  "wide-queued-20": { upper: 7, lower: 7, profile: "wide", courts: 2, queued: true, completionLimit: 20 },
   segregated: { upper: 8, lower: 8, profile: "segregated", courts: 2 },
   offset: { upper: 7, lower: 7, profile: "offset", courts: 2 },
+  "offset-20": { upper: 7, lower: 7, profile: "offset", courts: 2, completionLimit: 20 },
+  "offset-queued-20": { upper: 7, lower: 7, profile: "offset", courts: 2, queued: true, completionLimit: 20 },
+  "outliers-20": { upper: 7, lower: 7, profile: "outliers", courts: 2, completionLimit: 20 },
   "8-6": { upper: 8, lower: 6, profile: "compact", courts: 2 },
   "10-5": { upper: 10, lower: 5, profile: "compact", courts: 2 },
   "12-4": { upper: 12, lower: 4, profile: "compact", courts: 2 },

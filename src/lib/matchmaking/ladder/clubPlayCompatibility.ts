@@ -68,11 +68,22 @@ function buildNeighborhood(players: readonly RatedPlayer[]) {
       neighborhood: nearby[Math.min(3, nearby.length - 1)] ?? 0,
     };
   });
+  const typicalNearest = median(localWidths.map((width) => width.step));
+  // Ties can collapse the nearest step even when several nearby ratings
+  // show a real neighborhood. Require two observed gaps for a fallback and
+  // attenuate it when even the closest distinct rating is a lopsided fit.
+  const localStep = typicalNearest || (gaps.length >= 2 ? median(ordered.map(({ strength }) => {
+    const index = positions.get(strength)!.index;
+    const neighbors = values.slice(Math.max(0, index - 1), index + 2).filter((rating) => rating !== strength);
+    const nearest = neighbors.reduce((best, rating) =>
+      distance(strength, rating) < distance(strength, best) ? rating : best);
+    return distance(strength, nearest) * (1 - eloDistance(strength - nearest)) ** 2;
+  })) : 0);
   return {
     center,
     distance,
     typicalWidth: Math.min(
-      3 * median(localWidths.map((width) => width.step)),
+      3 * localStep,
       median(localWidths.map((width) => width.neighborhood)),
     ),
     quantile: (rating: number) => positions.get(rating)?.quantile ?? 0.5,
