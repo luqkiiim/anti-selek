@@ -50,6 +50,26 @@ test("hosts can choose a doubles type from a live session on mobile", async ({ p
     await expect(nextUp).toContainText("Doubles Player 5");
     await page.reload();
     await expect(nextUp).toContainText("Women's Doubles");
+
+    const court = page.locator(".court-card").filter({ has: page.getByRole("heading", { name: "Court 1" }) });
+    await court.getByRole("textbox", { name: "Team 1 score" }).fill("21");
+    await court.getByRole("textbox", { name: "Team 2 score" }).fill("18");
+    await court.getByRole("button", { name: "Save score" }).click();
+    await court.getByRole("button", { name: "Confirm", exact: true }).click();
+    const notice = court.getByRole("status");
+    await expect(notice).toHaveText("21–18 saved · Next match started");
+    await expect(court.getByText("Doubles Player 5")).toBeVisible();
+    await expect(court.getByRole("textbox", { name: "Team 1 score" })).toBeEnabled();
+    await expect(court.getByRole("textbox", { name: "Team 1 score" })).toHaveValue("");
+    await expect(nextUp).toHaveCount(0);
+
+    const incomingPlayers = court.locator(".team-players").first();
+    const highlight = court.locator(".court-handoff-highlight");
+    await expect(incomingPlayers).toHaveCSS("animation-name", "court-handoff-players");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(incomingPlayers).toHaveCSS("animation-name", "none");
+    await expect(highlight).toHaveCSS("opacity", "1");
+    await expect(notice).toHaveText("21–18 saved · Next match started");
   } finally {
     await db.$disconnect();
   }

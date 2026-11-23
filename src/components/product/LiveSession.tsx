@@ -34,6 +34,8 @@ import {
 } from "@/types/enums";
 import { api, ApiError, useResource, useAction } from "./api";
 import { getDoublesTypeLabel } from "@/lib/courtCreate";
+import { getCourtDisplayLabel } from "@/lib/courtLabels";
+import { resolveMatchScoreInput } from "@/lib/matchRules";
 import { useSessionController } from "./useSessionController";
 import { canApprovePendingSubmission, getTeamNumberForPlayerId } from "@/lib/matchApprovalRules";
 import { SessionJoinProfilePanel } from "@/components/session/SessionJoinProfilePanel";
@@ -75,7 +77,7 @@ import {
   type SessionSnapshotLike,
 } from "@/app/session/[code]/sessionDataMutations";
 import { MatchStatus } from "@/types/enums";
-import { saveScoreWithBackgroundRefresh } from "./scoreSave";
+import { saveScoreWithBackgroundRefresh, type ScoreSaveResponse } from "./scoreSave";
 import { ClubCollaboration, useClubCollaboration } from "./ClubCollaboration";
 import { SeriesScoreEditor } from "./SeriesScoreEditor";
 import { CourtPairingDetails } from "./CourtPairingDetails";
@@ -147,10 +149,24 @@ type PausePlayerResponse = {
   queuedMatchAffected?: boolean;
   queuedMatch?: SessionData["queuedMatch"];
 };
-type ScoreSaveResponse = MatchPayload & {
-  queuedMatch?: SessionData["queuedMatch"];
-  autoAssignedMatch?: MatchPayload;
+type CourtHandoff = {
+  sessionId: string;
+  fromCourtId: string;
+  toCourtId: string;
+  matchId: string;
+  message: string;
+  expiresAt: number;
 };
+const COURT_HANDOFF_NOTICE_MS = 4000;
+
+function getSavedScoreLabel(response: ScoreSaveResponse, court: Court) {
+  const scoringFormat = response.scoringFormat ?? court.currentMatch?.scoringFormat;
+  const result = resolveMatchScoreInput({ ...response, scoringFormat });
+  if (!result) return "Score saved";
+  return scoringFormat === "BEST_OF_THREE"
+    ? `${result.team1GameWins}–${result.team2GameWins} saved`
+    : `${result.team1Score}–${result.team2Score} saved`;
+}
 type MatchGenerationResponse = Partial<MatchPayload> & {
   matches?: MatchPayload[];
   queuedMatch?: SessionData["queuedMatch"];
@@ -251,6 +267,19 @@ export default function LiveSession({
   const [finishReview, setFinishReview] = useState<UnfinishedMatchReview[]>([]);
   const [finishUncertain, setFinishUncertain] = useState(false);
   const [pauseNotice, setPauseNotice] = useState("");
+  const [courtHandoffs, setCourtHandoffs] = useState<Record<string, CourtHandoff>>({});
+  useEffect(() => {
+    const handoffs = Object.values(courtHandoffs);
+    if (!handoffs.length) return;
+    const nextExpiry = Math.min(...handoffs.map(handoff => handoff.expiresAt));
+    const timer = setTimeout(() => {
+      const now = Date.now();
+      setCourtHandoffs(current => Object.fromEntries(
+        Object.entries(current).filter(([, handoff]) => handoff.expiresAt > now),
+      ));
+    }, Math.max(0, nextExpiry - Date.now()));
+    return () => clearTimeout(timer);
+  }, [courtHandoffs]);
   useEffect(() => {
     if (!pauseNotice) return;
     const timer = setTimeout(() => setPauseNotice(""), 5000);
@@ -439,16 +468,49 @@ export default function LiveSession({
     intervalMs: checkSharedSession ? SHARED_SESSION_REFRESH_MS : null,
     lastCheckedAt,
   });
-  async function pendingScoreAction(match: Match, operation: "approve" | "reopen") {
+  function applyScoreResult(court: Court, response: ScoreSaveResponse) {
+    const completed = response.status === MatchStatus.COMPLETED;
+    const incoming = response.autoAssignedMatch;
+    if (completed) {
+      setQueuedMatchOverlay(null);
+      const destination = s?.courts.find(candidate => candidate.id === incoming?.courtId);
+      if (s && incoming && destination) {
+        const action = destination.id === court.id
+          ? "Next match started"
+          : `Next match on ${getCourtDisplayLabel(destination)}`;
+        const handoff: CourtHandoff = {
+          sessionId: s.id,
+          fromCourtId: court.id,
+          toCourtId: destination.id,
+          matchId: incoming.id,
+          message: `${getSavedScoreLabel(response, court)} · ${action}`,
+          expiresAt: Date.now() + COURT_HANDOFF_NOTICE_MS,
+        };
+        setCourtHandoffs(current => ({ ...current, [court.id]: handoff }));
+      }
+    }
+    resource.update(current => {
+      if (!completed) return applyScoreSubmission(current, response);
+      const scored = applyScoreApproval(current, response);
+      return applyQueuedMatch(
+        incoming ? applyGeneratedMatches(scored, [incoming]) : scored,
+        response.queuedMatch ?? null,
+      );
+    }, { urgent: true });
+  }
+
+  async function pendingScoreAction(court: Court, match: Match, operation: "approve" | "reopen") {
     if (savingScoreMatchIdsRef.current.has(match.id)) return;
     setMatchSaving(match.id, true);
     try {
       const response = match.scoringFormat === "BEST_OF_THREE"
         ? await api<ScoreSaveResponse>(`/api/matches/${encodeURIComponent(match.id)}/${operation}`, "POST", {scoreRevision:match.scoreRevision??0})
         : await api<ScoreSaveResponse>(`/api/matches/${encodeURIComponent(match.id)}/${operation}`, "POST");
-      if (operation === "approve") setQueuedMatchOverlay(null);
-      resource.update(current => operation === "reopen" ? applyScoreReopen(current, response) : applyQueuedMatch(
-        response.autoAssignedMatch ? applyGeneratedMatches(applyScoreApproval(current, response), [response.autoAssignedMatch]) : applyScoreApproval(current, response), response.queuedMatch ?? null));
+      if (operation === "reopen") {
+        resource.update(current => applyScoreReopen(current, response));
+      } else {
+        applyScoreResult(court, response);
+      }
       void refresh().catch(() => {});
     } catch (error) { setScoreErrors(previous => ({ ...previous, [match.id]: error instanceof Error ? error.message : "Unable to update score." })); }
     finally { setMatchSaving(match.id, false); }
@@ -736,7 +798,7 @@ export default function LiveSession({
       throw new Error(isCollaboration ? "Enter unequal, nonnegative whole scores." : "Enter unequal whole scores from 0 to 99.");
     return values;
   }
-  function confirmScore(match: Match) {
+  function confirmScore(court: Court, match: Match) {
     if (action.busy || savingScoreMatchIdsRef.current.has(match.id)) return;
     try {
       const values = validateScore(match);
@@ -752,7 +814,7 @@ export default function LiveSession({
       });
       // Lock synchronously so rapid clicks cannot submit the same match twice.
       setMatchSaving(match.id, true);
-      void saveScore(match, values);
+      void saveScore(court, match, values);
     } catch (error) {
       setScoreErrors((previous) => ({
         ...previous,
@@ -760,7 +822,7 @@ export default function LiveSession({
       }));
     }
   }
-  async function saveScore(match: Match, values: number[]) {
+  async function saveScore(court: Court, match: Match, values: number[]) {
     try {
       await saveScoreWithBackgroundRefresh(
         () => api<ScoreSaveResponse>(
@@ -769,21 +831,7 @@ export default function LiveSession({
           { team1Score: values[0], team2Score: values[1], ...(match.scoreRevision !== undefined ? {scoreRevision:scores[match.id]?.revision ?? match.scoreRevision} : {}) },
         ),
         (response) => {
-          if (response.status === MatchStatus.COMPLETED) {
-            setQueuedMatchOverlay(null);
-          }
-          resource.update((current) => {
-            const next = response.status === MatchStatus.COMPLETED
-              ? applyScoreApproval(current, response)
-              : applyScoreSubmission(current, response);
-            if (response.status !== MatchStatus.COMPLETED) return next;
-            return applyQueuedMatch(
-              response.autoAssignedMatch
-                ? applyGeneratedMatches(next, [response.autoAssignedMatch])
-                : next,
-              response.queuedMatch ?? null,
-            );
-          }, { urgent: true });
+          applyScoreResult(court, response);
           setScores((current) => {
             const next = { ...current };
             delete next[match.id];
@@ -807,6 +855,12 @@ export default function LiveSession({
       setMatchSaving(match.id, false);
     }
   }
+  const visibleHandoffs = s?.status === "ACTIVE" ? Object.values(courtHandoffs).filter(handoff =>
+    handoff.sessionId === s.id && s.courts.some(court =>
+      court.id === handoff.toCourtId && court.currentMatch?.id === handoff.matchId &&
+      court.currentMatch.status === MatchStatus.IN_PROGRESS
+    )
+  ) : [];
   if (showHistory) {
     return (
       <div className="pc-app">
@@ -1274,8 +1328,13 @@ export default function LiveSession({
               {s.courts.map(court => {
                 const match = court.currentMatch;
                 const groupLabel = matchGroupLabel(match);
+                const message = visibleHandoffs.find(handoff => handoff.fromCourtId === court.id)?.message;
+                const incomingMatchId = visibleHandoffs.find(handoff => handoff.toCourtId === court.id)?.matchId;
                 return (
-                  <section className="court-card" key={court.id}>
+                  <section className="court-card" key={court.id} data-incoming-match={incomingMatchId}>
+                    {incomingMatchId && (
+                      <span className="court-handoff-highlight" key={incomingMatchId} aria-hidden="true" />
+                    )}
                     <div className="section-heading">
                       <div className="court-heading-title">
                         <h3>{court.label || "Court " + court.courtNumber}</h3>
@@ -1293,13 +1352,14 @@ export default function LiveSession({
                         )}
                       </div>
                     </div>
+                    <div className="court-handoff-status" role="status">{message}</div>
                     {match ? (
                       <>
                         {[
                           [match.team1User1, match.team1User2],
                           [match.team2User1, match.team2User2],
                         ].map((team, i) => (
-                          <div className="team-row" key={i}>
+                          <div className="team-row" key={`${match.id}-${i}`}>
                             <div className="team-players">
                               {team.map((player) => canManage && !lineupMode ? (
                                 <button
@@ -1345,22 +1405,31 @@ export default function LiveSession({
                             )}
                           </div>
                         ))}
-                        {match.scoringFormat === "BEST_OF_THREE" && <SeriesScoreEditor key={match.id} match={match} canEdit={maySubmitScore(match)} onSaved={refresh} />}
+                        {match.scoringFormat === "BEST_OF_THREE" && (
+                          <SeriesScoreEditor key={match.id} match={match} canEdit={maySubmitScore(match)} onSaved={async (response) => {
+                            if (response?.status === MatchStatus.COMPLETED) {
+                              applyScoreResult(court, response);
+                              void refresh().catch(() => {});
+                              return;
+                            }
+                            await refresh();
+                          }} />
+                        )}
                         <ErrorText error={scoreErrors[match.id] ?? ""} />
                         {maySubmitScore(match) && match.scoringFormat !== "BEST_OF_THREE" && (
                           <button
                             className="primary"
                             disabled={action.busy || savingScoreMatchIds.has(match.id)}
                             aria-busy={savingScoreMatchIds.has(match.id)}
-                            onClick={() => confirmScore(match)}
+                            onClick={() => confirmScore(court, match)}
                           >
                             {confirmingMatchIds.has(match.id) ? "Confirm" : "Save score"}
                           </button>
                         )}
                         {match.status === MatchStatus.PENDING_APPROVAL && <div className="pending-score-actions">
                           <p role="status">Waiting for score approval</p>
-                          {mayApproveScore(match) && <button className="primary" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(match, "approve")}>Approve score</button>}
-                          {canManageRoster && <button className="secondary full" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(match, "reopen")}>Edit score</button>}
+                          {mayApproveScore(match) && <button className="primary" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(court, match, "approve")}>Approve score</button>}
+                          {canManageRoster && <button className="secondary full" disabled={savingScoreMatchIds.has(match.id)} onClick={() => void pendingScoreAction(court, match, "reopen")}>Edit score</button>}
                         </div>}
                       </>
                     ) : (

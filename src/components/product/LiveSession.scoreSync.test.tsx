@@ -245,6 +245,8 @@ describe("live score saves with the real session controller", () => {
     expect(reads).toBe(2);
 
     function expectSaved() {
+      expect(container.querySelector("[data-incoming-match]")).toBeNull();
+      expect(container.querySelector(".court-handoff-status")?.textContent).toBe("");
       expect(container.textContent).not.toContain("Save score");
       if (status === "COMPLETED") expect(container.querySelector(".court-card input")).toBeNull();
       else {
@@ -270,6 +272,79 @@ describe("live score saves with the real session controller", () => {
     await clickRefresh();
     expect(container.textContent).toContain("Save score");
     expect(Array.from(container.querySelectorAll<HTMLInputElement>('.court-card input[aria-label$="score"]')).map(input => input.value)).toEqual(["", ""]);
+  });
+
+  it.each([
+    { action: "Approve score", route: "approve", crossCourt: true, score: "21–18" },
+    { action: "Finish match", route: "score", crossCourt: false, score: "2–1" },
+  ])("shows the next-match handoff after $action with a slow refresh", async ({ action, route, crossCourt, score }) => {
+    const initial = session();
+    const match = initial.courts[0].currentMatch!;
+    const games = '[{"team1Score":21,"team2Score":18},{"team1Score":19,"team2Score":21},{"team1Score":21,"team2Score":17}]';
+    if (crossCourt) {
+      match.status = "PENDING_APPROVAL";
+      initial.courts.push({ id: "court-2", courtNumber: 2, label: "East Court", currentMatch: null });
+    } else {
+      match.scoringFormat = "BEST_OF_THREE";
+      match.gameScoresJson = games;
+    }
+    const people = ["e", "f", "g", "h"].map(id => ({ id, name: `Player ${id}` }));
+    const lineup = { team1User1: people[0], team1User2: people[1], team2User1: people[2], team2User2: people[3] };
+    initial.queuedMatch = { id: "queue-1", ...lineup };
+    const destinationId = crossCourt ? "court-2" : "court-1";
+    const incoming = { id: "match-2", status: "IN_PROGRESS", courtId: destinationId, ...lineup };
+    const saved = {
+      id: match.id, status: "COMPLETED", scoreRevision: 1, winnerTeam: 1,
+      team1Score: crossCourt ? 21 : 61, team2Score: crossCourt ? 18 : 56,
+      scoringFormat: match.scoringFormat, gameScoresJson: match.gameScoresJson,
+      team1User1Id: "a", team1User2Id: "b", team2User1Id: "c", team2User2Id: "d",
+      courtId: "court-1",
+    };
+    const fresh = {
+      ...initial, resultsRevision: 1, matches: [saved], queuedMatch: null,
+      courts: initial.courts.map(court => ({
+        ...court, currentMatch: court.id === destinationId ? incoming : null,
+      })),
+    };
+    let reads = 0;
+    let finishRefresh: (() => void) | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith("/" + route) && options?.method === "POST") {
+        return json({ ...saved, queuedMatch: null, autoAssignedMatch: incoming });
+      }
+      if (url.endsWith("/leaderboard")) return json({ currentLeaderboard: [] });
+      if (url === "/api/sessions/SCORE1") {
+        if (++reads === 1) return json(initial);
+        return new Promise<Response>(resolve => { finishRefresh = () => resolve(json(fresh)); });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    await render();
+    const submit = Array.from(container.querySelectorAll("button")).find(button => button.textContent === action);
+    expect(submit).toBeTruthy();
+    await act(async () => submit!.click());
+    expect(finishRefresh).toBeDefined();
+
+    const source = container.querySelectorAll(".court-card")[0];
+    const message = `${score} saved · ${crossCourt ? "Next match on East Court" : "Next match started"}`;
+    expect(source.querySelector('[role="status"]')?.textContent).toBe(message);
+    const destination = container.querySelector('[data-incoming-match="match-2"]');
+    expect(destination?.querySelector("h3")?.textContent).toBe(crossCourt ? "East Court" : "Court 1");
+    expect(destination?.textContent).toContain("Player e");
+    expect(destination?.querySelector<HTMLInputElement>('input[aria-label="Team 1 score"]')?.disabled).toBe(false);
+    expect(container.querySelector(".next-up")).toBeNull();
+
+    const highlight = destination?.querySelector(".court-handoff-highlight");
+    expect(highlight).toBeTruthy();
+    await advance(1000);
+    await act(async () => finishRefresh!());
+    expect(container.querySelector(".court-handoff-highlight")).toBe(highlight);
+    await advance(2999);
+    expect(source.querySelector('[role="status"]')?.textContent).toBe(message);
+    await advance(1);
+    expect(source.querySelector('[role="status"]')?.textContent).toBe("");
+    expect(container.querySelector(".court-handoff-highlight")).toBeNull();
   });
 
   it("refreshes a single-club score conflict without requiring the app to restart", async () => {

@@ -4,6 +4,7 @@ import type { Match } from "@/components/session/sessionTypes";
 import { parseGameScores, resolveMatchScoreInput } from "@/lib/matchRules";
 import { api, ApiError } from "./api";
 import { ErrorText } from "./Primitives";
+import type { ScoreSaveResponse } from "./scoreSave";
 import "./club-collaboration.css";
 
 type Draft = { revision: number; games: Array<[string, string]> };
@@ -20,7 +21,7 @@ export function SeriesScoreEditor({
 }: {
   match: Match;
   canEdit: boolean;
-  onSaved: () => Promise<unknown>;
+  onSaved: (response?: ScoreSaveResponse) => Promise<unknown>;
 }) {
   const [draft, setDraft] = useState<Draft | null>(null),
     [busy, setBusy] = useState(false),
@@ -57,13 +58,13 @@ export function SeriesScoreEditor({
     setBusy(true);
     setError("");
     try {
-      await api(`/api/matches/${match.id}/score`, "POST", {
+      const response = await api<ScoreSaveResponse>(`/api/matches/${match.id}/score`, "POST", {
         gameScores,
         finalize,
         scoreRevision: draft?.revision ?? match.scoreRevision ?? 0,
       });
       setDraft(null);
-      await onSaved();
+      await onSaved(response);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setDraft(null);

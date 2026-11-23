@@ -543,6 +543,35 @@
   padding: 15px;
   box-shadow: 0 3px 10px #29144003;
 }
+.court-card[data-incoming-match] {
+  position: relative;
+}
+.court-handoff-highlight {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #aa83ed;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  animation: court-handoff-highlight 650ms ease-out;
+}
+.court-card[data-incoming-match] .team-players {
+  animation: court-handoff-players 300ms ease-out;
+}
+.court-handoff-status:not(:empty) {
+  margin-top: 6px;
+  color: #5e328a;
+  font-size: 12px;
+  font-weight: 800;
+}
+@keyframes court-handoff-highlight {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes court-handoff-players {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .court-status {
   font-size: 11px;
   color: #876189;
@@ -1456,6 +1485,9 @@
   .pc-app * {
     animation: none !important;
     transition: none !important;
+  }
+  .court-handoff-highlight {
+    opacity: 1;
   }
 }
 
