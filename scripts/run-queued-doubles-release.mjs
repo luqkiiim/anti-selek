@@ -14,6 +14,8 @@ import { tursoEndpointFingerprint } from "./turso-local-target-guard.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const predecessor = "8d0ccd2408aeb81ff30aea9c4b21880754fab126";
+const predecessorDeployment = "dpl_E9XdH2z9SXdsBNRGzvMKjA2nzeSF";
+const productionAliases = ["anti-selek.vercel.app", "antiselek.com"];
 const migration = "20261124000000_queued_doubles_type";
 const sqlHash = "f4f7fc7884003858a53df369d5fc0346290a8789b24ef885c3f8768d1584edc4";
 const endpoint = "af6c24a4939dcfccb80220dffc4f164896015ca83380547609a3e29d178f6a6d";
@@ -32,7 +34,8 @@ function git(...args) {
 
 function readPlan(commit) {
   requireRelease(/^[a-f0-9]{40}$/.test(commit ?? "") && git("rev-parse", "HEAD") === commit, "Pin the current full commit SHA.");
-  requireRelease(!git("status", "--porcelain"), "Use the clean reviewed worktree.");
+  requireRelease(!git("status", "--porcelain") && !/^[a-zS] /m.test(git("ls-files", "-v")),
+    "Use the clean reviewed worktree with all files tracked normally.");
   requireRelease(git("merge-base", predecessor, commit) === predecessor, "The pinned production predecessor is not part of this commit.");
   requireRelease(git("diff", "--name-status", predecessor, commit, "--", "prisma/migrations") === `A\t${migrationFile}`,
     "The release must add exactly the queued doubles migration.");
@@ -123,6 +126,7 @@ export async function applyQueuedDoubles(tx, plan, expectedColumns) {
 async function rehearse(plan, directory, reader) {
   const source = path.join(directory, "source.db");
   const restored = path.join(directory, "rehearsal.db");
+  const backupStartedAt = Date.now();
   await backupLibsqlReadOnly(reader, source);
   await backupLocalSqlite(source, restored);
   const db = new DatabaseSync(restored, { enableDoubleQuotedStringLiterals: true });
@@ -130,7 +134,9 @@ async function rehearse(plan, directory, reader) {
     const execute = async (input) => {
       const { sql, args = [] } = typeof input === "string" ? { sql: input } : input;
       const statement = db.prepare(sql);
-      return { rows: statement.columns().length ? statement.all(...args) : (statement.run(...args), []) };
+      if (statement.columns().length) return { rows: statement.all(...args) };
+      statement.run(...args);
+      return { rows: [] };
     };
     const wrapper = { execute };
     const before = await migrationState(wrapper, plan.priorMigrations, false);
@@ -141,13 +147,22 @@ async function rehearse(plan, directory, reader) {
     await verifyIntegrity(wrapper);
     fs.writeFileSync(path.join(directory, "rehearsal.json"), JSON.stringify({
       commit: plan.commit, sqlHash, endpoint, columns: before.columns,
-      backupSha256: hash(fs.readFileSync(source)), completedAt: Date.now(),
+      backupSha256: hash(fs.readFileSync(source)), backupStartedAt,
     }), { flag: "wx", mode: 0o600 });
     console.log("Read-only production backup and local queued doubles rehearsal passed.");
   } finally {
     if (db.isTransaction) db.exec("ROLLBACK");
     db.close();
   }
+}
+
+function loadEvidence(directory, name) {
+  return JSON.parse(fs.readFileSync(protectedPath(path.join(directory, name), false), "utf8"));
+}
+
+function checkFreshness(timestamp, maxMs, message) {
+  const age = Date.now() - timestamp;
+  requireRelease(Number.isFinite(age) && age >= 0 && age < maxMs, message);
 }
 
 export async function runQueuedDoublesRelease(mode, commit, attempt, approval) {
@@ -161,6 +176,13 @@ export async function runQueuedDoublesRelease(mode, commit, attempt, approval) {
   const releaseRoot = path.join(privateRoot, "production-queued-doubles");
   if (!fs.existsSync(releaseRoot)) fs.mkdirSync(releaseRoot, { mode: 0o700 });
   protectedPath(releaseRoot, true);
+  // This finite release uses fresh credentials under an explicit exception.
+  // The separate incident guard on the generic rehearsal remains active.
+  const authorization = loadEvidence(releaseRoot, "approval.json");
+  requireRelease(authorization.commit === commit && authorization.sqlHash === sqlHash &&
+    authorization.endpoint === endpoint && authorization.onlineMigrationApproved === true &&
+    authorization.freshCredentialExceptionApproved === true,
+  "This exact release requires approval and an explicit fresh-credential exception.");
   const directory = path.join(releaseRoot, attempt);
   if (mode === "rehearse") fs.mkdirSync(directory, { mode: 0o700 });
   protectedPath(directory, true);
@@ -169,24 +191,30 @@ export async function runQueuedDoublesRelease(mode, commit, attempt, approval) {
     if (mode === "rehearse") {
       return await rehearse(plan, directory, reader);
     }
-    const report = JSON.parse(fs.readFileSync(protectedPath(path.join(directory, "rehearsal.json"), false), "utf8"));
+    const report = loadEvidence(directory, "rehearsal.json");
     requireRelease(report.commit === commit && report.sqlHash === sqlHash && report.endpoint === endpoint &&
       report.backupSha256 === hash(fs.readFileSync(protectedPath(path.join(directory, "source.db"), false))),
     "The rehearsal does not match the reviewed commit, migration, and backup.");
 
     if (mode === "apply") {
-      const review = JSON.parse(fs.readFileSync(protectedPath(path.join(releaseRoot, "review.json"), false), "utf8"));
+      const review = loadEvidence(releaseRoot, "review.json");
       requireRelease(review.passed === true && review.commit === commit && Array.isArray(review.reviewers) &&
         new Set(review.reviewers).size >= 2 && review.reviewers.every((name) => /^\/root\/[a-z0-9_]+$/.test(name)),
       "A separate review bound to this exact commit is required.");
-      const age = Date.now() - report.completedAt;
-      requireRelease(Number.isFinite(age) && age >= 0 && age < 15 * 60 * 1000, "The rehearsal backup has expired.");
       requireRelease(git("ls-remote", "--heads", "origin", "refs/heads/main") === `${predecessor}\trefs/heads/main`,
         "Remote main changed. Recheck the deployment before proceeding.");
+      const live = loadEvidence(releaseRoot, "deployment.json");
+      requireRelease(live.releaseCommit === commit && live.commit === predecessor &&
+        live.deployment === predecessorDeployment && live.production === true && live.ready === true &&
+        stable(live.verifiedAliases) === stable(productionAliases) && live.predecessorHostProtected === true,
+      "The reviewed live production deployment and aliases must be verified.");
       const writer = createClient(readWriter(path.join(releaseRoot, "writer.env")));
       try {
+        checkFreshness(live.checkedAt, 2 * 60 * 1000, "Refresh the live deployment verification.");
+        checkFreshness(report.backupStartedAt, 15 * 60 * 1000, "The rehearsal backup has expired.");
         const tx = await writer.transaction("write");
         try {
+          checkFreshness(report.backupStartedAt, 15 * 60 * 1000, "The rehearsal backup has expired.");
           await applyQueuedDoubles(tx, plan, report.columns);
           await tx.commit();
         } catch (error) {
@@ -203,10 +231,19 @@ export async function runQueuedDoublesRelease(mode, commit, attempt, approval) {
 
     const read = await reader.transaction("read");
     try {
-      const { columns } = await migrationState(read, plan.priorMigrations, true);
+      const result = await read.execute({
+        sql: 'SELECT name FROM "_turso_sql_migrations" WHERE name = ?',
+        args: [migration],
+      });
+      const applied = result.rows.length === 1;
+      const { columns } = await migrationState(read, plan.priorMigrations, applied);
       assert.deepEqual(columns.filter(({ name }) => !newFields.includes(name)), report.columns);
       await verifyIntegrity(read);
-      console.log("Production queue schema, migration ledger, integrity, and foreign keys verified.");
+      if (applied) {
+        console.log("Production queue schema, migration ledger, integrity, and foreign keys verified.");
+      } else {
+        throw new ReleaseError("Verified intact predecessor schema and ledger. The queued doubles migration has not committed.");
+      }
     } finally {
       await read.rollback().catch(() => {});
       read.close();
