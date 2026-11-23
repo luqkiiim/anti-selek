@@ -5,7 +5,7 @@ import { Clock3, Plus } from "lucide-react";
 import { buildCourtCreateOptionStates } from "@/components/session/courtCreateOptions";
 import type { CourtCreateOptionState } from "@/components/session/courtCreateOptions";
 import type { Court, Player, QueuedMatch } from "@/components/session/sessionTypes";
-import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
+import { getDoublesTypeLabel, type SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import type { GenerateMatchRequestBody } from "./sessionMatchCreation";
 import { buildGenerateMatchesRequest } from "./sessionMatchCreation";
 import { Sheet } from "./Primitives";
@@ -64,7 +64,8 @@ export function SessionMatchCreationToolbar({
         <Sheet open={queuePickerOpen} title="Queue next match" onClose={() => setQueuePickerOpen(false)}>
           <div className="court-action-list">
             {options.map((option) => {
-              if (option.key !== "BEST") return null;
+              if (option.key === "MANUAL") return null;
+              const matchType = option.key === "BEST" ? undefined : option.key;
               return (
                 <button
                   className={`court-action-row ${styles.option}`}
@@ -73,10 +74,10 @@ export function SessionMatchCreationToolbar({
                   disabled={option.disabled || creatingQueuedMatch || creatingMatches}
                   onClick={() => {
                     setQueuePickerOpen(false);
-                    onQueueNextMatch();
+                    onQueueNextMatch(matchType);
                   }}
                 >
-                  <span>{option.label}</span>
+                  <span>{matchType ? getDoublesTypeLabel(matchType) : option.label}</span>
                   {option.detail ? <small>{option.detail}</small> : null}
                 </button>
               );

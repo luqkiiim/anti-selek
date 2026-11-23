@@ -123,8 +123,8 @@ export async function POST(
     if (matchType !== undefined && !isSideSpecificCourtCreateType(matchType)) {
       throw new GenerateMatchError(400, "Invalid queued match type.");
     }
-    if (matchType) {
-      throw new GenerateMatchError(409, "Doubles queue selection will be available shortly.");
+    if (matchType && (wantsReshuffle || replaceUserId || excludedUserId || body.manualTeams !== undefined)) {
+      throw new GenerateMatchError(400, "Choose a match type when creating a new queued match.");
     }
 
     ensureInterclubSessionReady(sessionData);
