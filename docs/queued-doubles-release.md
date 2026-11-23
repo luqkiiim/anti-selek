@@ -9,3 +9,15 @@ The online migration adds two nullable columns to `QueuedMatch`. Existing lineup
 3. With the reader, confirm both columns, the matching ledger entry, and database integrity. Push the tested commit to `main` without force. Verify the exact Vercel deployment reaches READY and serves the production aliases, then check an existing session and the queue picker in a disposable session. Scan fresh runtime logs for 500s and missing-schema errors.
 
 Review the exact writer command and its checks before asking for approval to run it. Verify that prior deployments cannot accept session mutations once hosts can create typed queues. If a rollback is needed after typed queues exist, use a compatible deployment or resolve those queues before rolling back. Leave the nullable columns in place during application recovery.
+
+## Commands
+
+Use the full reviewed commit SHA and the same attempt name across all commands. Use a new attempt if the backup is older than 15 minutes.
+
+```sh
+npm run db:rehearse:production -- --queued-doubles-release <commit> <attempt>
+node scripts/run-queued-doubles-release.mjs apply <commit> <attempt> --approved-production-release
+node scripts/run-queued-doubles-release.mjs verify <commit> <attempt>
+```
+
+The rehearse command uses `private/production-rehearsal.env` and writes to a new protected folder under `private/production-queued-doubles/`. Apply requires `private/production-queued-doubles/review.json` with the exact reviewed commit, `passed: true`, and two distinct reviewer IDs. It also requires a dedicated writer in `private/production-queued-doubles/writer.env` with `QUEUED_DOUBLES_WRITER_URL` and `QUEUED_DOUBLES_WRITER_TOKEN`. Both credentials must match the pinned production endpoint. The writer expires within 24 hours.

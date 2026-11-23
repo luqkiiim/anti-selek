@@ -38,6 +38,13 @@ function writeReport(filename, value, productionRehearsal) {
 }
 
 async function main() {
+  const args = process.argv.slice(2);
+  if (args[0] === "--source" && args[1] === "production" && args[2] === "--queued-doubles-release") {
+    const { runQueuedDoublesRelease, reportReleaseError } = await import("./run-queued-doubles-release.mjs");
+    if (args.length !== 5) throw new Error("Supply the queued doubles release commit and attempt name");
+    await runQueuedDoublesRelease("rehearse", args[3], args[4]).catch(reportReleaseError);
+    return;
+  }
   if (process.argv.includes("--audited-ownership-release")) {
     const { main: rehearseOwnershipRelease } = await import("./run-production-release60.mjs");
     const forwarded = process.argv.slice(2).filter((value, index, all) => value !== "--audited-ownership-release" && value !== "--source" && !(index > 0 && all[index - 1] === "--source"));
