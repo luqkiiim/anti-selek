@@ -39,7 +39,7 @@ import {
   getQuickAccessPlayerId,
   isQuickAccessSession,
 } from "@/lib/quickAccess";
-import { tryRebuildQueuedMatchForSessionId } from "./queue-match/shared";
+import { getRequestedMatchType, tryRebuildQueuedMatchForSessionId, tryRepairQueuedDoublesForSessionId } from "./queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -341,20 +341,23 @@ async function getSessionRoute(
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
-  // A generation response can request one explicit recovery refresh. Ordinary
-  // polling, including refreshes after Clear, must never create a queue.
+  // Ordinary polling does not create a reservation. A host can recover an
+  // interrupted repair of an existing doubles reservation on refresh.
+  const recoverDeferredQueue = new URL(request.url).searchParams.get("recoverDeferredQueue") === "1" &&
+    sessionData.autoQueueEnabled && !sessionData.queuedMatch;
   if (
-    new URL(request.url).searchParams.get("recoverDeferredQueue") === "1" &&
+    (recoverDeferredQueue || sessionData.queuedMatch?.refreshToken) &&
     !globalView && !isQuickAccess &&
     (session.user.isAdmin || !!operatorMembership) &&
-    sessionData.status === SessionStatus.ACTIVE &&
-    sessionData.autoQueueEnabled && !sessionData.queuedMatch
+    sessionData.status === SessionStatus.ACTIVE
   ) {
     try {
-      await tryRebuildQueuedMatchForSessionId(sessionData.id, undefined, {
-        userId: session.user.id,
-        isGlobalAdmin: !!session.user.isAdmin,
-      });
+      const actor = { userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin };
+      if (sessionData.queuedMatch?.refreshToken) {
+        await tryRepairQueuedDoublesForSessionId(sessionData.id, actor);
+      } else {
+        await tryRebuildQueuedMatchForSessionId(sessionData.id, undefined, actor);
+      }
       sessionData.queuedMatch = await prisma.queuedMatch.findUnique({
         where: { sessionId: sessionData.id },
       });
@@ -427,7 +430,7 @@ async function getSessionRoute(
     }),
   }));
 
-  const queuedMatch = sessionData.queuedMatch
+  const queuedMatch = sessionData.queuedMatch && !sessionData.queuedMatch.refreshToken
     ? (() => {
         const playerById = new Map(
           serializedPlayers.map((player) => [player.playerId, player.player])
@@ -445,6 +448,7 @@ async function getSessionRoute(
 
         return {
           id: sessionData.queuedMatch.id,
+          requestedMatchType: getRequestedMatchType(sessionData.queuedMatch),
           createdAt: sessionData.queuedMatch.createdAt,
           targetPool: sessionData.queuedMatch.targetPool,
           courtGroupType: sessionData.queuedMatch.courtGroupType,

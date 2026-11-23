@@ -1,4 +1,5 @@
 import { MixedSide } from "@/types/enums";
+import { getEffectiveMixedSide } from "./mixedSide";
 
 export const sideSpecificCourtCreateTypes = ["MENS", "WOMENS"] as const;
 
@@ -22,10 +23,21 @@ export function getSideSpecificCourtCreateLabel(
   return matchType === "MENS" ? "Men's Court" : "Women's Court";
 }
 
+export function getDoublesTypeLabel(matchType: SideSpecificCourtCreateType) {
+  return matchType === "MENS" ? "Men's Doubles" : "Women's Doubles";
+}
+
 export function getSideSpecificCourtCreateMixedSide(
   matchType: SideSpecificCourtCreateType
 ) {
   return matchType === "MENS" ? MixedSide.UPPER : MixedSide.LOWER;
+}
+
+export function isEligibleForDoublesType(
+  player: Parameters<typeof getEffectiveMixedSide>[0],
+  matchType: SideSpecificCourtCreateType
+) {
+  return getEffectiveMixedSide(player) === getSideSpecificCourtCreateMixedSide(matchType);
 }
 
 export function getSideSpecificCourtCreateShortageMessage(

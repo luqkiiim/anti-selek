@@ -501,6 +501,8 @@ model QueuedMatch {
   poolASeatCount        Int?
   poolBSeatCount        Int?
   isAutomatic           Boolean  @default(false)
+  requestedMatchType    String? // MENS, WOMENS
+  refreshToken          String? // Replaced whenever a typed queue needs a fresh lineup
   matchmakingReasonJson String?
   createdAt             DateTime @default(now())
 

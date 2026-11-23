@@ -11,6 +11,7 @@ import {
 } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
+import { markTypedQueuesForRefresh } from "@/lib/queuedMatchInvalidation";
 import {
   getPlayerClubBadges,
   getSessionOperatorMembership,
@@ -284,6 +285,7 @@ export async function PATCH(
                 id: true,
                 createdAt: true,
                 isAutomatic: true,
+                requestedMatchType: true,
                 team1Player1Id: true,
                 team1Player2Id: true,
                 team2Player1Id: true,
@@ -410,14 +412,11 @@ export async function PATCH(
           resolvedMixedState.mixedSideOverride !== freshPlayer.mixedSideOverride ||
           resolvedMixedState.partnerPreference !== freshPlayer.partnerPreference);
       if ((changesCurrentPool || changesPairing) && freshSession.queuedMatch?.isAutomatic) {
-        const deleted = await tx.queuedMatch.deleteMany({
-          where: {
-            id: freshSession.queuedMatch.id,
-            sessionId: sessionData.id,
-            isAutomatic: true,
-          },
-        });
-        automaticQueueInvalidated = deleted.count > 0;
+        const where = { id: freshSession.queuedMatch.id, sessionId: sessionData.id, isAutomatic: true };
+        const invalidated = freshSession.queuedMatch.requestedMatchType
+          ? await markTypedQueuesForRefresh(tx, where)
+          : await tx.queuedMatch.deleteMany({ where });
+        automaticQueueInvalidated = invalidated.count > 0;
       }
 
       return {

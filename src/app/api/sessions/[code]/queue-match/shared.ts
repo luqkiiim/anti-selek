@@ -2,6 +2,8 @@ import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
 import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withLegacySportingAliases } from "@/lib/sportingIdentity";
+import { getDoublesTypeLabel, isSideSpecificCourtCreateType, type SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
@@ -17,6 +19,7 @@ import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPr
 import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
 import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
+import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { getEffectiveSessionType, getEffectiveSessionMode } from "@/lib/sessionSettings";
 import {
   checkMatchmakingSearchBudget,
@@ -28,13 +31,14 @@ import { SessionMode, SessionType, type CourtGroupType } from "@/types/enums";
 import {
   buildMatchmakingState,
   ensureEnoughPlayers,
+  filterRankedCandidatesByMatchType,
   getRankedCandidates,
   selectClubPlayReservationIfAdmissible,
   selectReplacementMatchRespectingSkips,
   selectSingleCourtMatchRespectingSkips,
 } from "../generate-match/selection";
 import { resolveSocialCandidatePolicy } from "../generate-match/socialCandidateAcceptance";
-import { assertAssignmentsAvailable, createQueuedMatchAssignment, getQueuedMatchAssignmentVersion } from "../generate-match/assignments";
+import { assertAssignmentsAvailable, assertQueuedDoublesPlayers, createQueuedMatchAssignment, getQueuedMatchAssignmentVersion } from "../generate-match/assignments";
 import {
   GenerateMatchError,
   loadSessionRecord,
@@ -67,6 +71,7 @@ export function buildQueuedMatchResponse(
 
   return {
     id: queuedMatch.id,
+    requestedMatchType: getRequestedMatchType(queuedMatch),
     createdAt: queuedMatch.createdAt,
     targetPool: queuedMatch.targetPool ?? null,
     courtGroupType: queuedMatch.courtGroupType ?? null,
@@ -86,6 +91,11 @@ export function buildQueuedMatchResponse(
 }
 
 export type QueuedMatchResponse = ReturnType<typeof buildQueuedMatchResponse>;
+
+function getReadyQueuedMatchResponse(sessionData: QueueSessionRecord | null) {
+  const queue = sessionData?.queuedMatch;
+  return queue && !queue.refreshToken ? buildQueuedMatchResponse(sessionData, queue) : null;
+}
 
 async function shouldSuppressAutomaticQueueCreation(
   sessionData: QueueSessionRecord
@@ -144,6 +154,7 @@ interface QueuedMatchRecordInput {
   poolASeatCount?: number | null;
   poolBSeatCount?: number | null;
   isAutomatic: boolean;
+  requestedMatchType?: SideSpecificCourtCreateType;
   requireAutomaticEligibility?: boolean;
   matchmakingReasonJson?: string | null;
   teamClubIds?: { team1ClubId?: string | null; team2ClubId?: string | null };
@@ -242,6 +253,7 @@ async function createQueuedMatchRecord({
   poolASeatCount,
   poolBSeatCount,
   isAutomatic,
+  requestedMatchType,
   requireAutomaticEligibility = false,
   matchmakingReasonJson,
   teamClubIds,
@@ -264,6 +276,15 @@ async function createQueuedMatchRecord({
         if (!currentSession?.autoQueueEnabled || openCourt) {
           throw new GenerateMatchError(409, "Automatic queue conditions changed. Refresh and try again.");
         }
+      }
+      if (requestedMatchType) {
+        const courts = await tx.court.findMany({
+          where: { sessionId, isActive: true }, select: { currentMatchId: true },
+        });
+        if (!courts.length || courts.some((court) => !court.currentMatchId)) {
+          throw new GenerateMatchError(409, "Queue next match is only available when all courts are in use.");
+        }
+        await validateTypedQueueSelection(tx, sessionId, partition, requestedMatchType);
       }
       const groupSnapshot = await resolveQueuedGroupSnapshot(tx, {
         sessionId,
@@ -299,6 +320,7 @@ async function createQueuedMatchRecord({
           poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
           poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,
           isAutomatic,
+          requestedMatchType,
           matchmakingReasonJson: reasonJson,
         },
       });
@@ -321,19 +343,47 @@ async function createQueuedMatchRecord({
   }
 }
 
+export function getRequestedMatchType(queue?: { requestedMatchType?: string | null } | null) {
+  return isSideSpecificCourtCreateType(queue?.requestedMatchType) ? queue.requestedMatchType : null;
+}
+
+function getQueueCandidates(
+  candidates: ReturnType<typeof getRankedCandidates>,
+  sessionData: QueueSessionRecord,
+  matchType: SideSpecificCourtCreateType | null | undefined,
+) {
+  if (!matchType) {
+    ensureEnoughPlayers(candidates.availableCandidates.length, candidates.rankedCandidates.length, 1);
+    return candidates.rankedCandidates;
+  }
+  const eligible = filterRankedCandidatesByMatchType(candidates.rankedCandidates, sessionData, matchType);
+  if (eligible.length < 4) {
+    throw new GenerateMatchError(400, `Not enough players for ${getDoublesTypeLabel(matchType)} (need 4, have ${eligible.length}).`);
+  }
+  return eligible;
+}
+
+async function validateTypedQueueSelection(
+  tx: Prisma.TransactionClient,
+  sessionId: string,
+  partition: ManualMatchTeams,
+  matchType: SideSpecificCourtCreateType,
+) {
+  await assertQueuedDoublesPlayers(tx, sessionId, partition, matchType);
+  await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds: [...partition.team1, ...partition.team2] }], { allowQueuedPlayers: true });
+}
+
 export async function selectAutomaticMatchForSession(
   sessionData: QueueSessionRecord,
   searchBudget?: MatchmakingSearchBudget,
+  matchType?: SideSpecificCourtCreateType | null,
 ) {
   checkMatchmakingSearchBudget(searchBudget);
   const { busyPlayerIds, playersById, rotationHistory } =
     await buildMatchmakingState(sessionData);
-  const { availableCandidates, rankedCandidates } = getRankedCandidates(
-    sessionData,
-    busyPlayerIds
+  const rankedCandidates = getQueueCandidates(
+    getRankedCandidates(sessionData, busyPlayerIds), sessionData, matchType
   );
-
-  ensureEnoughPlayers(availableCandidates.length, rankedCandidates.length, 1);
 
   const { selection, consumedSkipUserIds } = selectSingleCourtMatchRespectingSkips({
     rankedCandidates,
@@ -379,8 +429,8 @@ export async function selectAutomaticClubPlayQueueAssignment(sessionData: QueueS
   const searchBudget = createMatchmakingSearchBudget();
   const source = { ...sessionData, queuedMatch: null };
   const { busyPlayerIds, playersById, rotationHistory } = await buildMatchmakingState(source);
-  const { availableCandidates, rankedCandidates } = getRankedCandidates(source, busyPlayerIds);
-  ensureEnoughPlayers(availableCandidates.length, rankedCandidates.length, 1);
+  const matchType = getRequestedMatchType(queue);
+  const rankedCandidates = getQueueCandidates(getRankedCandidates(source, busyPlayerIds), source, matchType);
   const { selection, consumedSkipUserIds } = selectSingleCourtMatchRespectingSkips({
     sessionData: source, playersById, rankedCandidates, rotationHistory, searchBudget, reshuffleSource: null,
   });
@@ -410,7 +460,9 @@ export async function selectAutomaticClubPlayQueueAssignment(sessionData: QueueS
   const keepCandidate = context &&
     preservesDistribution &&
     getExactPartitionKey(selection.partition) !== partitionKey &&
-    ![...reservation.team1, ...reservation.team2].some((id) => pendingSkips.has(id));
+    [...reservation.team1, ...reservation.team2].every((id) =>
+      !pendingSkips.has(id) && (!matchType || rankedCandidates.some((candidate) => candidate.userId === id))
+    );
   const chosen = keepCandidate
     ? selectClubPlayReservationIfAdmissible({
         sessionData: source, rankedCandidates, playersById, requestedMatchCount: 1, partitionKey,
@@ -453,7 +505,7 @@ async function updateQueuedMatchRecord({
 }: {
   sessionId: string;
   queuedMatchId: string;
-  previousQueue: Pick<QueueRecord, "team1Player1Id" | "team1Player2Id" | "team2Player1Id" | "team2Player2Id" | "matchmakingReasonJson">;
+  previousQueue: QueueRecord;
   actor?: SessionMutationActor;
   partition: ManualMatchTeams;
   targetPool?: string | null;
@@ -468,6 +520,15 @@ async function updateQueuedMatchRecord({
   releasePendingUserIds?: string[];
 }) {
   return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
+    const matchType = getRequestedMatchType(previousQueue);
+    if (matchType) {
+      const current = await tx.queuedMatch.findFirst({
+        where: { id: queuedMatchId, ...getQueuedMatchAssignmentVersion(previousQueue) },
+        select: { id: true },
+      });
+      if (!current) throw new GenerateMatchError(409, "The queued match changed. Please refresh and retry.");
+      await validateTypedQueueSelection(tx, sessionId, partition, matchType);
+    }
     const groupSnapshot = await resolveQueuedGroupSnapshot(tx, {
       sessionId,
       partition,
@@ -511,6 +572,7 @@ async function updateQueuedMatchRecord({
         poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
         poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,
         isAutomatic,
+        ...(matchType ? { refreshToken: null } : {}),
         matchmakingReasonJson: reasonJson,
       },
     });
@@ -557,11 +619,12 @@ export async function createQueuedMatchForSession(
   sessionData: QueueSessionRecord,
   searchBudget?: MatchmakingSearchBudget,
   requireAutomaticEligibility = false,
+  matchType?: SideSpecificCourtCreateType,
 ) {
   checkMatchmakingSearchBudget(searchBudget);
   await ensureQueueSlotAvailable(sessionData);
 
-  const selection = await selectAutomaticMatchForSession(sessionData, searchBudget);
+  const selection = await selectAutomaticMatchForSession(sessionData, searchBudget, matchType);
   checkMatchmakingSearchBudget(searchBudget);
   if (requireAutomaticEligibility && process.env.BALANCED_MATCH_TYPE_DISTRIBUTION_ENABLED === "1" &&
     [SessionType.POINTS,SessionType.ELO].includes(getEffectiveSessionType(sessionData) as SessionType.POINTS|SessionType.ELO) &&
@@ -582,6 +645,7 @@ export async function createQueuedMatchForSession(
     poolBSeatCount: selection.poolBSeatCount,
     isAutomatic: true,
     requireAutomaticEligibility,
+    requestedMatchType: matchType,
     matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
     teamClubIds: {
       team1ClubId: selection.team1ClubId,
@@ -603,6 +667,10 @@ export async function reshuffleQueuedMatchForSession(
 
   if (!sessionData.queuedMatch) {
     throw new GenerateMatchError(400, "No queued match to reshuffle.");
+  }
+
+  if (sessionData.queuedMatch.refreshToken) {
+    throw new GenerateMatchError(409, "The queued match is being refreshed. Try again.");
   }
 
   const excludedUserId = options?.excludedUserId;
@@ -639,14 +707,13 @@ export async function reshuffleQueuedMatchForSession(
     ? rankedCandidates.filter((candidate) => candidate.userId !== excludedUserId)
     : rankedCandidates;
 
-  ensureEnoughPlayers(
-    eligibleAvailableCandidates.length,
-    eligibleRankedCandidates.length,
-    1
-  );
+  const queuedCandidates = getQueueCandidates({
+    availableCandidates: eligibleAvailableCandidates,
+    rankedCandidates: eligibleRankedCandidates,
+  }, reshuffleSessionData, getRequestedMatchType(sessionData.queuedMatch));
 
   const { selection, consumedSkipUserIds } = selectSingleCourtMatchRespectingSkips({
-    rankedCandidates: eligibleRankedCandidates,
+    rankedCandidates: queuedCandidates,
     playersById,
     sessionData: reshuffleSessionData,
     rotationHistory,
@@ -702,6 +769,10 @@ export async function replaceQueuedMatchPlayerForSession(
     throw new GenerateMatchError(400, "No queued match to replace a player in.");
   }
 
+  if (sessionData.queuedMatch.refreshToken) {
+    throw new GenerateMatchError(409, "The queued match is being refreshed. Try again.");
+  }
+
   const currentQueuedUserIds = [
     sessionData.queuedMatch.team1Player1Id,
     sessionData.queuedMatch.team1Player2Id,
@@ -737,21 +808,22 @@ export async function replaceQueuedMatchPlayerForSession(
       reserveQueuedPlayers: false,
     }
   );
-  const { rankedCandidates } = getRankedCandidates(
-    replacementSessionData,
-    busyPlayerIds
-  );
+  const matchType = getRequestedMatchType(sessionData.queuedMatch);
+  const { rankedCandidates } = getRankedCandidates(replacementSessionData, busyPlayerIds);
+  const eligibleCandidates = matchType
+    ? filterRankedCandidatesByMatchType(rankedCandidates, replacementSessionData, matchType)
+    : rankedCandidates;
   const { selection: replacementSelection, consumedSkipUserIds } =
     selectReplacementMatchRespectingSkips({
-      rankedCandidates,
+      rankedCandidates: eligibleCandidates,
       playersById,
-    sessionData: replacementSessionData,
-    retainedUserIds: retainedUserIds as [string, string, string],
-    excludedUserIds: currentQueuedUserIds,
-    requiredCourtGroupType: sessionData.queuedMatch.courtGroupType,
-    socialPriorityPolicy: resolveSocialCandidatePolicy(
-      getEffectiveSessionType(replacementSessionData),
-    ),
+      sessionData: replacementSessionData,
+      retainedUserIds: retainedUserIds as [string, string, string],
+      excludedUserIds: currentQueuedUserIds,
+      requiredCourtGroupType: sessionData.queuedMatch.courtGroupType,
+      socialPriorityPolicy: resolveSocialCandidatePolicy(
+        getEffectiveSessionType(replacementSessionData),
+      ),
     });
 
   const queuedMatch = await updateQueuedMatchRecord({
@@ -824,6 +896,65 @@ export async function createManualQueuedMatchForSession(
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
 
+export async function repairTypedQueuedMatch(
+  sessionData: QueueSessionRecord,
+  searchBudget = createMatchmakingSearchBudget(),
+) {
+  const previousQueue = sessionData.queuedMatch;
+  const matchType = getRequestedMatchType(previousQueue);
+  if (!previousQueue?.refreshToken || !matchType) return previousQueue;
+
+  const source = { ...sessionData, queuedMatch: null };
+  let selection: Awaited<ReturnType<typeof selectAutomaticMatchForSession>>;
+  try {
+    selection = await selectAutomaticMatchForSession(source, searchBudget, matchType);
+  } catch (error) {
+    checkMatchmakingSearchBudget(searchBudget);
+    if (!(error instanceof GenerateMatchError) || error.status !== 400) throw error;
+    if (error.message.startsWith("Match search reached its time limit")) throw new MatchmakingSearchBudgetExceededError();
+
+    // Clear only the version for which there was no valid lineup.
+    await sessionMatchMutationTransaction(prisma, sessionData.id, sessionData.mutationActor, async (tx) => {
+      const deleted = await tx.queuedMatch.deleteMany({
+        where: { id: previousQueue.id, ...getQueuedMatchAssignmentVersion(previousQueue) },
+      });
+      if (deleted.count === 0) {
+        throw new GenerateMatchError(409, "The queued match changed. Please refresh and retry.");
+      }
+      await consumeSkipNextMatches(tx, { sessionId: sessionData.id, userIds: getQueuedMatchUserIds(previousQueue) });
+    });
+    return null;
+  }
+
+  checkMatchmakingSearchBudget(searchBudget);
+  const updated = await updateQueuedMatchRecord({
+    sessionId: sessionData.id,
+    actor: sessionData.mutationActor,
+    queuedMatchId: previousQueue.id,
+    previousQueue,
+    ...selection,
+    isAutomatic: true,
+    consumeSkipNextUserIds: selection.consumedSkipUserIds,
+  });
+  return withLegacySportingAliases(updated);
+}
+
+async function tryRepairTypedQueue(
+  sessionData: QueueSessionRecord,
+  loadSessionData: () => Promise<QueueSessionRecord | null>,
+  searchBudget?: MatchmakingSearchBudget,
+) {
+  try {
+    const repaired = await repairTypedQueuedMatch(sessionData, searchBudget);
+    return repaired ? buildQueuedMatchResponse(sessionData, repaired) : null;
+  } catch (error) {
+    if (error instanceof MatchmakingSearchBudgetExceededError && searchBudget) throw error;
+    if (!(error instanceof MatchmakingSearchBudgetExceededError) &&
+      !(error instanceof GenerateMatchError && error.status === 409)) throw error;
+    return getReadyQueuedMatchResponse(await loadSessionData());
+  }
+}
+
 async function tryRebuildAutomaticQueuedMatch(
   loadSessionData: () => Promise<QueueSessionRecord | null>
 ) {
@@ -834,6 +965,10 @@ async function tryRebuildAutomaticQueuedMatch(
 
   if (!sessionData.queuedMatch) {
     return tryRebuildQueuedMatch(loadSessionData);
+  }
+
+  if (sessionData.queuedMatch.refreshToken) {
+    return tryRepairTypedQueue(sessionData, loadSessionData);
   }
 
   if (!sessionData.queuedMatch.isAutomatic) {
@@ -849,9 +984,10 @@ async function tryRebuildAutomaticQueuedMatch(
     queuedMatch: null,
   };
 
+  const matchType = getRequestedMatchType(sessionData.queuedMatch);
   try {
     await ensureQueueSlotAvailable(rebuildSessionData);
-    const selection = await selectAutomaticMatchForSession(rebuildSessionData);
+    const selection = await selectAutomaticMatchForSession(rebuildSessionData, undefined, matchType);
     const queuedMatch = await updateQueuedMatchRecord({
       sessionId: sessionData.id,
       queuedMatchId: sessionData.queuedMatch.id,
@@ -872,7 +1008,9 @@ async function tryRebuildAutomaticQueuedMatch(
   } catch (error) {
     if (error instanceof GenerateMatchError ||
       (getEffectiveSessionType(sessionData) === SessionType.CLUB_PLAY && error instanceof MatchmakingSearchBudgetExceededError)) {
-      return buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
+      return matchType
+        ? getReadyQueuedMatchResponse(await loadSessionData())
+        : buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
     }
 
     throw error;
@@ -889,6 +1027,9 @@ async function tryRebuildQueuedMatch(
   }
 
   if (sessionData.queuedMatch) {
+    if (sessionData.queuedMatch.refreshToken) {
+      return tryRepairTypedQueue(sessionData, loadSessionData, searchBudget);
+    }
     return buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
   }
 
@@ -909,13 +1050,7 @@ async function tryRebuildQueuedMatch(
         throw new MatchmakingSearchBudgetExceededError();
       }
       if (error.status === 409) {
-        const reloadedSessionData = await loadSessionData();
-        if (reloadedSessionData?.queuedMatch) {
-          return buildQueuedMatchResponse(
-            reloadedSessionData,
-            reloadedSessionData.queuedMatch
-          );
-        }
+        return getReadyQueuedMatchResponse(await loadSessionData());
       }
 
       return null;
@@ -941,10 +1076,14 @@ export async function tryRebuildQueuedMatchForSessionId(
 }
 
 export async function getQueuedMatchForSessionId(sessionId: string) {
-  const sessionData = await loadSessionRecordById(sessionId);
-  return sessionData?.queuedMatch
-    ? buildQueuedMatchResponse(sessionData, sessionData.queuedMatch)
-    : null;
+  return getReadyQueuedMatchResponse(await loadSessionRecordById(sessionId));
+}
+
+export async function tryRepairQueuedDoublesForSessionId(sessionId: string, actor: SessionMutationActor) {
+  const loadSessionData = () => loadSessionRecordById(sessionId);
+  const sessionData = await loadSessionData();
+  if (!sessionData?.queuedMatch?.refreshToken) return getReadyQueuedMatchResponse(sessionData);
+  return tryRepairTypedQueue({ ...sessionData, mutationActor: actor }, loadSessionData);
 }
 
 export async function tryRebuildAutomaticQueuedMatchForCode(code: string) {

@@ -482,6 +482,7 @@ describe("sessionDataMutations", () => {
     ]);
     const withQueue = applyQueuedMatch(withLiveCourt, {
       id: "queue-1",
+      requestedMatchType: "MENS",
       team1User1: { id: "p1", name: "Player 1" },
       team1User2: { id: "p2", name: "Player 2" },
       team2User1: { id: "p3", name: "Player 3" },
@@ -495,6 +496,7 @@ describe("sessionDataMutations", () => {
     );
     expect(updated.courts[0].currentMatch?.team1User1.name).toBe("Alice");
     expect(updated.queuedMatch?.team1User1.name).toBe("Alice");
+    expect(updated.queuedMatch?.requestedMatchType).toBe("MENS");
   });
 
   it("can promote a queued match into a freed court after undo", () => {

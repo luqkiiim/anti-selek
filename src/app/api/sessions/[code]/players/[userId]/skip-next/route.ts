@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
+import { markTypedQueuesForRefresh } from "@/lib/queuedMatchInvalidation";
 import { getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { checkInvalidTargetRateLimit, invalidTargetResponse, rateLimit } from "@/lib/rateLimit";
@@ -129,7 +130,7 @@ export async function PATCH(
       );
     }
 
-    const queuedMatchAffected = await admissionTransaction(prisma, async (tx) => {
+    const { queuedMatchAffected, typedQueue } = await admissionTransaction(prisma, async (tx) => {
       await assertScopedSessionMutation(tx, { session: sessionData, userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin, playerId, availability: true });
       const queuedMatch = await tx.queuedMatch.findUnique({
         where: { sessionId: sessionData.id },
@@ -156,11 +157,13 @@ export async function PATCH(
               },
       });
 
-      if (affectsQueuedMatch) {
-        await tx.queuedMatch.delete({
-          where: { sessionId: sessionData.id },
-        });
-        if (queuedMatch && !queuedMatch.isAutomatic) {
+      if (queuedMatch && affectsQueuedMatch) {
+        if (queuedMatch.requestedMatchType) {
+          await markTypedQueuesForRefresh(tx, { id: queuedMatch.id });
+        } else {
+          await tx.queuedMatch.delete({ where: { sessionId: sessionData.id } });
+        }
+        if (!queuedMatch.isAutomatic) {
           await applyPendingPlayerGroupChangesInTransaction(tx, {
             sessionId: sessionData.id,
             userIds: getQueuedMatchUserIds(queuedMatch),
@@ -168,14 +171,14 @@ export async function PATCH(
         }
       }
 
-      return affectsQueuedMatch;
+      return { queuedMatchAffected: affectsQueuedMatch, typedQueue: !!queuedMatch?.requestedMatchType };
     });
 
     const queuedMatch = queuedMatchAffected
       ? await tryRebuildQueuedMatchForSessionId(sessionData.id)
       : undefined;
 
-    if (queuedMatchAffected && !queuedMatch) {
+    if (queuedMatchAffected && !queuedMatch && !typedQueue) {
       await prisma.$transaction((tx) =>
         consumeSkipNextMatches(tx, {
           sessionId: sessionData.id,

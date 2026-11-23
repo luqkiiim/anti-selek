@@ -1,4 +1,5 @@
 import {
+  getQueuedMatchForSessionId,
   tryRebuildQueuedMatchForSessionId,
   type QueuedMatchResponse,
 } from "@/app/api/sessions/[code]/queue-match/shared";
@@ -14,11 +15,13 @@ export async function reconcileSessionQueueAfterCourtChange(
   sessionId: string,
   options?: { generateAutomaticIfMissing?: boolean }
 ): Promise<SessionQueueReconciliation> {
-  const { autoAssignedMatch, queuedMatchCleared } =
-    await autoAssignQueuedMatch(sessionId, {
-      generateIfMissing: options?.generateAutomaticIfMissing,
-    });
-  const queuedMatch = await tryRebuildQueuedMatchForSessionId(sessionId);
+  const result = await autoAssignQueuedMatch(sessionId, {
+    generateIfMissing: options?.generateAutomaticIfMissing,
+  });
+  const { autoAssignedMatch, queuedMatchCleared } = result;
+  const queuedMatch = "skipQueueRefill" in result && result.skipQueueRefill
+    ? await getQueuedMatchForSessionId(sessionId)
+    : await tryRebuildQueuedMatchForSessionId(sessionId);
 
   return {
     autoAssignedMatch,

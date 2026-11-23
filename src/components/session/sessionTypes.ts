@@ -13,6 +13,7 @@ import {
   SessionPool,
   SessionScoringType,
 } from "@/types/enums";
+import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
 
 export interface Player {
@@ -67,6 +68,7 @@ export interface Match {
 
 export interface QueuedMatch {
   id: string;
+  requestedMatchType?: SideSpecificCourtCreateType | null;
   createdAt?: string;
   isAutomatic?: boolean;
   targetPool?: SessionPool | null;

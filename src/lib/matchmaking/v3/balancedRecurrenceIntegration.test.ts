@@ -175,6 +175,8 @@ function queuedRecord(ids: [string, string, string, string] = ["P5", "P6", "P7",
     poolBSeatCount: null,
     isAutomatic: true,
     matchmakingReasonJson: null,
+    requestedMatchType: null,
+    refreshToken: null,
   };
 }
 

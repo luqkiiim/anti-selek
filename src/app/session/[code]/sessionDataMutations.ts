@@ -306,6 +306,7 @@ function buildQueuedMatch(
 
   return {
     id: queuedMatch.id,
+    ...(queuedMatch.requestedMatchType ? { requestedMatchType: queuedMatch.requestedMatchType } : {}),
     createdAt: normalizeOptionalDate(queuedMatch.createdAt),
     isAutomatic: queuedMatch.isAutomatic ?? false,
     targetPool: queuedMatch.targetPool ?? null,

@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
+import { markTypedQueuesForRefresh } from "@/lib/queuedMatchInvalidation";
 import { SessionStatus, type SessionPool } from "@/types/enums";
 
 type PendingPoolTransaction = Prisma.TransactionClient & {
@@ -8,6 +9,7 @@ type PendingPoolTransaction = Prisma.TransactionClient & {
     findUnique?: (args: unknown) => Promise<{
       id: string;
       isAutomatic: boolean;
+      requestedMatchType?: string | null;
       team1Player1Id: string;
       team1Player2Id: string;
       team2Player1Id: string;
@@ -81,6 +83,7 @@ export async function propagatePreferredPoolToClubSessionsInTransaction(
               id: true,
               createdAt: true,
               isAutomatic: true,
+              requestedMatchType: true,
               team1Player1Id: true,
               team1Player2Id: true,
               team2Player1Id: true,
@@ -107,6 +110,7 @@ export async function propagatePreferredPoolToClubSessionsInTransaction(
   let immediateSessionCount = 0;
   let deferredSessionCount = 0;
   const automaticQueueSessionIds = new Set<string>();
+  const typedQueueSessionIds = new Set<string>();
 
   for (const player of sessionPlayers) {
     const queuedMatch = player.session.queuedMatch;
@@ -155,7 +159,8 @@ export async function propagatePreferredPoolToClubSessionsInTransaction(
       (changesCurrentPool && queuedMatch?.isAutomatic) ||
       (player.session.autoQueueEnabled && !queuedMatch)
     ) {
-      automaticQueueSessionIds.add(player.sessionId);
+      if (queuedMatch?.requestedMatchType) typedQueueSessionIds.add(player.sessionId);
+      else automaticQueueSessionIds.add(player.sessionId);
     }
   }
 
@@ -168,10 +173,17 @@ export async function propagatePreferredPoolToClubSessionsInTransaction(
     });
   }
 
+  if (typedQueueSessionIds.size > 0) {
+    await markTypedQueuesForRefresh(tx, {
+      sessionId: { in: Array.from(typedQueueSessionIds) },
+      isAutomatic: true,
+    });
+  }
+
   return {
     immediateSessionCount,
     deferredSessionCount,
-    automaticQueueSessionIds: Array.from(automaticQueueSessionIds),
+    automaticQueueSessionIds: [...automaticQueueSessionIds, ...typedQueueSessionIds],
   };
 }
 
@@ -222,6 +234,7 @@ export async function applyPendingPlayerGroupChangesInTransaction(
         select: {
           id: true,
           isAutomatic: true,
+          requestedMatchType: true,
           team1Player1Id: true,
           team1Player2Id: true,
           team2Player1Id: true,
@@ -262,14 +275,11 @@ export async function applyPendingPlayerGroupChangesInTransaction(
     queuedMatch?.isAutomatic &&
     tx.queuedMatch?.deleteMany
   ) {
-    const deleted = await tx.queuedMatch.deleteMany({
-      where: {
-        id: queuedMatch.id,
-        sessionId,
-        isAutomatic: true,
-      },
-    });
-    automaticQueueInvalidated = deleted.count > 0;
+    const where = { id: queuedMatch.id, sessionId, isAutomatic: true };
+    const invalidated = queuedMatch.requestedMatchType
+      ? await markTypedQueuesForRefresh(tx, where)
+      : await tx.queuedMatch.deleteMany({ where });
+    automaticQueueInvalidated = invalidated.count > 0;
   }
 
   return {

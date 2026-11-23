@@ -42,6 +42,7 @@ let prisma: PrismaInstance;
 let POST: RouteHandler;
 let GET_SESSION: typeof import("../route")["GET"];
 let DELETE_QUEUE: typeof import("../queue-match/route")["DELETE"];
+let POST_QUEUE: typeof import("../queue-match/route")["POST"];
 let POST_ASSIGN_QUEUE: typeof import("../queue-match/assign/route")["POST"];
 let mockedAuth: MockedFunction<typeof import("@/lib/auth")["auth"]>;
 let rebuildAutomaticQueuedMatchForSessionId: RebuildAutomaticQueuedMatchForSessionId;
@@ -299,12 +300,159 @@ beforeAll(async () => {
   const routeModule = await import("./route");
   POST = routeModule.POST;
   GET_SESSION = (await import("../route")).GET;
-  DELETE_QUEUE = (await import("../queue-match/route")).DELETE;
+  ({ DELETE: DELETE_QUEUE, POST: POST_QUEUE } = await import("../queue-match/route"));
   POST_ASSIGN_QUEUE = (await import("../queue-match/assign/route")).POST;
 
   const queueModule = await import("../queue-match/shared");
   rebuildAutomaticQueuedMatchForSessionId =
     queueModule.tryRebuildAutomaticQueuedMatchForSessionId;
+});
+
+describe("queued doubles type", () => {
+  async function setup(upperCount = 4, lowerCount = 4, clubPlay = false) {
+    const prefix = `doubles-${randomUUID().slice(0, 8)}`;
+    const { clubId } = await createClubAdmin(prefix);
+    const courtId = `${prefix}-court`;
+    const roster = [
+      ...Array.from({ length: 4 }, (_, i) => ({ key: `busy${i}` })),
+      ...Array.from({ length: upperCount }, (_, i) => i === 0
+        ? { key: "override", gender: PlayerGender.FEMALE, mixedSideOverride: MixedSide.UPPER }
+        : { key: `upper${i}` }),
+      ...Array.from({ length: lowerCount }, (_, i) => ({
+        key: `lower${i}`, gender: PlayerGender.FEMALE, partnerPreference: PartnerPreference.FEMALE_FLEX,
+      })),
+    ];
+    await createUsers(prefix, roster);
+    const playerIds = roster.map(({ key }) => `${prefix}-${key}`);
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix, clubId, type: clubPlay ? SessionType.CLUB_PLAY : SessionType.POINTS,
+      mode: SessionMode.MIXICANO, courtIds: [courtId], autoQueueEnabled: !clubPlay,
+      players: roster.map((player, i) => ({ ...player, playerId: playerIds[i] })),
+    });
+    if (clubPlay) await prisma.session.update({
+      where: { id: sessionId },
+      data: { matchmakingStyle: SessionMatchmakingStyle.CLUB_PLAY, balanceMetric: "RATING", pairingMode: "MIXED" },
+    });
+    const current = await prisma.match.create({ data: {
+      sessionId, courtId, status: MatchStatus.IN_PROGRESS,
+      team1Player1Id: playerIds[0], team1Player2Id: playerIds[1],
+      team2Player1Id: playerIds[2], team2Player2Id: playerIds[3],
+    } });
+    await prisma.court.update({ where: { id: courtId }, data: { currentMatchId: current.id } });
+
+    const params = { params: Promise.resolve({ code }) };
+    const postQueue = (body: Record<string, unknown>) => POST_QUEUE(new Request(
+      `http://localhost/api/sessions/${code}/queue-match`,
+      { method: "POST", body: JSON.stringify(body) },
+    ), params);
+    const pause = async (playerId: string) => {
+      const { POST: postPause } = await import("../pause-player/route");
+      return postPause(new Request(`http://localhost/api/sessions/${code}/pause-player`, {
+        method: "POST", body: JSON.stringify({ playerId, isPaused: true }),
+      }), params);
+    };
+    return {
+      sessionId, code, courtId, current, params, postQueue, pause,
+      upper: playerIds.slice(4, 4 + upperCount), lower: playerIds.slice(4 + upperCount),
+    };
+  }
+
+  it.each(["MENS", "WOMENS"] as const)("queues %s using the same session-side overrides as an open court", async (matchType) => {
+    const f = await setup();
+    const response = await f.postQueue({ matchType });
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    expect(payload.queuedMatch.requestedMatchType).toBe(matchType);
+    expect(getSelectedIds(payload.queuedMatch).sort()).toEqual((matchType === "MENS" ? f.upper : f.lower).sort());
+
+    const session = await GET_SESSION(new Request(`http://localhost/api/sessions/${f.code}`), f.params);
+    expect((await session.json()).queuedMatch).toMatchObject({ requestedMatchType: matchType });
+  });
+
+  it("preserves the type for reshuffles and replacements and leaves a failed edit intact", async () => {
+    const f = await setup(5);
+    const created = await (await f.postQueue({ matchType: "MENS" })).json();
+    const originalIds = getSelectedIds(created.queuedMatch);
+    const reshuffled = await f.postQueue({ reshuffle: true, excludeUserId: originalIds[0] });
+    const shuffled = (await reshuffled.json()).queuedMatch;
+    expect(reshuffled.status).toBe(200);
+    expect(shuffled.requestedMatchType).toBe("MENS");
+    expect(getSelectedIds(shuffled).sort()).toEqual(f.upper.filter(id => id !== originalIds[0]).sort());
+
+    const replaced = await f.postQueue({ replaceUserId: getSelectedIds(shuffled)[0] });
+    const updated = (await replaced.json()).queuedMatch;
+    expect(replaced.status).toBe(200);
+    expect(updated.requestedMatchType).toBe("MENS");
+    expect(getSelectedIds(updated)).toContain(originalIds[0]);
+
+    const women = await setup();
+    const queued = (await (await women.postQueue({ matchType: "WOMENS" })).json()).queuedMatch;
+    expect((await women.postQueue({ replaceUserId: getSelectedIds(queued)[0] })).status).toBe(409);
+    const saved = await prisma.queuedMatch.findUniqueOrThrow({ where: { sessionId: women.sessionId } });
+    expect(getSelectedIds(saved)).toEqual(getSelectedIds(queued));
+    expect(saved.requestedMatchType).toBe("WOMENS");
+  });
+
+  it("repairs a paused player's reservation and clears the queue when its type becomes unfillable", async () => {
+    const f = await setup(4, 5);
+    const queued = (await (await f.postQueue({ matchType: "WOMENS" })).json()).queuedMatch;
+    const [firstPaused] = getSelectedIds(queued);
+    const repairResponse = await f.pause(firstPaused);
+    const repaired = (await repairResponse.json()).queuedMatch;
+    expect(repairResponse.status).toBe(200);
+    expect(repaired).toMatchObject({ id: queued.id, requestedMatchType: "WOMENS" });
+    expect(getSelectedIds(repaired).sort()).toEqual(f.lower.filter(id => id !== firstPaused).sort());
+
+    const clearResponse = await f.pause(getSelectedIds(repaired)[0]);
+    expect(clearResponse.status).toBe(200);
+    expect((await clearResponse.json()).queuedMatch).toBeNull();
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId: f.sessionId } })).toBeNull();
+  });
+
+  it("allows one host request to reserve the single queue slot", async () => {
+    const f = await setup();
+    const results = await Promise.all([f.postQueue({ matchType: "MENS" }), f.postQueue({ matchType: "WOMENS" })]);
+    expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
+    const winner = (await results.find(({ ok }) => ok)!.json()).queuedMatch;
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId: f.sessionId } }))
+      .toMatchObject({ id: winner.id, requestedMatchType: winner.requestedMatchType });
+  });
+
+  it("reserves the slot during repair and leaves an open court empty if the chosen side is unfillable", async () => {
+    const f = await setup();
+    const created = (await (await f.postQueue({ matchType: "WOMENS" })).json()).queuedMatch;
+    const { markTypedQueuesForRefresh } = await import("@/lib/queuedMatchInvalidation");
+    const { reconcileSessionQueueAfterCourtChange } = await import("@/app/api/matches/_lib/reconcileSessionQueue");
+    await prisma.$transaction(async (tx) => {
+      await tx.sessionPlayer.update({
+        where: { sessionId_playerId: { sessionId: f.sessionId, playerId: getSelectedIds(created)[0] } },
+        data: { isPaused: true },
+      });
+      await markTypedQueuesForRefresh(tx, { id: created.id });
+    });
+    expect((await f.postQueue({ matchType: "MENS" })).status).toBe(409);
+
+    await prisma.match.update({ where: { id: f.current.id }, data: { status: MatchStatus.COMPLETED, completedAt: new Date() } });
+    await prisma.court.update({ where: { id: f.courtId }, data: { currentMatchId: null } });
+    const reconciled = await reconcileSessionQueueAfterCourtChange(f.sessionId, { generateAutomaticIfMissing: true });
+    expect(reconciled).toMatchObject({ autoAssignedMatch: null, queuedMatch: null, queuedMatchCleared: true });
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId: f.sessionId } })).toBeNull();
+  });
+
+  it("keeps the requested side when Club Play reselects players at court opening", async () => {
+    const f = await setup(4, 4, true);
+    const queued = await f.postQueue({ matchType: "WOMENS" });
+    expect(queued.status, await queued.text()).toBe(200);
+    await prisma.match.update({ where: { id: f.current.id }, data: { status: MatchStatus.COMPLETED, completedAt: new Date() } });
+    await prisma.court.update({ where: { id: f.courtId }, data: { currentMatchId: null } });
+    const assigned = await POST_ASSIGN_QUEUE(new Request(`http://localhost/api/sessions/${f.code}/queue-match/assign`, {
+      method: "POST",
+    }), f.params);
+    const payload = await assigned.json();
+    expect(assigned.status, JSON.stringify(payload)).toBe(200);
+    expect(getSelectedIds(payload).sort()).toEqual(f.lower.sort());
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId: f.sessionId } })).toBeNull();
+  });
 });
 
 describe("Club Play assignments", () => {

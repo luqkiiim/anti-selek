@@ -1,5 +1,4 @@
-import { getSideSpecificCourtCreateMixedSide } from "@/lib/courtCreate";
-import { getEffectiveMixedSide } from "@/lib/mixedSide";
+import { isEligibleForDoublesType } from "@/lib/courtCreate";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import type { Court, Player, QueuedMatch } from "./sessionTypes";
@@ -35,16 +34,7 @@ function getAvailablePlayerCountByMatchType(
   players: Player[],
   matchType: SideSpecificCourtCreateType
 ) {
-  const requestedSide = getSideSpecificCourtCreateMixedSide(matchType);
-
-  return players.filter(
-    (player) =>
-      getEffectiveMixedSide({
-        gender: player.gender,
-        partnerPreference: player.partnerPreference,
-        mixedSideOverride: player.mixedSideOverride,
-      }) === requestedSide
-  ).length;
+  return players.filter((player) => isEligibleForDoublesType(player, matchType)).length;
 }
 
 function getAvailablePlayerDetail(count: number) {

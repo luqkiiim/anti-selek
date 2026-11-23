@@ -1,0 +1,11 @@
+# Queued doubles production release
+
+The online migration adds two nullable columns to `QueuedMatch`. Existing lineups read with both values empty. The currently deployed app can serve the expanded schema while the Vercel build runs. The build checks the schema using read-only queries.
+
+## Writer procedure for separate review and approval
+
+1. Pin the tested commit, migration SQL hash, current live main deployment, and production Turso endpoint fingerprint. Using the protected read-only rehearsal credential, check the live migration ledger against the predecessor chain through `20261105000000_google_sign_in` and check that both new columns are absent. Take a fresh consistent backup and rehearse the exact migration against a disposable copy under `private/`. Verify existing queued lineups and database integrity.
+2. With a separate short-lived writer credential, open one reserved write transaction using the existing libSQL release procedure. Recheck the endpoint pin before connection and the predecessor ledger and schema inside the transaction. Apply the two statements in `20261124000000_queued_doubles_type/migration.sql`. Compare the old queue columns and row count within the transaction, verify both new fields are null for existing rows, then insert the migration name and UTC apply time in `_turso_sql_migrations`. Commit schema and ledger together. If commit acknowledgment is uncertain, inspect the schema and ledger with the reader before deciding on a retry.
+3. With the reader, confirm both columns, the matching ledger entry, and database integrity. Push the tested commit to `main` without force. Verify the exact Vercel deployment reaches READY and serves the production aliases, then check an existing session and the queue picker in a disposable session. Scan fresh runtime logs for 500s and missing-schema errors.
+
+Review the exact writer command and its checks before asking for approval to run it. Verify that prior deployments cannot accept session mutations once hosts can create typed queues. If a rollback is needed after typed queues exist, use a compatible deployment or resolve those queues before rolling back. Leave the nullable columns in place during application recovery.

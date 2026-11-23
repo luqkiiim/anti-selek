@@ -1,5 +1,7 @@
 import { isUpgradedCollaboration } from "@/lib/sessionCollaboration";
-import type { QueuedMatch } from "@prisma/client";
+import type { Prisma, QueuedMatch } from "@prisma/client";
+import { isEligibleForDoublesType, isSideSpecificCourtCreateType, type SideSpecificCourtCreateType } from "@/lib/courtCreate";
+import { hasPendingSkipNextMatch } from "@/lib/sessionSkipNext";
 import { sessionMatchMutationTransaction, type SessionMutationActor } from "@/lib/sessionProfileIdentity";
 import { prisma } from "@/lib/prisma";
 import { CourtGroupType, MatchStatus, SessionMatchmakingStyle } from "@/types/enums";
@@ -72,9 +74,10 @@ export async function assertAssignmentsAvailable(
       throw new GenerateMatchError(409, "Selected players are no longer available. Refresh and try again.");
     }
   }
-  if (source?.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY && !options.allowQueuedPlayers) {
+  if (!options.allowQueuedPlayers) {
     const queue = await tx.queuedMatch.findUnique({ where: { sessionId } });
-    if (queue && [queue.team1Player1Id, queue.team1Player2Id, queue.team2Player1Id, queue.team2Player2Id]
+    const protectsReservation = queue?.requestedMatchType || source?.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY;
+    if (queue && protectsReservation && [queue.team1Player1Id, queue.team1Player2Id, queue.team2Player1Id, queue.team2Player2Id]
       .some((playerId) => uniqueSelectedIds.has(playerId))) {
       throw new GenerateMatchError(409, "A selected player is already reserved for the queued match. Refresh and try again.");
     }
@@ -425,11 +428,37 @@ export async function replaceCurrentCourtMatchAssignment({
   });
 }
 
+export async function assertQueuedDoublesPlayers(
+  tx: Prisma.TransactionClient,
+  sessionId: string,
+  partition: ManualMatchTeams,
+  matchType: SideSpecificCourtCreateType
+) {
+  const selectedIds = [...partition.team1, ...partition.team2];
+  const players = await tx.sessionPlayer.findMany({
+    where: { sessionId, playerId: { in: selectedIds } },
+    select: {
+      playerId: true,
+      isPaused: true,
+      gender: true,
+      partnerPreference: true,
+      mixedSideOverride: true,
+      skipNextMatchAt: true,
+    },
+  });
+  if (players.length !== 4 || players.some((player) =>
+    player.isPaused || hasPendingSkipNextMatch(player) || !isEligibleForDoublesType(player, matchType)
+  )) {
+    throw new GenerateMatchError(409, "The selected players are no longer eligible for this doubles match. Refresh and try again.");
+  }
+}
+
 export function getQueuedMatchAssignmentVersion(queue: QueuedMatch) {
   return {
     team1Player1Id: queue.team1Player1Id, team1Player2Id: queue.team1Player2Id,
     team2Player1Id: queue.team2Player1Id, team2Player2Id: queue.team2Player2Id,
     matchmakingReasonJson: queue.matchmakingReasonJson, createdAt: queue.createdAt, isAutomatic: queue.isAutomatic,
+    ...(queue.requestedMatchType ? { requestedMatchType: queue.requestedMatchType, refreshToken: queue.refreshToken } : {}),
   };
 }
 
@@ -475,6 +504,11 @@ export async function createQueuedMatchAssignment({
         ],
       },
     ], { allowQueuedPlayers: true });
+
+    if (isSideSpecificCourtCreateType(previousQueue?.requestedMatchType)) {
+      if (previousQueue.refreshToken) throw new GenerateMatchError(409, "The queued match is being refreshed. Try again.");
+      await assertQueuedDoublesPlayers(tx, sessionId, partition, previousQueue.requestedMatchType);
+    }
 
     if (isAutomaticClubPlayReason(matchmakingReasonJson) &&
       !await isClubPlayDecisionCurrent(tx, sessionId, [{ matchmakingReasonJson }], true)) {

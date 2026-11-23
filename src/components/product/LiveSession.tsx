@@ -33,6 +33,7 @@ import {
   SessionPool,
 } from "@/types/enums";
 import { api, ApiError, useResource, useAction } from "./api";
+import { getDoublesTypeLabel } from "@/lib/courtCreate";
 import { useSessionController } from "./useSessionController";
 import { canApprovePendingSubmission, getTeamNumberForPlayerId } from "@/lib/matchApprovalRules";
 import { SessionJoinProfilePanel } from "@/components/session/SessionJoinProfilePanel";
@@ -503,7 +504,7 @@ export default function LiveSession({
   const availablePlayerCount = s?.players.filter((player) => !player.isPaused && !busyPlayerIds.has(player.userId)).length ?? 0;
   const openCourts = s?.courts.filter((court) => !court.currentMatch).sort((left, right) => left.courtNumber - right.courtNumber) ?? [];
   const creatableOpenCourtIds = s?.queuedMatch ? [] : openCourts.slice(0, Math.floor(availablePlayerCount / 4)).map((court) => court.id);
-  const canQueueNextMatch = !!s && s.status === "ACTIVE" && openCourts.length === 0 && !s.queuedMatch && availablePlayerCount >= 4;
+  const canQueueNextMatch = !!s && s.status === "ACTIVE" && s.courts.length > 0 && openCourts.length === 0 && !s.queuedMatch && availablePlayerCount >= 4;
 
   async function shareResults() {
     if (!s || sharing) return;
@@ -1263,7 +1264,11 @@ export default function LiveSession({
                   creatingMatches={action.busy}
                   creatingQueuedMatch={action.busy}
                   onGenerateMatch={(body) => void action.run(() => generateMatch(body))}
-                  onQueueNextMatch={() => void action.run(() => changeQueuedMatch("POST"))}
+                  players={s.players}
+                  courts={s.courts}
+                  onQueueNextMatch={(matchType) => void action.run(() =>
+                    changeQueuedMatch("POST", matchType ? { matchType } : undefined)
+                  )}
                 />
               )}
               {s.courts.map(court => {
@@ -1382,6 +1387,9 @@ export default function LiveSession({
                   <span>
                     <span className="next-up-heading">
                       <strong>Next up</strong>
+                      {queued.requestedMatchType && (
+                        <span className="court-group-label">{getDoublesTypeLabel(queued.requestedMatchType)}</span>
+                      )}
                       {queuedGroupLabel && <span className="court-group-label">{queuedGroupLabel}</span>}
                     </span>
                     <span className="next-up-teams">

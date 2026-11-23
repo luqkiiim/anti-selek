@@ -1122,6 +1122,8 @@ describe("LiveSession score and player controls", () => {
     mocks.api.mockResolvedValue({ queuedMatch });
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("Queue next match"))?.click());
+    expect(mocks.api).not.toHaveBeenCalled();
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Best Match")?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/queue-match", "POST");
     expect(mocks.sessionResource!.data?.queuedMatch).toMatchObject(queuedMatch);
   });

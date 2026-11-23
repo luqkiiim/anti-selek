@@ -1,6 +1,6 @@
 import { getGuestRatingsByUserId } from "@/lib/guestRating";
 import {
-  getSideSpecificCourtCreateMixedSide,
+  isEligibleForDoublesType,
   getSideSpecificCourtCreateShortageMessage,
   type SideSpecificCourtCreateType,
 } from "@/lib/courtCreate";
@@ -927,17 +927,9 @@ export function filterRankedCandidatesByMatchType(
   sessionData: GenerateMatchSession,
   matchType: SideSpecificCourtCreateType
 ) {
-  const requestedSide = getSideSpecificCourtCreateMixedSide(matchType);
   const eligibleUserIds = new Set(
     sessionData.players
-      .filter(
-        (player) =>
-          getEffectiveMixedSide({
-            gender: player.gender,
-            partnerPreference: player.partnerPreference,
-            mixedSideOverride: player.mixedSideOverride,
-          }) === requestedSide
-      )
+      .filter((player) => isEligibleForDoublesType(player, matchType))
       .map((player) => player.userId)
   );
 

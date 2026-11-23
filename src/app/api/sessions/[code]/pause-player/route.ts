@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
+import { markTypedQueuesForRefresh } from "@/lib/queuedMatchInvalidation";
 import { getSessionParticipantOwners } from "@/lib/sessionProfileIdentity";
 import {
   getSessionOperatorMembership,
@@ -294,11 +295,13 @@ export async function POST(
           where: { sessionId: sessionData.id },
         });
 
-        if (hasQueuedMatchUser(queuedMatch, playerId)) {
-          await tx.queuedMatch.delete({
-            where: { sessionId: sessionData.id },
-          });
-          if (queuedMatch && !queuedMatch.isAutomatic) {
+        if (queuedMatch && hasQueuedMatchUser(queuedMatch, playerId)) {
+          if (queuedMatch.requestedMatchType) {
+            await markTypedQueuesForRefresh(tx, { id: queuedMatch.id });
+          } else {
+            await tx.queuedMatch.delete({ where: { sessionId: sessionData.id } });
+          }
+          if (!queuedMatch.isAutomatic) {
             await applyPendingPlayerGroupChangesInTransaction(tx, {
               sessionId: sessionData.id,
               userIds: getQueuedMatchUserIds(queuedMatch),

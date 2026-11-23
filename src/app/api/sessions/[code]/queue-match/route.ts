@@ -5,6 +5,7 @@ import { IdentityConflictError } from "@/lib/playerIdentity";
 import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isSideSpecificCourtCreateType } from "@/lib/courtCreate";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import {
@@ -105,6 +106,7 @@ export async function POST(
     Object.assign(sessionData, { mutationActor: { userId: session.user.id, isGlobalAdmin: !!session.user.isAdmin } });
 
     const body = await parseQueueMatchBody(request);
+    const { matchType } = body;
     const wantsReshuffle = body.reshuffle === true;
     const excludedUserId =
       typeof body.excludeUserId === "string" ? body.excludeUserId : undefined;
@@ -116,6 +118,13 @@ export async function POST(
     }
     if (body.replaceUserId !== undefined && !replaceUserId) {
       throw new GenerateMatchError(400, "Invalid replacement player");
+    }
+
+    if (matchType !== undefined && !isSideSpecificCourtCreateType(matchType)) {
+      throw new GenerateMatchError(400, "Invalid queued match type.");
+    }
+    if (matchType && (wantsReshuffle || replaceUserId || excludedUserId || body.manualTeams !== undefined)) {
+      throw new GenerateMatchError(400, "Choose a match type when creating a new queued match.");
     }
 
     ensureInterclubSessionReady(sessionData);
@@ -197,7 +206,7 @@ export async function POST(
     }
 
     return sportingJson({
-      queuedMatch: await createQueuedMatchForSession(sessionData),
+      queuedMatch: await createQueuedMatchForSession(sessionData, undefined, false, matchType),
     });
   } catch (error) {
     if (error instanceof MatchmakingSearchBudgetExceededError) {

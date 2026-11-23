@@ -7,7 +7,7 @@ import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
-import { assignAutomaticClubPlayQueue, tryRebuildQueuedMatchForSessionId } from "../shared";
+import { assignAutomaticClubPlayQueue, repairTypedQueuedMatch, tryRebuildQueuedMatchForSessionId } from "../shared";
 import { getEffectiveSessionType } from "@/lib/sessionSettings";
 import { SessionType } from "@/types/enums";
 import { createQueuedMatchAssignment, getQueuedMatchAssignmentVersion } from "../../generate-match/assignments";
@@ -99,6 +99,13 @@ export async function POST(
       include: { currentMatch: true },
     });
 
+    if (openCourts.length && sessionData.queuedMatch.refreshToken) {
+      sessionData.queuedMatch = await repairTypedQueuedMatch(sessionData);
+      if (!sessionData.queuedMatch) {
+        throw new GenerateMatchError(409, "No eligible lineup for the queued doubles match. The queue was cleared.");
+      }
+    }
+
     const clubPlay = getEffectiveSessionType(sessionData) === SessionType.CLUB_PLAY;
     const targetCourt = rankOpenCourtsForGroupType(
       openCourts,
@@ -160,7 +167,8 @@ export async function POST(
       poolASeatCount: sessionData.queuedMatch.poolASeatCount,
       poolBSeatCount: sessionData.queuedMatch.poolBSeatCount,
       isAutomatic: sessionData.queuedMatch.isAutomatic,
-      ...(clubPlay ? { previousQueue: getQueuedMatchAssignmentVersion(sessionData.queuedMatch) } : {}),
+      ...(clubPlay || sessionData.queuedMatch.requestedMatchType
+        ? { previousQueue: getQueuedMatchAssignmentVersion(sessionData.queuedMatch) } : {}),
     });
 
     return sportingJson({

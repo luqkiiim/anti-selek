@@ -62,6 +62,7 @@ function createTransactionMock() {
       updateMany: vi.fn().mockResolvedValue({ count: 4 }),
     },
     queuedMatch: {
+      findUnique: vi.fn().mockResolvedValue(null),
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   };

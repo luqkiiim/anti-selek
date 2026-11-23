@@ -1,6 +1,6 @@
 import { createClient } from "@libsql/client/web";
 
-/** Read-only: a Git push must not deploy an app against an unmigrated database. */
+/** Read-only: guard deployed builds against missing migrations. */
 export async function assertDeployedCourtSchema(env = process.env, connect = createClient) {
   if (env.VERCEL !== "1") return;
   const preview = env.VERCEL_ENV === "preview";
@@ -23,8 +23,12 @@ export async function assertDeployedCourtSchema(env = process.env, connect = cre
     if (!["venue", "venueMapUrl", "scheduledStartAt", "scheduledEndAt", "timeZone", "feeText", "notes"].every(name => sessionSchema.rows.some(column => column.name === name))) {
       throw new Error("Session details migration is pending");
     }
+    const queueSchema = await client.execute('PRAGMA table_info("QueuedMatch")');
+    if (!["requestedMatchType", "refreshToken"].every(name => queueSchema.rows.some(column => column.name === name))) {
+      throw new Error("Queued doubles migration is pending");
+    }
   } catch {
-    throw new Error("Deployment held: verify the court availability and session details migrations through the separately approved database release procedure. Builds never apply migrations.");
+    throw new Error("Deployment held: verify the required Court, Session, and QueuedMatch migrations through the separately approved database release procedure. Builds never apply migrations.");
   } finally {
     client?.close();
   }

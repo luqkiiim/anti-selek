@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { SessionStatus, type MixedSide, type PlayerGender } from "@/types/enums";
 import { resolveMixedSideState } from "./mixedSide";
+import { markTypedQueuesForRefresh } from "./queuedMatchInvalidation";
 
 /** Never fall back to deprecated shared Player or Account pairing fields. */
 export function deriveClubPairingPreferences(member: { player: { gender: string }; mixedSideOverride?: string | null }) {
@@ -21,23 +22,28 @@ export async function propagateClubPairingPreferencesToSessionsInTransaction(
     },
     select: {
       id: true, sessionId: true, gender: true, mixedSideOverride: true, partnerPreference: true,
-      session: { select: { autoQueueEnabled: true, queuedMatch: { select: { isAutomatic: true } } } },
+      session: { select: { autoQueueEnabled: true, queuedMatch: { select: { isAutomatic: true, requestedMatchType: true } } } },
     },
   });
   const automaticQueueSessionIds: string[] = [];
+  const typedQueueSessionIds: string[] = [];
   for (const seat of seats) {
     const state = resolveMixedSideState({ gender: seat.gender as PlayerGender, mixedSideOverride });
     const changed = state.mixedSideOverride !== seat.mixedSideOverride || state.partnerPreference !== seat.partnerPreference;
     if (changed) await tx.sessionPlayer.update({ where: { id: seat.id }, data: state });
     // Any changed candidate can affect the best pairing, even outside the queued four.
     if ((changed && seat.session.queuedMatch?.isAutomatic) || (seat.session.autoQueueEnabled && !seat.session.queuedMatch)) {
-      automaticQueueSessionIds.push(seat.sessionId);
+      if (seat.session.queuedMatch?.requestedMatchType) typedQueueSessionIds.push(seat.sessionId);
+      else automaticQueueSessionIds.push(seat.sessionId);
     }
   }
   if (automaticQueueSessionIds.length) {
     await tx.queuedMatch.deleteMany({ where: { sessionId: { in: automaticQueueSessionIds }, isAutomatic: true } });
   }
-  return { automaticQueueSessionIds };
+  if (typedQueueSessionIds.length) {
+    await markTypedQueuesForRefresh(tx, { sessionId: { in: typedQueueSessionIds }, isAutomatic: true });
+  }
+  return { automaticQueueSessionIds: [...automaticQueueSessionIds, ...typedQueueSessionIds] };
 }
 
 /** Gender is identity-wide; each membership keeps and normalizes its own choice. */

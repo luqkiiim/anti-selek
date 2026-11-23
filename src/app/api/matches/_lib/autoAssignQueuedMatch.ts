@@ -14,12 +14,12 @@ import {
   getQueuedMatchAssignmentVersion,
 } from "@/app/api/sessions/[code]/generate-match/assignments";
 import { buildMatchmakingState } from "@/app/api/sessions/[code]/generate-match/selection";
-import { assignAutomaticClubPlayQueue, selectAutomaticMatchForSession } from "@/app/api/sessions/[code]/queue-match/shared";
+import { assignAutomaticClubPlayQueue, repairTypedQueuedMatch, selectAutomaticMatchForSession } from "@/app/api/sessions/[code]/queue-match/shared";
 import { validateManualMatchRequest } from "@/app/api/sessions/[code]/generate-match/manual";
-import { GenerateMatchError } from "@/app/api/sessions/[code]/generate-match/shared";
+import { GenerateMatchError, loadSessionRecordById } from "@/app/api/sessions/[code]/generate-match/shared";
 import { getInterclubTeamClubIdsForPartition } from "@/app/api/sessions/[code]/generate-match/interclub";
 
-function canDeferClubPlayAssignment(error: unknown) {
+function canDeferQueueAssignment(error: unknown) {
   return error instanceof MatchmakingSearchBudgetExceededError || error instanceof IdentityConflictError ||
     (error instanceof GenerateMatchError && (error.status === 409 || error.status === 400));
 }
@@ -55,6 +55,23 @@ export async function autoAssignQueuedMatch(
   const sessionData = withLegacySportingAliases(clubPlay
     ? { ...record, players: await withSessionProfileRatings(prisma, record, record.players) }
     : record);
+
+  if (sessionData.queuedMatch?.refreshToken && sessionData.courts.some((court) => !court.currentMatchId)) {
+    try {
+      const freshSession = await loadSessionRecordById(sessionId);
+      if (!freshSession?.queuedMatch) return { autoAssignedMatch: null, queuedMatchCleared: true, skipQueueRefill: true };
+      const repaired = await repairTypedQueuedMatch(freshSession);
+      if (!repaired) return { autoAssignedMatch: null, queuedMatchCleared: true, skipQueueRefill: true };
+      sessionData.players = freshSession.players;
+      sessionData.matches = freshSession.matches;
+      sessionData.queuedMatch = repaired;
+    } catch (error) {
+      if (canDeferQueueAssignment(error)) {
+        return { autoAssignedMatch: null, queuedMatchCleared: false, skipQueueRefill: true };
+      }
+      throw error;
+    }
+  }
 
   if (!sessionData.queuedMatch) {
     if (!options?.generateIfMissing || !sessionData.autoQueueEnabled) {
@@ -93,7 +110,7 @@ export async function autoAssignQueuedMatch(
 
       return { autoAssignedMatch, queuedMatchCleared: true };
     } catch (error) {
-      if (error instanceof GenerateMatchError || (clubPlay && canDeferClubPlayAssignment(error))) {
+      if (error instanceof GenerateMatchError || (clubPlay && canDeferQueueAssignment(error))) {
         return { autoAssignedMatch: null, queuedMatchCleared: true };
       }
       throw error;
@@ -114,7 +131,7 @@ export async function autoAssignQueuedMatch(
       const autoAssignedMatch = await assignAutomaticClubPlayQueue(sessionData, targetCourt.id);
       return { autoAssignedMatch, queuedMatchCleared: false };
     } catch (error) {
-      if (canDeferClubPlayAssignment(error)) {
+      if (canDeferQueueAssignment(error)) {
         return { autoAssignedMatch: null, queuedMatchCleared: false };
       }
       throw error;
@@ -153,7 +170,8 @@ export async function autoAssignQueuedMatch(
           where: {
             id: sessionData.queuedMatch!.id,
             sessionId,
-            ...(clubPlay ? getQueuedMatchAssignmentVersion(sessionData.queuedMatch!) : {}),
+            ...(clubPlay || sessionData.queuedMatch!.requestedMatchType
+              ? getQueuedMatchAssignmentVersion(sessionData.queuedMatch!) : {}),
           },
         });
         if (
@@ -166,7 +184,11 @@ export async function autoAssignQueuedMatch(
           });
         }
       });
-      return { autoAssignedMatch: null, queuedMatchCleared: true };
+      return {
+        autoAssignedMatch: null,
+        queuedMatchCleared: true,
+        ...(sessionData.queuedMatch.requestedMatchType ? { skipQueueRefill: true } : {}),
+      };
     }
 
     throw error;
@@ -184,11 +206,12 @@ export async function autoAssignQueuedMatch(
       poolASeatCount: sessionData.queuedMatch.poolASeatCount,
       poolBSeatCount: sessionData.queuedMatch.poolBSeatCount,
       isAutomatic: sessionData.queuedMatch.isAutomatic,
-      ...(clubPlay ? { previousQueue: getQueuedMatchAssignmentVersion(sessionData.queuedMatch) } : {}),
+      ...(clubPlay || sessionData.queuedMatch.requestedMatchType
+        ? { previousQueue: getQueuedMatchAssignmentVersion(sessionData.queuedMatch) } : {}),
     });
     return { autoAssignedMatch, queuedMatchCleared: false };
   } catch (error) {
-    if (clubPlay && canDeferClubPlayAssignment(error)) {
+    if ((clubPlay || sessionData.queuedMatch.requestedMatchType) && canDeferQueueAssignment(error)) {
       return { autoAssignedMatch: null, queuedMatchCleared: false };
     }
     throw error;

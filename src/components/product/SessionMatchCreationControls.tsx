@@ -5,7 +5,7 @@ import { Clock3, Plus } from "lucide-react";
 import { buildCourtCreateOptionStates } from "@/components/session/courtCreateOptions";
 import type { CourtCreateOptionState } from "@/components/session/courtCreateOptions";
 import type { Court, Player, QueuedMatch } from "@/components/session/sessionTypes";
-import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
+import { getDoublesTypeLabel, type SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import type { GenerateMatchRequestBody } from "./sessionMatchCreation";
 import { buildGenerateMatchesRequest } from "./sessionMatchCreation";
 import { Sheet } from "./Primitives";
@@ -21,8 +21,9 @@ export interface SessionMatchCreationToolbarProps {
   creatingMatches?: boolean;
   creatingQueuedMatch?: boolean;
   onGenerateMatch: (body: GenerateMatchRequestBody) => void;
-  /** POST /api/sessions/{code}/queue-match, with no request body. */
-  onQueueNextMatch: () => void;
+  players: Player[];
+  courts: Court[];
+  onQueueNextMatch: (matchType?: SideSpecificCourtCreateType) => void;
 }
 
 export function SessionMatchCreationToolbar({
@@ -34,22 +35,55 @@ export function SessionMatchCreationToolbar({
   creatingMatches = false,
   creatingQueuedMatch = false,
   onGenerateMatch,
+  players,
+  courts,
   onQueueNextMatch,
 }: SessionMatchCreationToolbarProps) {
+  const [queuePickerOpen, setQueuePickerOpen] = useState(false);
   if (!isHost || !isActive || hasQueuedMatch) return null;
 
   if (canQueueNextMatch) {
+    const options = queuePickerOpen ? buildCourtCreateOptionStates({
+      players: players.filter((player) => !player.skipNextMatchAt),
+      courts,
+      queuedMatch: null,
+    }) : [];
     return (
       <div className={styles.toolbar}>
         <button
           className={`${styles.primary} ${styles.queue}`}
           type="button"
           disabled={creatingQueuedMatch || creatingMatches}
-          onClick={onQueueNextMatch}
+          aria-expanded={queuePickerOpen}
+          aria-haspopup="dialog"
+          onClick={() => setQueuePickerOpen(true)}
         >
           <Clock3 aria-hidden="true" size={18} />
           {creatingQueuedMatch ? "Queueing..." : "Queue next match"}
         </button>
+        <Sheet open={queuePickerOpen} title="Queue next match" onClose={() => setQueuePickerOpen(false)}>
+          <div className="court-action-list">
+            {options.map((option) => {
+              if (option.key === "MANUAL") return null;
+              const matchType = option.key === "BEST" ? undefined : option.key;
+              return (
+                <button
+                  className={`court-action-row ${styles.option}`}
+                  key={option.key}
+                  type="button"
+                  disabled={option.disabled || creatingQueuedMatch || creatingMatches}
+                  onClick={() => {
+                    setQueuePickerOpen(false);
+                    onQueueNextMatch(matchType);
+                  }}
+                >
+                  <span>{matchType ? getDoublesTypeLabel(matchType) : option.label}</span>
+                  {option.detail ? <small>{option.detail}</small> : null}
+                </button>
+              );
+            })}
+          </div>
+        </Sheet>
       </div>
     );
   }

@@ -5,6 +5,7 @@ import { sportingJson } from "@/lib/sportingResponse";
 import { auth } from "@/lib/auth";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
+import { markTypedQueuesForRefresh } from "@/lib/queuedMatchInvalidation";
 import { getQueuedMatchUserIds, hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { deleteEphemeralGuestUsers } from "@/lib/sessionLifecycle";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
@@ -273,11 +274,13 @@ export async function DELETE(
         : 0;
 
       const queuedMatchAffected = hasQueuedMatchUser(queuedMatch, playerId);
-      if (queuedMatchAffected) {
-        await tx.queuedMatch.delete({
-          where: { sessionId: sessionData.id },
-        });
-        if (queuedMatch && !queuedMatch.isAutomatic) {
+      if (queuedMatch && queuedMatchAffected) {
+        if (queuedMatch.requestedMatchType) {
+          await markTypedQueuesForRefresh(tx, { id: queuedMatch.id });
+        } else {
+          await tx.queuedMatch.delete({ where: { sessionId: sessionData.id } });
+        }
+        if (!queuedMatch.isAutomatic) {
           await applyPendingPlayerGroupChangesInTransaction(tx, {
             sessionId: sessionData.id,
             userIds: getQueuedMatchUserIds(queuedMatch),

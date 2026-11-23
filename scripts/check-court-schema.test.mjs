@@ -3,7 +3,7 @@ import test from "node:test";
 import { assertDeployedCourtSchema } from "./check-court-schema.mjs";
 
 const production = { VERCEL: "1", VERCEL_ENV: "production", TURSO_DATABASE_URL: "libsql://fixture.turso.io", TURSO_AUTH_TOKEN: "fixture" };
-const columns = ["isActive", "bookingStartAt", "bookingEndAt", "venue", "venueMapUrl", "scheduledStartAt", "scheduledEndAt", "timeZone", "feeText", "notes"].map(name => ({ name }));
+const columns = ["isActive", "bookingStartAt", "bookingEndAt", "venue", "venueMapUrl", "scheduledStartAt", "scheduledEndAt", "timeZone", "feeText", "notes", "requestedMatchType", "refreshToken"].map(name => ({ name }));
 
 test("holds deployment on an old schema and closes the read-only connection", async () => {
   let closed = false;
@@ -28,8 +28,8 @@ test("local builds make no database connection", async () => {
   await assertDeployedCourtSchema({}, () => { throw new Error("Unexpected connection"); });
 });
 
-test("holds deployment when only part of the session details migration is present", async () => {
-  for (const missing of ["bookingEndAt", "venue", "timeZone"]) {
+test("holds deployment when required migration columns are missing", async () => {
+  for (const missing of ["bookingEndAt", "venue", "timeZone", "requestedMatchType", "refreshToken"]) {
     await assert.rejects(assertDeployedCourtSchema(production, () => ({ execute: async () => ({ rows: columns.filter(column => column.name !== missing) }), close() {} })), /Deployment held/);
   }
 });
