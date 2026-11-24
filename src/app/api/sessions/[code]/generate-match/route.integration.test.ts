@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type MockedFunction } from "vitest";
+import { getClearCourtsNextUp } from "@/lib/clearSessionCourts";
 import {
   MatchStatus,
   MixedSide,
@@ -685,6 +686,114 @@ afterAll(async () => {
   mutableEnv.NODE_ENV = previousEnv.NODE_ENV;
 
   await removeDatabaseFiles();
+});
+
+describe("clear all courts", () => {
+  async function setup({ thirdCourtOccupied = true } = {}) {
+    const prefix = `clear-courts-${randomUUID().slice(0, 8)}`;
+    const { clubId } = await createClubAdmin(prefix);
+    const keys = Array.from({ length: 17 }, (_, index) => `p${index}`);
+    await createUsers(prefix, keys.map(key => ({ key })));
+    const playerIds = keys.map(key => `${prefix}-${key}`);
+    const courtIds = [1, 2, 3].map(number => `${prefix}-court-${number}`);
+    const { code, sessionId } = await createSessionWithCourtsAndPlayers({
+      prefix, clubId, type: SessionType.POINTS, mode: SessionMode.MEXICANO, courtIds,
+      players: playerIds.map(playerId => ({ playerId })),
+    });
+    const teams = (offset: number) => ({
+      team1Player1Id: playerIds[offset], team1Player2Id: playerIds[offset + 1],
+      team2Player1Id: playerIds[offset + 2], team2Player2Id: playerIds[offset + 3],
+    });
+    async function putOnCourt(index: number, status: MatchStatus) {
+      const courtId = courtIds[index];
+      const match = await prisma.match.create({
+        data: { sessionId, courtId, status, ...teams(index * 4), scoreRevision: 1 },
+      });
+      await prisma.court.update({ where: { id: courtId }, data: { currentMatchId: match.id } });
+      return { courtId, matchId: match.id, scoreRevision: match.scoreRevision };
+    }
+    const courts = [
+      await putOnCourt(0, MatchStatus.IN_PROGRESS),
+      await putOnCourt(1, MatchStatus.PENDING),
+    ];
+    const pending = thirdCourtOccupied ? await putOnCourt(2, MatchStatus.PENDING_APPROVAL) : null;
+    const completed = await prisma.match.create({
+      data: { sessionId, courtId: courtIds[0], status: MatchStatus.COMPLETED, ...teams(0), team1Score: 21, team2Score: 17, winnerTeam: 1 },
+    });
+    const nextUp = await prisma.queuedMatch.create({ data: { sessionId, ...teams(12), requestedMatchType: "MENS" } });
+    const { POST: clear } = await import("../courts/clear/route");
+    const submit = (expectedNextUp = getClearCourtsNextUp(nextUp)) => clear(new Request(`http://localhost/api/sessions/${code}/courts/clear`, {
+      method: "POST", body: JSON.stringify({ courts, nextUp: expectedNextUp }),
+    }), { params: Promise.resolve({ code }) });
+    const snapshot = async () => ({
+      courts: await prisma.court.findMany({ where: { sessionId }, orderBy: { courtNumber: "asc" } }),
+      matches: await prisma.match.findMany({ where: { sessionId }, orderBy: { id: "asc" } }),
+      nextUp: await prisma.queuedMatch.findUnique({ where: { sessionId } }),
+    });
+    return { sessionId, playerIds, courtIds, courts, pending, completed, nextUp, submit, snapshot, putOnCourt };
+  }
+
+  it("empties all unfinished courts and Next up while preserving scores and releasing players", async () => {
+    const f = await setup();
+    const pendingResult = await prisma.match.update({
+      where: { id: f.pending!.matchId }, data: { team1Score: 21, team2Score: 19, scoreRevision: 2 },
+    });
+    const releasedIds = [f.playerIds[0], f.playerIds[12]];
+    await prisma.sessionPlayer.updateMany({
+      where: { sessionId: f.sessionId, playerId: { in: releasedIds } }, data: { pendingPool: SessionPool.B },
+    });
+
+    const response = await f.submit();
+    const body = await response.json();
+    expect(response.status, JSON.stringify(body)).toBe(200);
+    expect(body.clearedCourts).toHaveLength(2);
+    expect(body.queuedMatch).toBeNull();
+    const after = await f.snapshot();
+    expect(after.courts.map(court => court.currentMatchId)).toEqual([null, null, pendingResult.id]);
+    expect(after.matches).toEqual(expect.arrayContaining([f.completed, pendingResult]));
+    expect(after.matches).toHaveLength(2);
+    expect(after.nextUp).toBeNull();
+    expect(await prisma.session.findUnique({ where: { id: f.sessionId } })).toMatchObject({ status: "ACTIVE", autoQueueEnabled: true });
+    const players = await prisma.sessionPlayer.findMany({ where: { sessionId: f.sessionId } });
+    expect(players.map(player => player.playerId).sort()).toEqual([...f.playerIds].sort());
+    expect(players.filter(player => releasedIds.includes(player.playerId))).toEqual([
+      expect.objectContaining({ pool: SessionPool.B, pendingPool: null }),
+      expect.objectContaining({ pool: SessionPool.B, pendingPool: null }),
+    ]);
+  });
+
+  it.each(["score", "court", "queue"] as const)("keeps all courts and Next up when the reviewed %s changes", async (change) => {
+    const f = await setup({ thirdCourtOccupied: false });
+    if (change === "score") {
+      await prisma.match.update({
+        where: { id: f.courts[0].matchId }, data: { scoreRevision: 2, gameScoresJson: '[{"team1Score":21,"team2Score":17}]' },
+      });
+    } else if (change === "court") {
+      await f.putOnCourt(2, MatchStatus.IN_PROGRESS);
+    } else {
+      await prisma.queuedMatch.update({
+        where: { id: f.nextUp.id }, data: { team1Player1Id: f.playerIds[16] },
+      });
+    }
+    const before = await f.snapshot();
+    expect((await f.submit()).status).toBe(409);
+    expect(await f.snapshot()).toEqual(before);
+  });
+
+  it("rejects a player without session management access", async () => {
+    const f = await setup();
+    mockedAuth.mockResolvedValueOnce({ user: { id: `account-${f.playerIds[0]}`, isAdmin: false } } as never);
+    const before = await f.snapshot();
+    expect((await f.submit()).status).toBe(403);
+    expect(await f.snapshot()).toEqual(before);
+  });
+
+  it("removes a doubles queue hidden while its lineup is being refreshed", async () => {
+    const f = await setup();
+    await prisma.queuedMatch.update({ where: { id: f.nextUp.id }, data: { refreshToken: "pending-refresh" } });
+    expect((await f.submit(null)).status).toBe(200);
+    expect((await f.snapshot()).nextUp).toBeNull();
+  });
 });
 
 describe("generate match route integration", () => {

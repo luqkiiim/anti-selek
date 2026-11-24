@@ -34,6 +34,14 @@ import {
 } from "@/types/enums";
 import { api, ApiError, useResource, useAction } from "./api";
 import { getDoublesTypeLabel } from "@/lib/courtCreate";
+import {
+  getClearCourtsNextUp,
+  isClearableCourtMatch,
+  matchesClearCourtsNextUp,
+  matchesClearCourtsTargets,
+  type ClearCourtsRequest,
+  type ClearCourtsResponse,
+} from "@/lib/clearSessionCourts";
 import { buildCourtReshuffleOptions, type AutomaticCourtOption } from "@/components/session/courtCreateOptions";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { resolveMatchScoreInput } from "@/lib/matchRules";
@@ -134,6 +142,7 @@ type ManualTarget =
 type ControlConfirmation =
   | { kind: "court-reshuffle"; courtId: string; matchId: string; scoreRevision?: number; format: AutomaticCourtOption }
   | { kind: "court-undo"; courtId: string }
+  | { kind: "courts-clear"; expected: ClearCourtsRequest; hasPendingApproval: boolean }
   | { kind: "queue-clear" }
   | { kind: "court-player-rest"; courtId: string; matchId: string; playerId: string };
 type CourtPlayerAction = {
@@ -425,6 +434,16 @@ export default function LiveSession({
     });
   }, [rawSession]);
   const canManage = !globalClubId && !s?.viewerIsQuickAccess && (isCollaboration ? !!collaboration.data?.capabilities.host : !!s?.viewerCanManage);
+  const clearableCourts = s?.courts.flatMap(({ id, currentMatch }) =>
+    currentMatch && isClearableCourtMatch(currentMatch.status)
+      ? [{ courtId: id, matchId: currentMatch.id, scoreRevision: currentMatch.scoreRevision ?? 0 }]
+      : [],
+  ) ?? [];
+  const nextUpForClear = getClearCourtsNextUp(s?.queuedMatch);
+  const canClearCourts = canManage && !lineupMode && s?.status === "ACTIVE" && clearableCourts.length > 0;
+  const clearCourtsIsCurrent = canClearCourts && confirmation?.kind === "courts-clear" &&
+    matchesClearCourtsTargets(confirmation.expected.courts, clearableCourts) &&
+    matchesClearCourtsNextUp(confirmation.expected.nextUp, nextUpForClear);
   const canJoin = !!s && !globalClubId && !s.viewerIsQuickAccess && !s.selectedSelf && !!s.eligibleProfiles?.length && s.status !== "COMPLETED";
   const canRename = canManage && !!s?.viewerCanRename && s.status === "WAITING";
   const ended = s?.status === "COMPLETED";
@@ -1150,6 +1169,35 @@ export default function LiveSession({
       });
       return;
     }
+    if (confirmation.kind === "courts-clear") {
+      const { expected } = confirmation;
+      await resource.cancelDeferredQueueRecovery();
+      let result: ClearCourtsResponse;
+      try {
+        result = await api<ClearCourtsResponse>(endpoint + "/courts/clear", "POST", expected);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) void refresh().catch(() => {});
+        throw error;
+      }
+      const clearedByCourtId = new Map(result.clearedCourts.map(({ courtId, matchId }) => [courtId, matchId]));
+      const previousRawQueue = getClearCourtsNextUp(rawSession?.queuedMatch);
+      setQueuedMatchOverlay(current =>
+        current && matchesClearCourtsNextUp(expected.nextUp, getClearCourtsNextUp(current.queuedMatch)) ? null : current,
+      );
+      resource.update(current => {
+        const currentQueue = getClearCourtsNextUp(current.queuedMatch);
+        const clearQueue = matchesClearCourtsNextUp(expected.nextUp, currentQueue) ||
+          (queuedMatchOverlay && matchesClearCourtsNextUp(previousRawQueue, currentQueue));
+        return {
+          ...current,
+          courts: current.courts.map(court => court.currentMatch && court.currentMatch.id === clearedByCourtId.get(court.id)
+            ? { ...court, currentMatch: null }
+            : court),
+          queuedMatch: clearQueue ? result.queuedMatch : current.queuedMatch,
+        };
+      }, { urgent: true });
+      return;
+    }
     await changeQueuedMatch("DELETE");
   }
   function runCourtPlayerAction(kind: "exclude" | "pause") {
@@ -1675,6 +1723,8 @@ export default function LiveSession({
                             ? "Rest this match?"
                             : confirmation?.kind === "court-undo"
                             ? "Clear court?"
+                            : confirmation?.kind === "courts-clear"
+                              ? "Clear all courts?"
                             : confirmation?.kind === "queue-clear"
                               ? "Clear next match?"
                               : "Reshuffle this match?"
@@ -1704,6 +1754,13 @@ export default function LiveSession({
               {canManage && !ended && <>
                 <Row title="Session settings" icon={GearSix} onClick={openLiveSettings} />
                 <Row title="Finish session" icon={SignOut} onClick={openFinish} />
+                {tab === "Courts" && canClearCourts && (
+                  <Row title="Clear all courts" icon={Trash} onClick={() => startConfirmedControl({
+                    kind: "courts-clear",
+                    expected: { courts: clearableCourts, nextUp: nextUpForClear },
+                    hasPendingApproval: s.courts.some(court => court.currentMatch?.status === MatchStatus.PENDING_APPROVAL),
+                  })} />
+                )}
               </>}
               {s?.viewerCanDelete && (
                 <Row title={s.status === "ACTIVE" ? "Cancel session" : "Delete session"} icon={Trash} onClick={() => { action.setError(""); setSheet("delete"); }} />
@@ -2139,6 +2196,26 @@ export default function LiveSession({
                 {getManualPlayers({ kind: "court", courtId: courtControl.id }).length < 4 && <p className="muted">Four active players are required.</p>}
               </>
             ) : null
+          ) : sheet === "confirm-control" && confirmation?.kind === "courts-clear" ? (
+            <>
+              <p>
+                Clear {confirmation.expected.courts.length} {confirmation.expected.courts.length === 1 ? "court" : "courts"}?
+                {" "}Any draft scores and Next up will be discarded.
+              </p>
+              {confirmation.hasPendingApproval && <p>Courts with scores awaiting approval will stay as they are.</p>}
+              {!clearCourtsIsCurrent && !action.error && <p role="status">The session changed. Reopen the confirmation to review.</p>}
+              <button type="button" className="secondary full danger-outline" disabled={action.busy || !clearCourtsIsCurrent}
+                onClick={() => void action.run(confirmControlAction, finishControlAction, { backgroundRefresh: true })}>
+                Clear all courts
+              </button>
+              <button type="button" className="text-button" disabled={action.busy} onClick={() => {
+                action.setError("");
+                setConfirmation(null);
+                setSheet("menu");
+              }}>
+                Cancel
+              </button>
+            </>
           ) : sheet === "confirm-control" && confirmation ? (
             <>
               {confirmation.kind === "court-player-rest" ? (
