@@ -1,12 +1,16 @@
-import { isEligibleForDoublesType } from "@/lib/courtCreate";
+import {
+  getDoublesTypeLabel,
+  getSideSpecificCourtCreateLabel,
+  isEligibleForDoublesType,
+  sideSpecificCourtCreateTypes,
+  type SideSpecificCourtCreateType,
+} from "@/lib/courtCreate";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
-import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import type { Court, Player, QueuedMatch } from "./sessionTypes";
 
-export type CourtCreateActionKey =
-  | "BEST"
-  | SideSpecificCourtCreateType
-  | "MANUAL";
+const automaticCourtOptions = ["BEST", ...sideSpecificCourtCreateTypes] as const;
+export type AutomaticCourtOption = (typeof automaticCourtOptions)[number];
+export type CourtCreateActionKey = AutomaticCourtOption | "MANUAL";
 
 export interface CourtCreateOptionState {
   key: CourtCreateActionKey;
@@ -15,89 +19,51 @@ export interface CourtCreateOptionState {
   detail?: string;
 }
 
-function getBusyCourtPlayerIds(courts: Court[]) {
-  return new Set(
-    courts.flatMap((court) =>
-      court.currentMatch
-        ? [
-            court.currentMatch.team1User1.id,
-            court.currentMatch.team1User2.id,
-            court.currentMatch.team2User1.id,
-            court.currentMatch.team2User2.id,
-          ]
-        : []
-    )
-  );
-}
-
-function getAvailablePlayerCountByMatchType(
-  players: Player[],
-  matchType: SideSpecificCourtCreateType
-) {
-  return players.filter((player) => isEligibleForDoublesType(player, matchType)).length;
-}
-
-function getAvailablePlayerDetail(count: number) {
-  return `Only ${count} available`;
-}
-
-export function buildCourtCreateOptionStates({
-  players,
-  courts,
-  queuedMatch,
-}: {
+type CourtOptionRoster = {
   players: Player[];
   courts: Court[];
   queuedMatch: QueuedMatch | null;
-}): CourtCreateOptionState[] {
-  const busyCourtPlayerIds = getBusyCourtPlayerIds(courts);
-  const queuedPlayerIds = new Set(getQueuedMatchUserIds(queuedMatch));
-  const availablePlayers = players.filter(
-    (player) =>
-      !player.isPaused &&
-      !busyCourtPlayerIds.has(player.userId) &&
-      !queuedPlayerIds.has(player.userId)
-  );
-  const resolveQueueDetail = queuedMatch ? "Resolve queued match first" : undefined;
-  const totalAvailableCount = availablePlayers.length;
-  const mensAvailableCount = getAvailablePlayerCountByMatchType(
-    availablePlayers,
-    "MENS"
-  );
-  const womensAvailableCount = getAvailablePlayerCountByMatchType(
-    availablePlayers,
-    "WOMENS"
-  );
+};
 
-  const options: CourtCreateOptionState[] = [
-    {
-      key: "BEST",
-      label: "Best Match",
-      disabled: !!resolveQueueDetail || totalAvailableCount < 4,
-      detail: resolveQueueDetail ?? getAvailablePlayerDetail(totalAvailableCount),
-    },
-    {
-      key: "MENS",
-      label: "Men's Court",
-      disabled: !!resolveQueueDetail || mensAvailableCount < 4,
-      detail: resolveQueueDetail ?? getAvailablePlayerDetail(mensAvailableCount),
-    },
-    {
-      key: "WOMENS",
-      label: "Women's Court",
-      disabled: !!resolveQueueDetail || womensAvailableCount < 4,
-      detail: resolveQueueDetail ?? getAvailablePlayerDetail(womensAvailableCount),
-    },
-    {
-      key: "MANUAL",
-      label: "Manual",
-      disabled: false,
-    },
-  ];
+function getAvailableCourtPlayers({ players, courts, queuedMatch }: CourtOptionRoster) {
+  const occupiedIds = new Set(courts.flatMap(({ currentMatch: match }) =>
+    match ? [match.team1User1.id, match.team1User2.id, match.team2User1.id, match.team2User2.id] : []
+  ));
+  const queuedIds = new Set(getQueuedMatchUserIds(queuedMatch));
+  return players.filter(player => !player.isPaused && !occupiedIds.has(player.userId) && !queuedIds.has(player.userId));
+}
 
-  return options.map((option) => ({
-    ...option,
-    detail:
-      option.disabled && option.detail !== undefined ? option.detail : undefined,
-  }));
+function getSideCount(players: Player[], matchType: SideSpecificCourtCreateType) {
+  return players.filter(player => isEligibleForDoublesType(player, matchType)).length;
+}
+
+export function buildCourtCreateOptionStates(roster: CourtOptionRoster): CourtCreateOptionState[] {
+  const players = getAvailableCourtPlayers(roster);
+  const options: CourtCreateOptionState[] = automaticCourtOptions.map(key => {
+    const count = key === "BEST" ? players.length : getSideCount(players, key);
+    return {
+      key,
+      label: key === "BEST" ? "Best Match" : getSideSpecificCourtCreateLabel(key),
+      disabled: !!roster.queuedMatch || count < 4,
+      detail: roster.queuedMatch ? "Resolve queued match first" : count < 4 ? `Only ${count} available` : undefined,
+    };
+  });
+  return [...options, { key: "MANUAL", label: "Manual", disabled: false }];
+}
+
+export function buildCourtReshuffleOptions(roster: CourtOptionRoster, courtId: string) {
+  const players = getAvailableCourtPlayers({
+    ...roster,
+    courts: roster.courts.filter(court => court.id !== courtId),
+  }).filter(player => !player.skipNextMatchAt);
+
+  return automaticCourtOptions.map(key => {
+    const count = key === "BEST" ? players.length : getSideCount(players, key);
+    return {
+      key,
+      label: key === "BEST" ? "Best Match" : getDoublesTypeLabel(key),
+      disabled: count < 4,
+      detail: count < 4 ? `Only ${count} eligible ${count === 1 ? "player" : "players"}` : undefined,
+    };
+  });
 }

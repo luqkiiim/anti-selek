@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { getSideSpecificCourtCreateLabel } from "@/lib/courtCreate";
 import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
 import { getEffectiveSessionMode, getEffectiveSessionType } from "@/lib/sessionSettings";
-import { SessionType } from "@/types/enums";
+import { MatchStatus, SessionType } from "@/types/enums";
 import {
   createMatchmakingSearchBudget,
   MatchmakingSearchBudgetExceededError,
@@ -71,6 +71,7 @@ export async function POST(
       excludedUserId,
       restUserId,
       expectedMatchId,
+      expectedScoreRevision,
       replaceUserId,
       matchType,
     } = parseGenerateMatchRequest(body);
@@ -89,11 +90,15 @@ export async function POST(
       forceReshuffle,
     });
 
-    if (restUserId && targetCourt.currentMatch?.id !== expectedMatchId) {
+    if (expectedMatchId && targetCourt.currentMatch?.id !== expectedMatchId) {
       throw new GenerateMatchError(
         409,
         "This match has changed. Refresh and try again."
       );
+    }
+
+    if (expectedScoreRevision !== undefined && targetCourt.currentMatch?.scoreRevision !== expectedScoreRevision) {
+      throw new GenerateMatchError(409, "The score changed. Refresh and confirm the reshuffle again.");
     }
 
     if (undoCurrentMatch) {
@@ -106,7 +111,7 @@ export async function POST(
       ? createMatchmakingSearchBudget()
       : undefined;
 
-    if (matchType && sessionData.queuedMatch) {
+    if (matchType && !forceReshuffle && sessionData.queuedMatch) {
       throw new GenerateMatchError(
         409,
         `Resolve the queued match before creating a ${getSideSpecificCourtCreateLabel(
@@ -244,6 +249,10 @@ export async function POST(
     }
 
     if (forceReshuffle && targetCourt.currentMatch) {
+      const status = targetCourt.currentMatch.status;
+      if (status !== MatchStatus.PENDING && status !== MatchStatus.IN_PROGRESS) {
+        throw new GenerateMatchError(409, "This match is no longer available to reshuffle.");
+      }
       const reshuffleUserIds = [
         targetCourt.currentMatch.team1Player1Id,
         targetCourt.currentMatch.team1Player2Id,
@@ -281,15 +290,18 @@ export async function POST(
           )
         : rankedCandidates;
 
-      ensureEnoughPlayers(
-        eligibleAvailableCandidates.length,
-        eligibleRankedCandidates.length,
-        1
-      );
+      const candidates = matchType
+        ? filterRankedCandidatesByMatchType(eligibleRankedCandidates, reshuffleSessionData, matchType)
+        : eligibleRankedCandidates;
+      if (matchType) {
+        ensureEnoughMatchTypePlayers(matchType, candidates.length);
+      } else {
+        ensureEnoughPlayers(eligibleAvailableCandidates.length, candidates.length, 1);
+      }
 
       const { selection: bestSelection, consumedSkipUserIds } =
         selectSingleCourtMatchRespectingSkips({
-          rankedCandidates: eligibleRankedCandidates,
+          rankedCandidates: candidates,
           playersById,
           sessionData: reshuffleSessionData,
           rotationHistory,
@@ -303,6 +315,10 @@ export async function POST(
         actor: sessionData.mutationActor,
         courtId: targetCourt.id,
         currentMatchId: targetCourt.currentMatch.id,
+        expectedScoreRevision: expectedMatchId && !excludedUserId
+          ? targetCourt.currentMatch.scoreRevision
+          : undefined,
+        matchType,
         selectedIds: [...bestSelection.ids],
         partition: bestSelection.partition,
         team1ClubId:

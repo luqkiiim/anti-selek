@@ -308,7 +308,7 @@ beforeAll(async () => {
     queueModule.tryRebuildAutomaticQueuedMatchForSessionId;
 });
 
-describe("queued doubles type", () => {
+describe("doubles match selection", () => {
   async function setup(upperCount = 4, lowerCount = 4, clubPlay = false) {
     const prefix = `doubles-${randomUUID().slice(0, 8)}`;
     const { clubId } = await createClubAdmin(prefix);
@@ -437,6 +437,84 @@ describe("queued doubles type", () => {
     const reconciled = await reconcileSessionQueueAfterCourtChange(f.sessionId, { generateAutomaticIfMissing: true });
     expect(reconciled).toMatchObject({ autoAssignedMatch: null, queuedMatch: null, queuedMatchCleared: true });
     expect(await prisma.queuedMatch.findUnique({ where: { sessionId: f.sessionId } })).toBeNull();
+  });
+
+  it.each(["MENS", "WOMENS"] as const)("reshuffles an occupied court as %s while reserving the queue", async (matchType) => {
+    const f = await setup();
+    const originalIds = getSelectedIds(f.current);
+    const originalLower = [originalIds[1], originalIds[3]];
+    await prisma.sessionPlayer.updateMany({
+      where: { sessionId: f.sessionId, playerId: { in: originalLower } },
+      data: { gender: PlayerGender.FEMALE, partnerPreference: PartnerPreference.FEMALE_FLEX },
+    });
+    const reserved = await prisma.queuedMatch.create({ data: {
+      sessionId: f.sessionId,
+      team1Player1Id: f.upper[2], team1Player2Id: f.lower[2],
+      team2Player1Id: f.upper[3], team2Player2Id: f.lower[3],
+    } });
+    const response = await postGenerateMatch(f.code, {
+      courtId: f.courtId, forceReshuffle: true, expectedMatchId: f.current.id,
+      expectedScoreRevision: f.current.scoreRevision, matchType,
+    });
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    const expected = matchType === "MENS"
+      ? [originalIds[0], originalIds[2], ...f.upper.slice(0, 2)]
+      : [...originalLower, ...f.lower.slice(0, 2)];
+    expect(getSelectedIds(payload).sort()).toEqual(expected.sort());
+    expect(await prisma.match.findUnique({ where: { id: f.current.id } })).toBeNull();
+    expect(await prisma.court.findUnique({ where: { id: f.courtId } })).toMatchObject({ currentMatchId: payload.id });
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId: f.sessionId } })).toEqual(reserved);
+  });
+
+  it("preserves the match and score drafts on shortages and stale confirmations", async () => {
+    const f = await setup(4, 3);
+    const saved = await prisma.match.update({
+      where: { id: f.current.id }, data: { scoreRevision: 1, team1Score: 21, team2Score: 18 },
+    });
+    const reshuffle = (expectedMatchId: string, expectedScoreRevision: number) => postGenerateMatch(f.code, {
+      courtId: f.courtId, forceReshuffle: true, matchType: "WOMENS", expectedMatchId, expectedScoreRevision,
+    });
+    expect((await reshuffle("another-match", 1)).status).toBe(409);
+    expect((await reshuffle(f.current.id, 0)).status).toBe(409);
+    expect((await reshuffle(f.current.id, 1)).status).toBe(400);
+    expect(await prisma.match.findUnique({ where: { id: f.current.id } })).toEqual(saved);
+    expect(await prisma.court.findUnique({ where: { id: f.courtId } })).toMatchObject({ currentMatchId: f.current.id });
+  });
+
+  it("rolls back the replacement if the score changes after the matchup was selected", async () => {
+    const f = await setup();
+    const { replaceCurrentCourtMatchAssignment } = await import("./assignments");
+    const saved = await prisma.match.update({
+      where: { id: f.current.id }, data: { scoreRevision: 1, team1Score: 21, team2Score: 18 },
+    });
+    await expect(replaceCurrentCourtMatchAssignment({
+      sessionId: f.sessionId, courtId: f.courtId, currentMatchId: f.current.id,
+      expectedScoreRevision: f.current.scoreRevision,
+      matchType: "WOMENS", selectedIds: f.lower,
+      partition: { team1: [f.lower[0], f.lower[1]], team2: [f.lower[2], f.lower[3]] },
+    })).rejects.toMatchObject({ status: 409 });
+    expect(await prisma.match.findUnique({ where: { id: f.current.id } })).toEqual(saved);
+    expect(await prisma.court.findUnique({ where: { id: f.courtId } })).toMatchObject({ currentMatchId: f.current.id });
+  });
+
+  it("keeps the original match if a new queue reserves a selected player", async () => {
+    const f = await setup();
+    const { replaceCurrentCourtMatchAssignment } = await import("./assignments");
+    const queued = await prisma.queuedMatch.create({ data: {
+      sessionId: f.sessionId,
+      team1Player1Id: f.upper[0], team1Player2Id: f.lower[0],
+      team2Player1Id: f.upper[1], team2Player2Id: f.lower[1],
+    } });
+    await expect(replaceCurrentCourtMatchAssignment({
+      sessionId: f.sessionId, courtId: f.courtId, currentMatchId: f.current.id,
+      expectedScoreRevision: f.current.scoreRevision,
+      matchType: "WOMENS", selectedIds: f.lower,
+      partition: { team1: [f.lower[0], f.lower[1]], team2: [f.lower[2], f.lower[3]] },
+    })).rejects.toMatchObject({ status: 409, message: expect.stringContaining("reserved") });
+    expect(await prisma.match.findUnique({ where: { id: f.current.id } })).toEqual(f.current);
+    expect(await prisma.court.findUnique({ where: { id: f.courtId } })).toMatchObject({ currentMatchId: f.current.id });
+    expect(await prisma.queuedMatch.findUnique({ where: { sessionId: f.sessionId } })).toEqual(queued);
   });
 
   it("keeps the requested side when Club Play reselects players at court opening", async () => {

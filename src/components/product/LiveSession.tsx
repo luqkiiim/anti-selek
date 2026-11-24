@@ -34,6 +34,7 @@ import {
 } from "@/types/enums";
 import { api, ApiError, useResource, useAction } from "./api";
 import { getDoublesTypeLabel } from "@/lib/courtCreate";
+import { buildCourtReshuffleOptions, type AutomaticCourtOption } from "@/components/session/courtCreateOptions";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { resolveMatchScoreInput } from "@/lib/matchRules";
 import { useSessionController } from "./useSessionController";
@@ -131,7 +132,7 @@ type ManualTarget =
   | { kind: "court"; courtId: string }
   | { kind: "queue"; replaceQueuedMatch: boolean };
 type ControlConfirmation =
-  | { kind: "court-reshuffle"; courtId: string }
+  | { kind: "court-reshuffle"; courtId: string; matchId: string; scoreRevision?: number; format: AutomaticCourtOption }
   | { kind: "court-undo"; courtId: string }
   | { kind: "queue-clear" }
   | { kind: "court-player-rest"; courtId: string; matchId: string; playerId: string };
@@ -179,6 +180,10 @@ type QueuedMatchOverlay = {
   expectedId: string | null;
   conflictingRefreshes: number;
 };
+function canReshuffleMatch(match: Match | null) {
+  return match?.status === MatchStatus.PENDING || match?.status === MatchStatus.IN_PROGRESS;
+}
+
 function standingsKey(rawSession: SessionData | null) {
   return JSON.stringify([
     rawSession?.status, rawSession?.type, rawSession?.mode, rawSession?.resultsRevision,
@@ -766,6 +771,17 @@ export default function LiveSession({
   }
   const courtControl = s?.courts.find((court) => court.id === courtControlId) ?? null;
   const controlMatch = courtControl?.currentMatch ?? null;
+  const reshuffle = confirmation?.kind === "court-reshuffle" ? confirmation : null;
+  const reshuffleOptions = reshuffle && s ? buildCourtReshuffleOptions({
+    players: s.players,
+    courts: s.courts,
+    queuedMatch: s.queuedMatch ?? null,
+  }, reshuffle.courtId) : [];
+  const reshuffleIsCurrent = !!reshuffle && controlMatch?.id === reshuffle.matchId &&
+    controlMatch.scoreRevision === reshuffle.scoreRevision && canReshuffleMatch(controlMatch);
+  const reshuffleAvailable = reshuffleIsCurrent && reshuffleOptions.some(
+    option => option.key === reshuffle?.format && !option.disabled,
+  );
   const controlQueue = s?.queuedMatch ?? null;
   function getManualPlayers(selectionTarget: ManualTarget | null): SessionData["players"] {
     if (!s || !selectionTarget) return [];
@@ -1121,6 +1137,9 @@ export default function LiveSession({
       await generateMatch({
         courtId: confirmation.courtId,
         forceReshuffle: true,
+        expectedMatchId: confirmation.matchId,
+        ...(confirmation.scoreRevision !== undefined ? { expectedScoreRevision: confirmation.scoreRevision } : {}),
+        ...(confirmation.format === "BEST" ? {} : { matchType: confirmation.format }),
       });
       return;
     }
@@ -2085,8 +2104,14 @@ export default function LiveSession({
                   <button
                     type="button"
                     className="court-action-row"
-                    disabled={action.busy}
-                    onClick={() => startConfirmedControl({ kind: "court-reshuffle", courtId: courtControl.id })}
+                    disabled={action.busy || !canReshuffleMatch(controlMatch)}
+                    onClick={() => startConfirmedControl({
+                      kind: "court-reshuffle",
+                      courtId: courtControl.id,
+                      matchId: controlMatch.id,
+                      scoreRevision: controlMatch.scoreRevision,
+                      format: "BEST",
+                    })}
                   >
                     Reshuffle match
                   </button>
@@ -2119,7 +2144,32 @@ export default function LiveSession({
               {confirmation.kind === "court-player-rest" ? (
                 <p>This counts as your turn.</p>
               ) : confirmation.kind === "court-reshuffle" ? (
-                <p>Choose a different lineup for {courtControl?.label || `Court ${courtControl?.courtNumber ?? ""}`}? The current four players return to the pool.</p>
+                <>
+                  <fieldset className="court-action-list reshuffle-formats" disabled={action.busy || !reshuffleIsCurrent}>
+                    <legend className="sr-only">Match format</legend>
+                    {reshuffleOptions.map(option => (
+                      <label className="court-action-row reshuffle-format" key={option.key}>
+                        <input
+                          type="radio"
+                          name="court-reshuffle-format"
+                          checked={confirmation.format === option.key}
+                          disabled={option.disabled}
+                          onChange={() => {
+                            setConfirmation({ ...confirmation, format: option.key });
+                            action.setError("");
+                          }}
+                        />
+                        <span>
+                          {option.label}
+                          {option.detail && <small>{option.detail}</small>}
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                  {reshuffleIsCurrent
+                    ? <p>Reshuffling discards any draft scores.</p>
+                    : <p role="status">The match or score changed. Reopen court options to try again.</p>}
+                </>
               ) : confirmation.kind === "court-undo" ? (
                 <p>Return the four players on {courtControl?.label || `Court ${courtControl?.courtNumber ?? ""}`} to the available pool and clear this court?</p>
               ) : (
@@ -2127,7 +2177,7 @@ export default function LiveSession({
               )}
               <button
                 className="primary"
-                disabled={action.busy}
+                disabled={action.busy || (confirmation.kind === "court-reshuffle" && !reshuffleAvailable)}
                 onClick={() => void action.run(confirmControlAction, () => {
                   finishControlAction();
                 }, { backgroundRefresh: confirmation.kind === "court-undo" })}

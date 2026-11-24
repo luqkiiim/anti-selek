@@ -38,7 +38,7 @@ import {
   selectSingleCourtMatchRespectingSkips,
 } from "../generate-match/selection";
 import { resolveSocialCandidatePolicy } from "../generate-match/socialCandidateAcceptance";
-import { assertAssignmentsAvailable, assertQueuedDoublesPlayers, createQueuedMatchAssignment, getQueuedMatchAssignmentVersion } from "../generate-match/assignments";
+import { assertAssignmentsAvailable, assertDoublesPlayersEligible, createQueuedMatchAssignment, getQueuedMatchAssignmentVersion } from "../generate-match/assignments";
 import {
   GenerateMatchError,
   loadSessionRecord,
@@ -369,7 +369,7 @@ async function validateTypedQueueSelection(
   partition: ManualMatchTeams,
   matchType: SideSpecificCourtCreateType,
 ) {
-  await assertQueuedDoublesPlayers(tx, sessionId, partition, matchType);
+  await assertDoublesPlayersEligible(tx, sessionId, partition, matchType);
   await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds: [...partition.team1, ...partition.team2] }], { allowQueuedPlayers: true });
 }
 

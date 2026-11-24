@@ -1397,6 +1397,33 @@
 .sheet-content .court-action-row + .court-action-row {
   border-top: 1px solid var(--line);
 }
+.sheet-content .reshuffle-formats {
+  min-width: 0;
+  padding: 0;
+  margin: 0 0 10px;
+}
+.sheet-content .reshuffle-format {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.reshuffle-format input {
+  margin: 0;
+  accent-color: var(--purple);
+}
+.sheet-content .reshuffle-format:has(input:checked) {
+  background: #f5eefb;
+}
+.reshuffle-format:has(input:disabled) {
+  cursor: default;
+  color: var(--muted);
+}
+.reshuffle-format small {
+  display: block;
+  color: var(--muted);
+  font-weight: 600;
+}
 .sheet-content p {
   margin: 0 0 10px;
 }

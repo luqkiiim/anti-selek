@@ -20,6 +20,7 @@ export function parseGenerateMatchRequest(
     excludedUserId,
     restUserId,
     expectedMatchId,
+    expectedScoreRevision,
     replaceUserId,
     matchType,
   } = (typeof body === "object" && body !== null ? body : {}) as {
@@ -31,6 +32,7 @@ export function parseGenerateMatchRequest(
     excludedUserId?: unknown;
     restUserId?: unknown;
     expectedMatchId?: unknown;
+    expectedScoreRevision?: unknown;
     replaceUserId?: unknown;
     matchType?: unknown;
   };
@@ -56,14 +58,19 @@ export function parseGenerateMatchRequest(
   if (restUserId !== undefined && typeof restUserId !== "string") {
     throw new GenerateMatchError(400, "Invalid player to rest.");
   }
-  if (expectedMatchId !== undefined && typeof expectedMatchId !== "string") {
-    throw new GenerateMatchError(400, "Invalid match to rest.");
+  if (expectedMatchId !== undefined && (typeof expectedMatchId !== "string" || !expectedMatchId.trim())) {
+    throw new GenerateMatchError(400, "Invalid match to reshuffle.");
   }
   if (restUserId && (!forceReshuffle || restUserId !== excludedUserId || !expectedMatchId)) {
     throw new GenerateMatchError(400, "Resting a player requires a current match and excluded player.");
   }
-  if (!restUserId && expectedMatchId !== undefined) {
-    throw new GenerateMatchError(400, "Expected match ID is only supported when resting a player.");
+  if (expectedMatchId !== undefined && !forceReshuffle) {
+    throw new GenerateMatchError(400, "Expected match ID is only supported when reshuffling.");
+  }
+  if (expectedScoreRevision !== undefined &&
+    (!forceReshuffle || !expectedMatchId || excludedUserId !== undefined ||
+      typeof expectedScoreRevision !== "number" || !Number.isSafeInteger(expectedScoreRevision) || expectedScoreRevision < 0)) {
+    throw new GenerateMatchError(400, "Invalid score revision for this reshuffle.");
   }
   if (replaceUserId !== undefined && typeof replaceUserId !== "string") {
     throw new GenerateMatchError(400, "Invalid replacement player.");
@@ -88,16 +95,18 @@ export function parseGenerateMatchRequest(
   }
   if (
     matchType &&
-    (forceReshuffle ||
-      undoCurrentMatch ||
+    (undoCurrentMatch ||
       manualTeams ||
       excludedUserId ||
       replaceUserId)
   ) {
     throw new GenerateMatchError(
       400,
-      "Men's/Women's court creation cannot be combined with reshuffle, undo, replace player, or manual match creation."
+      "A doubles format is supported for creating a match or reshuffling the whole court."
     );
+  }
+  if (forceReshuffle && matchType && !expectedMatchId) {
+    throw new GenerateMatchError(400, "Confirm which match to reshuffle.");
   }
   if (manualTeams && (forceReshuffle || undoCurrentMatch || excludedUserId || replaceUserId)) {
     throw new GenerateMatchError(
@@ -123,6 +132,7 @@ export function parseGenerateMatchRequest(
     excludedUserId,
     restUserId,
     expectedMatchId,
+    expectedScoreRevision,
     replaceUserId,
     matchType: matchType as SideSpecificCourtCreateType | undefined,
   };

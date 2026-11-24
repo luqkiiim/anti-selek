@@ -486,11 +486,14 @@ describe("LiveSession score and player controls", () => {
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')?.click());
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reshuffle match")?.click());
     expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Reshuffle this match?");
+    expect(container.querySelector<HTMLInputElement>('input[type="radio"]:checked')?.parentElement?.textContent).toBe("Best Match");
+    expect(mocks.api).not.toHaveBeenCalled();
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reshuffle match")?.click());
 
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", {
       courtId: "court-1",
       forceReshuffle: true,
+      expectedMatchId: currentMatch.id,
     });
   });
 

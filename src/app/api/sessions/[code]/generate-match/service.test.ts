@@ -600,7 +600,7 @@ describe("generate match service", () => {
       ).toThrowError(
         new GenerateMatchError(
           400,
-          "Men's/Women's court creation cannot be combined with reshuffle, undo, replace player, or manual match creation."
+          "A doubles format is supported for creating a match or reshuffling the whole court."
         )
       );
     });

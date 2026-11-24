@@ -53,7 +53,7 @@ export async function assertAssignmentsAvailable(
   assignments: Array<{
     selectedIds: string[];
   }>,
-  options: { allowQueuedPlayers?: boolean } = {},
+  options: { allowQueuedPlayers?: boolean; strictAvailability?: boolean } = {},
 ) {
   const allSelectedIds = getAllSelectedIds(assignments);
   const uniqueSelectedIds = new Set(allSelectedIds);
@@ -68,15 +68,22 @@ export async function assertAssignmentsAvailable(
   const source = await tx.session.findUnique({
     where: { id: sessionId }, select: { collaborationVersion: true, matchmakingStyle: true },
   });
-  if (source && (isUpgradedCollaboration(source) || source.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY)) {
-    const selected = await tx.sessionPlayer.findMany({ where: { sessionId, playerId: { in: [...uniqueSelectedIds] } }, select: { playerId: true, isPaused: true } });
-    if (selected.length !== uniqueSelectedIds.size || selected.some(player => player.isPaused)) {
+  if (options.strictAvailability ||
+    (source && (isUpgradedCollaboration(source) || source.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY))) {
+    const selected = await tx.sessionPlayer.findMany({
+      where: { sessionId, playerId: { in: [...uniqueSelectedIds] } },
+      select: { playerId: true, isPaused: true, ...(options.strictAvailability ? { skipNextMatchAt: true } : {}) },
+    });
+    if (selected.length !== uniqueSelectedIds.size || selected.some(player =>
+      player.isPaused || (options.strictAvailability && hasPendingSkipNextMatch(player))
+    )) {
       throw new GenerateMatchError(409, "Selected players are no longer available. Refresh and try again.");
     }
   }
   if (!options.allowQueuedPlayers) {
     const queue = await tx.queuedMatch.findUnique({ where: { sessionId } });
-    const protectsReservation = queue?.requestedMatchType || source?.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY;
+    const protectsReservation = options.strictAvailability ||
+      queue?.requestedMatchType || source?.matchmakingStyle === SessionMatchmakingStyle.CLUB_PLAY;
     if (queue && protectsReservation && [queue.team1Player1Id, queue.team1Player2Id, queue.team2Player1Id, queue.team2Player2Id]
       .some((playerId) => uniqueSelectedIds.has(playerId))) {
       throw new GenerateMatchError(409, "A selected player is already reserved for the queued match. Refresh and try again.");
@@ -309,6 +316,8 @@ export async function replaceCurrentCourtMatchAssignment({
   actor,
   courtId,
   currentMatchId,
+  expectedScoreRevision,
+  matchType,
   selectedIds,
   partition,
   team1ClubId,
@@ -326,6 +335,8 @@ export async function replaceCurrentCourtMatchAssignment({
   actor?: SessionMutationActor;
   courtId: string;
   currentMatchId: string;
+  expectedScoreRevision?: number;
+  matchType?: SideSpecificCourtCreateType;
   selectedIds: string[];
   partition: ManualMatchTeams;
   team1ClubId?: string | null;
@@ -340,6 +351,16 @@ export async function replaceCurrentCourtMatchAssignment({
   releasePendingUserIds?: string[];
 }) {
   return sessionMatchMutationTransaction(prisma, sessionId, actor, async (tx) => {
+    const strictAvailability = expectedScoreRevision !== undefined;
+    if (strictAvailability) {
+      const currentCourt = await tx.court.findFirst({
+        where: { id: courtId, sessionId, isActive: true, currentMatchId },
+        select: { id: true },
+      });
+      if (!currentCourt) {
+        throw new GenerateMatchError(409, "This court already changed. Please refresh and try again.");
+      }
+    }
     const matchTimingDelegate = tx.match as unknown as MatchTimingDelegate;
     const replacedMatch = matchTimingDelegate.findUnique
       ? await matchTimingDelegate.findUnique({
@@ -351,6 +372,7 @@ export async function replaceCurrentCourtMatchAssignment({
       where: {
         id: currentMatchId,
         sessionId,
+        ...(strictAvailability ? { scoreRevision: expectedScoreRevision } : {}),
         status: {
           in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS],
         },
@@ -360,7 +382,7 @@ export async function replaceCurrentCourtMatchAssignment({
     if (deletedMatch.count === 0) {
       throw new GenerateMatchError(
         409,
-        "This match is no longer available to reshuffle."
+        "The match or its score changed. Refresh and confirm the reshuffle again."
       );
     }
 
@@ -379,7 +401,8 @@ export async function replaceCurrentCourtMatchAssignment({
       );
     }
 
-    await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds }]);
+    await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds }], { strictAvailability });
+    if (matchType) await assertDoublesPlayersEligible(tx, sessionId, partition, matchType);
     if (!await isBalancedMatchTypeSourceCurrent(tx, sessionId, [{ partition, matchmakingReasonJson }]) ||
       !await isLevelMatchTypeSourceCurrent(tx, sessionId, [{ matchmakingReasonJson }]) ||
       !await isClubPlayDecisionCurrent(tx, sessionId, [{ matchmakingReasonJson }])) {
@@ -428,7 +451,7 @@ export async function replaceCurrentCourtMatchAssignment({
   });
 }
 
-export async function assertQueuedDoublesPlayers(
+export async function assertDoublesPlayersEligible(
   tx: Prisma.TransactionClient,
   sessionId: string,
   partition: ManualMatchTeams,
@@ -507,7 +530,7 @@ export async function createQueuedMatchAssignment({
 
     if (isSideSpecificCourtCreateType(previousQueue?.requestedMatchType)) {
       if (previousQueue.refreshToken) throw new GenerateMatchError(409, "The queued match is being refreshed. Try again.");
-      await assertQueuedDoublesPlayers(tx, sessionId, partition, previousQueue.requestedMatchType);
+      await assertDoublesPlayersEligible(tx, sessionId, partition, previousQueue.requestedMatchType);
     }
 
     if (isAutomaticClubPlayReason(matchmakingReasonJson) &&

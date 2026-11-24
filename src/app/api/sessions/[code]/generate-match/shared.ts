@@ -26,6 +26,7 @@ export interface ParsedGenerateMatchRequest {
   excludedUserId?: string;
   restUserId?: string;
   expectedMatchId?: string;
+  expectedScoreRevision?: number;
   replaceUserId?: string;
   matchType?: SideSpecificCourtCreateType;
 }
