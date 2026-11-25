@@ -22,6 +22,7 @@ import { clubHref, getClubTab, navigateApp } from "@/lib/appNavigation";
 import { BrowseClubs } from "./BrowseClubs";
 import type { AccountUser } from "./AccountSettings";
 import { JoinClubAdmission } from "./JoinClubAdmission";
+import type { ClubJoinRequestListItem } from "./admissionTypes";
 
 const AccountSettings = dynamic(() => import("./AccountSettings").then(module => module.AccountSettings));
 
@@ -42,7 +43,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const clubStore = useClubDataStore();
   const destination = useRef<string | null>(null);
-  const accountReady = status !== "unauthenticated" && !!auth?.user?.id;
+  const userId = auth?.user?.id;
+  const accountReady = status !== "unauthenticated" && !!userId;
   const account = useResource<{ user: AccountUser }>(accountReady ? "/api/user/me" : null);
   const clubs = useResource<DashboardClub[]>(
     accountReady ? "/api/clubs" : null,
@@ -55,10 +57,25 @@ export default function HomeScreen() {
   const [selectionResolved, setSelectionResolved] = useState(false);
   const [joinAccountOpen, setJoinAccountOpen] = useState(false);
   const action = useAction(clubs.refresh);
+  const showRequests = selectionResolved && !selected && status === "authenticated" && !!userId && !auth?.user?.isQuickAccess;
+  const { data: requestSummary, refresh: refreshRequests } = useResource<{ joinRequests: ClubJoinRequestListItem[] }>(
+    showRequests ? "/api/clubs/join-requests?view=summary" : null,
+  );
+  const joinRequests = requestSummary?.joinRequests ?? [];
+  const refreshClubs = clubs.refresh;
+
+  useEffect(() => {
+    if (!showRequests) return;
+    function refreshChooser() {
+      if (document.visibilityState === "hidden") return;
+      void Promise.allSettled([refreshClubs(), refreshRequests()]);
+    }
+    window.addEventListener("focus", refreshChooser);
+    return () => window.removeEventListener("focus", refreshChooser);
+  }, [showRequests, refreshClubs, refreshRequests]);
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/signin?callbackUrl="+encodeURIComponent(location.pathname+location.search));
   }, [status, router]);
-  const userId = auth?.user?.id;
   const preparedStartup = useRef<string | null>(null);
   useEffect(() => {
     if (!clubStore || !userId || status !== "authenticated" || preparedStartup.current || destination.current) return;
@@ -75,7 +92,7 @@ export default function HomeScreen() {
     } catch {}
   }, [clubStore, userId, status, router]);
   useEffect(() => {
-    if (!clubs.data || !userId || status !== "authenticated" || destination.current) return;
+    if (!clubs.data || !userId || status !== "authenticated" || destination.current || selectionResolved) return;
     const availableClubs=clubs.data;
     if (preparedStartup.current && !availableClubs.some(c => c.id === preparedStartup.current)) {
       clubStore?.cancelPreparedClub(preparedStartup.current);
@@ -120,7 +137,7 @@ export default function HomeScreen() {
     });return()=>{cancelled=true};
     // Selection changes only on authoritative club reads or a consumed link.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clubs.data, userId, status, auth?.user?.canBrowseAllClubs]);
+  }, [clubs.data, userId, status, auth?.user?.canBrowseAllClubs, selectionResolved]);
   function select(id: string, tab = "club", replace = false, known?: ClubIdentity, globalView = false) {
     const identity = known ?? clubs.data?.find(c => c.id === id) ?? clubStore?.identity(id) ?? { id, name: "" };
     destination.current = id;
@@ -208,6 +225,25 @@ export default function HomeScreen() {
                   <CaretRight size={20} />
                 </button>
               ))}
+              {joinRequests.length > 0 && (
+                <section className="chooser-requests" aria-labelledby="chooser-requests-title">
+                  <h2 id="chooser-requests-title">Join requests</h2>
+                  {joinRequests.map(({ club, status }) => (
+                    <button
+                      className="club-choice chooser-request"
+                      key={club.id}
+                      type="button"
+                      onClick={() => { setValue(club.id); setForm("join"); }}
+                    >
+                      <span>
+                        <strong>{club.name}</strong>
+                        <small>{status === "PENDING" ? "Waiting for approval" : "Declined"}</small>
+                      </span>
+                      <CaretRight size={20} aria-hidden="true" />
+                    </button>
+                  ))}
+                </section>
+              )}
               {auth?.user?.canBrowseAllClubs && <button className="secondary" onClick={() => setBrowseOpen(true)}>Browse clubs</button>}
               {status === "authenticated" && account.data && !account.data.user.isQuickAccess && (
                 <div className="chooser-actions">
@@ -301,7 +337,10 @@ export default function HomeScreen() {
         initialValue={value}
         accountName={account.data?.user.name || auth?.user?.name || ""}
         accountGender={account.data?.user.gender || ""}
-        onClose={() => setForm("")}
+        onClose={() => {
+          setForm("");
+          void refreshRequests().catch(() => {});
+        }}
         onOpenClub={(id, identity) => {
           void Promise.allSettled([account.refresh(), clubs.refresh()]);
           select(id, "club", false, identity);

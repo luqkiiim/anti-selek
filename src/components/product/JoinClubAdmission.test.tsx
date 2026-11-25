@@ -121,7 +121,7 @@ describe("JoinClubAdmission", () => {
     root = createRoot(container);
     discovery = makeDiscovery({ requests: [makeRequest({ status: "REJECTED" })] });
     await openSheet();
-    expect(container.textContent).toContain("Your last request was declined.");
+    expect(container.textContent).toContain("Request declined");
 
     await act(async () => root.unmount());
     root = createRoot(container);

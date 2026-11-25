@@ -80,7 +80,7 @@ export default function Admin({
   function setTab(next: string) { if (onRoute) onRoute(changeAppQuery(href, { tab: next.toLowerCase() })); else setLocalTab(next); }
   const [alternatePicker, setAlternatePicker] = useState<Record<string, boolean>>({});
   const [selectedCandidate, setSelectedCandidate] = useState<Record<string, string>>({});
-  const [rejectionReasons, setRejectionReasons] = useState<Record<string, string>>({});
+  const [declineNotes, setDeclineNotes] = useState<Record<string, string>>({});
   const [edit, setEdit] = useState<ClubPageMember | null>(null),
     [name, setName] = useState(""),
     [rating, setRating] = useState("1000"),
@@ -124,7 +124,7 @@ export default function Admin({
     const id = selectedCandidate[request.id] ?? request.requestedPlayerId ?? "";
     return candidatesFor(request).find(candidate => candidate.id === id) ?? null;
   }
-  function reviewAdmission(request: AdmissionRequest, body: { action: "APPROVE" | "REJECT"; playerId?: string; asNew?: boolean; reason?: string }) {
+  function reviewAdmission(request: AdmissionRequest, body: { action: "APPROVE" | "REJECT"; playerId?: string; asNew?: boolean; playerNote?: string }) {
     void action.run(signal => adminApi(endpoint + "/join-requests/" + request.id, "PATCH", { ...body, revision: request.revision }, { signal }), () => {
       joins.update(current => ({ ...current, requests: current.requests.filter(item => item.id !== request.id) }));
     });
@@ -287,11 +287,11 @@ export default function Admin({
                   {!r.requestedPlayerId && !alternatePicker[r.id] ? <button type="button" className="text-button admission-change-candidate" onClick={() => setAlternatePicker(current => ({ ...current, [r.id]: true }))}>Choose an existing Player instead</button> : null}
                   {alternatePicker[r.id] && <label className="field-label admission-candidate-picker">Local profile to connect<select aria-label={`Player for ${r.requesterName ?? r.name ?? "request"}`} value={selectedCandidate[r.id] ?? r.requestedPlayerId ?? ""} onChange={event => setSelectedCandidate(current => ({ ...current, [r.id]: event.target.value }))}><option value="">Select a Player</option>{candidatesFor(r).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}{candidate.elo !== undefined ? ` · ${candidate.elo} rating` : ""}</option>)}</select></label>}
                   {chosenPlayer(r) && <p className="admission-selected-candidate">Selected: <strong>{chosenPlayer(r)?.name}</strong>{chosenPlayer(r)?.matchesPlayed !== undefined ? ` · ${chosenPlayer(r)?.matchesPlayed} matches` : ""}</p>}
-                  <label className="field-label admission-rejection-reason">Rejection note (optional)<textarea rows={2} maxLength={1000} value={rejectionReasons[r.id] ?? ""} onChange={event => setRejectionReasons(current => ({ ...current, [r.id]: event.target.value }))} placeholder="Explain what the requester can correct" /></label>
+                  <label className="field-label admission-rejection-reason">Note to the player (optional)<textarea rows={2} maxLength={1000} value={declineNotes[r.id] ?? ""} onChange={event => setDeclineNotes(current => ({ ...current, [r.id]: event.target.value }))} /></label>
                   <div className="admission-review-actions">
                     {chosenPlayer(r) && <button type="button" className="primary" disabled={action.busy || (!!r.conflict && (selectedCandidate[r.id] ?? r.requestedPlayerId) === r.requestedPlayerId)} onClick={() => reviewAdmission(r, { action: "APPROVE", playerId: selectedCandidate[r.id] ?? r.requestedPlayerId! })}>Approve {chosenPlayer(r)?.name}</button>}
                     <button type="button" className="secondary" disabled={action.busy || r.currentAccountProfile?.isComplete === false} onClick={() => reviewAdmission(r, { action: "APPROVE", asNew: true })}>Approve as new local profile</button>
-                    <button type="button" className="secondary admission-reject" disabled={action.busy} onClick={() => reviewAdmission(r, { action: "REJECT", reason: rejectionReasons[r.id]?.trim() || undefined })}>Reject request</button>
+                    <button type="button" className="secondary admission-reject" disabled={action.busy} onClick={() => reviewAdmission(r, { action: "REJECT", playerNote: declineNotes[r.id]?.trim() || undefined })}>Reject request</button>
                   </div>
                 </article>
               ))}
@@ -423,9 +423,9 @@ export default function Admin({
               </button>
             </>
           ) : sheet === "invite" ? (
-            <>
-              <p>Share access to {club.name}.</p>
+            joins.data?.allowJoinRequests ? <>
               <div className="sample-link">{invite}</div>
+              {club.isPasswordProtected && <p className="muted">Share the club join code separately.</p>}
               <button
                 className="primary"
                 onClick={() =>
@@ -438,8 +438,11 @@ export default function Admin({
                 <LinkSimple size={19} />
                 Copy invite link
               </button>
-              <p className="muted">An admin approves each request.</p>
-            </>
+            </> : joins.data ? (
+              <p>Turn on join requests to share this invite.</p>
+            ) : !joins.error && (
+              <p role="status">Checking join requests…</p>
+            )
           ) : (
             <p className="muted">Choose a player or club setting to continue.</p>
           )}

@@ -58,6 +58,13 @@ export function getSafeCallbackUrl(
   }
 }
 
+export function isClubInvitationCallback(value: string): boolean {
+  const safe = getSafeCallbackUrl(value, "");
+  if (!safe) return false;
+  const { pathname, searchParams } = new URL(safe, "https://anti-selek.local");
+  return pathname === "/" && !!searchParams.get("join")?.trim();
+}
+
 export function withCallbackUrl(
   pathname: string,
   callbackUrl: string | null | undefined

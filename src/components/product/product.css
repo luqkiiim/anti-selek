@@ -1755,6 +1755,28 @@
   font-size: 11px;
   margin-top: 8px;
 }
+.chooser-requests {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.chooser-requests h2 {
+  margin: 0 0 2px;
+  font-size: 16px;
+}
+.product-root .club-choice.chooser-request {
+  min-height: 60px;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+.chooser-request > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.chooser-request > svg {
+  flex-shrink: 0;
+}
 .chooser-actions {
   display: flex;
   gap: 10px;

@@ -102,7 +102,7 @@ export async function submitClubAdmission(db: Db, input: SubmitAdmission, entryP
 
 export interface ReviewAdmission {
   clubId: string; requestId: string; reviewerUserId: string; isGlobalAdmin?: boolean;
-  action: "APPROVE" | "REJECT" | "CANCEL"; playerId?: string | null; asNew?: boolean; revision?: number; reason?: string;
+  action: "APPROVE" | "REJECT" | "CANCEL"; playerId?: string | null; asNew?: boolean; revision?: number; reason?: string; playerNote?: string;
   confirmRestoreAccess?: boolean; retireEmptyPlayerId?: string;
   /** Set only by the authorized invitation executor when cancelling an exact obsolete recovery request. */
   supersededByInvitationId?: string;
@@ -166,7 +166,14 @@ export async function reviewClubAdmission(db: Db, input: ReviewAdmission) {
     // The local claim event grants MEMBER access or preserves an active grant.
   }
   const result = await db.clubAdmissionRequest.update({ where: { id: request.id }, data: { status: desired, approvedPlayerId, decision, reviewedByUserId: input.reviewerUserId, reviewedAt: new Date() }, include: admissionInclude });
-  await event(db, request.id, input.reviewerUserId, input.action, revision, { requestedPlayerId: request.requestedPlayerId, approvedPlayerId, decision, reason: input.reason ?? null });
+  const playerNote = input.action === "REJECT" ? normalizedOptional(input.playerNote) : null;
+  await event(db, request.id, input.reviewerUserId, input.action, revision, {
+    requestedPlayerId: request.requestedPlayerId,
+    approvedPlayerId,
+    decision,
+    reason: input.reason ?? null,
+    ...(playerNote ? { playerNote } : {}),
+  });
   return result;
 }
 

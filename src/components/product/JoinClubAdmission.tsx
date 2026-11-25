@@ -270,7 +270,7 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
       {isMember ? <div className="admission-status is-approved" role="status"><strong>You’re already a member.</strong><span>Your Player profile is connected to this club.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id, discovery.club)}>Open club</button></div>
         : currentPending ? <div className="admission-status" role="status"><strong>Waiting for admin approval</strong><span>An admin will review your request to {discovery.club.name}.</span><small>Sent {formatProfileDate(currentPending.createdAt)}</small><button className="text-button" type="button" onClick={() => void loadClub(discovery.club.id)}>Refresh status</button><button className="text-button" type="button" onClick={() => void cancel(currentPending)}>Cancel request</button></div>
         : discovery.identityReviewRequired ? <div className="admission-status" role="status"><strong>Ask an admin to restore your Player profile.</strong><span>Your existing profile needs an admin review before you can join or open this club.</span></div>
-        : mostRecentRequest?.status === "REJECTED" ? <div className="admission-status is-rejected" role="status"><strong>Your last request was declined.</strong><span>You can send a new request if your Player details have changed.</span></div>
+        : mostRecentRequest?.status === "REJECTED" ? <div className="admission-status is-rejected" role="status"><strong>Request declined</strong>{mostRecentRequest.playerNote && <p className="admission-player-note">{mostRecentRequest.playerNote}</p>}</div>
         : mostRecentRequest?.status === "APPROVED" ? <div className="admission-status" role="status"><strong>Your request was approved.</strong><span>Ask an admin if your club access has changed.</span><button className="primary" type="button" onClick={() => onOpenClub(discovery.club.id, discovery.club)}>Open club</button></div>
         : null}
 
@@ -313,7 +313,17 @@ export function JoinClubAdmission({ open, initialValue, accountName, accountGend
             <details className="admission-note"><summary>Add note (optional)</summary><label className="field-label">Note for the admin<textarea rows={3} maxLength={1000} value={note} onChange={event => setNote(event.target.value)} /></label></details>
           </>}
       </>}
-      <button type="button" className="text-button admission-change-club" onClick={() => { requestVersion.current += 1; setPassword(""); setDiscovery(null); setLatestRequest(null); setSelection(null); setMode("start"); setError(""); }}>Find a different club</button>
+      <button type="button" className="text-button admission-change-club" disabled={busy} onClick={() => {
+        requestVersion.current += 1;
+        setValue("");
+        setPassword("");
+        setDiscovery(null);
+        setLatestRequest(null);
+        setSelection(null);
+        setMode("start");
+        setNote("");
+        setError("");
+      }}>Find a different club</button>
     </>}
   </Sheet>;
 }

@@ -69,6 +69,57 @@ it("requires an account and blocks quick guest writes", async () => {
   expect((await POST(request(newInput))).status).toBe(403);
   expect(await db.player.count()).toBe(1);
 });
+it("lists the requester's latest actionable status and shares only their explicitly addressed decline note", async () => {
+  const requester = { id: "account-member" };
+  const admin = { id: "account-owner" };
+  const summaryUrl = "http://localhost/api/clubs/join-requests?view=summary";
+  const clubUrl = "http://localhost/api/clubs/join-requests?clubId=club-a";
+  const read = async (url: string) => (await discovery(new Request(url))).json();
+  const contextFor = (requestId: string) => ({ params: Promise.resolve({ id: "club-a", requestId }) });
+
+  actor = requester;
+  const older = await (await POST(request(newInput))).json();
+  actor = admin;
+  expect((await review(request({ action: "REJECT", reason: "Old private note" }), contextFor(older.id))).status).toBe(200);
+  actor = requester;
+  expect((await read(clubUrl)).requests[0]).not.toHaveProperty("playerNote");
+
+  const current = await (await POST(request(newInput))).json();
+  expect((await read(summaryUrl)).joinRequests).toEqual([
+    { club: { id: "club-a", name: "Club A" }, status: "PENDING" },
+  ]);
+  const result = { action: "REJECT", reason: "Internal review details", playerNote: "Please use your roster name." };
+  expect((await review(request(result), contextFor(current.id))).status).toBe(403);
+
+  actor = admin;
+  expect((await review(request(result), contextFor(current.id))).status).toBe(200);
+  await db.club.update({ where: { id: "club-a" }, data: { isPasswordProtected: true, passwordHash: "fixture-hash" } });
+
+  actor = requester;
+  expect((await read(summaryUrl)).joinRequests).toEqual([
+    { club: { id: "club-a", name: "Club A" }, status: "REJECTED" },
+  ]);
+  const own = await read(clubUrl);
+  expect(own).toMatchObject({
+    requiresJoinCode: true, players: [], requests: [
+      expect.objectContaining({ id: current.id, playerNote: result.playerNote }),
+      expect.objectContaining({ id: older.id }),
+    ],
+  });
+  expect(JSON.stringify(own)).not.toContain("private note");
+  expect(JSON.stringify(own)).not.toContain(result.reason);
+
+  actor = { id: "account-other" };
+  expect((await read(summaryUrl)).joinRequests).toEqual([]);
+  expect((await read(clubUrl)).requests).toEqual([]);
+
+  actor = requester;
+  await db.club.update({ where: { id: "club-a" }, data: { isPasswordProtected: false, passwordHash: null } });
+  const later = await (await POST(request(newInput))).json();
+  expect((await review(request({ action: "CANCEL" }), contextFor(later.id))).status).toBe(200);
+  expect((await read(summaryUrl)).joinRequests).toEqual([]);
+});
+
 it("creates an account admission without creating sporting identity until approval", async () => {
   actor = { id: "account-member" };
   const first = await (await POST(request(newInput))).json();

@@ -2,7 +2,8 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { expect, test } from "@playwright/test";
 import { e2eBaseURL, e2eDatabaseUrl } from "./env";
-import { adminUserId, signIn, signInAsAdmin } from "./helpers";
+import { adminUserId, hostClubId, signIn, signInAsAdmin } from "./helpers";
+import { expectCurrentUi } from "./current-ui";
 
 const clubId = "club-code-joining-e2e";
 const openClubId = "club-open-joining-e2e";
@@ -37,6 +38,7 @@ for (const variant of variants) {
   test(`${variant}: search and join code lead to the question, then a reviewed claim`, async ({ page }) => {
     await page.setViewportSize(variant === "mobile" ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
     await signIn(page, { email: `joining-${variant}@example.com`, password: accountPassword });
+    await expectCurrentUi(page);
     await page.getByRole("button", { name: "Join a club", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Join a club" });
     await dialog.getByLabel("Search clubs by name").fill("join code");
@@ -158,6 +160,12 @@ test("a new profile confirms account details and stays unallocated until approva
   await dialog.getByRole("button", { name: "Send request", exact: true }).click();
   await expect(dialog.getByText("Waiting for admin approval")).toBeVisible();
   const pendingDb = db();
+  const requests = page.getByRole("region", { name: "Join requests" });
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(requests.getByRole("button", { name: /E2E Open Joining Club.*Waiting for approval/ })).toBeVisible();
+  await page.reload();
+  await expectCurrentUi(page);
+  await expect(requests.getByRole("button", { name: /E2E Open Joining Club.*Waiting for approval/ })).toBeVisible();
   let pending: { id: string; revision: number };
   try { pending = await pendingDb.clubAdmissionRequest.findFirstOrThrow({ where: { clubId: openClubId, requesterUserId: "account-joining-new", status: "PENDING" } }); } finally { await pendingDb.$disconnect(); }
   const adminContext = await page.context().browser()!.newContext({ baseURL: e2eBaseURL });
@@ -166,8 +174,12 @@ test("a new profile confirms account details and stays unallocated until approva
     const status = await admin.evaluate(async ({ clubId, request }) => (await fetch(`/api/clubs/${clubId}/join-requests/${request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "APPROVE", revision: request.revision }) })).status, { clubId: openClubId, request: pending });
     expect(status).toBe(200);
   } finally { await adminContext.close(); }
-  await dialog.getByRole("button", { name: "Refresh status", exact: true }).click();
-  await dialog.getByRole("button", { name: "Open club", exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  const approved = page.getByRole("button", { name: /E2E Open Joining Club.*Member/ });
+  await expect(approved).toBeVisible();
+  await expect(requests).toHaveCount(0);
+  await approved.click();
+  await expectCurrentUi(page, "club");
   await expect(page.getByRole("button", { name: "Switch club, current E2E Open Joining Club", exact: true })).toBeVisible();
 });
 
@@ -183,9 +195,99 @@ test("a legacy account completes missing details and returns to its club confirm
   await expect(account).toBeVisible(); await expect(dialog).toHaveCount(0);
   await account.getByLabel("Account gender", { exact: true }).selectOption("FEMALE");
   await account.getByRole("button", { name: "Save changes", exact: true }).click();
+  await page.getByRole("dialog", { name: "Confirm account changes" }).getByRole("button", { name: "Confirm changes" }).click();
   await expect(dialog.getByRole("heading", { name: "Request a new Player profile", exact: true })).toBeVisible();
   await expect(dialog.locator(".admission-account-summary")).toContainText("Joining legacy");
   await expect(dialog.locator(".admission-account-summary")).toContainText("Female");
   await expect(dialog.getByRole("button", { name: "Send request", exact: true })).toBeEnabled();
   await expect(dialog.getByLabel("Player name", { exact: true })).toHaveCount(0);
+});
+
+
+test("a copied invite keeps its context through signup and the player can reopen a decline", async ({ page, browser }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const adminContext = await browser.newContext({ baseURL: e2eBaseURL, permissions: ["clipboard-read", "clipboard-write"] });
+  try {
+    const admin = await adminContext.newPage();
+    await signInAsAdmin(admin);
+
+    await admin.goto(`/club/${hostClubId}/admin?tab=settings`);
+    await expectCurrentUi(admin, "club");
+    await admin.getByRole("button", { name: "Invite link", exact: true }).click();
+    const share = admin.getByRole("dialog", { name: "Invite to your club" });
+    await expect(share.getByText("Turn on join requests to share this invite.")).toBeVisible();
+    await expect(share.getByRole("button", { name: "Copy invite link" })).toHaveCount(0);
+
+    await admin.goto(`/club/${clubId}/admin?tab=settings`);
+    await expectCurrentUi(admin, "club");
+    await admin.getByRole("button", { name: "Invite link", exact: true }).click();
+    await expect(share.getByText("Share the club join code separately.")).toBeVisible();
+
+    await admin.goto(`/club/${openClubId}/admin?tab=settings`);
+    await expectCurrentUi(admin, "club");
+    await admin.getByRole("button", { name: "Invite link", exact: true }).click();
+    await share.getByRole("button", { name: "Copy invite link" }).click();
+    await expect(share).toHaveCount(0);
+    const invite = await admin.evaluate(() => navigator.clipboard.readText());
+    expect(invite).toBe(`${e2eBaseURL}/?join=${openClubId}`);
+
+    await page.goto(invite);
+    await expect(page.getByRole("heading", { name: "Sign in to continue" })).toBeVisible();
+    await expect(page.getByText(/^Club invitation$/i)).toBeVisible();
+    await page.getByRole("link", { name: "Create an account" }).click();
+    await expect(page.getByText(/^Club invitation$/i)).toBeVisible();
+    await page.getByLabel("Display name", { exact: true }).fill("Join Audit Player");
+    await page.getByLabel("Email", { exact: true }).fill("join-audit-player@example.com");
+    await page.getByRole("combobox", { name: /^Gender/ }).selectOption("FEMALE");
+    await page.getByLabel(/^Password/).fill(accountPassword);
+    await page.getByLabel("Confirm password", { exact: true }).fill(accountPassword);
+    await page.getByRole("button", { name: "Create account", exact: true }).click();
+    await expect(page.getByText("Account created. Sign in to continue to your club invite.")).toBeVisible();
+    await page.getByLabel("Email", { exact: true }).fill("join-audit-player@example.com");
+    await page.getByLabel("Password", { exact: true }).fill(accountPassword);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expectCurrentUi(page);
+
+    const dialog = page.getByRole("dialog", { name: "Join a club" });
+    const newPlayer = dialog.getByRole("button", { name: "I’m new to this club" });
+    await expect(dialog.getByRole("heading", { name: "E2E Open Joining Club" })).toBeVisible();
+    await newPlayer.click();
+    await dialog.getByText("Add note (optional)", { exact: true }).click();
+    const note = dialog.getByLabel("Note for the admin");
+    await note.fill("Intended only for the first club");
+    await dialog.getByRole("button", { name: "Back", exact: true }).click();
+    await newPlayer.click();
+    await expect(note).toHaveValue("Intended only for the first club");
+    await dialog.getByRole("button", { name: "Find a different club" }).click();
+    await dialog.getByLabel("Invite link or club ID").fill(clubId);
+    await dialog.getByRole("button", { name: "Find club", exact: true }).click();
+    await dialog.getByLabel("Club join code", { exact: true }).fill(joinCode);
+    await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+    await newPlayer.click();
+    await dialog.getByText("Add note (optional)", { exact: true }).click();
+    await expect(note).toHaveValue("");
+    await dialog.getByRole("button", { name: "Send request", exact: true }).click();
+    await expect(dialog.getByText("Waiting for admin approval")).toBeVisible();
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+
+    await admin.goto(`/club/${clubId}/admin?tab=requests`);
+    await expectCurrentUi(admin, "club");
+    const card = admin.locator("article").filter({ hasText: "Join Audit Player" });
+    const correction = "Please check which roster name you played under.";
+    await card.getByLabel("Note to the player (optional)").fill(correction);
+    await card.getByRole("button", { name: "Reject request", exact: true }).click();
+    await expect(card).toHaveCount(0);
+
+    for (const cookie of await page.context().cookies()) {
+      if (cookie.name.startsWith("club-entry-")) await page.context().clearCookies({ name: cookie.name });
+    }
+    await page.reload();
+    await expectCurrentUi(page);
+    await page.getByRole("region", { name: "Join requests" }).getByRole("button", { name: /E2E Join Code Club.*Declined/ }).click();
+    await expect(dialog.getByText("Request declined", { exact: true })).toBeVisible();
+    await expect(dialog.getByText(correction, { exact: true })).toBeVisible();
+    await expect(dialog.getByLabel("Club join code", { exact: true })).toBeVisible();
+  } finally {
+    await adminContext.close();
+  }
 });

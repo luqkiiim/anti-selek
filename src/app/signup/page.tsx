@@ -7,7 +7,7 @@ import { UserPlus } from "lucide-react";
 
 import { FlashMessage } from "@/components/ui/chrome";
 import { GoogleSignInButton } from "@/components/GoogleSignIn";
-import { getSafeCallbackUrl, withCallbackUrl } from "@/lib/authCallback";
+import { getSafeCallbackUrl, isClubInvitationCallback, withCallbackUrl } from "@/lib/authCallback";
 import { PlayerGender } from "@/types/enums";
 
 type SignupField = "name" | "gender" | "email" | "password" | "confirmPassword";
@@ -31,6 +31,7 @@ function SignupForm() {
     searchParams.get("callbackUrl"),
     ""
   );
+  const isClubInvite = isClubInvitationCallback(callbackUrl);
   const nameRef = useRef<HTMLInputElement | null>(null);
   const genderRef = useRef<HTMLSelectElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
@@ -153,6 +154,7 @@ function SignupForm() {
       <div className="w-full max-w-md">
         <div className="grid gap-6">
           <section className="app-panel order-1 px-6 py-8 sm:px-8 lg:order-2">
+            {isClubInvite && <p className="app-eyebrow">Club invitation</p>}
             <h1 className="mt-3 text-2xl font-semibold text-gray-900">
               Create account
             </h1>

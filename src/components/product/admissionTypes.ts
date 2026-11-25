@@ -20,6 +20,7 @@ export type AdmissionRequest = {
   proposedPlayerName: string | null;
   proposedGender: string | null;
   note: string | null;
+  playerNote?: string;
   createdAt: string;
   reviewedAt?: string | null;
   decision?: string | null;
@@ -38,6 +39,11 @@ export type AdmissionRequest = {
 };
 
 export type AdmissionRequestSummary = Pick<AdmissionRequest, "id" | "clubId" | "kind" | "status" | "revision" | "createdAt"> & Partial<AdmissionRequest>;
+
+export type ClubJoinRequestListItem = {
+  club: { id: string; name: string };
+  status: "PENDING" | "REJECTED";
+};
 
 export type AdmissionDiscovery = {
   requiresJoinCode: boolean;

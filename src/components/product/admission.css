@@ -1,3 +1,8 @@
+.admission-player-note {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .admission-form,
 .admission-search {
   display: flex;

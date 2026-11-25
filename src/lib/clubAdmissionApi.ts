@@ -17,7 +17,18 @@ const submitSchema = z.object({
   requestedPlayerId: z.string().min(1).max(100).nullable().optional(), proposedPlayerName: z.string().trim().min(1).max(100).nullable().optional(),
   proposedGender: z.enum(["MALE", "FEMALE"]).nullable().optional(), note: z.string().max(1000).nullable().optional(), idempotencyKey: z.string().min(1).max(100).optional(),
 }).strict().refine(input => input.kind === "NEW_PLAYER" || !!input.requestedPlayerId, { message: "Select a Player" });
-const reviewSchema = z.object({ action: z.enum(["APPROVE", "REJECT", "CANCEL"]), playerId: z.string().min(1).max(100).nullable().optional(), asNew: z.boolean().optional(), revision: z.number().int().nonnegative().optional(), reason: z.string().max(1000).optional(), confirmRestoreAccess: z.boolean().optional(), retireEmptyPlayerId: z.string().min(1).max(100).optional() }).strict();
+const reviewSchema = z.object({
+  action: z.enum(["APPROVE", "REJECT", "CANCEL"]),
+  playerId: z.string().min(1).max(100).nullable().optional(),
+  asNew: z.boolean().optional(),
+  revision: z.number().int().nonnegative().optional(),
+  reason: z.string().max(1000).optional(),
+  playerNote: z.string().max(1000).optional(),
+  confirmRestoreAccess: z.boolean().optional(),
+  retireEmptyPlayerId: z.string().min(1).max(100).optional(),
+}).strict().refine(input => input.playerNote === undefined || input.action === "REJECT");
+
+const newestRequestFirst = [{ createdAt: "desc" }, { id: "desc" }] satisfies Prisma.ClubAdmissionRequestOrderByWithRelationInput[];
 
 export function admissionError(error: unknown) {
   if (error instanceof ClubEntryUnavailableError) return privateJson({ error: error.message, code: error.code }, error.statusCode);
@@ -75,6 +86,10 @@ export async function reviewAdmissionApi(request: Request, { params }: { params:
     const access = await joinRequestAccess(request); if (access.response) return access.response;
     const parsed = reviewSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: "Invalid review action" }, { status: 400 });
+    if (parsed.data.playerNote !== undefined) {
+      const guard = sameOriginJsonGuard(request);
+      if (guard) return guard;
+    }
     const destination = new URL(request.url); destination.host = request.headers.get("host") ?? destination.host;
     const requestOriginValid = request.headers.get("origin") === destination.origin && !!request.headers.get("content-type")?.startsWith("application/json");
     const result = await admissionTransaction(prisma, tx => reviewClubAdmission(tx, { ...parsed.data, clubId: id, requestId, reviewerUserId: access.userId, isGlobalAdmin: access.isGlobalAdmin, requestOriginValid }));
@@ -88,6 +103,28 @@ async function playerSummary(db: Prisma.TransactionClient | PrismaClient, clubId
   return { id: player.id, name: player.name, avatarUrl: resolveAvatarUrl(player.avatarKey), elo, matchesPlayed, lastPlayedAt: last?.completedAt ?? null };
 }
 
+async function withLatestPlayerNote<T extends { id: string; revision: number; status: string }>(
+  db: Prisma.TransactionClient,
+  requests: T[],
+) {
+  const latest = requests[0];
+  if (latest?.status !== "REJECTED") return requests;
+  const event = await db.clubAdmissionEvent.findUnique({
+    where: { admissionRequestId_revision: { admissionRequestId: latest.id, revision: latest.revision } },
+    select: { action: true, detailsJson: true },
+  });
+  if (event?.action !== "REJECT") return requests;
+  try {
+    const details = JSON.parse(event.detailsJson) as { playerNote?: unknown } | null;
+    if (typeof details?.playerNote === "string" && details.playerNote) {
+      return [{ ...latest, playerNote: details.playerNote }, ...requests.slice(1)];
+    }
+  } catch {
+    // Older event payloads may not contain a readable player-facing note.
+  }
+  return requests;
+}
+
 export async function admissionDiscoveryApi(request: Request, onlyClubId?: string) {
   try {
     const access = await joinRequestAccess(request); if (access.response) return access.response;
@@ -95,6 +132,20 @@ export async function admissionDiscoveryApi(request: Request, onlyClubId?: strin
       const account = await tx.user.findUnique({ where: { id: access.userId } });
       if (!account?.isActive) return privateJson({ error: "An active account is required" }, 403);
       const url = new URL(request.url); const clubId = onlyClubId ?? url.searchParams.get("clubId");
+      if (!clubId && url.searchParams.get("view") === "summary") {
+        const requests = await tx.clubAdmissionRequest.findMany({
+          where: { requesterUserId: access.userId, originInvitationId: null },
+          select: { status: true, clubId: true, club: { select: { id: true, name: true } } },
+          orderBy: newestRequestFirst,
+          distinct: ["clubId"],
+          take: 50,
+        });
+        return privateJson({
+          joinRequests: requests
+            .filter(entry => entry.status === "PENDING" || entry.status === "REJECTED")
+            .map(({ club, status }) => ({ club, status })),
+        });
+      }
       if (!clubId) {
         const summaries = await tx.clubAdmissionRequest.findMany({ where: { requesterUserId: access.userId },
           select: { id: true, clubId: true, kind: true, status: true, revision: true, createdAt: true, reviewedAt: true,
@@ -110,7 +161,14 @@ export async function admissionDiscoveryApi(request: Request, onlyClubId?: strin
       const entryProof = await readClubEntryProof(request, clubId);
       const requiresJoinCode = !await hasClubEntry(tx, club, account, entryProof);
       const passwordProof = { status: !club.isPasswordProtected ? "NOT_REQUIRED" : requiresJoinCode ? "PASSWORD_REQUIRED" : "VERIFIED", expiresAt: requiresJoinCode ? null : clubEntryProofExpiresAt(entryProof) };
-      const requests = requiresJoinCode ? await tx.clubAdmissionRequest.findMany({ where: { requesterUserId: access.userId, clubId }, select: { id: true, clubId: true, kind: true, status: true, revision: true, createdAt: true, reviewedAt: true }, orderBy: { createdAt: "desc" }, take: 50 }) : await tx.clubAdmissionRequest.findMany({ where: { requesterUserId: access.userId, clubId }, include: admissionInclude, orderBy: { createdAt: "desc" }, take: 50 });
+      const requestQuery = { where: { requesterUserId: access.userId, clubId }, orderBy: newestRequestFirst, take: 50 };
+      const history = requiresJoinCode
+        ? await tx.clubAdmissionRequest.findMany({
+          ...requestQuery,
+          select: { id: true, clubId: true, kind: true, status: true, revision: true, createdAt: true, reviewedAt: true },
+        })
+        : await tx.clubAdmissionRequest.findMany({ ...requestQuery, include: admissionInclude });
+      const requests = await withLatestPlayerNote(tx, history);
       const [clubAccess, membership] = await Promise.all([
         tx.clubAccess.findUnique({ where: { clubId_userId: { clubId, userId: access.userId } } }),
         getOwnedClubPlayer(tx, { clubId, userId: access.userId }),

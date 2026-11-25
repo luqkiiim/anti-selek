@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { GoogleSignInButton } from "@/components/GoogleSignIn";
 import { FlashMessage } from "@/components/ui/chrome";
-import { getSafeCallbackUrl, withCallbackUrl } from "@/lib/authCallback";
+import { getSafeCallbackUrl, isClubInvitationCallback, withCallbackUrl } from "@/lib/authCallback";
 import "@fontsource/nunito-sans/400.css";
 import "@fontsource/nunito-sans/600.css";
 import "@fontsource/nunito-sans/700.css";
@@ -38,6 +38,7 @@ function SigninForm() {
     ""
   );
   const signupHref = withCallbackUrl("/signup", callbackUrl);
+  const isClubInvite = isClubInvitationCallback(callbackUrl);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -76,9 +77,9 @@ function SigninForm() {
 
         <section className={styles.panel} aria-labelledby="signin-title">
           <header className={styles.intro}>
-            <p className={styles.eyebrow}>ACCOUNT ACCESS</p>
+            <p className={styles.eyebrow}>{isClubInvite ? "CLUB INVITATION" : "ACCOUNT ACCESS"}</p>
             <h1 className={styles.title} id="signin-title">
-              Welcome back
+              {isClubInvite ? "Sign in to continue" : "Welcome back"}
             </h1>
           </header>
 
@@ -86,7 +87,7 @@ function SigninForm() {
             <div className={styles.messages}>
               {registered ? (
                 <FlashMessage tone="success">
-                  Account created. Please sign in.
+                  {isClubInvite ? "Account created. Sign in to continue to your club invite." : "Account created. Please sign in."}
                 </FlashMessage>
               ) : null}
               {passwordReset ? (
@@ -158,7 +159,7 @@ function SigninForm() {
           <p className={styles.footer}>
             <span>Don&apos;t have an account?</span>
             <Link href={signupHref} className={styles.link}>
-              Sign up
+              {isClubInvite ? "Create an account" : "Sign up"}
             </Link>
           </p>
         </section>
