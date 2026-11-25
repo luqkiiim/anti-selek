@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { MixedSide, PartnerPreference, PlayerGender, SessionPool } from "@/types/enums";
 
-type Profile = "compact" | "wide" | "offset" | "segregated" | "outliers" | "tied";
+type Profile = "compact" | "wide" | "offset" | "segregated" | "outliers" | "tied" | "evo";
 
 interface Scenario {
   upper: number;
@@ -9,6 +10,7 @@ interface Scenario {
   courts: number;
   queued?: boolean;
   lifecycle?: boolean;
+  lateAfterCompletions?: number;
   open?: boolean;
   overrides?: boolean;
   duration?: number;
@@ -17,6 +19,8 @@ interface Scenario {
 }
 
 export const clubPlayBenchmarkScenarios = {
+  "evo-opening": { upper: 15, lower: 10, profile: "evo", courts: 4, completionLimit: 32 },
+  "evo-late": { upper: 17, lower: 10, profile: "evo", courts: 4, completionLimit: 40, lateAfterCompletions: 4 },
   compact: { upper: 7, lower: 7, profile: "compact", courts: 2 },
   "balanced-21": { upper: 7, lower: 7, profile: "tied", courts: 1, duration: 105, fixedGameMinutes: 5 },
   "balanced-24": { upper: 8, lower: 8, profile: "tied", courts: 1, fixedGameMinutes: 5 },
@@ -114,10 +118,23 @@ function seedSegregatedHistory(players: BenchmarkPlayer[], seed: number) {
   };
 }
 
+function readEvoRatings() {
+  const file = process.env.CLUB_PLAY_BENCHMARK_EVO_ROSTER;
+  if (!file) throw new Error("Set CLUB_PLAY_BENCHMARK_EVO_ROSTER to a protected, de-identified roster JSON file.");
+  const { upper, lower, late } = JSON.parse(readFileSync(file, "utf8"));
+  if (![[upper, 15], [lower, 10], [late, 2]].every(([ratings, count]) =>
+    Array.isArray(ratings) && ratings.length === count && ratings.every(Number.isFinite))) {
+    throw new Error("Evo replay requires 15 Higher, 10 Lower and two late Higher ratings.");
+  }
+  return { upper: upper as number[], lower: lower as number[], late: late as number[] };
+}
+
 export function makeClubPlayBenchmarkScenario(id: ScenarioId, seed: number) {
   const config: Scenario = clubPlayBenchmarkScenarios[id];
   const random = benchmarkRandom(seed);
   const players: BenchmarkPlayer[] = [];
+  const evo = config.profile === "evo" ? readEvoRatings() : null;
+  const evoUpper = evo ? [...evo.upper, ...evo.late] : [];
   for (const [side, count] of [[MixedSide.UPPER, config.upper], [MixedSide.LOWER, config.lower]] as const) {
     for (let index = 0; index < count; index++) {
       const position = count > 1 ? index / (count - 1) : 0.5;
@@ -132,6 +149,8 @@ export function makeClubPlayBenchmarkScenario(id: ScenarioId, seed: number) {
       if (config.profile === "segregated") rating = weakHalf ? Math.round(680 + 590 * position) : Math.round(1_100 + 225 * (2 * position - 1));
       if (config.profile === "outliers") rating = upper && index === 0 ? 500 : !upper && index === count - 1 ? 1_550 : 1000 + 20 * Math.floor(index / 2);
 
+      if (evo) rating = upper ? evoUpper[index] : evo.lower[index];
+
       const useOverride = Boolean(config.overrides && index === 1);
       const isGuest = Boolean(config.open && !upper && index === count - 1);
       const gender = isGuest ? PlayerGender.UNSPECIFIED : upper ? PlayerGender.MALE : PlayerGender.FEMALE;
@@ -143,6 +162,10 @@ export function makeClubPlayBenchmarkScenario(id: ScenarioId, seed: number) {
         partnerPreference: effectiveSide === MixedSide.LOWER ? PartnerPreference.FEMALE_FLEX : PartnerPreference.OPEN,
         pool: weakHalf ? SessionPool.B : SessionPool.A, isGuest });
     }
+  }
+  if (config.lateAfterCompletions) {
+    // Keep the two simulated late Higher players last for the attendance driver.
+    players.push(...players.splice(evo!.upper.length, evo!.late.length));
   }
   const ordered = [...players].sort((a, b) => a.trueRating - b.trueRating || a.id.localeCompare(b.id));
   for (const [index, player] of ordered.entries()) {

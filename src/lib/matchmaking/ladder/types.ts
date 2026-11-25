@@ -139,6 +139,7 @@ export interface LadderSingleCourtSelection<
   levelContext?: LevelSelectionContext;
   levelDiagnostics?: LevelSelectionDiagnostics;
   clubPlayContext?: ClubPlaySelectionContext;
+  clubPlayRank?: readonly number[];
   clubPlayDiagnostics?: ClubPlaySelectionDiagnostics;
 }
 

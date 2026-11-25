@@ -587,6 +587,33 @@ describe("Club Play assignments", () => {
     expect(await prisma.match.count({ where: { sessionId, status: MatchStatus.IN_PROGRESS } })).toBe(1);
   });
 
+  it("replaces a fair and balanced reservation that repeats the same courtmates", async () => {
+    const { sessionId, code, clubId, courtIds, playerIds } = await setup(Array(8).fill(2), SessionMode.MEXICANO);
+    const ratings = [950, 960, 970, 980, 1000, 1010, 1020, 1030];
+    await prisma.clubMember.createMany({ data: playerIds.map((playerId, index) => ({ clubId, playerId, elo: ratings[index] })) });
+    const teams = (start: number) => ({
+      team1Player1Id: playerIds[start], team1Player2Id: playerIds[start + 3],
+      team2Player1Id: playerIds[start + 1], team2Player2Id: playerIds[start + 2],
+    });
+    const first = teams(0);
+    const second = teams(4);
+    await prisma.match.createMany({ data: [first, second, first, second].map((partition, index) => ({
+      ...partition, sessionId, courtId: courtIds[index % 2], status: MatchStatus.COMPLETED,
+      createdAt: new Date(index * 60_000), completedAt: new Date((index + 1) * 60_000),
+      team1Score: 21, team2Score: 18,
+    })) });
+    await prisma.queuedMatch.create({ data: { ...first, sessionId, isAutomatic: true } });
+
+    const response = await POST_ASSIGN_QUEUE(new Request(`http://localhost/api/sessions/${code}/queue-match/assign`, {
+      method: "POST",
+    }), { params: Promise.resolve({ code }) });
+    const payload = await response.json();
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    const selected = getSelectedIds(payload);
+    expect(selected.some((id) => playerIds.slice(0, 4).includes(id))).toBe(true);
+    expect(selected.some((id) => playerIds.slice(4).includes(id))).toBe(true);
+  });
+
   it("refuses a stale fairness decision even when its players and court remain free", async () => {
     const { sessionId, clubId, playerIds, courtIds } = await setup(Array(8).fill(0));
     const { loadSessionRecordById } = await import("./shared");

@@ -158,6 +158,19 @@ export function buildLevelDistributionContext(
       exposure.set(id, prior);
     }
   }
+  const initialAbsoluteDeviation = residual.reduce((sum, value) => sum + Math.abs(value), 0);
+  const projectedDistance = (
+    chosen: readonly Counts[], remaining: readonly { min: Counts; max: Counts }[], power: number,
+  ) => {
+    let error = 0;
+    for (let i = 0; i < 3; i++) {
+      const projected = residual[i] + chosen.reduce((sum, delta) => sum + delta[i], 0);
+      const low = projected + remaining.reduce((sum, range) => sum + range.min[i], 0);
+      const high = projected + remaining.reduce((sum, range) => sum + range.max[i], 0);
+      error += (low > 0 ? low : high < 0 ? -high : 0) ** power;
+    }
+    return error;
+  };
   return {
     snapshot: (partition: V3DoublesPartition, category?: LevelMatchType | null) =>
       mode === SessionMode.MIXICANO ? targetFor(partition, category) : undefined,
@@ -175,14 +188,10 @@ export function buildLevelDistributionContext(
     },
     /** Independent coordinate intervals overstate possible repairs, making a safe lower bound. */
     band(chosen: readonly Counts[], remaining: readonly { min: Counts; max: Counts }[] = []) {
-      let error = 0;
-      for (let i = 0; i < 3; i++) {
-        const projected = residual[i] + chosen.reduce((sum, delta) => sum + delta[i], 0);
-        const low = projected + remaining.reduce((sum, range) => sum + range.min[i], 0);
-        const high = projected + remaining.reduce((sum, range) => sum + range.max[i], 0);
-        error += (low > 0 ? low : high < 0 ? high : 0) ** 2;
-      }
-      return Math.floor(error / ERROR_BAND);
+      return Math.floor(projectedDistance(chosen, remaining, 2) / ERROR_BAND);
+    },
+    absoluteDeviationChange(chosen: readonly Counts[], remaining: readonly { min: Counts; max: Counts }[] = []) {
+      return (projectedDistance(chosen, remaining, 1) - initialAbsoluteDeviation) / (2 * SHARE_UNIT);
     },
     diagnostics(entries: readonly (LevelDistributionSnapshot | undefined)[]) {
       const projectedActual = [...actual], projectedExpected = [...expected];

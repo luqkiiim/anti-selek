@@ -14,6 +14,7 @@ interface SocialAssignmentRow {
   team2User1Id: string;
   team2User2Id: string;
   matchmakingReasonJson?: string | null;
+  createdAt?: Date;
   completedAt?: Date | null;
 }
 
@@ -46,8 +47,17 @@ function toSocialHistoryMatch(row: SocialAssignmentRow): SocialHistoryMatch {
     ? parseLevelDistributionSnapshot(reason.levelMatchType, partition) : null;
   const clubPlayMatchType = reason && typeof reason === "object" && "clubPlayMatchType" in reason
     ? parseClubPlayDistributionSnapshot(reason.clubPlayMatchType, partition) : null;
+  const clubPlayReason = reason && typeof reason === "object" && "source" in reason && reason.source === "club-play"
+    ? reason : null;
+  const playedUp = clubPlayReason && "clubPlayPlayedUp" in clubPlayReason ? clubPlayReason.clubPlayPlayedUp : null;
+  const ids = [...partition.team1, ...partition.team2];
   return {
     ...partition,
+    ...(row.createdAt ? { createdAt: row.createdAt } : {}),
+    ...(clubPlayReason && "clubPlayBoosted" in clubPlayReason && clubPlayReason.clubPlayBoosted === true
+      ? { clubPlayBoosted: true } : {}),
+    ...(Array.isArray(playedUp) && playedUp.every((id): id is string => typeof id === "string" && ids.includes(id))
+      ? { clubPlayPlayedUp: playedUp } : {}),
     ...(row.id ? { id: row.id } : {}),
     completedAt: row.completedAt,
     ...(snapshot ? { socialVariety: snapshot } : {}),

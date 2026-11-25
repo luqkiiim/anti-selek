@@ -2,7 +2,35 @@
 
 Run `npm run benchmark:club-play` for the complete paired suite. Filter with `--cases=compact,wide,three-court-24`, `--seeds=1`, or `--policies=club-play,level-match,grouped-points`. Each run writes a JSON trace in the ignored `benchmarks/generated/` directory. Add `--out=PATH` to choose a new output file.
 
-## Method
+The optional Evo cases use a protected, de-identified roster JSON file set via
+`CLUB_PLAY_BENCHMARK_EVO_ROSTER`. The file holds arrays named `upper`
+(15 starting Higher ratings), `lower` (10 starting Lower ratings), and `late`
+(two Higher ratings). Select the cases with `--cases=evo-opening,evo-late`.
+The opening case stops after 32 completions. The late case adds the two players
+after the fourth completion and stops after 40. Both use four courts and
+simulated match timing. Keep input and output files under protected `private/`.
+
+## Rotation update
+
+Compared with `a34b70e8` across three fixed timing seeds. The matcher recorded
+682 completed games in 24 update runs with zero eligibility, fair-turn, or
+team-balance violations. The largest increase in 95th-percentile wait was
+seven minutes. The wide cases introduced no avoidable extreme-cluster
+games. The existing search budget still produced six controlled timeouts
+and 24 certified fallbacks in the update runs.
+
+| Evo simulation | Median distinct courtmates | Lower-quarter floor | Most starts by one foursome | Mean raw Elo spread | Widest raw Elo spread |
+| --- | --- | --- | --- | --- | --- |
+| Opening roster | 8–9 → 10–12 | 6–8 → 9–10 | 4–5 → 2 | 165–185 → 182–211 | 552 → 552–691 |
+| Two late arrivals | 10–11 → 11–12 | 8–9 → 10–11 | 2–4 → 2–3 | 189–214 → 190–218 | 552–715 → 525–691 |
+
+All three focal players shared a court with at least one of the three
+highest-rated Higher players in two of three late-arrival runs. In the
+third, two focal players shared a court with the nominated Lower
+player. The replay uses the captured opening roster and synthetic timing.
+Raw Elo spread includes cross-side differences in Mixed.
+
+## Method for earlier format comparisons
 
 The runner drives the app's single- and multiple-court selectors using the same synthetic rosters and external event schedules for Club Play, default Level Match with Rating, and grouped Balanced Points. Optional Level Match 3 and Balanced distribution experiments are disabled. Grouped Points uses the default recurrence policy and its existing fallback. Lower/Higher categories use effective pairing sides, including overrides. Open play is measured separately.
 

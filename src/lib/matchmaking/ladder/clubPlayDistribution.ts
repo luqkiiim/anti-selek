@@ -57,15 +57,15 @@ export function buildClubPlayDistributionContext(
   return {
     ...distribution,
     snapshot: buildClubPlayDistributionTargets(players),
-    exposureCost(snapshot?: ClubPlayDistributionSnapshot) {
+    absoluteExposureChange(snapshot?: ClubPlayDistributionSnapshot) {
       if (!snapshot) return 0;
       const mixed = Number(snapshot.category === "MIXED");
       const change = Object.entries(snapshot.mixedTargetByPlayer).reduce((sum, [id, target]) => {
         const previous = exposure.get(id) ?? 0;
         const next = previous + mixed - target;
-        return sum + next ** 2 - previous ** 2;
+        return sum + Math.abs(next) - Math.abs(previous);
       }, 0);
-      return Math.round(change * 1_000);
+      return change / 4;
     },
   };
 }

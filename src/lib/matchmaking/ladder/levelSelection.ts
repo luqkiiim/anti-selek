@@ -15,6 +15,7 @@ import type { SocialHistoryMatch } from "../v3/socialVariety";
 import { buildLevelDistributionContext, type LevelDistributionSnapshot } from "./levelDistribution";
 import { buildClubPlayCompatibilityScorer } from "./clubPlayCompatibility";
 import { buildClubPlayDistributionContext } from "./clubPlayDistribution";
+import { buildClubPlayRotation, CLUB_PLAY_QUALITY_UNIT } from "./clubPlayRotation";
 import { buildLevelRelationshipVariety, LEVEL_RELATIONSHIP_COST_SIZE } from "./levelRelationshipVariety";
 import {
   buildLevelGrouping, compareLevelVectors, getLevelBalancePolicy, getLevelQualityVector,
@@ -112,6 +113,7 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
     selection: Selection; mask: bigint; order: number; skill: LevelCompatibility;
     alternatives: Alternative[]; variety?: readonly number[]; quality?: number[];
     distribution?: { impact: DistributionImpact; exposure: number };
+    clubCost?: { cost: number; boost: number };
   };
   type Baseline = { batch: LadderBatchSelection<Player>; candidates: Candidate[]; scheduleIndex: number };
   type State = {
@@ -122,6 +124,7 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
   type Compatible = {
     candidates: Candidate[]; minBalance: number; minSpread: number;
     minPairwise: number; minPointDiff: number; minVariety: number[];
+    minClubCost: number; minClubCostWithBoost: number;
     distribution?: { min: DistributionImpact; max: DistributionImpact };
   };
   const startedAt = performance.now();
@@ -203,30 +206,34 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
   const clubSkill = clubPlay ? buildClubPlayCompatibilityScorer(players, options.sessionMode) : null;
   const scoreSkill = clubSkill?.score ?? buildLevelCompatibilityScorer(players, options.sessionMode, options.levelPolicy.metric);
   const history = options.history ?? [];
-  const distribution = clubPlay && options.sessionMode === SessionMode.MIXICANO ? buildClubPlayDistributionContext(players, history) :
-    options.level3 ? buildLevelDistributionContext(players, history, options.sessionMode, options.level3.groups) : null;
+  const clubDistribution = clubPlay && options.sessionMode === SessionMode.MIXICANO
+    ? buildClubPlayDistributionContext(players, history) : null;
+  const clubRotation = clubSkill ? buildClubPlayRotation(players, history, clubSkill) : null;
+  const distribution = clubDistribution ?? (options.level3
+    ? buildLevelDistributionContext(players, history, options.sessionMode, options.level3.groups) : null);
   const relationships = options.level3 ? buildLevelRelationshipVariety(history) : null;
   const scoreLegacyVariety = !clubPlay && !options.level3 && history.length
     ? buildLevelVarietyScorer(players, history, options.sessionMode) : null;
   const scoreClubPlayVariety = clubSkill ? buildClubPlayRelationshipCost(history) : null;
   const scoreVariety = relationships || scoreLegacyVariety || scoreClubPlayVariety;
-  const varietySize = clubPlay ? 5 : relationships ? LEVEL_RELATIONSHIP_COST_SIZE : 6;
+  const varietySize = relationships ? LEVEL_RELATIONSHIP_COST_SIZE : 6;
   const distributionFor = (candidate: Candidate) => {
     if (!distribution) return undefined;
     if (!candidate.distribution) {
       const target = distribution.snapshot(candidate.selection.partition, candidate.skill.matchType);
-      candidate.distribution = { impact: distribution.impact(target), exposure: distribution.exposureCost(target) };
+      candidate.distribution = {
+        impact: distribution.impact(target),
+        exposure: clubDistribution ? clubDistribution.absoluteExposureChange(target) : distribution.exposureCost(target),
+      };
     }
     return candidate.distribution;
   };
   const relationshipCost = (candidate: Candidate, partition: Alternative["partition"]) => {
+    if (scoreClubPlayVariety) return scoreClubPlayVariety(partition);
     const exposure = distributionFor(candidate)?.exposure ?? 0;
-    if (clubSkill && scoreClubPlayVariety) {
-      return [exposure, clubSkill.partnerGap(partition), ...scoreClubPlayVariety(partition)];
-    }
     return relationships ? relationships.score(partition, exposure) : scoreLegacyVariety!(partition, candidate.skill.matchType);
   };
-  const tolerance = clubSkill?.frontierMargin ?? Math.round((options.skillTolerance ?? 0.5) * LEVEL_SKILL_UNIT);
+  const tolerance = Math.round((options.skillTolerance ?? 0.5) * LEVEL_SKILL_UNIT);
   const skillOf = (candidates: readonly Candidate[]) => [
     Math.max(0, ...candidates.map((candidate) => candidate.skill.worst)),
     candidates.reduce((sum, candidate) => sum + candidate.skill.mean, 0),
@@ -240,11 +247,6 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
   ];
   const impactsOf = (candidates: readonly Candidate[]) => candidates.map((candidate) => distributionFor(candidate)!.impact);
   const qualityVector = (skill: number[], balanceAndRest: number[], variety: number[] = [], distributionBand?: number) => {
-    if (clubPlay && variety.length) {
-      const [exposure, partnerGap, ...repetition] = variety;
-      return [...(distributionBand === undefined ? [] : [distributionBand, exposure]), ...skill, ...balanceAndRest.slice(0, -1),
-        partnerGap, ...repetition, balanceAndRest[balanceAndRest.length - 1]];
-    }
     return [
       ...(distributionBand === undefined ? [] : [distributionBand, ...skillBands(skill)]),
       ...variety,
@@ -252,12 +254,39 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
       ...balanceAndRest,
     ];
   };
-  const qualityOf = (candidates: readonly Candidate[], variety = false) => qualityVector(
-    skillOf(candidates),
-    getLevelQualityVector(candidates.map((candidate) => candidate.selection), options.levelPolicy, respectRest).slice(2),
-    variety ? varietyOf(candidates) : [],
-    variety && distribution ? distribution.band(impactsOf(candidates)) : undefined,
-  );
+  const clubCostOf = (candidate: Candidate) => {
+    if (!candidate.clubCost) {
+      const rotation = clubRotation!.cost(candidate.selection.ids);
+      const exposure = Math.round((distributionFor(candidate)?.exposure ?? 0) * CLUB_PLAY_QUALITY_UNIT / 4);
+      candidate.clubCost = {
+        cost: candidate.skill.worst + candidate.skill.mean + rotation.repeat + exposure,
+        boost: rotation.boost,
+      };
+    }
+    return candidate.clubCost;
+  };
+  const clubMixCost = (chosen: readonly Candidate[], remaining?: Compatible[]) => clubDistribution
+    ? Math.round(clubDistribution.absoluteDeviationChange(
+      impactsOf(chosen), remaining?.map((summary) => summary.distribution!),
+    ) * CLUB_PLAY_QUALITY_UNIT / 4) : 0;
+  const clubScoreOf = (chosen: readonly Candidate[], remaining: Compatible[] = [], withBoost = true) => {
+    const costs = chosen.map(clubCostOf);
+    return costs.reduce((sum, entry) => sum + entry.cost, 0) +
+      remaining.reduce((sum, summary) => sum + summary.minClubCost, 0) +
+      clubMixCost(chosen, remaining) -
+      (withBoost ? Math.max(0, ...costs.map((entry) => entry.boost),
+        ...remaining.map((summary) => summary.minClubCost - summary.minClubCostWithBoost)) : 0);
+  };
+  const qualityOf = (candidates: readonly Candidate[], variety = false, withBoost = true) => {
+    const skill = skillOf(candidates);
+    const balanceAndRest = getLevelQualityVector(
+      candidates.map((candidate) => candidate.selection), options.levelPolicy, respectRest,
+    ).slice(2);
+    return clubPlay
+      ? [clubScoreOf(candidates, [], withBoost), ...skill, ...balanceAndRest]
+      : qualityVector(skill, balanceAndRest, variety ? varietyOf(candidates) : [],
+        variety && distribution ? distribution.band(impactsOf(candidates)) : undefined);
+  };
 
   const starvationContext = {
     activePlayerCount: eligiblePlayers.filter((player) => !player.isPaused).length,
@@ -411,7 +440,7 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
   let bestQuality: number[] | null = null;
   let bestSchedule: number | null = null;
   let guardrail = context?.balanceGuardrail ?? null;
-  let skillEnvelope = context?.skillEnvelope;
+  let skillEnvelope = clubPlay ? undefined : context?.skillEnvelope;
   const admitsSkill = ([worst, total]: readonly number[]) => !skillEnvelope ||
     (worst <= skillEnvelope.allowedWorst && total <= skillEnvelope.allowedTotal);
   const globalLowerBound = optimisticFor(stateFor(BigInt(0)), Math.min(...prepared.map((schedule) => schedule.rank)));
@@ -433,7 +462,7 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
       }
       relationships.finalize();
     }
-    if (useVariety && bestCandidates.length) {
+    if (useVariety && !clubPlay && bestCandidates.length) {
       bestCandidates = bestCandidates.map((candidate) => ({ ...candidate,
         variety: relationshipCost(candidate, candidate.selection.partition),
       }));
@@ -441,7 +470,6 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
     }
     const sortedLists = new Map<Candidate[], Candidate[]>();
     const cappedLists = new WeakMap<Candidate[], Map<number, Candidate[]>>();
-    const skillCappedLists = new WeakMap<Candidate[], Map<number, Candidate[]>>();
     const compatibleCache = new WeakMap<Candidate[], Map<string, Compatible>>();
     const listFor = (source: Candidate[]) => {
       const cached = sortedLists.get(source);
@@ -457,7 +485,8 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
         for (const alternative of candidate.alternatives) {
           // With a total cap, a higher-gap split cannot belong to the
           // globally certified best worst/total balance batch.
-          if (!admitsPartition(candidate, alternative)) continue;
+          if (!admitsPartition(candidate, alternative) ||
+            (clubPlay && alternative.balanceGap > candidate.selection.balanceGap)) continue;
           const cost = relationshipCost(candidate, alternative.partition);
           if (!chosen || compareLevelVectors(orderPartition(cost, alternative.balanceGap, alternative.pointDiffGap),
             orderPartition(chosen.variety!, chosen.selection.balanceGap, chosen.selection.pointDiffGap)) < 0) {
@@ -491,20 +520,6 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
       }
       return remember(cache, maximum, list, 64);
     };
-    const skillCappedAt = (source: Candidate[], maximum: number) => {
-      let cache = skillCappedLists.get(source);
-      if (!cache) { cache = new Map(); skillCappedLists.set(source, cache); }
-      const cached = cache.get(maximum);
-      if (cached) return cached;
-      const list: Candidate[] = [];
-      // The skill pass sorts by worst compatibility before every other field.
-      for (const candidate of source) {
-        checkScanBudget();
-        if (candidate.skill.worst > maximum) break;
-        list.push(candidate);
-      }
-      return remember(cache, maximum, list, 64);
-    };
     const compatibleFor = (list: Candidate[], mask: bigint, minimumOrder: number): Compatible => {
       let cache = compatibleCache.get(list);
       if (!cache) { cache = new Map(); compatibleCache.set(list, cache); }
@@ -513,7 +528,8 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
       if (cached) return cached;
       const summary: Compatible = {
         candidates: [], minBalance: Infinity, minSpread: Infinity, minPairwise: Infinity, minPointDiff: Infinity,
-        minVariety: useVariety ? Array<number>(varietySize).fill(Infinity) : [],
+        minVariety: useVariety && !clubPlay ? Array<number>(varietySize).fill(Infinity) : [],
+        minClubCost: Infinity, minClubCostWithBoost: Infinity,
         ...(useVariety && distribution ? { distribution: { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] } } : {}),
       };
       for (const candidate of list) {
@@ -524,6 +540,11 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
         if (searchPhase !== "baseline") {
           summary.minSpread = Math.min(summary.minSpread, candidate.skill.worst);
           summary.minPairwise = Math.min(summary.minPairwise, candidate.skill.mean);
+          if (clubPlay) {
+            const { cost, boost } = clubCostOf(candidate);
+            summary.minClubCost = Math.min(summary.minClubCost, cost);
+            summary.minClubCostWithBoost = Math.min(summary.minClubCostWithBoost, cost - boost);
+          }
           if (points) summary.minPointDiff = Math.min(summary.minPointDiff, candidate.selection.pointDiffGap);
           if (useVariety) for (let index = 0; index < summary.minVariety.length; index++) {
             summary.minVariety[index] = Math.min(summary.minVariety[index], candidate.variety![index]);
@@ -590,7 +611,7 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
           }
           const list = searchPhase === "baseline" && baseline && fairnessBound === 0
             ? cappedAt(source, baseline.batch.maxBalanceGap)
-            : clubPlay && searchPhase === "skill" && bestQuality ? skillCappedAt(source, bestQuality[0]) : source;
+            : source;
           return compatibleFor(list, mask, minimumOrder);
         });
         if (compatible.some((summary) => !summary.candidates.length)) { pruned++; return; }
@@ -616,7 +637,7 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
               compatible.reduce((sum, summary) => sum + summary.minPairwise, 0),
           ];
           if (!admitsSkill(skillBound)) { pruned++; return; }
-          lowerQuality = qualityVector(skillBound, [
+          const balanceAndRestBound = [
             lowerBalance.maxBalanceGap, lowerBalance.totalBalanceGap,
             ...(points ? [
               Math.max(0, ...selections.map((selection) => selection.pointDiffGap),
@@ -625,10 +646,13 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
                 compatible.reduce((sum, summary) => sum + summary.minPointDiff, 0),
             ] : []),
             ...qualityTailFor(state),
-          ], useVariety ? varietyOf(chosen).map((value, index) => value +
-            compatible.reduce((sum, summary) => sum + summary.minVariety[index], 0)) : [],
-          useVariety && distribution
-            ? distribution.band(impactsOf(chosen), compatible.map((summary) => summary.distribution!)) : undefined);
+          ];
+          lowerQuality = clubPlay
+            ? [clubScoreOf(chosen, compatible), ...skillBound, ...balanceAndRestBound]
+            : qualityVector(skillBound, balanceAndRestBound, useVariety ? varietyOf(chosen).map((value, index) => value +
+              compatible.reduce((sum, summary) => sum + summary.minVariety[index], 0)) : [],
+            useVariety && distribution
+              ? distribution.band(impactsOf(chosen), compatible.map((summary) => summary.distribution!)) : undefined);
           if (bestQuality && compareLevelVectors(lowerQuality, bestQuality) >= 0) { pruned++; return; }
         }
         for (const candidate of compatible[0].candidates) {
@@ -646,7 +670,6 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
               }
             }
           } else if (lowerQuality && bestQuality && compareLevelVectors(lowerQuality, bestQuality) >= 0) break;
-          if (clubPlay && searchPhase === "skill" && bestQuality && candidate.skill.worst > bestQuality[0]) break;
           visit([...chosen, candidate], mask | candidate.mask);
         }
       };
@@ -670,12 +693,14 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
       guardrail = buildBalanceGuardrail(getLevelBalancePolicy(options.levelPolicy), established.batch);
       best = established.batch;
       bestCandidates = established.candidates;
-      bestQuality = qualityOf(bestCandidates);
+      bestQuality = qualityOf(bestCandidates, false, false);
       bestSchedule = established.scheduleIndex;
     }
     if (!limitReached) {
       enterPhase("quality");
-      if (!skillEnvelope) {
+      if (clubPlay) {
+        runWithinBudget(() => runPass("variety"));
+      } else if (!skillEnvelope) {
         runWithinBudget(() => runPass("skill"));
         if (!limitReached && bestCandidates.length) {
           const [worst, total] = skillOf(bestCandidates);
@@ -683,15 +708,14 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
           // An unavoidable wider court remains eligible under the same fairness class.
           skillEnvelope = {
             bestWorst: worst,
-            allowedWorst: clubPlay ? worst + tolerance :
-              Math.min(worst + tolerance, Math.max(worst, LEVEL_SEVERE_COMPATIBILITY)),
+            allowedWorst: Math.min(worst + tolerance, Math.max(worst, LEVEL_SEVERE_COMPATIBILITY)),
             allowedTotal: total + tolerance * options.courtCount,
           };
         }
       }
-      if (scoreVariety && skillEnvelope && !limitReached) {
+      if (!clubPlay && scoreVariety && skillEnvelope && !limitReached) {
         runWithinBudget(() => runPass("variety"));
-      } else if (context?.skillEnvelope && !scoreVariety) {
+      } else if (!clubPlay && context?.skillEnvelope && !scoreVariety) {
         runWithinBudget(() => runPass("skill"));
       }
     }
@@ -703,6 +727,13 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
     ? selection.selections.map((chosen, index) => distribution.snapshot(chosen.partition, bestCandidates[index].skill.matchType))
     : [];
   const distributionDiagnostics = distribution?.diagnostics(distributionSnapshots);
+  // A balance-only fallback did not spend the session's play-up boost.
+  const rankedForClubPlay = Boolean(clubPlay && best !== established?.batch);
+  const clubPlayRank = clubPlay ? qualityOf(bestCandidates, false, rankedForClubPlay) : [];
+  const boosted = rankedForClubPlay
+    ? bestCandidates.reduce<Candidate | undefined>((winner, candidate) =>
+      clubCostOf(candidate).boost > (winner ? clubCostOf(winner).boost : 0) ? candidate : winner, undefined)
+    : undefined;
   selection.selections = selection.selections.map((chosen, index) => {
     const diagnostics = {
       metric: options.levelPolicy.metric, levelSpread: chosen.groupingSummary.maxLadderGap,
@@ -719,9 +750,12 @@ export function findBestSkillBatchSelection<T extends MatchmakerLadderPlayer>(
     if (clubPlay) return {
       ...chosen,
       clubPlayContext: selectionContext,
+      clubPlayRank,
       clubPlayDiagnostics: {
         ...diagnostics,
         clubPlayMatchType: distributionSnapshots[index],
+        clubPlayBoosted: bestCandidates[index] === boosted,
+        clubPlayPlayedUp: clubRotation!.playedUp(chosen.ids),
         distribution: distributionDiagnostics,
         fallback: !limitReached ? "none" : best === established?.batch ? "balance-baseline" : "quality",
       },

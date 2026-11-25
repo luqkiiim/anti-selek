@@ -1266,7 +1266,7 @@ export function selectClubPlayReservationIfAdmissible({
   consumedSkipUserIds: readonly string[];
   selectionContext: ClubPlaySelectionContext;
 }) {
-  if (options.searchBudget?.isExpired() || !options.selectionContext.skillEnvelope) return null;
+  if (options.searchBudget?.isExpired() || !options.selectionContext.balanceGuardrail.baselineCertified) return null;
   return selectClubPlayBatch({
     ...options,
     rankedCandidates: filterRankedCandidatesByExcludedUserIds(options.rankedCandidates, new Set(consumedSkipUserIds)),

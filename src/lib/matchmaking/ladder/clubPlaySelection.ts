@@ -10,6 +10,8 @@ export interface ClubPlaySelectionDiagnostics extends Omit<LevelSelectionDiagnos
   "levelMatchType" | "levelDistribution"> {
   clubPlayMatchType?: ClubPlayDistributionSnapshot;
   distribution?: LevelSelectionDiagnostics["levelDistribution"];
+  clubPlayBoosted: boolean;
+  clubPlayPlayedUp: readonly string[];
   fallback: "none" | "balance-baseline" | "quality";
 }
 

@@ -36,6 +36,9 @@ export interface SocialVarietySnapshot {
 
 export interface SocialHistoryMatch extends V3CompletedMatch {
   id?: string;
+  createdAt?: Date;
+  clubPlayBoosted?: boolean;
+  clubPlayPlayedUp?: readonly string[];
   socialVariety?: SocialVarietySnapshot;
   balancedMatchType?: import("./balancedMatchTypes").BalancedMatchTypeSnapshot;
   levelMatchType?: import("../ladder/levelDistribution").LevelDistributionSnapshot;

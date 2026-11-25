@@ -30,6 +30,24 @@ describe("Club Play selection", () => {
     expect(result.selection?.maxBalanceGap).toBe(0);
   });
 
+  it("rotates repeated courtmates when a nearby balanced batch is available", () => {
+    const players = roster([950, 960, 970, 980, 1000, 1010, 1020, 1030]);
+    const options = { courtCount: 2, sessionMode: SessionMode.MEXICANO };
+    const opening = findBestClubPlayBatchSelection(players, options).selection!;
+    const firstGroups = opening.selections.map(({ ids }) => [...ids].sort().join());
+    expect(firstGroups.sort()).toEqual(["p0,p1,p2,p3", "p4,p5,p6,p7"]);
+
+    const history = [
+      { team1: ["p0", "p3"], team2: ["p1", "p2"] },
+      { team1: ["p4", "p7"], team2: ["p5", "p6"] },
+      { team1: ["p0", "p2"], team2: ["p1", "p3"] },
+      { team1: ["p4", "p6"], team2: ["p5", "p7"] },
+    ] satisfies LadderDoublesPartition[];
+    const rotated = findBestClubPlayBatchSelection(players, { ...options, history }).selection!;
+    expect(rotated.selections.every(({ ids }) => !firstGroups.includes([...ids].sort().join()))).toBe(true);
+    expect(rotated.maxBalanceGap).toBeLessThanOrEqual(30);
+  });
+
   it("keeps an unavoidable 310-point court eligible and balances its teams", () => {
     const result = findBestClubPlayBatchSelection(roster([990, 1100, 1190, 1300]), { courtCount: 1 });
     expect(result.selection?.selections[0].clubPlayDiagnostics).toMatchObject({
@@ -48,19 +66,47 @@ describe("Club Play selection", () => {
     expect(selection?.clubPlayDiagnostics?.balanceGap).toBe(selection?.clubPlayDiagnostics?.bestBalanceGap);
   });
 
-  it("penalizes a cluster boundary more than an equal rating gap in a dense neighborhood", () => {
-    const ratings = [300, 340, 380, 420, 520, 560, 600, 640, 650, 660, 760, 770, 780];
-    const players = [...roster(ratings), ...ratings.map((rating, index) =>
-      player(`f${index}`, rating, { gender: PlayerGender.FEMALE }))];
-    const scorer = buildClubPlayCompatibilityScorer(players);
-    const isolatedGap = scorer.score(players.filter(({ strength }) => strength === 660 || strength === 760));
-    const widerNeighborhood = scorer.score(players.filter(({ strength }) => strength === 420 || strength === 520));
-    expect(isolatedGap.relativeGap).toEqual(widerNeighborhood.relativeGap);
-    expect(isolatedGap.withinSideGap).toEqual(widerNeighborhood.withinSideGap);
-    expect(isolatedGap.worst).toBeGreaterThan(widerNeighborhood.worst);
+  it("gives two players a balanced play-up game above 400 Elo after two ordinary starts", () => {
+    const players = roster([858, 897, 930, 969, 1237, 1301, 1000, 1100]);
+    players[6].isBusy = true;
+    players[7].isBusy = true;
+    const lowerCourt: LadderDoublesPartition = { team1: ["p0", "p3"], team2: ["p1", "p2"] };
+    const higherCourt: LadderDoublesPartition = { team1: ["p4", "p7"], team2: ["p5", "p6"] };
+    const history = [lowerCourt, higherCourt, lowerCourt, higherCourt];
+    const options = { courtCount: 1, lockedPlayerIds: new Set(["p0", "p1"]) };
+    const opening = findBestClubPlayBatchSelection(players, options).selection?.selections[0];
+    expect(opening?.clubPlayDiagnostics).toMatchObject({ levelSpread: 111, clubPlayBoosted: false });
+
+    const next = findBestClubPlayBatchSelection(players, { ...options, history }).selection?.selections[0];
+    expect(next?.clubPlayDiagnostics).toMatchObject({
+      levelSpread: 443, balanceGap: 12.5, clubPlayBoosted: true, clubPlayPlayedUp: ["p0", "p1"],
+    });
+
+    const coolingOff = findBestClubPlayBatchSelection(players, {
+      ...options, history: [...history, { ...higherCourt, clubPlayBoosted: true }],
+    }).selection?.selections[0];
+    expect(coolingOff?.clubPlayDiagnostics).toMatchObject({ levelSpread: 111, clubPlayBoosted: false });
+
+    const strongerPlayersStillCooling = findBestClubPlayBatchSelection(players, {
+      ...options, history: [...history, { ...higherCourt, clubPlayBoosted: true }, lowerCourt, lowerCourt, lowerCourt],
+    }).selection?.selections[0];
+    expect(strongerPlayersStillCooling?.clubPlayDiagnostics).toMatchObject({ levelSpread: 111, clubPlayBoosted: false });
   });
 
-  it("finds a close same-side court when ties would otherwise shrink the quality window to zero", () => {
+  it("keeps a close option ahead of an extreme court even with two play-up opportunities", () => {
+    const players = roster([500, 520, 540, 560, 1190, 1210, 850, 950]);
+    players[6].isBusy = true;
+    players[7].isBusy = true;
+    const close: LadderDoublesPartition = { team1: ["p0", "p3"], team2: ["p1", "p2"] };
+    const higher: LadderDoublesPartition = { team1: ["p4", "p7"], team2: ["p5", "p6"] };
+    const result = findBestClubPlayBatchSelection(players, {
+      courtCount: 1, lockedPlayerIds: new Set(["p0", "p1"]),
+      history: [close, higher, close, higher],
+    }).selection?.selections[0];
+    expect(result?.clubPlayDiagnostics).toMatchObject({ levelSpread: 60, balanceGap: 0, clubPlayBoosted: false });
+  });
+
+  it("finds a close same-side court when most ratings are tied", () => {
     const players = [
       ...roster([500, 1000, 1020, 1020, 1040, 1040, 1060]),
       ...[1000, 1000, 1020, 1020, 1040, 1040, 1550].map((rating, index) =>
@@ -73,13 +119,12 @@ describe("Club Play selection", () => {
     expect(ownSide.every((court) => court.groupingSummary.maxLadderGap <= 40)).toBe(true);
   });
 
-  it("keeps separated tied cohorts out of the distribution window", () => {
+  it("keeps separated tied cohorts together even when doubles mix favors a wider court", () => {
     const ratings = [500, 500, 900, 900, 1300, 1300];
     const players = [...roster(ratings), ...ratings.map((rating, index) =>
       player(`f${index}`, rating, { gender: PlayerGender.FEMALE }))];
     const result = findBestClubPlayBatchSelection(players, { courtCount: 2 });
     expect(result.selection?.selections.map((court) => court.clubPlayDiagnostics?.matchType)).toEqual(["MIXED", "MIXED"]);
-    expect(buildClubPlayCompatibilityScorer(players.filter(({ strength }) => strength !== 900)).frontierMargin).toBe(0);
   });
 
   it("aligns mixed cohorts by relative strength and still uses raw team balance", () => {
@@ -124,7 +169,7 @@ describe("Club Play selection", () => {
     expect(parseClubPlayDistributionSnapshot(snapshot, { team1: ["p1", "p3"], team2: ["p2", "p4"] })).toBeNull();
   });
 
-  it("repairs accumulated mixed exposure before considering repeat pairings on tied ratings", () => {
+  it("balances accumulated mixed exposure on tied ratings", () => {
     const players = roster([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000])
       .map((entrant, index) => ({ ...entrant, gender: index < 4 ? PlayerGender.MALE : PlayerGender.FEMALE }));
     const mixedOne: LadderDoublesPartition = { team1: ["p0", "p4"], team2: ["p1", "p5"] };

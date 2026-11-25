@@ -11,7 +11,7 @@ import { isBalancedMatchTypeSourceCurrent } from "@/lib/matchmaking/balancedMatc
 import { hasLevelMatch3Commitment, isLevelMatchTypeSourceCurrent } from "@/lib/matchmaking/levelMatchPersistence";
 import { isAutomaticClubPlayReason, isClubPlayDecisionCurrent } from "@/lib/matchmaking/clubPlayPersistence";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
-import { buildClubPlayDistributionContext } from "@/lib/matchmaking/ladder/clubPlayDistribution";
+import { compareLevelVectors } from "@/lib/matchmaking/ladder/levelPolicy";
 import { getPendingSkipNextUserIds } from "@/lib/sessionSkipNext";
 import { getBalancedQueueDeferralReason } from "@/lib/matchmaking/balancedMatchTypeQueue";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
@@ -442,33 +442,21 @@ export async function selectAutomaticClubPlayQueueAssignment(sessionData: QueueS
   const partitionKey = getExactPartitionKey(reservation);
   const pendingSkips = getPendingSkipNextUserIds(source.players);
   const context = "clubPlayContext" in selection ? selection.clubPlayContext : undefined;
-  let preservesDistribution = true;
-  if (getEffectiveSessionMode(source) === SessionMode.MIXICANO) {
-    const history = buildSocialSessionHistory(source, { excludePendingMatches: true });
-    const mix = buildClubPlayDistributionContext(source.players, history);
-    const freshTarget = mix.snapshot(selection.partition);
-    const reservedTarget = mix.snapshot(reservation);
-    if (!reservedTarget || !freshTarget) {
-      preservesDistribution = false;
-    } else {
-      const freshBand = mix.band([mix.impact(freshTarget)]);
-      const reservedBand = mix.band([mix.impact(reservedTarget)]);
-      preservesDistribution = reservedBand < freshBand ||
-        (reservedBand === freshBand && mix.exposureCost(reservedTarget) <= mix.exposureCost(freshTarget));
-    }
-  }
   const keepCandidate = context &&
-    preservesDistribution &&
     getExactPartitionKey(selection.partition) !== partitionKey &&
     [...reservation.team1, ...reservation.team2].every((id) =>
       !pendingSkips.has(id) && (!matchType || rankedCandidates.some((candidate) => candidate.userId === id))
     );
-  const chosen = keepCandidate
+  const admitted = keepCandidate
     ? selectClubPlayReservationIfAdmissible({
         sessionData: source, rankedCandidates, playersById, requestedMatchCount: 1, partitionKey,
         consumedSkipUserIds, searchBudget, selectionContext: context,
-      }) ?? selection
-    : selection;
+      })
+    : null;
+  const freshRank = "clubPlayRank" in selection ? selection.clubPlayRank : undefined;
+  const reservedRank = admitted?.clubPlayRank;
+  const chosen = admitted && freshRank && reservedRank && compareLevelVectors(reservedRank, freshRank) <= 0
+    ? admitted : selection;
   return { chosen, consumedSkipUserIds, queue };
 }
 
